@@ -12,7 +12,8 @@ import json
 import re
 import subprocess
 import sys
-from collections.abc import AsyncIterator, Callable
+import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -1388,6 +1389,16 @@ SIZES = {"80": (80, 36), "160": (160, 44)}
 TALL = {"80": (80, 80), "160": (160, 76)}
 
 
+@pytest.fixture
+def utc(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The Live tab's ticker prints local times: pinned to UTC, as on CI, whatever the laptop's zone."""
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
 def test_the_workspace_snapshot_with_an_expanded_run(
@@ -1433,6 +1444,7 @@ def test_the_workspace_snapshot(
     snap_compare: Any,
     platform: Platform,
     monkeypatch: pytest.MonkeyPatch,
+    utc: None,
     colour: str,
     columns: str,
     view: str,
@@ -1443,7 +1455,6 @@ def test_the_workspace_snapshot(
         monkeypatch.setenv("NO_COLOR", "1")
     # The Live tab is drawn against pinned clocks and without motion: a snapshot is one instant.
     monkeypatch.setenv("CHOREGOS_NO_MOTION", "1")
-    monkeypatch.setenv("TZ", "UTC")
     monkeypatch.setattr(live_app, "now", lambda: NOW)
     monkeypatch.setattr(live_app, "mono", lambda: 1000.0)
     _showcase(platform)
