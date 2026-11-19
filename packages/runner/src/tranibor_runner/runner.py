@@ -908,6 +908,7 @@ class Runner:
             self.settings.tools_url,
             *confine.endpoint_urls(agent_env),
             *(str(server["url"]) for server in plan.mcp_servers if server.get("url")),
+            *(f"http://127.0.0.1:{port}" for port in plan.local_ports),
         ]
         confinement = confine.Confinement(
             mode=mode,
