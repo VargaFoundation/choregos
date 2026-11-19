@@ -43,8 +43,8 @@
         "id": { "type": "string" },
         "kind": {
           "type": "string",
-          "enum": ["decision", "convention", "incident", "ticket_summary", "run_lesson",
-                   "flaky_test", "hotspot", "finding", "other"]
+          "pattern": "^[a-z][a-z0-9_]{0,31}$",
+          "description": "An open list (ADR 0181): the core's kinds, decision, convention, incident, ticket_summary, run_lesson, flaky_test, hotspot, finding, other, and the kinds an installed extension declares."
         },
         "subject": { "type": "string" },
         "content": { "type": "string" },
