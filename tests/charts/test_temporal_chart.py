@@ -34,7 +34,7 @@ def _render(*sets: str) -> subprocess.CompletedProcess[str]:
     args = ["helm", "template", "c", str(CHART), "-f", str(CHART / "values" / "local.yaml")]
     for s in sets:
         args += ["--set", s]
-    return subprocess.run(args, capture_output=True, text=True, timeout=120)
+    return subprocess.run(args, check=False, capture_output=True, text=True, timeout=120)
 
 
 def _docs(*sets: str) -> list[dict[str, Any]]:
@@ -56,29 +56,33 @@ def test_defaults_are_unchanged_the_service_and_the_claim_carry_the_release_name
     docs = _docs()
     assert _one(docs, "Service", "c-temporal")
     assert _one(docs, "PersistentVolumeClaim", "c-temporal")
-    assert [v for v in _temporal(docs)["volumes"] if v["name"] == "data"][0][
-        "persistentVolumeClaim"
-    ] == {"claimName": "c-temporal"}
+    assert next(v for v in _temporal(docs)["volumes"] if v["name"] == "data")["persistentVolumeClaim"] == {
+        "claimName": "c-temporal"
+    }
     assert not [d for d in docs if d["kind"] == "Certificate"]
 
 
 def test_an_existing_claim_and_service_name_are_adopted_and_no_claim_is_rendered() -> None:
-    docs = _docs(f"global.temporal.serviceName=temporal-frontend", f"{T}.persistence.existingClaim=temporal-data")
+    docs = _docs(
+        "global.temporal.serviceName=temporal-frontend", f"{T}.persistence.existingClaim=temporal-data"
+    )
     assert _one(docs, "Service", "temporal-frontend")
-    assert not [d for d in docs if d["kind"] == "PersistentVolumeClaim" and "temporal" in d["metadata"]["name"]]
+    assert not [
+        d for d in docs if d["kind"] == "PersistentVolumeClaim" and "temporal" in d["metadata"]["name"]
+    ]
     (data,) = [v for v in _temporal(docs)["volumes"] if v["name"] == "data"]
     assert data["persistentVolumeClaim"]["claimName"] == "temporal-data"
 
 
 def test_the_clients_dial_the_adopted_service_name() -> None:
-    docs = _docs(f"global.temporal.serviceName=temporal-frontend")
+    docs = _docs("global.temporal.serviceName=temporal-frontend")
     api = _one(docs, "Deployment", "choregos-api")["spec"]["template"]["spec"]["containers"][0]
     env = {e["name"]: e.get("value") for e in api["env"]}
     assert env["CHOREGOS_TEMPORAL_ADDRESS"] == "temporal-frontend:7233"
 
 
 def test_dev_with_tls_puts_the_relay_on_7233_and_keeps_start_dev_on_loopback() -> None:
-    docs = _docs(*TLS_BOTH, f"global.temporal.serviceName=temporal-frontend")
+    docs = _docs(*TLS_BOTH, "global.temporal.serviceName=temporal-frontend")
     spec = _temporal(docs)
     main, relay = spec["containers"]
     assert main["args"][main["args"].index("--ip") + 1] == "127.0.0.1"
@@ -94,7 +98,11 @@ def test_dev_with_tls_puts_the_relay_on_7233_and_keeps_start_dev_on_loopback() -
 
 
 def test_the_certificate_chain_renders_and_names_the_service_and_the_namespace() -> None:
-    docs = _docs(*TLS_BOTH, f"global.temporal.serviceName=temporal-frontend", f"{T}.tls.certManager.namePrefix=temporal")
+    docs = _docs(
+        *TLS_BOTH,
+        "global.temporal.serviceName=temporal-frontend",
+        f"{T}.tls.certManager.namePrefix=temporal",
+    )
     assert _one(docs, "Issuer", "temporal-selfsigned") and _one(docs, "Issuer", "temporal-ca")
     server = _one(docs, "Certificate", "temporal-frontend-tls")["spec"]
     assert "temporal-frontend" in server["dnsNames"]
@@ -105,7 +113,11 @@ def test_the_certificate_chain_renders_and_names_the_service_and_the_namespace()
 
 
 def test_the_client_secret_name_can_be_pinned_to_the_one_clients_already_mount() -> None:
-    docs = _docs(*TLS_BOTH, f"{T}.tls.clientSecretName=temporal-client-tls", "global.temporal.tls.secretName=temporal-client-tls")
+    docs = _docs(
+        *TLS_BOTH,
+        f"{T}.tls.clientSecretName=temporal-client-tls",
+        "global.temporal.tls.secretName=temporal-client-tls",
+    )
     assert _one(docs, "Certificate", "temporal-client-tls")
 
 
@@ -143,16 +155,18 @@ def test_server_mode_runs_auto_setup_on_postgresql_and_mounts_no_data_volume() -
     assert env["POSTGRES_SEEDS"] == "choregos-pg" and env["POSTGRES_USER"] == "temporal"
     assert env["SKIP_DB_CREATE"] == "true" and env["DBNAME"] == "temporal"
     assert env["VISIBILITY_DBNAME"] == "temporal_visibility"
-    pwd = [e for e in main["env"] if e["name"] == "POSTGRES_PWD"][0]
+    (pwd,) = [e for e in main["env"] if e["name"] == "POSTGRES_PWD"]
     assert pwd["valueFrom"]["secretKeyRef"] == {"name": "temporal.choregos-pg.credentials", "key": "password"}
     # The schema tool reads other variables than the server: both pairs, or it connects in clear.
     assert env["SQL_TLS_ENABLED"] == "true" and env["POSTGRES_TLS_ENABLED"] == "true"
     assert not [v for v in spec.get("volumes", []) if v["name"] == "data"]
-    assert not [d for d in docs if d["kind"] == "PersistentVolumeClaim" and "temporal" in d["metadata"]["name"]]
+    assert not [
+        d for d in docs if d["kind"] == "PersistentVolumeClaim" and "temporal" in d["metadata"]["name"]
+    ]
 
 
 def test_server_mode_serves_tls_itself_with_no_relay() -> None:
-    docs = _docs(*SERVER, *TLS_BOTH, f"global.temporal.serviceName=temporal-frontend")
+    docs = _docs(*SERVER, *TLS_BOTH, "global.temporal.serviceName=temporal-frontend")
     spec = _temporal(docs)
     (main,) = spec["containers"]
     env = {e["name"]: e.get("value") for e in main["env"]}
