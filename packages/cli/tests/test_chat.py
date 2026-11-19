@@ -1448,7 +1448,7 @@ async def test_the_footer_keeps_every_key_and_shows_the_palette(platform: Platfo
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
-@pytest.mark.parametrize("query", ["", "fin"])
+@pytest.mark.parametrize("query", ["", "fin"], ids=["empty", "typed"])
 def test_the_palette_snapshot(
     snap_compare: Any,
     platform: Platform,
