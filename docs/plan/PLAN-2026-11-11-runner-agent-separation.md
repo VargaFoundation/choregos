@@ -230,6 +230,11 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
   image must hold.
 - **Accepted when**: the Job of a code agent names the platform's image for `runner` and the
   operator's for `agent`, and `make conformance-agent` passes in that shape.
+- **Done** (2026-11-19, STATUS S65-04k), with one gap: the conformance suite runs every code agent behind a
+  launcher too, and the plain example passes from its source; with an image (`make conformance-agent
+  IMAGE=...`) it needs `--network=host` to reach the fake gateway, which Docker Desktop does not give the
+  WSL host, so the image shape was not run here (the launcher was seen starting in the image as uid 1001
+  under a read-only root).
 
 ### S65-04l · feat(adapters): `tekton` and `aca` say what they can
 
