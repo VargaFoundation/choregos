@@ -166,8 +166,12 @@ def _who(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     if isinstance(actor, DecisionActor):
         return "decision", name, _decision(actor)
     # What the platform does when it crosses it, in plain words (`does`, #175).
-    gesture = {"open_pr": ", which opens the pull request", "merge_pr": ", which merges the pull request"}
-    return "system", name, f"the platform{gesture.get(transition_effect(t) or '', '')}"
+    from ..step_effects import step_effect_of
+
+    effect = transition_effect(t)
+    gesture = step_effect_of(effect)
+    which = f", which {gesture.gesture}" if gesture else (f", which does `{effect}`" if effect else "")
+    return "system", name, f"the platform{which}"
 
 
 def _action(t: Transition) -> str | None:

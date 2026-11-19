@@ -21,6 +21,7 @@ from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from tranibor_contracts import Workflow
+    from tranibor_contracts.open_lists import STORED
     from tranibor_core import WorkflowEngine
     from tranibor_core.domain import TRIAL_STATE
     from tranibor_core.dsl import UnknownStateError
@@ -32,6 +33,9 @@ with workflow.unsafe.imports_passed_through():
         message_of,
         record_workflow_failure,
     )
+
+#: How the interpreter reads a definition the platform stored (`tranibor_contracts.open_lists.STORED`).
+STORED_DOCUMENT = {STORED: True}
 
 #: `migrate` receives the target definition in the signal, records it and no longer kills the ticket
 #: (ADR 0031, S16-05). Histories from before this marker replay the old path.
@@ -413,7 +417,9 @@ class WorkflowInterpreter(
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=DEFAULT_RETRY,
         )
-        engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
+        # A stored definition: a plugin's step effect it names is read even once the plugin is gone
+        # (ADR 0181), and refused only when it is reached.
+        engine = WorkflowEngine(Workflow.model_validate(context["workflow"], context=STORED_DOCUMENT))
         self._start_from(params, engine, context)
         self._restore_attempts(context)
         self.ceilings = dict(context.get("attempts_ceilings") or {})
