@@ -3,6 +3,7 @@
 platform's processes, registered through the core's seams when the API and the worker load the
 `choregos.plugins` entry point.
 
+- the connector kind `marketdata` in the contracts' open list (`CONNECTOR_KINDS`, ADR 0181 round C0);
 - the `marketdata` connector types (`stooq`, `yahoo`, `alphavantage`, `tiingo`, `composite`), through
   `tranibor_adapters.register`, with the specs their organisation connectors are validated against;
 - their fake (ADR 0005), registered as the kind's `fake` type: `CHOREGOS_FAKES=1` switches every
@@ -22,6 +23,7 @@ from tranibor_adapters import register as register_connector
 from tranibor_adapters.errors import ConfigurationError
 from tranibor_adapters.fakes.scenes import declare_scene
 from tranibor_adapters.http.pool import strategy_of
+from tranibor_contracts import CONNECTOR_KINDS
 
 from .marketdata import PROVIDERS, CompositeProvider, MarketDataProvider
 from .marketdata import fake as _fake
@@ -86,6 +88,7 @@ def _scene(name: str) -> tuple[Any, Any]:
 
 def register() -> None:
     """The `choregos.plugins` entry point of `tranibor-investment-research`."""
+    CONNECTOR_KINDS.declare(KIND, plugin=NAME)
     for name in PROVIDERS:
         register_connector(KIND, name, SPECS[name])(_constructor(name))
     register_connector(KIND, "composite", SPECS["composite"])(_composite)

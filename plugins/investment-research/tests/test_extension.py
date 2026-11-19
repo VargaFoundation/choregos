@@ -42,7 +42,11 @@ def unregistered(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 def test_the_core_ships_no_marketdata_type() -> None:
+    from tranibor_contracts import CONNECTOR_KINDS
+
     assert not [pair for pair in _SHIPPED_SPECS if pair[0] == "marketdata"]
+    assert "marketdata" not in CONNECTOR_KINDS.core
+    assert CONNECTOR_KINDS.plugin_of("marketdata") == "investment-research", "declared by the extension"
 
 
 def test_the_distribution_declares_its_entry_point_under_the_plugins_name() -> None:
