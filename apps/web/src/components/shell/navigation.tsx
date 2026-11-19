@@ -33,6 +33,7 @@ import {
   Server,
   MessagesSquare,
   Settings,
+  Route,
   SquareKanban,
   TrainFront,
   TriangleAlert,
@@ -177,6 +178,8 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
         section("", "Overview", LayoutDashboard),
         // A ticket and its runs belong to the board (S23-12).
         section("/board", "Board", SquareKanban, ["/items", "/runs"]),
+        // The workflow as a line, with the tickets travelling through it (S67-29).
+        section("/flow", "Flow", Route),
         { ...section("/inbox", "Inbox", Inbox), counts: true },
         // The organisation's Activity narrowed to the project (S64-06): one screen, not a route per
         // project, which cost the bundle a second copy of the screen's chunks.

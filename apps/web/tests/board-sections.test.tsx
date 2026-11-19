@@ -32,6 +32,10 @@ const graphs: Record<string, { id: string; display: string; kind?: string; termi
   ],
 };
 
+vi.mock("@/lib/session", () => ({
+  useSession: () => ({ org: "acme", orgs: [{ slug: "acme", currency: "EUR" }], me: null }),
+}));
+
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {
@@ -39,6 +43,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       workItems: vi.fn(),
+      costs: vi.fn().mockResolvedValue({ rows: [], total: { cost_usd: 0, cost_eur: 0 } }),
       workflows: vi.fn().mockResolvedValue([
         { name: "fon-access", version: 1, is_default: false, open_items: 1, description: "Access requests (form 38)." },
         { name: "fon-support", version: 1, is_default: true, open_items: 1 },

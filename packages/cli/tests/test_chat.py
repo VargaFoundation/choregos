@@ -1148,7 +1148,7 @@ def test_version_and_the_other_commands_import_no_textual_module() -> None:
         "import sys\n"
         "from tranibor_cli.main import app\n"
         "from typer.testing import CliRunner\n"
-        "for words in (['--version'], ['activity', '--help'], ['ask', '--help']):\n"
+        "for words in (['--version'], ['activity', '--help'], ['ask', '--help'], ['live', '--help']):\n"
         "    assert CliRunner().invoke(app, words).exit_code == 0\n"
         "print(sorted(m for m in sys.modules if m.split('.')[0] == 'textual'))\n"
     )
@@ -1163,7 +1163,7 @@ def test_the_workspace_module_is_the_only_one_importing_textual() -> None:
         for path in source.glob("*.py")
         if any(line.startswith(("import textual", "from textual")) for line in path.read_text().splitlines())
     )
-    assert importing == ["workspace.py"]
+    assert importing == ["live_app.py", "workspace.py"]
 
 
 async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platform: Platform) -> None:

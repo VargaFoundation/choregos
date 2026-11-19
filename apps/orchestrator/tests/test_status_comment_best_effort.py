@@ -58,6 +58,31 @@ async def _row_state(setup: Fixture, state: str, *, timeout: float = 60.0) -> st
         await asyncio.sleep(0.1)
 
 
+async def _the_miss_is_on_the_timeline(setup: Fixture) -> None:
+    """S62-20: the missed comment is published on the work item, and its timeline says so."""
+    from sqlalchemy import select
+    from tranibor_api.db.models import Event, WorkItem
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services.tickets import timeline
+
+    async with session_scope() as session:
+        missed = list(
+            (
+                await session.execute(
+                    select(Event).where(
+                        Event.work_item_id == setup.work_item_id,
+                        Event.type == "choregos.workitem.status_comment_missed",
+                    )
+                )
+            ).scalars()
+        )
+        assert missed and "did not answer in time" in missed[0].payload["error"], missed
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        entries = await timeline(session, item)
+    assert any(e.kind == "error" and "status comment" in e.title for e in entries), entries
+
+
 async def test_a_refused_status_comment_does_not_stop_the_work_item(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -76,13 +101,14 @@ async def test_a_refused_status_comment_does_not_stop_the_work_item(
         # The row is written by `mirror_state`, an activity after the state moved: wait for it.
         state = await _row_state(setup, "awaiting_spec_approval")
         assert state == "awaiting_spec_approval", "the state is still written"
+        await _the_miss_is_on_the_timeline(setup)
         await handle.signal("control", {"action": "stop"})
         await handle.result()
         history = await handle.fetch_history()
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
-        target = HISTORIES / "wi-status-comment-best-effort-S62-05.json"
+        target = HISTORIES / "wi-status-comment-miss-published-S62-20.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 

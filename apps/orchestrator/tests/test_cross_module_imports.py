@@ -38,6 +38,7 @@ ALLOWED_SOURCES = {
     "test_restarted_interpreter_resumes",
     "test_result_from_journal",
     "test_suspend_around_human",
+    "test_trial_item_has_no_interpreter",
 }
 
 #: Names that used to be imported from French-named modules and now live in `kits/`.

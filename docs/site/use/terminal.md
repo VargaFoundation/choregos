@@ -175,6 +175,32 @@ A stop always needs a reason: an empty one is not sent. The reason is audited an
 `x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to
 what you are on.
 
+## Watch the flow live
+
+```bash
+choregos live
+choregos live --project billing-api --workflow delivery
+```
+
+`live` opens a full-screen view of one workflow: its stations as boxes joined by arrows, the side states
+(rejections, retries, waits for a person) on a row below, and each work item as a token parked in the station
+it is in. A token is blue with a spinner while a run works on it, amber while a person has to decide, red
+with a word for why when it failed (`loop`, `budget`, `turns`), dim when idle and green when done. When an
+item changes station its token travels along the arrow and the arrow stays lit for a moment. The header says
+`LIVE` or `RECONNECTING`; under it, a line counts what is in flight, waiting for a person, failed and done
+today, with the day's spend in your organisation's currency (a dash when the platform cannot say). The last
+events scroll at the bottom.
+
+- **Keys.** Left and right walk the tokens, Enter opens the item (its runs and their steps, as
+  `activity --run` shows them), Escape closes it, `q` quits.
+- **Narrow terminals.** Below what the stations need, each shows its counts instead of its tokens and the
+  selected token is named; below that, the view scrolls sideways.
+- **No colour, no motion.** `NO_COLOR` draws without colour and without animation (shape still tells the
+  state: a failed station is double-ruled, a running one heavy). `--no-motion` (or `CHOREGOS_NO_MOTION`)
+  keeps the colours but stops the spinner and the travel. A terminal that cannot draw Unicode gets plain
+  ASCII.
+- **It only reads.** Nothing is written, and it needs a terminal; in a script use `choregos activity`.
+
 ## Decide
 
 ```bash

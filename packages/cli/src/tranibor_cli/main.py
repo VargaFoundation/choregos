@@ -22,6 +22,7 @@ from rich.table import Table
 from . import __version__, device_login, money, theme
 from . import chat as chat_module
 from . import client as client_module
+from . import live as live_module
 from .a2a import a2a_app
 from .activity import activity
 from .artifacts import artifacts_app
@@ -116,6 +117,7 @@ def _root(
 app.command("ask")(ask)
 app.command("activity")(activity)
 app.command("chat")(chat_module.chat)
+app.command("live")(live_module.live)
 app.add_typer(artifacts_app, name="artifacts")
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).

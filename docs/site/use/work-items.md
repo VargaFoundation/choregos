@@ -63,6 +63,35 @@ them.
 The board on your tracker (GitHub Projects, Jira) follows Tranibor, not the reverse: moving a card
 there does not move the work item. Move it from the console.
 
+### The board is live
+
+The board follows the organisation's activity stream, narrowed to the project, and shows what happens as it
+happens. There is no separate page to open:
+
+- **LIVE** at the right of the header turns to **RECONNECTING** when the stream drops; the board then reads the work items every few seconds until it is back.
+- A slim bar under each workflow's title counts what is in flight, waiting for a person, failed, done today, and what was spent today.
+- A running card glows softly in the workflow's colour, with a thin moving line at its foot, and says the stage (and the agent when it is not the stage's own name), how long it has run and what it has spent so far, in the organisation's currency.
+- A card that has just arrived in a column is lit for a moment, and slides there from its old column when its work item changes state.
+- A failed card turns red and names the reason; hover it or focus it with the keyboard for the summary.
+- A card that waits for a person turns amber and says what it waits for.
+- **Latest events**, folded under the columns, lists the last events.
+
+With *reduce motion* set in your system, nothing pulses or slides: cards change place plainly.
+
+### The flow
+
+**Flow** (in the project's navigation, and a tab of every workflow's page) draws the workflow as a line and
+shows the work items travelling through it:
+
+- The stations of the nominal path run left to right; the states that leave it (rejections, retries, escalations, human waits) sit on a row below. Each station says who acts there (agent, human or platform) and how many work items are in it.
+- Every work item is a small token with its key, resting in its station and coloured by status: amber when it waits for a person, red when its run failed (hover or focus it for the reason), a spinning ring while a run is in flight (the elapsed time and the spend are in its tooltip). A station with a run in flight glows in the workflow's colour.
+- When a work item changes state its token walks along the edge to the next station, and the edge lights up for a moment. A token opens its work item.
+- A click on a station narrows **Latest events** to it and lists its tickets.
+- **Wall mode** (or `?wall=1`) takes the whole screen for a display nobody operates: the project and workflow in large type, a clock, the summary, the flow and the ticker. **Escape** leaves it.
+- The workflow switcher on the project's Flow page picks another workflow; the default one opens first.
+
+With *reduce motion* set in your system, tokens jump to their new station instead of walking.
+
 ### On its page
 
 Open a work item. From top to bottom:

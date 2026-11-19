@@ -1,10 +1,10 @@
 [project]
 name = "choregos-tools-mcp"
-version = "0.27.14"
+version = "0.27.15"
 description = "Deprecated name of tranibor-tools-mcp: an empty wheel that depends on it and ships the `choregos_tools_mcp` import alias (ADR 0176, R2)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["tranibor-tools-mcp==0.27.14", "tranibor-contracts==0.27.14"]
+dependencies = ["tranibor-tools-mcp==0.27.15", "tranibor-contracts==0.27.15"]
 
 [build-system]
 requires = ["hatchling"]

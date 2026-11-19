@@ -6,6 +6,7 @@ from .client import (
     HeadersProvider,
     McpClient,
     McpError,
+    McpResource,
     McpTool,
     schema_digest,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "HeadersProvider",
     "McpClient",
     "McpError",
+    "McpResource",
     "McpTool",
     "TokenCache",
     "TokenRefused",

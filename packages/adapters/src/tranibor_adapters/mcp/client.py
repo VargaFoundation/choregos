@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """An MCP client, written by hand like the server (ADR 0017): the platform reaches an MCP server
-that the organisation declared (`initialize`, `tools/list`, `tools/call`) over Streamable HTTP.
+that the organisation declared (`initialize`, `tools/list`, `tools/call`, `resources/list`,
+`resources/read`) over Streamable HTTP.
 
 What is negotiated:
 - `initialize` offers the newest of `CLIENT_VERSIONS` (2026-07-28) and carries no
@@ -28,7 +29,8 @@ Also:
 - an answer arrives as JSON or as an SSE stream (`text/event-stream`): the client reads the message
   that carries the request's id, and nothing else;
 - `tools/list` follows `nextCursor` to the end: a server pages, and a tool on page 2 that the
-  client did not see would never be seen again;
+  client did not see would never be seen again; so does `resources/list`, which a knowledge source
+  of kind `mcp` reads with `resources/read` (ADR 0191);
 - the token is THE CONNECTOR'S, resolved by the platform: a run's token never leaves.
 
 What it does not do: tasks, elicitation, sampling and the other server-to-client requests, server
@@ -103,6 +105,20 @@ def _read_sse(text: str, request_id: int) -> dict[str, Any] | None:
             if isinstance(message, dict) and message.get("id") == request_id:
                 return message
     return None
+
+
+@dataclass(frozen=True)
+class McpResource:
+    """One resource a server lists (`resources/list`): its `uri` is its identity, `name` what it is
+    called, `mime_type` and `size` what the server says of its content. `last_modified` is the
+    `annotations.lastModified` the server MAY declare (2025-06-18 and later); None when it does not."""
+
+    uri: str
+    name: str
+    title: str | None = None
+    mime_type: str | None = None
+    size: int | None = None
+    last_modified: str | None = None
 
 
 class McpClient:
@@ -281,6 +297,44 @@ class McpClient:
             await self._open(http)
             result = await self._send(http, "tools/call", {"name": name, "arguments": arguments})
             return dict(result or {})
+
+    async def list_resources(self) -> list[McpResource]:
+        """Every resource the server lists, following `nextCursor` (ADR 0191). A server that pages
+        without end is an error, never a partial list: a listing taken for complete decides deletions."""
+        async with self._http() as http:
+            await self._open(http)
+            resources: list[McpResource] = []
+            cursor: str | None = None
+            for _ in range(MAX_PAGES):
+                result = await self._send(http, "resources/list", {"cursor": cursor} if cursor else {})
+                for raw in (result or {}).get("resources", []):
+                    if not isinstance(raw, dict) or not isinstance(raw.get("uri"), str):
+                        continue
+                    annotations = raw.get("annotations") or {}
+                    modified = annotations.get("lastModified") if isinstance(annotations, dict) else None
+                    size = raw.get("size")
+                    resources.append(
+                        McpResource(
+                            uri=raw["uri"],
+                            name=str(raw.get("name") or ""),
+                            title=str(raw["title"]) if isinstance(raw.get("title"), str) else None,
+                            mime_type=str(raw["mimeType"]) if isinstance(raw.get("mimeType"), str) else None,
+                            size=size if isinstance(size, int) and not isinstance(size, bool) else None,
+                            last_modified=modified if isinstance(modified, str) and modified else None,
+                        )
+                    )
+                cursor = (result or {}).get("nextCursor")
+                if not cursor:
+                    return resources
+            raise McpError(f"resources/list: more than {MAX_PAGES} pages: the server pages without end")
+
+    async def read_resource(self, uri: str) -> list[dict[str, Any]]:
+        """The contents `resources/read` answers for `uri`: each a `text` or a base64 `blob`."""
+        async with self._http() as http:
+            await self._open(http)
+            result = await self._send(http, "resources/read", {"uri": uri})
+            contents = (result or {}).get("contents")
+            return [dict(c) for c in contents if isinstance(c, dict)] if isinstance(contents, list) else []
 
     async def test(self) -> dict[str, Any]:
         tools = await self.list_tools()

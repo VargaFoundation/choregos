@@ -26,7 +26,7 @@ Optional but recommended in production: a model gateway (LiteLLM), a memory serv
 
 ```bash
 helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
-  --version 0.27.14 --namespace choregos --create-namespace \
+  --version 0.27.15 --namespace choregos --create-namespace \
   -f my-values.yaml
 ```
 
@@ -2015,7 +2015,7 @@ scenario against it.
 
 ```bash
 curl -s https://<api-host>/edition
-{"edition":"community","features":[],"version":"0.27.14","publisher":null,"edition_version":null}
+{"edition":"community","features":[],"version":"0.27.15","publisher":null,"edition_version":null}
 ```
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
@@ -2142,7 +2142,16 @@ twice, under the core's name and under the former one:
 
 An image is one manifest list under both names (one digest), and each name carries its own keyless
 signature from the release workflow of `graalsystems/tranibor`: a policy that verifies the signature of
-`choregos-*` verifies `tranibor-*` with the same subject. A chart is packaged from one directory under each
+`choregos-*` verifies `tranibor-*` with the same subject. To check one by hand (all fourteen references of 0.27.14 pass, each
+signature recorded in Rekor):
+
+```bash
+cosign verify ghcr.io/graalsystems/tranibor-api:<version> \
+  --certificate-identity https://github.com/graalsystems/tranibor/.github/workflows/release.yml@refs/tags/v<version> \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+A chart is packaged from one directory under each
 name and renders the same objects under both (the objects' names do not follow the chart's), so moving a
 release from `choregos` to `tranibor` changes its address and nothing else. Nothing changes by itself: the
 chart's defaults still name the images `choregos-*`.
@@ -2155,6 +2164,25 @@ admission policies beside `choregos-*` (`infra/policies/images.yaml` does; a pol
 `choregos-orchestrator.runner.image: tranibor-runner`) and the chart's address at the new names. The
 former names stop being published two minor versions after the enterprise edition has moved, and the
 chart's defaults switch before that; each step is announced here.
+
+**The Python packages have two names too** (S75-02, ADR 0176 R2). The distributions and import
+packages are `tranibor-<x>` / `tranibor_<x>`; each former `choregos-<x>` is an empty wheel that depends on
+`tranibor-<x>` of the same version and makes `import choregos_<x>…` give the very same module (one
+`DeprecationWarning` per package). Three things to know before you lean on the former names:
+
+- **They are for the runtime only.** The shims carry no `py.typed` and no stubs: a strict `mypy` reports
+  `import-untyped` for every `choregos_*` import. Code you type-check imports `tranibor_*`.
+- **`python -m choregos_<x>.<module>` fails on 0.27.14** (`'_AliasLoader' object has no attribute
+  'get_code'`, #1899) and works from the release after it. Scripts, jobs and old values that run a module
+  should name `tranibor_<x>.<module>` (`python -m tranibor_api.migrate`, as the chart's Job does).
+- **Neither name set is on PyPI**: the wheels are the GitHub release's assets. Download them into one
+  directory (`gh release download v<version> --repo graalsystems/tranibor --pattern '*.whl' --dir
+  wheels`) and install both sets from it by path, in one command (`uv pip install wheels/*.whl`, or
+  `pip install wheels/*.whl`); the third-party dependencies come from your index as usual. A shim wheel
+  installed alone does not resolve: `choregos-api` depends on `tranibor-api==<version>`, which no index
+  carries, so `uv` and `pip` look for it on PyPI and stop. Prefer the paths to `--find-links wheels`:
+  nobody has claimed the `tranibor-*` names on PyPI, and a wheel named by path is the only candidate for
+  its name, whereas `--find-links` still asks the index.
 
 **The `staging` and `prod` presets enforce the run's API guard** (S80-03b,
 [ADR 0144](adr/0144-the-run-s-api-answers-only-where-runs-are.md)). `values/staging.yaml` and

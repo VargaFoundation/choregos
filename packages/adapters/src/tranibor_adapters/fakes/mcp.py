@@ -3,6 +3,9 @@
 in-memory transport. It serves its tools by pages, answers in JSON or SSE, requires a session
 after `initialize`, and records every request, to check what leaves the platform.
 
+It also serves `resources` and their `contents` (`resources/list` by pages, `resources/read`), what a
+knowledge source of kind `mcp` reads (ADR 0191).
+
 A tool returns a text (`answers`), or DOES something (`gestures`): a function called with its
 arguments, whose object comes back in `structuredContent` and as JSON text, for a client that does
 not read it. A refusal (`AdapterError`) comes back as an `isError` result, as MCP wants for a tool
@@ -40,6 +43,10 @@ class FakeMcpServer:
     gestures: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = field(default_factory=dict)
     #: a tool's `structuredContent`, sent beside its text and free to say what the text does not
     structured: dict[str, Any] = field(default_factory=dict)
+    #: what `resources/list` answers, by pages of `page_size` (ADR 0191); empty: no `resources` capability
+    resources: list[dict[str, Any]] = field(default_factory=list)
+    #: what `resources/read` answers for a URI: its `contents`; a URI not here is MCP's -32002
+    contents: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.respond)
@@ -78,7 +85,7 @@ class FakeMcpServer:
         if method == "initialize":
             return {
                 "protocolVersion": params.get("protocolVersion", "2025-06-18"),
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {}, **({"resources": {}} if self.resources else {})},
                 "serverInfo": {"name": "fake-mcp", "version": "1"},
             }
         if method == "tools/list":
@@ -86,6 +93,17 @@ class FakeMcpServer:
             page = self.tools[start : start + self.page_size]
             following = start + self.page_size
             return {"tools": page, **({"nextCursor": str(following)} if following < len(self.tools) else {})}
+        if method == "resources/list":
+            start = int(params.get("cursor") or 0)
+            listed = self.resources[start : start + self.page_size]
+            following = start + self.page_size
+            more = {"nextCursor": str(following)} if following < len(self.resources) else {}
+            return {"resources": listed, **more}
+        if method == "resources/read":
+            uri = str(params.get("uri"))
+            if uri not in self.contents:
+                return (-32002, f"resource not found: {uri}")
+            return {"contents": self.contents[uri]}
         if method == "tools/call":
             name = str(params.get("name"))
             # A gesture is callable even when not announced: a tool kept under its former name.
