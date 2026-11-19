@@ -22,6 +22,8 @@ from .scheduling import execute_on_its_queue
 with workflow.unsafe.imports_passed_through():
     from tranibor_contracts import Workflow
     from tranibor_core import WorkflowEngine
+    from tranibor_core.domain import TRIAL_STATE
+    from tranibor_core.dsl import UnknownStateError
 
     from ..activities import tracker as tracker_activities
     from ..activities.interpretation import (
@@ -146,6 +148,10 @@ RUN_STOPPED_GOES_TO_A_PERSON = "run-stopped-goes-to-a-person"
 #: mirrors the platform's state, and the next mirror rewrites it whole. Before this marker the failure
 #: failed the interpreter (FON-277 stood still for two days, 2026-11-09).
 STATUS_COMMENT_BEST_EFFORT = "status-comment-best-effort"
+#: A status comment missed under `STATUS_COMMENT_BEST_EFFORT` is published on the work item
+#: (`record_status_comment_missed`, S62-20), so its timeline says why the board may lag. Before this
+#: marker only the worker's log said so.
+STATUS_COMMENT_MISS_PUBLISHED = "status-comment-miss-published"
 #: A decision that names the request it answers (`request_id`) is applied only while that request is
 #: the one pending (#1795, S67-15). A decision made for a request that has since been closed, or
 #: replaced by another (an approval in `pr_open` delivered once the work item had escalated to
@@ -209,6 +215,11 @@ __all__ = [
     "WorkflowInterpreter",
     "wait_signal",
 ]
+
+
+def _is_a_trial(exc: BaseException) -> bool:
+    """The interpreter met a trial's work item: its state is `trial`, which no workflow declares."""
+    return isinstance(exc, UnknownStateError) and exc.state == TRIAL_STATE
 
 
 @workflow.defn(name="WorkflowInterpreter", sandboxed=False)
@@ -378,6 +389,12 @@ class WorkflowInterpreter(
                     start_to_close_timeout=timedelta(seconds=30),
                     retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1)),
                 )
+            if _is_a_trial(exc):
+                # A trial's work item has no interpreter (#1781): one started on it before 0.27.11
+                # stayed open, its workflow task failing on every replay (#1865). It ends here, after
+                # the same commands as before, so the histories left over replay and close.
+                workflow.logger.warning("interpreter on a trial work item ended", extra={"state": self.state})
+                return {"state": self.state, "cost_usd": self.cost_usd, "stopped": True}
             raise
 
     async def _run(self, params: InterpreterInput, payload: dict[str, Any]) -> dict[str, Any]:

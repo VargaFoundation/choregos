@@ -23,7 +23,12 @@ with workflow.unsafe.imports_passed_through():
         record_migration,
     )
 
-from ..interpreter import ESCALATION_CONTEXT_STORED, MIGRATION_BY_DEFINITION, STATUS_COMMENT_BEST_EFFORT
+from ..interpreter import (
+    ESCALATION_CONTEXT_STORED,
+    MIGRATION_BY_DEFINITION,
+    STATUS_COMMENT_BEST_EFFORT,
+    STATUS_COMMENT_MISS_PUBLISHED,
+)
 from .base import InterpreterBase
 from .helpers import _MIGRATION, DEFAULT_RETRY, InterpreterInput
 
@@ -187,3 +192,15 @@ class ExternalMixin(InterpreterBase):
                     "error": str(error.cause or error),
                 },
             )
+            if workflow.patched(STATUS_COMMENT_MISS_PUBLISHED):
+                await execute_on_its_queue(
+                    tracker_activities.record_status_comment_missed,
+                    {
+                        "project_id": params.project_id,
+                        "work_item_id": params.work_item_id,
+                        "state": self.state,
+                        "error": str(error.cause or error),
+                    },
+                    start_to_close_timeout=timedelta(minutes=1),
+                    retry_policy=DEFAULT_RETRY,
+                )

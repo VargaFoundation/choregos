@@ -71,7 +71,7 @@ async def play() -> tuple[str, dict[str, Any] | None, dict[str, list[Any]], Any]
 async def test_a_loop_past_its_cycles_continues_as_new_with_the_same_input() -> None:
     ended, next_input, asked, _ = await play()
     assert ended == "continued_as_new", "a returned loop could never start again under `mem-<slug>`"
-    assert next_input == {**PAYLOAD, "last_report_week": 0}
+    assert next_input == {**PAYLOAD, "last_report_week": 0, "run_lessons_since": ""}
     assert asked["ingest"][0] == {"project_slug": "replay", "sources": ["adr"]}
 
 
