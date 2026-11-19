@@ -52,6 +52,9 @@ from ..http.egress import guarded
 
 #: Beyond this, a server that pages without end is an error, not a list.
 MAX_PAGES = 50
+#: The same for `resources/list`: a catalogue lists far more resources than a server has tools, and a
+#: server may page them ten by ten. A cursor seen twice is a loop, and an error at once.
+MAX_RESOURCE_PAGES = 1000
 
 #: The versions this CLIENT speaks, newest first; `initialize` offers the first. It differs from
 #: `tranibor_core.mcp.VERSIONS`, what Tranibor's own servers claim (the sidecar, the API's door):
@@ -305,7 +308,8 @@ class McpClient:
             await self._open(http)
             resources: list[McpResource] = []
             cursor: str | None = None
-            for _ in range(MAX_PAGES):
+            seen: set[str] = set()
+            for _ in range(MAX_RESOURCE_PAGES):
                 result = await self._send(http, "resources/list", {"cursor": cursor} if cursor else {})
                 for raw in (result or {}).get("resources", []):
                     if not isinstance(raw, dict) or not isinstance(raw.get("uri"), str):
@@ -326,7 +330,12 @@ class McpClient:
                 cursor = (result or {}).get("nextCursor")
                 if not cursor:
                     return resources
-            raise McpError(f"resources/list: more than {MAX_PAGES} pages: the server pages without end")
+                if not isinstance(cursor, str) or cursor in seen:
+                    raise McpError("resources/list: the server answered a cursor it had already given")
+                seen.add(cursor)
+            raise McpError(
+                f"resources/list: more than {MAX_RESOURCE_PAGES} pages: the server pages without end"
+            )
 
     async def read_resource(self, uri: str) -> list[dict[str, Any]]:
         """The contents `resources/read` answers for `uri`: each a `text` or a base64 `blob`."""
