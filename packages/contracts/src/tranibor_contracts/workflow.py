@@ -133,8 +133,9 @@ class JobActor(Strict):
     #: The job image's name; `None` runs in the runner image.
     image: JobImage | None = None
     max_minutes: int | None = Field(default=None, ge=1, le=480)
-    #: The connector operations the command may call with the run's token (`marketdata: [get_bars]`):
-    #: the only way out of the sandbox, metered and recorded like an agent's tool calls.
+    #: The connector operations the command may call with the run's token
+    #: (`{connector: feed, tools: [get_bars]}`): the only way out of the sandbox, metered and recorded
+    #: like an agent's tool calls.
     tools: list[JobTools] = Field(default_factory=list, max_length=16)
 
 
