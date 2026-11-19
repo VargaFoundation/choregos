@@ -104,6 +104,8 @@ class TektonExecutor:
     """Creates and follows the `PipelineRun`s of agent steps."""
 
     kind = ExecutorKind.TEKTON
+    #: Never `separate_agent` (ADR 0146 §9, S65-04l): under `container` every run is refused at `start`,
+    #: with the reason in `tranibor_core.agent_isolation.WHY_NOT_SEPARATE`.
     capabilities: frozenset[str] = frozenset()
 
     def __init__(

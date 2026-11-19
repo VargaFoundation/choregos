@@ -102,8 +102,11 @@ platform's runner image for `runner` and the operator's image for the agent's co
 a step and the routing executor sends it to `k8s_job`. `docs/code-agents.md` says what such an image must
 hold (the runner's entrypoint, the agent readable by uid 1001 under a read-only root, no secret).
 
-**Not built, still decided**: `tekton` and `aca` get no second container: under `container` they refuse the
-run at `start`.
+**Decided after, S65-04l (§9)**: `tekton` and `aca` do not start the agent's container and never
+declare `separate_agent`: under `container` each refuses every run at `start`, naming itself and why
+(`WHY_NOT_SEPARATE`: the Task carries no agent sidecar and is copied per namespace; a Container Apps job
+runs one container and its handling of a second was never run), and `/readiness` reads the same sentence.
+A project there runs under `process`, or moves to `k8s_job`, `local_docker` or `agent_sandbox`.
 
 **Proved** (`tests/cluster/test_agent_isolation.py`, kubelet 1.34, runc): the same probe, run as the
 runner's child, reads the runner's environment, process and file; run by the launcher, it reads none
