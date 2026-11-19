@@ -108,9 +108,19 @@ def test_project_allow_unvalidated_flag() -> None:
 
 
 def test_to_ref_and_api_format_per_backend() -> None:
-    ref = resolver().resolve("profile:standard", backend="gemini-cli").to_ref()
+    ref = resolver().resolve("profile:aux", backend="gemini-cli").to_ref()
     assert ref.api_format == "gemini"
     assert ref.base_url == "http://litellm:4000"
+
+
+def test_gemini_cli_is_refused_on_a_model_that_is_not_gemini_and_says_why() -> None:
+    """#1990: through LiteLLM's Gemini adapter a Claude model refuses gemini-cli's turns as soon as it
+    calls one tool twice; the step is refused before it starts, even where unvalidated pairs pass."""
+    with pytest.raises(ModelResolutionError, match=r"gemini-cli.*only accepts gemini.*#1990"):
+        resolver().resolve("profile:standard", backend="gemini-cli", project=project(allow_unvalidated=True))
+    with pytest.raises(ModelResolutionError, match="#1990"):
+        resolver().resolve("anthropic/claude-haiku-4-5", backend="gemini-cli")
+    assert resolver().resolve("profile:aux", backend="gemini-cli").provider_model == "vertex_ai/gemini-flash"
 
 
 def test_estimate_tokens() -> None:

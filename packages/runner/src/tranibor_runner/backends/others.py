@@ -52,6 +52,9 @@ class GeminiCliBackend(Backend):
     name: ClassVar[str] = "gemini-cli"
     skills_dir: ClassVar[str | None] = ".gemini/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
+    #: Gemini only (#1990): through LiteLLM's Gemini adapter another family refuses its turns as soon
+    #: as it calls one tool twice (`tranibor_core.models.BACKEND_MODEL_CONSTRAINT_REASONS`).
+    model_constraint: ClassVar[tuple[str, ...]] = ("gemini",)
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
         # `--acp` since gemini-cli 0.39; `--experimental-acp` is deprecated and prints a
@@ -77,6 +80,7 @@ class GeminiCliBackend(Backend):
         )
 
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
+        self.validate_model(model)
         return {
             "GOOGLE_GEMINI_BASE_URL": model.base_url,
             "GEMINI_API_KEY": key or "",
