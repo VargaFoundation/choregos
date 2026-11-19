@@ -19,6 +19,12 @@ shell call's `rawInput` before the command is known, so its every `bash` is anno
 fingerprinted on the first arguments it carries once it is no longer `pending`, or, if it ends
 without any, on the last ones it was announced with — what an agent that sends its arguments with
 the announcement only (claude-agent-acp) leaves to compare.
+
+That still held a hole (#1869, prod 0.27.10: `execute/bash:{"cwd": "/workspace"}` five times, a verifier
+stopped with its tests green): the working directory is not an argument, and a shell call without its
+command is not a call that can be compared, whatever its status. Arguments reduced to the working
+directory are unknown arguments, and an `execute` call is compared only once its command is known;
+one that ends without it is unknown, which breaks the streak instead of extending it.
 """
 
 from __future__ import annotations
@@ -55,6 +61,27 @@ def known_arguments(tool_call: dict[str, Any]) -> Any | None:
     arguments = tool_call.get("rawInput")
     if arguments is None or arguments in ({}, [], ""):
         return None
+    return arguments
+
+
+#: Keys that say where a call runs, not what it does.
+_LOCATION_KEYS = frozenset({"cwd", "workdir"})
+
+#: The keys under which a backend puts a shell call's command (as `guardrails.py` reads them).
+_COMMAND_KEYS = ("command", "cmd", "script", "shell")
+
+
+def usable_arguments(name: str, arguments: Any | None) -> Any | None:
+    """The arguments worth comparing: `None` when they hold only the call's location, or, for an
+    `execute` call, no command (opencode adds `cwd` to a shell call's `rawInput` before the command)."""
+    if arguments is None:
+        return None
+    if isinstance(arguments, dict):
+        if all(key in _LOCATION_KEYS for key in arguments):
+            return None
+        is_shell = name == "execute" or name.startswith("execute/")
+        if is_shell and not any(arguments.get(key) for key in _COMMAND_KEYS):
+            return None
     return arguments
 
 
@@ -106,7 +133,7 @@ class TurnGuard:
                 return self.tripped
         if call_id in self._settled:
             return None
-        arguments = known_arguments(tool_call)
+        arguments = usable_arguments(self._names.get(call_id, ""), known_arguments(tool_call))
         status = tool_call.get("status")
         anonymous = call_id.startswith("\x00")
         if arguments is not None and status == _PENDING and not anonymous:
