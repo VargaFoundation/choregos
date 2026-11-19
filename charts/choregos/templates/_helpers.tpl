@@ -422,9 +422,15 @@ right — in the parent chart only.
 {{- end -}}
 {{- end -}}
 
+{{- /* The embedded Temporal's Service name: `global.temporal.serviceName` (global, so the API and the
+workers, which render the address from their own values, see it too), or `<release>-temporal`. */ -}}
+{{- define "choregos.temporalServiceName" -}}
+{{- (.Values.global.temporal | default dict).serviceName | default (printf "%s-temporal" .Release.Name) -}}
+{{- end -}}
+
 {{- define "choregos.temporalAddress" -}}
 {{- if .Values.global.temporal.embedded -}}
-{{ .Release.Name }}-temporal:7233
+{{ include "choregos.temporalServiceName" . }}:7233
 {{- else -}}
 {{ .Values.global.temporal.address }}
 {{- end -}}

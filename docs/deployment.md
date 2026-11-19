@@ -86,6 +86,41 @@ probes the bucket when a workflow declares a file output and names the cause.
 Turning all four on gives a self-contained bench on a single node:
 `-f charts/choregos/values/local.yaml`.
 
+### The embedded Temporal as an operator runs it ([ADR 0195](adr/0195-the-core-ships-the-generic-deployment-an-operators-repository-keeps-its-values.md))
+
+`global.temporal.embedded=true` renders the `choregos-temporal` subchart, in one of two modes.
+
+```yaml
+global:
+  temporal: { embedded: true, serviceName: temporal-frontend }
+choregos-temporal:
+  mode: server                       # `dev` (start-dev, SQLite: a bench) or `server` (auto-setup, PostgreSQL)
+  database:                          # `server` only; empty host/user/secret: `global.database`
+    host: choregos-pg
+    user: temporal
+    passwordSecret: { name: temporal.choregos-pg.credentials.postgresql.acid.zalan.do, key: password }
+    skipCreate: true                 # the operator's PostgreSQL already created `temporal` and `temporal_visibility`
+    tls: { enabled: true }
+  tls:
+    enabled: true
+    certManager: { enabled: true }   # self-signed issuer -> CA -> server and client certificates
+```
+
+- `dev`: `server start-dev` on SQLite. With `tls.enabled` it listens on 127.0.0.1:7234 and an nginx relay
+  holds the pod's port 7233 with the server certificate (start-dev has no TLS option).
+- `server`: `temporalio/auto-setup`, the four services in one pod, persistence on PostgreSQL. The pod holds
+  no data: a restart cuts the workflows for about 30 s and the clients resume alone.
+  `server.numHistoryShards` is **immutable** once the database is initialised.
+- A serious environment (`staging`, `prod`) refuses the embedded Temporal in `dev` mode only.
+- **Adopting what already runs.** `global.temporal.serviceName` keeps the Service name clients dial;
+  `persistence.existingClaim` keeps the SQLite volume (the chart then renders no claim and never touches
+  it); `tls.serverSecretName`, `tls.clientSecretName` and `tls.certManager.namePrefix` keep the Secret and
+  issuer names an earlier deployment created. Switching a running Temporal onto the chart is one
+  Deployment replaced, never a database or a volume recreated: remove the old Deployment first (two
+  SQLite writers corrupt the file), then let the chart's Deployment start on the same claim.
+- `choregos-temporal.tls.enabled` needs `global.temporal.tls.enabled`: the render refuses a TLS server whose
+  clients would speak clear.
+
 ### Temporal over TLS, payloads encrypted ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
 
 Temporal keeps every workflow's inputs, results, signals and failure messages: ticket text, agents'
