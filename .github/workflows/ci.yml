@@ -31,6 +31,7 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       web: ${{ steps.filter.outputs.web }}
       vscode: ${{ steps.filter.outputs.vscode }}
+      android: ${{ steps.filter.outputs.android }}
       charts: ${{ steps.filter.outputs.charts }}
       contracts: ${{ steps.filter.outputs.contracts }}
       docker: ${{ steps.filter.outputs.docker }}
@@ -69,6 +70,10 @@ jobs:
             vscode:
               - 'apps/vscode/**'
               - 'packages/contracts/ts/**'
+            # The phone app (ADR 0193) reads the REST contract by hand (Kotlin DTOs), so a contract change reruns it.
+            android:
+              - 'apps/android/**'
+              - 'packages/contracts/openapi.yaml'
             charts:
               - 'charts/**'
               - 'infra/**'
@@ -379,6 +384,29 @@ jobs:
       - run: pnpm package
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: choregos-vscode, path: apps/vscode/dist/choregos-vscode.vsix, retention-days: 7 }
+
+  android:
+    # The phone app (ADR 0193, S81-07): Android lint (warnings are errors), the JVM unit suite (the API client, the
+    # sign-in, and the voice session against a fake WebSocket server), then the release APK, unsigned: signing
+    # keys exist only where a release is cut (docs/android.md). Temurin 17 and the pinned Gradle wrapper (its
+    # checksum is in gradle-wrapper.properties); the runner's own Android SDK.
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run: { working-directory: apps/android }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - run: ./gradlew --no-daemon lint test assembleRelease
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: tranibor-android, path: apps/android/app/build/outputs/apk/release/*.apk, retention-days: 7 }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with: { name: android-reports, path: apps/android/app/build/reports, retention-days: 7 }
 
   charts:
     needs: changes
@@ -1094,7 +1122,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, python-postgres, contracts, web, vscode, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
+    needs: [changes, python, python-postgres, contracts, web, vscode, android, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

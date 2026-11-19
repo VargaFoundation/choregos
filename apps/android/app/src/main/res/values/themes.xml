@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.Tranibor" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFCFCFD</item>
+        <item name="android:statusBarColor">#FFFCFCFD</item>
+        <item name="android:navigationBarColor">#FFFCFCFD</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

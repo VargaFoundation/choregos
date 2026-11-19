@@ -61,6 +61,17 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
+  # The phone app (Gradle, ADR 0193). AGP, Kotlin and Compose move together, so they are one group; the
+  # wrapper is pinned by checksum and bumped by hand (docs/android.md).
+  - package-ecosystem: gradle
+    directory: /apps/android
+    schedule:
+      interval: weekly
+    groups:
+      android-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   # Base images of the Dockerfiles. A single PR: most share `python:3.12-slim`, the
   # console starts from `node:24`, and moving them out of step with each other makes no sense. An upgrade to
   # a Node version that is not LTS gets closed: the rule is in `docker/README.md`.
