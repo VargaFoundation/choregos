@@ -62,3 +62,6 @@ choregos.db-wal
 # The documentation site (ADR 0181): `website/docs/` is copied from `docs/site/` at build time.
 website/docs/
 website/.docusaurus/
+
+# pytest-textual-snapshot writes its report here on a failure or an update
+snapshot_report.html
