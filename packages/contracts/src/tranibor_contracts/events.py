@@ -23,7 +23,7 @@ class InboundEvent(Strict):
 
     #: One of the core's `InboundEventType` (returned as the member), or a type an extension declared
     #: (`INBOUND_EVENT_TYPES.declare`, ADR 0181); any other is refused.
-    type: Annotated[str, AfterValidator(INBOUND_EVENT_TYPES.check)]
+    type: Annotated[str, AfterValidator(INBOUND_EVENT_TYPES.validate)]
     source: str
     delivery_id: str
     ts: datetime = Field(default_factory=_now)

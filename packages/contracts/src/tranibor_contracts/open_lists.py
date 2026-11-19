@@ -21,7 +21,12 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import Any
 
+from pydantic import ValidationInfo
+
 from .enums import ConnectorKind, FindingType, InboundEventType, MemoryKind, StageRole
+
+#: The validation context of a document read back from the platform's own storage (`{STORED: True}`).
+STORED = "stored"
 
 
 class OpenList:
@@ -62,13 +67,26 @@ class OpenList:
         """Drop what `plugin` declared: what a test does after installing an extension."""
         self._declared = {value: owner for value, owner in self._declared.items() if owner != plugin}
 
-    def check(self, value: Any) -> Any:
+    def validate(self, value: Any, info: ValidationInfo) -> Any:
+        """The validator of a contract's field (`AfterValidator(LIST.validate)`): `check`, with the
+        validation context, which says whether the document is one the platform stored."""
+        return self.check(value, info)
+
+    def check(self, value: Any, info: ValidationInfo | None = None) -> Any:
         """The validator of a contract's field: the enumeration's member for a value of the core, the
-        string for a declared one; anything else is refused, naming the list."""
+        string for a declared one; anything else is refused, naming the list.
+
+        A document the platform already stored is read with the context `{"stored": True}`: a value
+        that matches the pattern is then read even when no installed extension declares it (ADR 0098
+        §4, readers accept). A stored workflow that names a plugin's step effect keeps parsing after
+        the plugin is gone, and its Temporal history keeps replaying; the effect itself is then refused
+        when it is reached, naming it."""
         text = str(value)
         if text in self.core:
             return self._enum(text) if self._enum is not None else text
         if text in self._declared:
+            return text
+        if info is not None and (info.context or {}).get(STORED) and self._compiled.fullmatch(text):
             return text
         raise ValueError(
             f"unknown {self.what}: {text!r} (the core's: {', '.join(sorted(self.core))}; an extension "
