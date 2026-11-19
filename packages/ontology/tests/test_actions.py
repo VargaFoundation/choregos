@@ -491,6 +491,23 @@ async def test_an_api_token_does_not_decide_and_a_rejection_needs_a_reason(
     assert (await _proposal(client, project, proposal))["status"] == "pending_approval"
 
 
+async def test_an_outposts_signature_does_not_decide_a_proposal(
+    client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
+) -> None:
+    """The plugin's decision route is the core's gate (S67-15): a request that carries an outpost's signature
+    is refused before the administrator's session is read, and the proposal keeps waiting."""
+    from tranibor_contracts import SIGNATURE_HEADER
+
+    proposal = (await _propose(client, it4it))["result"]["proposal"]
+    path = f"/api/v1/projects/{project['id']}/proposals/{proposal}/decision"
+    refused = await client.post(
+        path, headers={SIGNATURE_HEADER: "0" * 64}, json={"decision": "approve", "reason": "ok"}
+    )
+    assert refused.status_code == 403 and "outposts' door only" in refused.json()["detail"], refused.text
+    assert scm.prs == {}
+    assert (await _proposal(client, project, proposal))["status"] == "pending_approval"
+
+
 # ───────────────────────────── a proposal made by a person ─────────────────────────────
 
 

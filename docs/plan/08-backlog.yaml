@@ -54,6 +54,7 @@ streams:
   S68: "The editor is a surface of the platform: a code editor extension that converses, shows what runs and what waits, and runs nothing locally (ADR 0155)"
   S75: "The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176)"
   S80: "From engine to product: the plan of 2026-11-16"
+  S81: "The phone is a surface of the platform: an Android app for agents, assistants and voice (ADRs 0192-0194)"
 
 stories:
 
@@ -5427,6 +5428,14 @@ stories:
     size: M
     depends_on: [S72-01]
     notes: "Asked by the project lead on 2026-11-18: external knowledge bases that a data platform feeds, built generically (ADR 0079). Source kind `mcp` on an mcp/mcp or mcp/mcp-gateway connector, its service identity; resources/list complete, resources/read per item, lastModified as version, OKF header kept. Contract first (kind enum), then the implementation. The platform's own MCP door publishes its documentation as resources, the real server the source is proved against. The push of an OKF bundle is a rejected alternative, kept for later."
+  - id: S72-06
+    title: "feat(adapters,api): an MCP knowledge source proved against a third-party server and the gateway (ADR 0191)"
+    stream: S72
+    sprint: 3
+    priority: 3
+    size: S
+    depends_on: [S72-05]
+    notes: "Finishes what S72-05 left unproved. The protocol's reference server (`@modelcontextprotocol/server-everything` 2.2.1) answers a collection resource with five contents: a resource with several contents is now one document (JSON parts as an array, text parts joined, binary parts skipped). `resources/list` pages up to 1000 (a catalogue pages ten by ten), a repeated cursor is a loop. The gateway route relays resources/* signed as the source. A large unversioned catalogue is read only up to the base's limit."
   - id: S73-01
     title: "chore(publishing): the publication moves to graalsystems (owner, registry, source repository; ADR 0156 amendment)"
     stream: S73
@@ -5692,6 +5701,63 @@ stories:
     size: S
     depends_on: [S80-10]
     notes: "graalsystems/ecphoria 0.2.6 is the first release published to ghcr.io/graalsystems/ecphoria and -operator. The chart and both compose files pin 0.2.6-memory there; the allowlist of tests/licences/test_no_varga.py loses the four files that named the frozen Ecphoria address."
+  # ───────────── S81 — the phone is a surface of the platform ─────────────
+  - id: S81-01
+    title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
+    stream: S81
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "Decision of the project lead, 2026-11-19. ADR 0180 §1 and its frozen verdicts lifted, tests/docs/test_scope_freeze.py removed; the finish verdicts, human review and the December decisions stand. ADR 0193 accepted; stream S81 and its stories in the backlog and in status/S81."
+  - id: S81-02
+    title: "contract(openapi): a person's push subscriptions and the VAPID public key"
+    stream: S81
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S81-01]
+    notes: "GET /push/vapid-public-key; GET, POST /me/push-subscriptions (endpoint, p256dh and auth keys, device name, kinds), DELETE and a test send; the schema of the payload a device decrypts (kind, title, body, org, ref, url, at)."
+  - id: S81-03
+    title: "feat(api): a person's devices are told by Web Push what waits for them (ADR 0194)"
+    stream: S81
+    sprint: 1
+    priority: 3
+    size: M
+    depends_on: [S81-02]
+    notes: "RFC 8030/8291/8292, no push vendor named. Subscriptions under RLS; delivery after the inbox item or agent notification is committed, never blocking it; 404 and 410 delete the subscription; VAPID key and subject as settings and chart secret; a Fake sender."
+  - id: S81-04
+    title: "feat(android): the app signs in by device code and shows agents, assistants, activity and conversations"
+    stream: S81
+    sprint: 1
+    priority: 4
+    size: L
+    depends_on: [S81-01]
+    notes: "apps/android, Kotlin and Compose. Device-code sign-in, token in Keystore-backed storage, organisation picker, agents (stop, watch, star), assistants and their conversations, a prompt agent's responses streamed, activity with stop, My account sessions."
+  - id: S81-05
+    title: "feat(android): a spoken conversation with a voice agent (ADR 0080)"
+    stream: S81
+    sprint: 1
+    priority: 5
+    size: L
+    depends_on: [S81-04]
+    notes: "The realtime socket, PCM16 24 kHz mono, server VAD; echo cancellation and noise suppression, barge-in, Bluetooth headset, a microphone foreground service; never session.update; a cap's 1008 said in plain words. Codec and session state machine tested against a fake socket."
+  - id: S81-06
+    title: "feat(android): the inbox, decisions from the phone, and notifications through UnifiedPush"
+    stream: S81
+    sprint: 1
+    priority: 6
+    size: M
+    depends_on: [S81-03, S81-04]
+    notes: "/me/inbox with the decision routes the items point to, ADR 0170 re-authentication honoured; UnifiedPush registration on /me/push-subscriptions, payload decrypted on the device, deep links to the item."
+  - id: S81-07
+    title: "ci(android): the app's CI job and its signed release beside the CLI's binaries"
+    stream: S81
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: [S81-04]
+    notes: "make android-ci (lint, unit tests, release build), an android job with every action pinned by SHA, release signing from secrets and an unsigned build without them, the APK attached to the release (ADR 0151); docs/android.md."
   - id: S4-08
     title: "Prompt caching on the platform's own model calls — stable prefix, `cache_control` on the Anthropic-family prefix, no-op elsewhere"
     stream: S4

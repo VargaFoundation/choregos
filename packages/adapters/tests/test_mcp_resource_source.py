@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 
 import pytest
 from tranibor_adapters.documents.base import ItemUnreadableError, SourceRefusedError
@@ -154,3 +155,68 @@ def test_the_configuration_keeps_what_it_knows_and_refuses_the_rest() -> None:
         checked_config({"uri_prefix": "x" * 2001})
     with pytest.raises(SourceRefusedError):
         checked_config({"mime_types": ["not a type"]})
+
+
+async def test_a_collection_is_one_document_and_binary_parts_are_not_joined() -> None:
+    """The protocol's reference server answers five JSON items for one `collection` resource."""
+    items = [{"uri": f"catalog://c/item/{n}", "mimeType": "application/json", "text": f'{{"id": {n}}}'}
+             for n in (1, 2)]  # fmt: skip
+    server = FakeMcpServer(
+        resources=[
+            {"uri": "catalog://c/specials", "name": "specials", "mimeType": "application/json"},
+            {"uri": "catalog://c/notes", "name": "notes", "mimeType": "text/markdown"},
+            {"uri": "catalog://c/mixed", "name": "mixed", "mimeType": "text/markdown"},
+            {"uri": "catalog://c/broken", "name": "broken", "mimeType": "application/json"},
+        ],
+        contents={
+            "catalog://c/specials": items,
+            "catalog://c/notes": [
+                {"uri": "catalog://c/n/1", "text": "# One\n"},
+                {"uri": "catalog://c/n/2", "text": "# Two"},
+            ],
+            "catalog://c/mixed": [
+                {"uri": "catalog://c/m/1", "text": "# One"},
+                {"uri": "catalog://c/m/2", "blob": "AA=="},
+            ],
+            "catalog://c/broken": [
+                {"uri": "catalog://c/b/1", "text": "{"},
+                {"uri": "catalog://c/b/2", "text": "{}"},
+            ],
+        },
+    )  # fmt: skip
+    source = _source(server)
+    by_name = {i.name: i for i in (await source.changes(None)).items}
+    assert (
+        await source.fetch(by_name["specials.json"]) == b'[\n  {\n    "id": 1\n  },\n  {\n    "id": 2\n  }\n]'
+    )
+    assert await source.fetch(by_name["notes.md"]) == b"# One\n\n# Two\n"
+    with pytest.raises(ItemUnreadableError, match="not all of them text"):
+        await source.fetch(by_name["mixed.md"])
+    with pytest.raises(ItemUnreadableError, match="not all of them JSON"):
+        await source.fetch(by_name["broken.json"])
+
+
+async def test_a_long_listing_is_followed_to_its_end_and_a_cursor_loop_is_an_error() -> None:
+    import httpx
+
+    many = FakeMcpServer(
+        resources=[
+            {"uri": f"catalog://t/{n:04}", "name": f"t{n}", "mimeType": "text/plain"} for n in range(240)
+        ],
+        page_size=2,
+    )
+    listed = await McpClient("https://catalog.test/mcp", transport=many.transport()).list_resources()
+    assert len(listed) == 240, "120 pages: a catalogue pages far beyond a tool list's 50"
+
+    def looping(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if "id" not in body:
+            return httpx.Response(202)
+        result: dict[str, object] = {"resources": [{"uri": "catalog://loop"}], "nextCursor": "again"}
+        if body["method"] == "initialize":
+            result = {"protocolVersion": "2025-06-18", "capabilities": {"resources": {}}, "serverInfo": {}}
+        return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": result})
+
+    client = McpClient("https://catalog.test/mcp", transport=httpx.MockTransport(looping))
+    with pytest.raises(McpError, match="already given"):
+        await client.list_resources()
