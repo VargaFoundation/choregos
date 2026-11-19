@@ -12,8 +12,8 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from tranibor_contracts import ExecutorKind, StageResult
-from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_contracts.env import with_legacy
+from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 from tranibor_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER
 

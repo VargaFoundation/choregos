@@ -24,8 +24,8 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from tranibor_contracts import ExecutorKind
-from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_contracts.env import with_legacy_entries
+from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import (
     RUN_GATEWAY_KEY_ENV,
     RUN_REMOTE_TOKEN_ENV,
