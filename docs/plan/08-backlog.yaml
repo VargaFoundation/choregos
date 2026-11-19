@@ -5578,6 +5578,14 @@ stories:
     size: S
     depends_on: []
     notes: "Plan workstreams A1 (decision) and O4 (decision); proposed, the project lead decides in December 2026. Docs only: no contract changes. The contract-change rounds C0, C1 (in the same minor as ADR 0176 R2) and C2 are tracked by issue #1832."
+  - id: S80-08b
+    title: "chore(core): the ontology package is removed, its tables dropped if present (ADR 0181 O4-1)"
+    stream: S80
+    sprint: 1
+    priority: 8
+    size: M
+    depends_on: [S80-08]
+    notes: "Project lead's decision of 2026-11-19: option O4-1. packages/ontology, the compat shim, the console card, the template extension and the ontology trials go; migration b4d6f8a0c2e5 drops the tables IF EXISTS and migrate.forget_retired_revisions removes onto0001-0003 from alembic_version. Persisted origin 'ontology', ontology.effet/preuve and params.ontologie stay readable; the contract is unchanged."  # lang: fr-ok
   - id: S80-02
     title: "docs(plan): STATUS.md becomes an index of per-stream status files, and the install guide names the current version"
     stream: S80
@@ -5710,6 +5718,14 @@ stories:
     size: S
     depends_on: [S80-10]
     notes: "graalsystems/ecphoria 0.2.6 is the first release published to ghcr.io/graalsystems/ecphoria and -operator. The chart and both compose files pin 0.2.6-memory there; the allowlist of tests/licences/test_no_varga.py loses the four files that named the frozen Ecphoria address."
+  - id: S80-12
+    title: "docs(adr,plan): the core ships the generic deployment, an operator's repository keeps its values (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: []
+    notes: "Decision of 2026-11-19. Sorts the first operator's deployment repository into generic (moves here) and operator-specific (stays), and orders the moves."
   - id: S80-13
     title: "ci: the gateway's guarantees are proven every night against a real model, Claude Haiku 5.5, with a capped key"
     stream: S80
@@ -5719,6 +5735,38 @@ stories:
     depends_on: [S80-07e]
     notes: ".github/workflows/live-model.yml: nightly at 03:30 UTC and on dispatch, never on a pull request, only on graalsystems/tranibor from main. tests/live/model/compose.yaml starts the chart's LiteLLM (guard, span callback) with every alias on anthropic/claude-haiku-5-5; tests/live/test_litellm_live.py runs through it, a skip fails the job. The repository secret ANTHROPIC_API_KEY (a dedicated workspace with a monthly cap) is in the environment of the step that starts LiteLLM only. Guarded by tests/ci/test_live_model_job.py."
   # ───────────── S81 — the phone is a surface of the platform ─────────────
+  - id: S80-14
+    title: "feat(charts): Temporal over TLS and on PostgreSQL in the chart, adopting an existing volume and Service name (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S80-12, S80-06]
+    notes: "First move of ADR 0195. The temporal subchart gains tls (cert-manager chain or an existing secret, an nginx relay for start-dev), mode server (auto-setup on PostgreSQL), persistence.existingClaim and service.name. Not done: a handshake against a real Temporal over TLS on a cluster."
+  - id: S80-15
+    title: "feat(charts): the LiteLLM subchart takes model prices, cache prices, a TLS database and a pinned image (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: M
+    depends_on: [S80-12]
+    notes: "Second move of ADR 0195. Per-model modelInfo, database sslmode and password secret, a security context, a configuration checksum on the pod."
+  - id: S80-16
+    title: "feat(charts): Ecphoria and the embedded components adopt an existing volume and Service name (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S80-12]
+    notes: "Third move of ADR 0195."
+  - id: S80-17
+    title: "feat(charts): an optional web-search stack, SearXNG, Firecrawl search and the outbound-proxy relay (ADR 0195)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: [S80-12]
+    notes: "Fourth move of ADR 0195. A websearch subchart, off by default."
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
     stream: S81
@@ -5865,7 +5913,54 @@ stories:
       - "a transition may declare repairs: <outcome>; the interpreter picks it on that outcome, behind a workflow.patched id, with a replayed history under tests/replay"
       - "one window list names each old name and the release that removes it; a test fails when pyproject's version reaches that release and the name is still there"
       - "memberships.role readers accept both spellings; the OpenAPI title is Tranibor API"
-    notes: "12-19 pd. R2 shipped in 0.27.14 without C1, so Python names take the window rule of REST and DSL names (ADR 0181 decision 6). The removal, at least two weeks after the round's release, is its own PR (S83-03b), with the memberships data migration once the enterprise group mapper emits the new names. 2027-01-04 to 2027-02-05; window closed by 2027-02-26."
+    notes: "12-19 pd. R2 shipped in 0.27.14 without C1, so Python names take the window rule of REST and DSL names (ADR 0181 decision 6). The removal, at least two weeks after the round's release, is its own PR (S83-03r), with the memberships data migration once the enterprise group mapper emits the new names. Started 2026-11-19 instead of 2027-01-04, split as S83-03a (contract), b (API), c (repairs and declared needs), d (console and CLI), r (removal in 0.30.0)."
+  - id: S83-03a
+    title: "contract(contracts): C1's neutral names beside the old ones, the window list and its test (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-02]
+    acceptance:
+      - "Role.CONTRIBUTOR and Role.APPROVER beside the former members; the role enums of the DSL and the REST contract take both spellings; WorkItem carries links, workspace and workspace_fixed beside pr_url, repository and repository_fixed; writes_workspace, needs_workspace, in_change_request and first_pass_acceptance_rate beside their former names; a stage result's artifacts carry links; a transition may declare repairs, an agent needs; the OpenAPI title is Tranibor API"
+      - "tranibor_contracts.window.WINDOW names every former name, where it is and the release that removes it; tests/architecture/test_the_window_list.py fails on a stale entry and on a name still there at its release"
+  - id: S83-03b
+    title: "feat(api): the API serves C1's neutral names beside the former ones, reads both role spellings and writes the former one for a release (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-03a]
+    acceptance:
+      - "responses carry both names; requests accept either role spelling; a contributor or approver holds the permissions of the role it renames; the role groups contributors and approvers sign in"
+  - id: S83-03c
+    title: "feat(core,orchestrator): a transition declares repairs and an agent declares needs, behind a workflow.patched id with a replayed history (ADR 0181 C1)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-03a]
+    acceptance:
+      - "the interpreter takes the transition that repairs an outcome, behind a workflow.patched id, and an archived history replays; the repository's templates declare repairs; the requirements read an agent's needs"
+  - id: S83-03d
+    title: "feat(web,cli): the console and the CLI read and send C1's neutral names (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-03b]
+    acceptance:
+      - "the console and the CLI read the neutral fields, falling back to the former ones, and send contributor and approver"
+  - id: S83-03r
+    title: "contract(contracts,api): C1's former names leave in 0.30.0, the memberships rows rewritten (ADR 0181)"
+    stream: S83
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S83-03b, S83-03c, S83-03d]
+    acceptance:
+      - "every C1 entry of the window list is gone with its name; an Alembic migration rewrites memberships.role; the vocabulary guard's counts drop accordingly"
+    notes: "Not before 2026-12-07, two weeks after 0.28.0 (tranibor_contracts.window.C1). The writers switch in 0.29.0: ROLE_STORED_AS empties."
   - id: S83-04
     title: "contract(contracts,core,orchestrator,api): C2, the twelve gates, does, the delivery sections, scm/ci/cd event types, the train contract and DORA move to the software-delivery plugin (ADR 0181)"
     stream: S83
@@ -5929,3 +6024,13 @@ stories:
       - "the two connector.marketdata procedures are the plugin's"
       - "test_core_names_no_business_vocabulary.py has no exemption left"
     notes: "4-6 pd, 2027-01-25 to 2027-02-12."
+  - id: S4-07
+    title: "The cost ledger separates cache writes from cache reads (ADR 0188)"
+    stream: S4
+    sprint: 67
+    priority: 7
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "`cost_ledger.tokens_cache_write` (migration, default 0); the gateway adapter reads `cache_creation_input_tokens`"
+      - "The cost report's rows and total carry `tokens_cache_write` next to `tokens_cached` (contract PR first)"

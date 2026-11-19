@@ -104,6 +104,10 @@ spec:
               value: {{ $root.Values.runner.limits.cpu | quote }}
             - name: CHOREGOS_RUNNER_MEMORY_LIMIT
               value: {{ $root.Values.runner.limits.memory | quote }}
+            # The runner container's own requests and limits when the agent has a container of its
+            # own (ADR 0146 §12); the agent's take the two values above.
+            - name: CHOREGOS_RUNNER_OWN_RESOURCES
+              value: {{ toJson ($root.Values.runner.ownResources | default dict) | quote }}
             # Simultaneous runs in the namespace. Beyond that, the Job is created SUSPENDED: it
             # has no pod, does not pull the image and takes no room in the quota.
             # 0 = no ceiling, the previous behavior.

@@ -16,6 +16,7 @@ from ..scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from tranibor_contracts import Workflow
+    from tranibor_contracts.open_lists import STORED
     from tranibor_core import WorkflowEngine
 
     from ...activities import tracker as tracker_activities
@@ -59,7 +60,7 @@ class ExternalMixin(InterpreterBase):
             "from_state": self.state,
         }
         try:
-            target = Workflow.model_validate(requested.get("workflow") or {})
+            target = Workflow.model_validate(requested.get("workflow") or {}, context={STORED: True})
             new_state = engine.can_migrate_to(target, self.state, dict(requested.get("state_mapping") or {}))
         except ValueError as refusal:  # a pydantic ValidationError is one
             await execute_on_its_queue(
@@ -89,7 +90,7 @@ class ExternalMixin(InterpreterBase):
         override = self.workflow_override or {}
         self.workflow_override, self.migration = None, {}
         definition = override.get("workflow") or override.get("json") or override
-        target = Workflow.model_validate(definition)
+        target = Workflow.model_validate(definition, context={STORED: True})
         new_engine = WorkflowEngine(target)
         self.state = WorkflowEngine(engine.wf).can_migrate_to(target, self.state, self.state_mapping)
         return new_engine

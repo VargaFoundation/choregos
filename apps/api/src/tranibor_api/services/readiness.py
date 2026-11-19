@@ -108,6 +108,15 @@ class RuntimeFact:
 
 
 @dataclass(frozen=True)
+class IsolationFact:
+    """The deployment runs every agent in a container of its own (ADR 0146) and the project's executor is
+    known. `refusal` is the executor's own message (`agent_isolation_refusal`), None when it can."""
+
+    executor: str
+    refusal: str | None = None
+
+
+@dataclass(frozen=True)
 class TemplateWorkflowFact:
     """An active workflow the project received from its template, against what the template ships now.
 
@@ -163,6 +172,9 @@ class Facts:
     #: the policy's RuntimeClass against the warm pool's; None when nothing is asked, the pool is not
     #: the executor in use, or the deployment did not say which RuntimeClass it runs
     runtime: RuntimeFact | None = None
+    #: the deployment's `container` isolation against the project's executor; None under `process`, under
+    #: the fakes, or when nothing is asked
+    isolation: IsolationFact | None = None
     #: the template the project was made from, and its workflows still marked `source: template`;
     #: empty when there is no template or it cannot be read any more (nothing is judged then)
     template: str | None = None
@@ -518,11 +530,11 @@ def item_people(f: Facts) -> list[ReadinessItem]:
             _item(
                 "people-release-captain",
                 "people",
-                "A release captain",
+                "An approver",
                 "done" if f.has_release_captain else "todo",
-                "a release captain is a member."
+                "an approver is a member."
                 if f.has_release_captain
-                else "the workflows run a release train and nobody holds the release_captain role.",
+                else "the workflows run a release train and nobody holds the approver role.",
                 ReadinessFix(href=members, by="project_owner"),
             )
         )
@@ -676,6 +688,36 @@ def item_runtime_class(f: Facts) -> list[ReadinessItem]:
     ]
 
 
+def item_agent_isolation(f: Facts) -> list[ReadinessItem]:
+    """ADR 0146 §9: under `container`, a run on an executor that cannot start the agent's container is
+    refused at its start; this says so before the first one."""
+    if f.isolation is None:
+        return []
+    title = "Agent runs in its own container"
+    fix = ReadinessFix(href=None, by="platform_operator")
+    if f.isolation.refusal is None:
+        return [
+            _item(
+                "agent-isolation",
+                "connections",
+                title,
+                "done",
+                f"the `{f.isolation.executor}` executor starts the agent in a container of its own.",
+                fix,
+            )
+        ]
+    return [
+        _item(
+            "agent-isolation",
+            "connections",
+            title,
+            "todo",
+            f"every run would be refused: {f.isolation.refusal}.",
+            fix,
+        )
+    ]
+
+
 def item_workflow_template(f: Facts) -> list[ReadinessItem]:
     """A project keeps the copy of its template's workflows made the day it was created (#817)."""
     if f.template is None or not f.template_workflows:
@@ -780,6 +822,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_notifications,
     item_object_store,
     item_runtime_class,
+    item_agent_isolation,
     item_workflow_template,
     item_workflow_catalogue,
     item_tools,
@@ -949,6 +992,28 @@ def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFa
     return RuntimeFact("gvisor", runtime_class_refusal("gvisor", str(pool), str(warm_pool)))
 
 
+def isolation_fact(connectors: dict[str, ConnectorFact]) -> IsolationFact | None:
+    """Can the project's executor start the agent's own container, when the deployment asks for it?
+
+    No judgment (None) under `process`, the default, or under the fakes. The executor is the project's
+    `runtime` connector, else the deployment's; what it declares is read from its class
+    (`declared_capabilities`), and the sentence is the one its `start` raises."""
+    import os
+
+    from tranibor_adapters import fakes_enabled
+    from tranibor_adapters.executor.isolation import declared_capabilities
+    from tranibor_adapters.registry import default_executor_kind
+    from tranibor_core.agent_isolation import agent_isolation_refusal, deployment_agent_isolation
+
+    asked = deployment_agent_isolation(os.environ)
+    if asked == "process" or fakes_enabled():
+        return None
+    runtime = connectors.get("runtime")
+    kind = runtime.type if runtime else default_executor_kind()
+    capabilities = declared_capabilities(kind, agent_isolation=asked)
+    return IsolationFact(kind, agent_isolation_refusal(asked, kind, capabilities))
+
+
 async def template_workflow_facts(
     session: AsyncSession, template_ref: str | None, rows: list[Any], org_id: str | None = None
 ) -> tuple[TemplateWorkflowFact, ...]:
@@ -1071,6 +1136,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         file_outputs=file_outputs,
         object_store=await probe_object_store() if file_outputs else None,
         runtime=runtime_fact(connectors, policy),
+        isolation=isolation_fact(connectors),
         template=project.template_ref or None,
         template_workflows=await template_workflow_facts(
             session, project.template_ref, list(workflow_rows), project.org_id
@@ -1094,7 +1160,8 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         ticket_budget_set=bool(policy.budgets.ticket_usd),
         daily_budget_set=policy.budgets.daily_project_usd is not None,
         has_owner="project_owner" in memberships,
-        has_release_captain="release_captain" in memberships,
+        # Either spelling of the role (ADR 0181 C1).
+        has_release_captain=bool({"approver", "release_captain"} & set(memberships)),
         unknown_groups=tuple(unknown_groups),
         has_release_train=await declares_a_release_train(session, project.id),
         announces=bool(policy.findings.notify_severities) or policy.memory.enabled,

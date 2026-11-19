@@ -20,6 +20,7 @@ import {
   decisionOutputs,
   type WorkflowDecisionActor,
 } from "@/components/workflows/document";
+import { writesWorkspace } from "@/lib/neutral-names";
 
 /** The actor kinds the process view returns, as `ActorIcon` names them. */
 export const ACTOR_KIND_ICON: Record<string, string> = {
@@ -255,7 +256,7 @@ function StepDetailsCard({
           </dd>
         </>
       )}
-      {(outputs.length > 0 || step.writes_branch) && (
+      {(outputs.length > 0 || writesWorkspace(step)) && (
         <>
           <dt className={LEGENDE}>Produces</dt>
           <dd>
@@ -274,7 +275,7 @@ function StepDetailsCard({
                   )}
                 </li>
               ))}
-              {step.writes_branch && <li>changes on the work item&apos;s branch</li>}
+              {writesWorkspace(step) && <li>changes on the work item&apos;s branch</li>}
             </ul>
             {decision && exampleWhen(decision) && (
               <p className="mt-1 text-ink-muted" data-testid={`decision-when-${step.id}`}>

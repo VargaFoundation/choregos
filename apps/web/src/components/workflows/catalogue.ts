@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { ConnectorDto, WorkflowCatalogueAgent, WorkflowCatalogueEntry } from "@/lib/types";
+import { needsWorkspace } from "@/lib/neutral-names";
 
 /** What the deployment provides when a project configures nothing (readiness: `PROVIDED_BY_THE_DEPLOYMENT`). */
 export const PROVIDED = new Set(["runtime", "gateway", "memory", "tracker"]);
@@ -18,8 +19,8 @@ export function sourceLabel(source: string): string {
 export function filterEntries(entries: WorkflowCatalogueEntry[], query: string, repository: RepositoryFilter): WorkflowCatalogueEntry[] {
   const q = query.trim().toLowerCase();
   return entries.filter((e) => {
-    if (repository === "without" && e.needs_repository) return false;
-    if (repository === "with" && !e.needs_repository) return false;
+    if (repository === "without" && needsWorkspace(e)) return false;
+    if (repository === "with" && !needsWorkspace(e)) return false;
     if (!q) return true;
     return [e.name, e.title, e.summary, e.source, ...e.tags].some((text) => text.toLowerCase().includes(q));
   });

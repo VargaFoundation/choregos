@@ -57,6 +57,7 @@ ACTIVITIES_BY_QUEUE: dict[str, tuple[str, ...]] = {
         "enqueue_merge",
         "ensure_branch",
         "collect_run_artifacts",
+        "run_step_effect",
         "evaluate_gates",
         "check_scope_violations",
         "triage_finding",

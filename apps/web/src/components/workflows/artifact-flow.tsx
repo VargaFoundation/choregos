@@ -3,6 +3,7 @@
 
 import { Badge, Card } from "@/components/ui";
 import type { ArtifactFlow, ProcessStep } from "@/lib/types";
+import { inChangeRequest } from "@/lib/neutral-names";
 
 /** What a hovered row lights up on the map: the boxes that produce the document, and those that read it. */
 export type Highlight = Map<string, "produces" | "reads">;
@@ -80,7 +81,7 @@ export function ArtifactFlowCard({
                   <code className="text-ink">{a.name}</code>
                   <span className="mt-0.5 flex flex-wrap gap-1 text-ink-muted">
                     {a.context && <span>context of every agent step</span>}
-                    {a.in_pull_request && <span>in the pull request</span>}
+                    {inChangeRequest(a) && <span>in the pull request</span>}
                   </span>
                 </th>
                 <td className="py-1.5 pr-3">{a.type ?? <span className="text-ink-muted">inline</span>}</td>

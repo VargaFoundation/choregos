@@ -67,7 +67,7 @@ async def memory_ab_comparison(session: AsyncSession, org: str, weeks: int = 4) 
         name: {
             "projects": sorted(bucket["projects"]),
             "tickets": bucket["tickets"],
-            "first_pass_merge_rate": round(median(bucket["rates"]), 4) if bucket["rates"] else None,
+            "first_pass_acceptance_rate": round(median(bucket["rates"]), 4) if bucket["rates"] else None,
             "cost_per_ticket_usd": round(median(bucket["costs"]), 4) if bucket["costs"] else None,
         }
         for name, bucket in buckets.items()
@@ -125,8 +125,8 @@ def _ab_verdict(groups: dict[str, Any]) -> tuple[str, str]:
             f"{with_memory['tickets']} work item(s) closed with memory, {without_memory['tickets']} without: "
             f"{MIN_WORK_ITEMS_PER_GROUP} are needed on each side to conclude.",
         )
-    rate_with = with_memory["first_pass_merge_rate"]
-    rate_without = without_memory["first_pass_merge_rate"]
+    rate_with = with_memory["first_pass_acceptance_rate"]
+    rate_without = without_memory["first_pass_acceptance_rate"]
     cost_with = with_memory["cost_per_ticket_usd"]
     cost_without = without_memory["cost_per_ticket_usd"]
     if rate_with is None or rate_without is None or cost_with is None or cost_without is None:

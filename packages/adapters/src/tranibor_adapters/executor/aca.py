@@ -26,6 +26,7 @@ from tranibor_contracts import ExecutorKind
 from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import ConfigurationError, UpstreamError
+from .isolation import refuse_unless_separate
 
 ARM = "https://management.azure.com"
 API_VERSION = "2024-03-01"
@@ -114,6 +115,8 @@ class AcaExecutor:
     """One ACA job per run, triggered manually, cleaned up by the ACA lifecycle."""
 
     kind = ExecutorKind.ACA
+    #: Never `separate_agent` (ADR 0146 §9, S65-04l): under `container` every run is refused at `start`,
+    #: with the reason in `tranibor_core.agent_isolation.WHY_NOT_SEPARATE`.
     capabilities: frozenset[str] = frozenset()
 
     def __init__(
@@ -150,6 +153,7 @@ class AcaExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Creates the job if it does not exist, then triggers it. Replayable without a double execution."""
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which this "

@@ -4,6 +4,11 @@
 **10 minutes at most and 6 GB at most**? And does the IT4IT slice (elements 1 to 6) hold against this
 running stack, and not only in the tests?
 
+> **2026-11-19: the ontology was removed (ADR 0181, O4-1).** `extension.Dockerfile`, `scenario.py`
+> and `scenery.py` went with it, and the stack no longer sets `CHOREGOS_ONTOLOGY_TRIAL`: `run.sh` now
+> builds, starts and measures the stack only. The results below are kept as they were recorded; the
+> scripts they name are in the history of the repository.
+
 **Answer: yes to both, on a development machine with cached images.** The time on a new
 workstation depends on the download (about 1.5 GB of images). And the running stack found a
 defect in the core, invisible to the tests: a request's transaction was committed **after** the

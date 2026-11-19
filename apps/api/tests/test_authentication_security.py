@@ -170,7 +170,8 @@ async def test_the_oidc_groups_are_attached_to_their_organisation() -> None:
         ["choregos:northwind:developers", "choregos:other:org-admins", "developers", "unrelated"],
         default_org="",
     )
-    assert roles == {"northwind": Role.DEVELOPER, "other": Role.ORG_ADMIN}
+    # `developers` gives the neutral role (ADR 0181 C1); the row is written with `Role.stored`.
+    assert roles == {"northwind": Role.CONTRIBUTOR, "other": Role.ORG_ADMIN}
     # a bare group holds only for the default organisation, and the highest one wins
     roles = roles_from_groups(["developers", "choregos:northwind:product-owners"], default_org="northwind")
     assert roles == {"northwind": Role.PROJECT_OWNER}

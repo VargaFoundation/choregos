@@ -402,3 +402,49 @@ async def test_gemini_cli_gets_the_loopback_key_and_address_too(
     assert env["GOOGLE_GEMINI_BASE_URL"] == loopback_url(runner.loopback_ports[0])
     assert GATEWAY not in json.dumps(env)
     assert EGRESS not in json.dumps(env) and MCP_HEADER not in json.dumps(env)
+
+
+async def test_anthropic_paths_reach_the_gateway_under_v1_when_the_platform_names_its_root(
+    stage_input: StageInput,
+) -> None:
+    """S65-04a, measured with claude-agent-acp against the dev gateway: the platform names LiteLLM by its
+    root (`CHOREGOS_GATEWAY_URL=http://litellm:4000`), which serves `messages` only under `/v1`; every
+    Claude Code request was forwarded to `/messages` and answered 404. Its token count (21 calls in a
+    26-message step) was not served at all. A base that already ends in `/v1` is left as it is."""
+    gateway = Gateway()
+    step = _step(stage_input)
+    assert not step.model.base_url.endswith("/v1")
+    headers = {"x-api-key": LOOPBACK_KEY, "anthropic-version": "2023-06-01"}
+    body = {"model": "claude-anything", "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]}
+    acp = ModelProxy(step, _noop, transport=httpx.MockTransport(gateway), count_turns=False, measure=False)
+    hosted = ModelProxy(
+        step.model_copy(update={"budget": step.budget.model_copy(update={"max_turns": 1})}),
+        _noop,
+        transport=httpx.MockTransport(gateway),
+    )
+    async with await _client(acp) as agent, await _client(hosted) as other:
+        answers = [
+            (await agent.post("/v1/messages", headers=headers, json=body)).status_code,
+            (await agent.post("/v1/messages/count_tokens", headers=headers, json=body)).status_code,
+            (await agent.post("/v1/chat/completions", headers=headers, json=body)).status_code,
+            (await agent.post("/v1/messages/batches", headers=headers, json=body)).status_code,
+        ]
+        counted = [
+            (await other.post("/v1/messages/count_tokens", headers=headers, json=body)).status_code,
+            (await other.post("/v1/messages", headers=headers, json=body)).status_code,
+            (await other.post("/v1/messages/count_tokens", headers=headers, json=body)).status_code,
+        ]
+
+    assert answers == [200, 200, 200, 404]
+    assert counted == [200, 200, 200], "a token count is no turn: the one-turn step still counts"
+    base = step.model.base_url.rstrip("/")
+    assert [str(r.url) for r in gateway.requests[:3]] == [
+        f"{base}/v1/messages",
+        f"{base}/v1/messages/count_tokens",
+        f"{base}/v1/chat/completions",
+    ]
+    for forwarded in gateway.requests:
+        assert forwarded.headers["authorization"] == f"Bearer {GATEWAY}"
+        assert json.loads(forwarded.content)["model"] == step.model.litellm_model
+    assert gateway.requests[0].headers["x-api-key"] == GATEWAY
+    assert gateway.requests[1].headers["x-api-key"] == GATEWAY

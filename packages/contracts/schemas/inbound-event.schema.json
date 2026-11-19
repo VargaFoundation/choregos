@@ -9,16 +9,8 @@
   "properties": {
     "type": {
       "type": "string",
-      "enum": [
-        "tracker.item.created", "tracker.item.updated", "tracker.item.moved",
-        "tracker.item.commented", "tracker.item.labeled", "tracker.item.closed",
-        "scm.pr.opened", "scm.pr.synchronized", "scm.pr.review_submitted",
-        "scm.pr.merged", "scm.pr.closed", "scm.check.completed",
-        "ci.run.started", "ci.run.succeeded", "ci.run.failed",
-        "cd.app.synced", "cd.app.degraded", "cd.rollout.completed", "cd.rollout.aborted",
-        "alert.fired", "alert.resolved",
-        "human.decision"
-      ]
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+      "description": "An open list (ADR 0181): the core's types, tracker.item.created, tracker.item.updated, tracker.item.moved, tracker.item.commented, tracker.item.labeled, tracker.item.closed, scm.pr.opened, scm.pr.synchronized, scm.pr.review_submitted, scm.pr.merged, scm.pr.closed, scm.check.completed, ci.run.started, ci.run.succeeded, ci.run.failed, cd.app.synced, cd.app.degraded, cd.rollout.completed, cd.rollout.aborted, alert.fired, alert.resolved, human.decision, and the types an installed extension declares. The platform refuses any other."
     },
     "source": { "type": "string", "description": "github, jira, gitlab, tekton, argocd, alertmanager, slack, web, cli" },
     "delivery_id": { "type": "string", "description": "Unique delivery identifier (deduplication, replay)." },

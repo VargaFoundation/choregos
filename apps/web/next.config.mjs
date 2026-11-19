@@ -52,7 +52,8 @@ const nextConfig = {
   },
   // An ontology proposal has been a core action since S20-08, under the SAME identifier: the
   // "proposals" page merged into the actions page (S20-10), and a decision link issued before —
-  // through the MCP gate, in an email — still leads to the right page.
+  // through the MCP gate, in an email — still leads to the right page, which still reads the action
+  // after the ontology itself was removed (ADR 0181, O4-1).
   async redirects() {
     return [
       { source: "/p/:slug/proposals", destination: "/p/:slug/actions", permanent: true },

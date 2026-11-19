@@ -13,9 +13,9 @@ metadata:
   description: "Documentation: writing, agent review, pull request approved by a maintainer, merge. Nothing is deployed."
 initial: inbox
 actors:
-  writer: { type: agent, role: implement, agent: docs-writer, model: "profile:standard" }
+  writer: { type: agent, role: implement, agent: docs-writer, model: "profile:standard", needs: [scm] }
   checker: { type: agent, role: verify, agent: reviewer, model: "profile:standard", fresh_context: true }
-  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard", needs: [scm] }
   platform: { type: system }
   maintainers: { type: human, group: maintainers, sla_hours: 48 }
 states:
@@ -48,6 +48,7 @@ transitions:
     from: addressing_review
     to: written
     by: responder
+    repairs: changes_requested
     inputs: [review_markdown, human_feedback]
     outputs: [review_markdown]
     gates: [scope_respected, no_secrets]

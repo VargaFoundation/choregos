@@ -34,10 +34,7 @@ pass `--api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` or set
 {{- end }}
 {{- $sandbox := .Values.runner.sandbox | default dict }}
 {{- $port := int ($sandbox.assignmentPort | default 8765) }}
-{{- $isolation := $sandbox.agentIsolation | default "process" }}
-{{- if not (has $isolation (list "process" "container")) }}
-{{- fail (printf "runner.sandbox.agentIsolation=%q: expected process or container (ADR 0146)" $isolation) }}
-{{- end }}
+{{- $isolation := include "choregos.agentIsolation" . }}
 {{- $launcherPort := int ($sandbox.launcherPort | default 8766) }}
 {{- $agentUid := int ($sandbox.agentUid | default 1001) }}
 {{- $separate := eq $isolation "container" }}
@@ -191,9 +188,18 @@ spec:
             - { name: CHOREGOS_EGRESS_GATE_REPORT, value: /egress-gate/report.json }
             {{- end }}
           {{- end }}
+          {{- if $separate }}
+          # ADR 0146 §12: the runner's own, small (Python, git, the loopback listeners); the agent's
+          # container above takes what the single container had.
+          {{- $own := .Values.runner.ownResources | default dict }}
+          resources:
+            requests: {{ toJson ($own.requests | default (dict "cpu" "250m" "memory" "512Mi")) }}
+            limits: {{ toJson ($own.limits | default (dict "cpu" "1" "memory" "2Gi")) }}
+          {{- else }}
           resources:
             requests: { cpu: 500m, memory: 1Gi }
             limits: { cpu: {{ .Values.runner.limits.cpu | quote }}, memory: {{ .Values.runner.limits.memory | quote }} }
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: ["ALL"] }

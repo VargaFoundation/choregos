@@ -4,7 +4,7 @@
 Approving a write to the directory, a workstation order, the cut-off of a badge: the session must
 be fresh, otherwise a workstation left open would approve in place of its owner. The 401 carries
 `step_up_required` and the re-authentication path: the console sends the user there, then back.
-It is the same format as the decision of an ontology action, which the console already follows.
+It is the same format as the decision of an action, which the console already follows.
 """
 
 from __future__ import annotations
