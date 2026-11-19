@@ -6,7 +6,8 @@
   2026-11-17: "do the renames now", the trademark gate being skipped); R1 is implemented by S75-01,
   R3 steps (a) and (b) by S75-03 (2026-11-18), R2 by S75-02 (2026-11-18), shipped by release 0.27.14,
   and R3 step (c) on the Diametral deployments (2026-11-18, see the amendment "0.27.14 on a real
-  release"); R4 and R3 steps (d) and (e) are not started
+  release"), and R3 step (d) (2026-11-18, see the amendment "step (d)"); R4 and R3 step (e) are not
+  started
 - **Concerns**: the whole repository (25,000 occurrences of the old name in 4,600 files, counted on
   2026-11-17), and above all `packages/*` (the distributions and import packages), `publishing.json` and
   `tools/publishing_identity.py`, `charts/`, `docker/`, `infra/policies/`, the `CHOREGOS_*` variables;
@@ -249,3 +250,59 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   orchestrator (enterprise images, step (d)), the chart's own name (the deployments still vendor the
   `choregos` chart, which renders the same objects), the CLI files.
 
+## Amendment (2026-11-18, #1899, PR #1908): the shims under `python -m`, typing and the release wheels; the signatures checked
+
+- **`python -m choregos_<x>.<module>` works** (from the release after 0.27.14). runpy does not import the
+  module: it asks the spec's loader for its code. The alias loader now finds the real module's spec
+  without importing it, and gives runpy the real loader's `get_code` (and `get_source`, `is_package`,
+  `get_filename`), so the module runs once, as `__main__`; `import choregos_<x>.<module>` still gets the
+  module object of `tranibor_<x>.<module>`, imported under its own name, and that module keeps its own
+  `__spec__` (it used to be stamped with the alias's). `tests/compat/test_old_import_names.py` runs a
+  synthetic aliased package and `python -m choregos_api.migrate heads` in a subprocess.
+- **The shims stay runtime-only, on purpose.** Making `import choregos_<x>.<y>` type-check would take a
+  stub per module (several hundred, one per module of thirteen packages), regenerated with every module
+  added, re-exporting through `import *` (which drops the private names and anything outside
+  `__all__`), and a test running a strict `mypy` over them: a second copy of the API to keep right, for
+  a window of one minor whose one typed consumer, the enterprise edition, has already moved. The
+  deprecation path is to move typed code to `tranibor_*`; `docs/deployment.md` ("Upgrading past
+  0.27.13") and `tranibor_contracts._compat` say so.
+- **Installing the release wheels.** Neither name set is on PyPI, and a shim wheel alone does not resolve
+  (its `tranibor-<x>==<version>` is on no index): both sets are installed from the release's assets by
+  path, in one command (checked on 0.27.14: `uv pip install wheels/*.whl` into an empty virtualenv,
+  then `choregos_api.extensions is tranibor_api.extensions`; the shim alone fails to resolve).
+  `docs/deployment.md` gives the commands and why paths, not `--find-links`, while the `tranibor-*`
+  names are unclaimed on PyPI.
+- **The signatures of the new names, checked** (they were not, in the amendment above). With cosign
+  2.6.1, `cosign verify` of the fourteen references `ghcr.io/graalsystems/{tranibor,choregos}-{api,web,
+  orchestrator,runner,tools,outpost,laya}:0.27.14`, anonymously, against the identity
+  `https://github.com/graalsystems/tranibor/.github/workflows/release.yml@refs/tags/v0.27.14` and the
+  issuer `https://token.actions.githubusercontent.com`: all fourteen pass, one signature each, recorded in
+  Rekor (log indexes 3977329697 to 3977600945), from workflow commit `6b8dbaad` (push of the tag). Each
+  pair shares its digest (`tranibor-api` and `choregos-api` are both `sha256:df7c2bbc…`). The subject
+  glob of `infra/policies/images.yaml` (`…/tranibor/.github/workflows/*`) matches them
+  (`--certificate-identity-regexp`), and the same check against `…@refs/tags/v0.27.13` fails, so the
+  identity is what is checked. Not proven: a cluster's admission webhook verifying a `tranibor-*`
+  reference (the Diametral clusters pull from Harbor).
+
+## Amendment (2026-11-18, S75-03): R3 step (d), the enterprise edition on the new base image
+
+- **Done.** `DiametralGroup/choregos-ee#113` builds the enterprise images FROM
+  `tranibor-api` / `tranibor-orchestrator` (its `Makefile`, `outils/coeur.sh`, `outils/coeur-local.sh`),
+  and its CI passes the same name (`DiametralGroup/choregos-deploy#300`: `choregos-kaniko-build` and
+  `choregos-ee-tests` take the base image's prefix, `tranibor` for the release pipeline). With the package
+  half (`choregos-ee#112`, `tranibor_*` imports), step (d) is complete. The image says which base it was
+  built from, in the OCI annotation `org.opencontainers.image.base.name`
+  (`harbor.build.diametral.com/choregos/tranibor-<component>:0.27.14` on both published images).
+- **The enterprise images keep their names** (`choregos-api-ee`, `choregos-orchestrator-ee`). Point 4
+  renames the core's artefacts; the enterprise edition is not "Tranibor Enterprise" (point 9), and a new
+  name for its images is a product decision, not part of this round. Nothing therefore moved in the
+  registry's immutability and retention rules or in the clusters' admission.
+- **Deployed** on dev (`choregos-deploy#301`) then prod (`#302`, synchronised by hand): the six EE
+  deployments run the new digests, ready without restart, and `GET /api/v1/edition` answers `enterprise`,
+  0.27.14, edition 0.2.0 on both. The base digests are the ones the former names carry (`tranibor-api:0.27.14`
+  and `choregos-api:0.27.14` are one digest, likewise the orchestrator), so the core inside is byte for
+  byte the one that ran before.
+- **Not changed by (d)**: the per-commit pipeline (`choregos-ee-edge`, suspended) still builds FROM
+  `choregos-<component>:<commit>`, because `main`'s per-commit images carry only the former name; it moves
+  when those images gain the new name. Step (e) may start counting: the old names stop being published
+  two minors after this step, so not before 0.29.

@@ -638,6 +638,18 @@ async def timeline(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]
                     via=_via(event.payload.get("via")),
                 )
             )
+        elif event.type == str(EventType.WORKITEM_STATUS_COMMENT_MISSED):
+            # The work item went on (S62-17): the board may lag until the next state rewrites it (S62-20).
+            entries.append(
+                TimelineEntry(
+                    ts=event.ts,
+                    kind="error",
+                    title="the tracker did not take the status comment; the next state rewrites it",
+                    detail=str(event.payload.get("error") or ""),
+                    actor="orchestrator",
+                    actor_kind="system",
+                )
+            )
     findings = (
         (await session.execute(select(Finding).where(Finding.origin_work_item_id == item.id))).scalars().all()
     )

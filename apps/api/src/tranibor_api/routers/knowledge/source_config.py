@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import replace
 from urllib.parse import urlsplit
 
 import httpx
@@ -22,7 +23,12 @@ from ...db.models import (
 )
 from ...deps import Me
 from ...errors import conflict, forbidden, not_found, unprocessable
-from ...knowledge.sync import CONNECTED_KINDS, OPTIONALLY_CONNECTED, SOURCE_CONNECTOR_TYPES
+from ...knowledge.sync import (
+    CONNECTED_KINDS,
+    OPTIONALLY_CONNECTED,
+    SOURCE_CONNECTOR_KIND,
+    SOURCE_CONNECTOR_TYPES,
+)
 from ...secret_store import resolved_configuration
 from ...services import github_app_credentials
 from ...services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
@@ -38,11 +44,13 @@ _HTTPS = ("https://",)
 async def _documents_connector(
     session: AsyncSession, organisation: Organization, name: str, source_kind: str
 ) -> OrgConnector:
-    """The `documents` connector a source names, or the reason it is not one (422).
+    """The connector a source names, or the reason it is not one (422): a `documents` connector, or
+    an `mcp` one for an `mcp` source (ADR 0191).
 
     Connector names are lowercase, so the lookup ignores case and says what the name should be;
     a connector of another kind or type is named for what it is rather than "not found".
     """
+    kind = SOURCE_CONNECTOR_KIND.get(source_kind, "documents")
     rows = (
         (await session.execute(select(OrgConnector).where(OrgConnector.org_id == organisation.id)))
         .scalars()
@@ -51,31 +59,31 @@ async def _documents_connector(
     exact = [c for c in rows if c.name == name]
     folded = [c for c in rows if c.name.lower() == name.strip().lower()]
     match = (exact + folded)[0] if exact or folded else None
-    if match is not None and match.kind != "documents":
+    if match is not None and match.kind != kind:
         raise unprocessable(
-            f"no `documents` connector `{name}` in {organisation.slug}: "
-            f"`{match.name}` is a {match.kind}/{match.type} connector, not a documents one"
+            f"no `{kind}` connector `{name}` in {organisation.slug}: "
+            f"`{match.name}` is a {match.kind}/{match.type} connector, not a {kind} one"
         )
     if match is not None and match.name != name:
         raise unprocessable(
-            f"no `documents` connector `{name}` in {organisation.slug} "
+            f"no `{kind}` connector `{name}` in {organisation.slug} "
             f'(names are lowercase: did you mean "{match.name}"?)'
         )
     if match is not None:
         allowed = SOURCE_CONNECTOR_TYPES.get(source_kind, frozenset())
         if match.type not in allowed:
             raise unprocessable(
-                f"`{name}` is a documents/{match.type} connector: "
+                f"`{name}` is a {kind}/{match.type} connector: "
                 f"a {source_kind} source needs {' or '.join(sorted(allowed))}"
             )
         return match
-    names = sorted(c.name for c in rows if c.kind == "documents")
+    names = sorted(c.name for c in rows if c.kind == kind)
     listing = (
-        f"documents connectors here: {', '.join(names)}"
+        f"{kind} connectors here: {', '.join(names)}"
         if names
         else "none: an org admin declares one in /admin/connectors"
     )
-    raise unprocessable(f"no `documents` connector `{name}` in {organisation.slug} ({listing})")
+    raise unprocessable(f"no `{kind}` connector `{name}` in {organisation.slug} ({listing})")
 
 
 def _excluded_paths(config: dict[str, object]) -> list[str]:
@@ -189,6 +197,16 @@ def _git_config(config: dict[str, object]) -> dict[str, object]:
     return {"url": url, "ref": ref, "paths": paths}
 
 
+def _mcp_config(config: dict[str, object]) -> dict[str, object]:
+    from tranibor_adapters.documents.base import SourceRefusedError
+    from tranibor_adapters.documents.mcp import checked_config
+
+    try:
+        return checked_config(dict(config))
+    except SourceRefusedError as refused:
+        raise unprocessable(str(refused)) from refused
+
+
 def _https_url(config: dict[str, object], kind: str) -> str:
     url = str(config.get("url") or "")
     if not url.startswith(_HTTPS):
@@ -202,6 +220,7 @@ _SOURCE_VALIDATORS: dict[str, Callable[[dict[str, object]], dict[str, object]]] 
     "confluence": _confluence_config,
     "web": _web_config,
     "git": _git_config,
+    "mcp": _mcp_config,
 }
 
 _CONNECTED_WHAT = {
@@ -209,6 +228,7 @@ _CONNECTED_WHAT = {
     "confluence": "Confluence",
     "git": "private git",
     "web": "web site behind a login",
+    "mcp": "MCP server's resources",
 }
 
 
@@ -222,7 +242,10 @@ async def _checked_source_config(
     """What a source may be: refused here, with its reason, rather than at its first sync."""
     if kind in CONNECTED_KINDS or (kind in OPTIONALLY_CONNECTED and connector):
         if not connector:
-            raise unprocessable(f"a {_CONNECTED_WHAT.get(kind, kind)} source names its `documents` connector")
+            raise unprocessable(
+                f"a {_CONNECTED_WHAT.get(kind, kind)} source names its "
+                f"`{SOURCE_CONNECTOR_KIND.get(kind, 'documents')}` connector"
+            )
         found = await _documents_connector(session, organisation, connector, kind)
     checked = _SOURCE_VALIDATORS[kind](config)
     if kind == "web" and connector:
@@ -311,7 +334,8 @@ async def _egress_gate(
 ) -> None:
     """A source's hosts must be in the organisation's egress allowlist (S39-22): the modal's 409,
     or, for an administrator who says so, opened in this same transaction. A connected source
-    (`sharepoint`, `confluence`) calls the hosts its connector declares."""
+    (`sharepoint`, `confluence`, `mcp`) calls the hosts its connector declares, from the workers that
+    sync it as well as from the API (an `mcp` connector was opened for the API's calls only)."""
     targets = knowledge_source_targets(kind, dict(config))
     if connector and kind in CONNECTED_KINDS:
         found = (
@@ -322,7 +346,10 @@ async def _egress_gate(
             )
         ).scalar_one_or_none()
         if found is not None:
-            targets += targets_of_connector(found.kind, found.type, dict(found.config or {}))
+            own = targets_of_connector(found.kind, found.type, dict(found.config or {}))
+            targets += own
+            if kind == "mcp":
+                targets += [replace(t, family="workers") for t in own if t.family == "api"]
     await ensure_or_409(
         session,
         principal,

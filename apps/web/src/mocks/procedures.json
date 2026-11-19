@@ -3903,6 +3903,65 @@
     "origin": "shipped"
   },
   {
+    "id": "source.mcp",
+    "title": "Feed a knowledge base from an MCP server's resources",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "source": "mcp"
+    },
+    "link": null,
+    "reviewed": "2026-11-18",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An **MCP connector** declared by an organisation administrator (see \"Connect an MCP server\"), whose\n  server lists **resources** (`resources/list`) and answers them (`resources/read`). A data platform,\n  a data catalogue or a documentation server that publishes its descriptions as MCP resources feeds a\n  base this way.\n- The connector must carry its own credential (the `service` identity): a sync acts for nobody, so a\n  connector that answers people only cannot be read. A connector at an outpost is not read either."
+      },
+      {
+        "key": "at",
+        "title": "At the MCP server",
+        "markdown": "Publish what agents should know as resources, one per document. Markdown (`text/markdown`) is read\nbest; PDF, Word, PowerPoint, Excel, HTML, JSON, YAML and text are converted too. A resource whose text\nopens with an Open Knowledge Format header (`type`, `title`, `status: deprecated`…) is read with it.\nDeclaring `annotations.lastModified` on each resource spares a full read at every sync."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "The source mirrors what the connector's credential can read: everything the server lists to it,\nnarrowed by `uri_prefix` and `mime_types`, becomes readable by the base's readers. Give that\ncredential access to what you mean to share, and nothing else."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **MCP server's resources**.\n2. Pick the **connector**; optionally a `uri_prefix` and the `mime_types` to keep.\n3. Choose the refresh: an interval, a cron expression, or manual."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Sync now**. Each sync lists the server's resources once, reads those that changed (all of them\nwhen the server declares no `lastModified`), and removes from the base those no longer listed."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- \"answers people only\": the connector declares no `service` identity; give it a credential of its own.\n- \"its resources cannot be listed\": the connector is reached through an outpost.\n- A sync that stops part-way: a listing that fails stops the sync and deletes nothing.\n- A resource **skipped** as \"format not converted\": its media type is not one the platform converts\n  (an image, an archive)."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "the MCP server's host, from the workers as well as from the API"
+    ],
+    "fields": {
+      "connector": "the organisation's mcp connector whose resources the base reads, picked from a list",
+      "uri_prefix": "only the resources whose URI starts with this text, for example catalog://sales/",
+      "mime_types": "only the resources of these media types, for example text/markdown"
+    },
+    "vendor_docs": [
+      {
+        "title": "Model Context Protocol: resources",
+        "url": "https://modelcontextprotocol.io/specification/2025-06-18/server/resources"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "source.sharepoint",
     "title": "Add a SharePoint or OneDrive source to a knowledge base",
     "version": 1,

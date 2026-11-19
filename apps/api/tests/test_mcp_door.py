@@ -132,7 +132,7 @@ async def test_what_is_not_an_acceptable_request(client: AsyncClient, admin: str
     assert batch.status_code == 400 and batch.json()["error"]["code"] == -32600
     version = await _rpc(client, token, "ping", headers={"MCP-Protocol-Version": "1999-01-01"})
     assert version.status_code == 400
-    unknown = await _rpc(client, token, "resources/list")
+    unknown = await _rpc(client, token, "resources/subscribe")
     assert unknown.json()["error"]["code"] == -32601
 
 
