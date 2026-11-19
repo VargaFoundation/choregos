@@ -29,6 +29,22 @@ async def _role_row(email: str) -> str:
         return next(iter(rows))
 
 
+async def _member(email: str, role: Role) -> None:
+    """A row of the organisation `northwind` under the spelling given, as 0.29.0's writers write it."""
+    from sqlalchemy import select
+    from tranibor_api.db.models import Membership, Organization, User
+    from tranibor_api.db.session import session_scope
+
+    async with session_scope() as session:
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
+        user = User(email=email, display_name=email.split("@", maxsplit=1)[0])
+        session.add(user)
+        await session.flush()
+        session.add(Membership(user_id=user.id, org_id=org.id, role=str(role)))
+
+
 def test_a_role_and_its_former_name_hold_the_same_permissions_and_rank() -> None:
     from tranibor_api.rbac import ROLE_PERMISSIONS, Permission, rank_of
 
@@ -64,8 +80,6 @@ async def test_a_row_under_the_neutral_spelling_holds_its_permissions(
     """A row written by 0.29.0 or by the enterprise edition's SCIM: `approver` approves releases."""
     from tranibor_api.config import reset_settings_cache
 
-    from .test_rbac_matrix import _member
-
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     await _member("neutral@northwind.dev", Role.APPROVER)
@@ -73,7 +87,9 @@ async def test_a_row_under_the_neutral_spelling_holds_its_permissions(
         await login(c, "neutral@northwind.dev")
         me = (await c.get("/api/v1/me")).json()
         assert {m["role"] for m in me["memberships"]} == {"approver"}, "the dev sign-in left the row alone"
-        frozen = await c.post(f"/api/v1/projects/{project['id']}/trains/prod/freeze", json={"reason": "round C1"})
+        frozen = await c.post(
+            f"/api/v1/projects/{project['id']}/trains/prod/freeze", json={"reason": "round C1"}
+        )
         assert frozen.status_code not in (403, 422), frozen.text
     reset_settings_cache()
 
