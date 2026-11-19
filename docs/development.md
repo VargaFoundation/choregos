@@ -849,9 +849,9 @@ modules, and they keep plain typed aliases.
 
 The API is a dependency that only shrinks ([ADR 0099](adr/0099-the-api-is-a-dependency-that-only-shrinks.md)).
 
-- The orchestrator and extensions (entry-point packages such as `tranibor_ontology`) may import the
-  API's persistence and services, never its HTTP layer (`routers`, `deps`, `main`, `mcp`, `a2a`,
-  `fastapi`).
+- The orchestrator may import the API's persistence and services, never its HTTP layer (`routers`,
+  `deps`, `main`, `mcp`, `a2a`, `fastapi`). No package under `packages/` imports the API: the last
+  one, the ontology's service, was removed with the package (ADR 0181, O4-1).
 - Services never import routers. One import remains (`services/readiness.py`), ratcheted and
   removed by S47-08.
 - Routers share helpers through services, not by importing each other's private names. An import
@@ -865,7 +865,7 @@ Five guards count the crossings that exist today and refuse a new one. Each asse
 | Guard | Counts |
 |---|---|
 | `tests/architecture/test_orchestrator_imports_of_the_api.py` | `tranibor_api` imports in `apps/orchestrator/src` |
-| `tests/architecture/test_packages_imports_of_the_api.py` | `tranibor_api` imports in `packages/*/src` (only `tranibor_ontology/service`) |
+| `tests/architecture/test_packages_imports_of_the_api.py` | `tranibor_api` imports in `packages/*/src` (none: the ceiling is 0) |
 | `apps/api/tests/test_layering_services_do_not_import_routers.py` | modules outside `routers/` that import a router |
 | `apps/api/tests/test_layering_router_private_imports.py` | private names imported between router units |
 | `apps/api/tests/test_one_organisation_lookup.py` | module-level `_organisation` / `_org` helpers in routers |

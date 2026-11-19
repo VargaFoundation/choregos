@@ -163,7 +163,7 @@ def section_paths(manifest: dict[str, Any]) -> list[tuple[str, str]]:
 #
 # The tool catalogue (`catalogue.py`) describes third-party APIs, declared by the deployment in a
 # file. An extension can have its own, which depend on the run's PROJECT and not on the deployment:
-# the tools generated from a project's ontology, for example. They go through the same path as the
+# the tools a plugin generates from what a project declares, for example. They go through the same path as the
 # catalogue's: `GET /internal/runs/{id}/tools` announces them to the agent's `choregos-tools` MCP
 # server, `POST /internal/runs/{id}/tools/{name}` calls them under the same per-run call ceiling,
 # with the same cost ledger line and the same event. The run token stays the only authentication: the
@@ -250,7 +250,7 @@ def human_tool_providers() -> dict[str, HumanToolProvider]:
 # ───────────────────────────── what a template ships to an extension ─────────────────────────────
 #
 # A template ships workflows, a policy, agents and skills: the core knows how to install them. It can
-# also ship what only an extension understands, an ontology for example:
+# also ship what only an extension understands:
 # `defaults.extensions: {<installer>: <template folder>}`. When the project is born, the core reads
 # the folder (never leaving it, no symbolic link) and hands it to the installer declared under that
 # name, in the transaction that creates the project: a refusal of the installer (`HTTPException`)

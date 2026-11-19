@@ -1418,10 +1418,7 @@ an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, 
 becomes `{text: <its JSON, cut, with the marker>, truncated}`. A catalogue entry may declare its
 own `result_max_bytes`, bounded by the same ceiling, and so may a plugin's tool, beside its `name`
 in what the plugin lists (S40-17b); the agent is not shown it, and a value that is not an integer of
-at least 1024 is refused when the tools are listed. The ontology plugin declares 256 KiB for a page
-of objects (`<type>_search`, a link, `action_list`) and for `ontology_describe`, so that a full page
-keeps its `next_cursor`, and 64 KiB for one object, one proposal or its status (S40-17c). Neither
-declares an output schema.
+at least 1024 is refused when the tools are listed.
 The injection guard then reads what is left (S40-18): an MCP-shaped answer's text blocks and every
 string of its `structuredContent` (S40-18b), any other JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
 returns `suspicions` beside the result, `block` withholds it with `status_code: 451`).
@@ -1444,7 +1441,7 @@ characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `tranibor_core.mcp.RESU
 notices outside the cut; a status of 400 or more is still `isError`. A result the API passes under the
 default bound therefore reaches the model whole. The API says the bound it held the result to,
 `result_max_bytes` in its answer (#1383): an operation's, a catalogue entry's or a plugin tool's own
-cap (the ontology's 256 KiB pages), the default for `web_fetch` and `web_search`. The tool server
+cap, the default for `web_fetch` and `web_search`. The tool server
 reads the result up to that bound instead of its 65,536, and does not show it to the model; the
 prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
 `tranibor_core.mcp.RESULT_CEILING_BYTES`) and the notices.
@@ -1454,11 +1451,7 @@ text its model reads (#1349, [hosted agents](hosted-agents.md)), and so do a pro
 messages and a realtime session's `function_call_output`s (#1399), which have no error flag: there a
 status of 400 or more is a first line, `FAILED (status <code>): the call did not succeed; what follows
 is its error, not a result.`, and the calls left are `Tool calls left in this session: <n>.`. Every door
-composes these lines in one place, `tranibor_core.tool_answer`. An ontology proposal says it was not
-executed (#1350): its
-`action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
-proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
-approves (`approve: auto`) reads `NOT FINISHED YET` until Temporal has played it.
+composes these lines in one place, `tranibor_core.tool_answer`.
 
 The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each tool does (S57-05,
 [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)): MCP's own
@@ -1474,9 +1467,6 @@ The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each t
 | a plugin extension's tool that declares `x-choregos-access` beside its `name` | what it declares (`read`, `write`, `approval`; any other value is refused when the tools are listed) |
 | a plugin extension's tool annotated `readOnlyHint: true`, declaring nothing | `read` |
 | any other plugin extension tool (MCP's default is not read-only) | `write` |
-
-The ontology plugin declares its reads (`describe`, `search`, `get`, links, `action_list`,
-`action_status`) `read` and its action tools `approval`: calling one proposes what a person decides.
 
 A connector operation whose server declares an `outputSchema` is listed with it: it describes the
 `structuredContent` of the tool's `result`. The run's tool server lists the tools to the model
@@ -3381,10 +3371,9 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
 - **Reading**: `GET /projects/{id}/actions/{id}` gives the decisions (who, when, how fresh their
   authentication was) and the **journal** — every effect's key, attempts, answer or error. Events
   `choregos.action.*` tell the same story on the ticket. In the console, every action has its page,
-  `/p/<project>/actions/<id>`, where it is decided — an ontology proposal too: it is a core action
-  under the same id, and its page says what it acts on (action type, targets, parameters), what its
-  effects returned and what its evidence collected. The former `/p/<project>/proposals[/<id>]` links
-  redirect there.
+  `/p/<project>/actions/<id>`, where it is decided. An action the ontology persisted before it was
+  removed (origin `ontology`, ADR 0181 O4-1) is read there like any other, and the former
+  `/p/<project>/proposals[/<id>]` links redirect there.
 - **Waiting for a person**: the console's **inbox** (`/inbox`, top bar, with a count) lists what
   cannot move until someone decides, across the organisation's projects: tickets stopped on a human
   request (approval, question, scope change, task — overdue first, then the nearest due date, then

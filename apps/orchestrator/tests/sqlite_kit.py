@@ -4,7 +4,7 @@ Copied from the API suite's `kits/sqlite_template.py`: test packages do not impo
 
 `create_all()` for the whole schema costs more than most tests do. The schema is laid once per
 process into a template file; each test gets a copy. The template is keyed on the tables the
-metadata holds: modules that join `Base` later (the ontology plugin) make it rebuild, so a copy is
+metadata holds: modules that join `Base` later (a plugin's) make it rebuild, so a copy is
 never missing a table that `create_all()` would have laid.
 """
 

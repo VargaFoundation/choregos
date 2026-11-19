@@ -5570,6 +5570,14 @@ stories:
     size: S
     depends_on: []
     notes: "Plan workstreams A1 (decision) and O4 (decision); proposed, the project lead decides in December 2026. Docs only: no contract changes. The contract-change rounds C0, C1 (in the same minor as ADR 0176 R2) and C2 are tracked by issue #1832."
+  - id: S80-08b
+    title: "chore(core): the ontology package is removed, its tables dropped if present (ADR 0181 O4-1)"
+    stream: S80
+    sprint: 1
+    priority: 8
+    size: M
+    depends_on: [S80-08]
+    notes: "Project lead's decision of 2026-11-19: option O4-1. packages/ontology, the compat shim, the console card, the template extension and the ontology trials go; migration b4d6f8a0c2e5 drops the tables IF EXISTS and migrate.forget_retired_revisions removes onto0001-0003 from alembic_version. Persisted origin 'ontology', ontology.effet/preuve and params.ontologie stay readable; the contract is unchanged."  # lang: fr-ok
   - id: S80-02
     title: "docs(plan): STATUS.md becomes an index of per-stream status files, and the install guide names the current version"
     stream: S80

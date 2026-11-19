@@ -384,7 +384,7 @@ async def decide(
     if any(d.get("by", "").lower() == principal.email.lower() for d in action.decisions or []):
         raise conflict("you have already decided this action")
     # `step_up_minutes` absent (`None`): the rule demands no recent authentication, which an
-    # extension's policy (the ontology) can say; an action proposed by the API always has one.
+    # extension's policy can say; an action proposed by the API always has one.
     freshness = approval.get("step_up_minutes", 10)
     age = (
         require_fresh_authentication(principal, int(freshness))

@@ -39,7 +39,6 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGES: tuple[tuple[str, str, str], ...] = (
     ("contracts", "contracts", "packages/contracts"),
     ("core", "core", "packages/core"),
-    ("ontology", "ontology", "packages/ontology"),
     ("adapters", "adapters", "packages/adapters"),
     ("runner", "runner", "packages/runner"),
     ("quant", "quant", "packages/quant"),

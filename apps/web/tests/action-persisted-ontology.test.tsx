@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 import ActionPage from "@/app/p/[slug]/actions/[id]/page";
 import { DecisionDAction } from "@/components/actions/decision";
-import { OntologyDetail } from "@/components/actions/ontology";
 import { api } from "@/lib/api";
 import type { Action } from "@/lib/types";
 import config from "../next.config.mjs";
@@ -33,27 +32,8 @@ const ontology = {
   },
 } as unknown as Action;
 
-describe("an ontology action says what it touches (S20-10)", () => {
-  it("its type, its targets, its parameters, what its effects returned and its evidence gathered", () => {
-    render(<OntologyDetail action={ontology} />);
-    const card = screen.getByTestId("ontology");
-    expect(card).toHaveTextContent("open_infra_pr");
-    expect(card).toHaveTextContent("os-reboot-required");
-    expect(card).toHaveTextContent("platform/maintenance/reboot.yaml");
-    const dossier = screen.getByTestId("ontology-folder");
-    expect(dossier).toHaveTextContent("gitops.pull_request");
-    expect(dossier).toHaveTextContent("https://github.com/acme/infra/pull/7");
-    expect(dossier).toHaveTextContent("finding_gone");
-    expect(dossier).toHaveTextContent("passed");
-  });
-
-  it("an action proposed after S45-39 keeps its parameters under `ontology`", () => {
-    const { ontologie: meta } = ontology.params as unknown as { ontologie: object }; // lang: fr-ok
-    render(<OntologyDetail action={{ ...ontology, params: { ontology: meta } } as unknown as Action} />);
-    expect(screen.getByTestId("ontology")).toHaveTextContent("os-reboot-required");
-  });
-
-  it("an action's page shows it", async () => {
+describe("an action the ontology persisted is still read (ADR 0181, O4-1)", () => {
+  it("its page shows it like any other action, with no card of the removed extension", async () => {
     vi.mocked(api.projectAction).mockResolvedValue({ ...ontology, effects: [], decisions: [], journal: [] } as Action);
     // The page reads its parameters through `use(promise)`: it suspends, and the render has to be awaited.
     await act(async () => {
@@ -65,12 +45,9 @@ describe("an ontology action says what it touches (S20-10)", () => {
         </QueryClientProvider>,
       );
     });
-    expect(await screen.findByTestId("ontology")).toHaveTextContent("os-reboot-required");
-  });
-
-  it("an action of another origin does not have this card", () => {
-    const { container } = render(<OntologyDetail action={{ ...ontology, origin: "tool" } as Action} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(await screen.findByText("open_infra_pr on os-reboot-required")).toBeInTheDocument();
+    expect(screen.getByText("ontology.open_infra_pr")).toBeInTheDocument();
+    expect(screen.queryByTestId("ontology")).not.toBeInTheDocument();
   });
 
   it("a rule without a recent authentication does not promise it", () => {
