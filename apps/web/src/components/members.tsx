@@ -10,12 +10,15 @@ export type Role = (typeof ROLES)[number];
 /** The roles a project row may carry: `org_admin` is the organisation's (S30-06; the API refuses it). */
 export const PROJECT_ROLES: readonly Role[] = ROLES.filter((role) => role !== "org_admin");
 
-export const ROLE_LABELS: Record<Role, string> = {
+/** Every spelling the API may send: `contributor` and `approver` are the neutral names (ADR 0181 C1). */
+export const ROLE_LABELS: Record<Role | "contributor" | "approver", string> = {
   viewer: "Viewer",
   developer: "Developer",
   release_captain: "Release captain",
   project_owner: "Project owner",
   org_admin: "Organisation admin",
+  contributor: "Contributor",
+  approver: "Approver",
 };
 
 export function rank(role: string): number {
