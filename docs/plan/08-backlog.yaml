@@ -5700,6 +5700,14 @@ stories:
     size: S
     depends_on: [S80-10]
     notes: "graalsystems/ecphoria 0.2.6 is the first release published to ghcr.io/graalsystems/ecphoria and -operator. The chart and both compose files pin 0.2.6-memory there; the allowlist of tests/licences/test_no_varga.py loses the four files that named the frozen Ecphoria address."
+  - id: S80-13
+    title: "ci: the gateway's guarantees are proven every night against a real model, Claude Haiku 5.5, with a capped key"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: [S80-07e]
+    notes: ".github/workflows/live-model.yml: nightly at 03:30 UTC and on dispatch, never on a pull request, only on graalsystems/tranibor from main. tests/live/model/compose.yaml starts the chart's LiteLLM (guard, span callback) with every alias on anthropic/claude-haiku-5-5; tests/live/test_litellm_live.py runs through it, a skip fails the job. The repository secret ANTHROPIC_API_KEY (a dedicated workspace with a monthly cap) is in the environment of the step that starts LiteLLM only. Guarded by tests/ci/test_live_model_job.py."
   # ───────────── S81 — the phone is a surface of the platform ─────────────
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"

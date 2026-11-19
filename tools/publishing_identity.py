@@ -80,6 +80,7 @@ DERIVED: tuple[str, ...] = (
     # Where the images are pushed and signed, and the upstream-only jobs.
     ".github/dependabot.yml",
     ".github/workflows/ci.yml",
+    ".github/workflows/live-model.yml",
     ".github/workflows/nightly.yml",
     ".github/workflows/release.yml",
     ".github/workflows/single-node-proof.yml",
