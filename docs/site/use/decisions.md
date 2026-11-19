@@ -170,7 +170,7 @@ console or with their own token.
 | "this step is addressed to … first: the group … may answer it once its SLA has passed" | The named person has until the deadline; after it, the group may answer |
 | "reassigning a waiting request is an organisation administrator's gesture" | Ask an organisation admin |
 | "no human request is pending on this work item" | Someone decided before you, or the work item moved on |
-| "approving a release needs the release_captain role" | Ask a project owner for the role |
+| "approving a release needs the approver role" | Ask a project owner for the role |
 
 ## Go further
 

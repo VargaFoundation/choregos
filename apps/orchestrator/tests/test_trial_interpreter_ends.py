@@ -82,6 +82,11 @@ async def test_an_interpreter_left_over_on_a_trial_item_replays_to_its_end() -> 
     handler.emit = seen.append  # type: ignore[method-assign]
     base = workflow.logger.base_logger
     level = base.level
+    # The workflow logger drops a line while `is_replaying` holds, and whether the Replayer still holds it
+    # on the history's last, never-completed task is not stable under load: main's CI missed the line on
+    # d7af12309 with the handler above in place. Logging during replay makes the check not depend on it.
+    during_replay = workflow.logger.log_during_replay
+    workflow.logger.log_during_replay = True
     base.addHandler(handler)
     base.setLevel(logging.WARNING)
     try:
@@ -89,6 +94,7 @@ async def test_an_interpreter_left_over_on_a_trial_item_replays_to_its_end() -> 
     finally:
         base.removeHandler(handler)
         base.setLevel(level)
+        workflow.logger.log_during_replay = during_replay
 
     assert result.replay_failure is None
     assert any(ENDED in record.getMessage() for record in seen), "the replay did not reach the end"

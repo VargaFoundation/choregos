@@ -118,6 +118,31 @@
             "null"
           ]
         },
+        "links": {
+          "description": "Where the step's work can be seen, by relation (ADR 0181 C1): `{rel: change_request, url}` for the change it proposes. It replaces `pr_url`, read until the release the window list names.",
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": [
+              "rel",
+              "url"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "rel": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            }
+          },
+          "default": []
+        },
         "transcript_url": {
           "type": [
             "string",

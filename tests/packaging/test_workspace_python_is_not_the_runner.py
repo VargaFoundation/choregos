@@ -37,8 +37,9 @@ def test_the_platform_commands_stay_callable_by_name_and_the_build_checks_python
     runtime = _runtime()
     assert "for command in" in runtime, "the platform's commands are no longer linked"
     linked = runtime.split("for command in", 1)[1].split(";", 1)[0].split()
-    # A Tekton step runs `choregos-runner run`, a job `choregos-quant`: linked, not on PATH.
-    assert {"choregos-runner", "choregos-quant", "choregos-tools"} <= set(linked)
+    # A Tekton step runs `choregos-runner run`: linked, not on PATH. A job image built FROM this one
+    # links its own command the same way (`plugins/investment-research/Dockerfile`).
+    assert {"choregos-runner", "choregos-tools"} <= set(linked)
     assert 'ln -s "/app/.venv/bin/$command" "/usr/local/bin/$command"' in runtime
     assert 'test "$(command -v python3)" = /usr/local/bin/python3' in runtime
     assert "sys.prefix == sys.base_prefix" in runtime

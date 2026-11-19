@@ -48,6 +48,7 @@ from ..gates import (
     RUN_SCOPED_GATES,
     judged_on_a_run,
     known_gates,
+    unavailable,
 )
 from .dates import field_of
 from .groups import is_per_project, placeholder_error
@@ -630,10 +631,14 @@ def _check_transition_references(
     if t.by is not None and t.by not in wf.actors:
         report.error("actor.unknown", f"unknown actor: {t.by}", [*path, "by"], source)
     for g_index, g in enumerate(t.gates):
-        if g.name not in gates:
+        # A gate this deployment cannot judge is refused now, naming the plugin to install, rather
+        # than when a work item reaches it (ADR 0181): one nobody registered, or one whose context
+        # provider no installed extension declares.
+        why = unavailable(g.name)
+        if why is not None:
             report.error(
-                "gate.unknown",
-                f"unknown gate: {g.name} (known: {', '.join(sorted(gates))})",
+                "gate.unknown" if g.name not in gates else "gate.provider_missing",
+                why,
                 [*path, "gates", g_index],
                 source,
             )
@@ -790,7 +795,8 @@ def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
     """What the platform does is WRITTEN (#175): `does` on a system transition, `production`
     on a state. An effect still deduced from a name is read (a published workflow does not change
     behaviour), but it announces itself: a rename would lose it."""
-    gestures = {"open_pr": "opens the PR", "merge_pr": "merges the PR"}
+    from ..step_effects import step_effect_of
+
     for index, t in enumerate(wf.transitions):
         is_system = isinstance(wf.actors.get(t.by or ""), SystemActor)
         if t.does is not None and not is_system:
@@ -798,8 +804,10 @@ def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
             report.error("transition.does_requires_system", message, ["transitions", index, "does"], source)
         implicit = implicit_effect(t.to)
         if is_system and t.does is None and implicit is not None:
+            found = step_effect_of(implicit)
+            gesture = found.gesture if found else implicit
             message = (
-                f"the transition to `{t.to}` {gestures[implicit]} because of the state's NAME: "
+                f"the transition to `{t.to}` {gesture} because of the state's NAME: "
                 f"write `does: {implicit}`, so that a rename no longer changes it"
             )
             report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)

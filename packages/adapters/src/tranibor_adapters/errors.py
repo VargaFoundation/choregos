@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from tranibor_core import ChoregosError
+from tranibor_core.agent_isolation import AGENT_ISOLATION_UNAVAILABLE
 from tranibor_core.hosted import UNSUPPORTED_CLUSTER
 
 
@@ -55,3 +56,10 @@ class UnsupportedClusterError(ConfigurationError):
     Kubernetes 1.29 (S41-16). Retrying changes nothing until the cluster is upgraded."""
 
     code = UNSUPPORTED_CLUSTER
+
+
+class AgentIsolationRefusedError(ConfigurationError):
+    """The deployment runs every agent in a container of its own (ADR 0146) and this executor cannot
+    start one: refused before anything reaches its backend, never run with the agent beside the runner."""
+
+    code = AGENT_ISOLATION_UNAVAILABLE

@@ -47,7 +47,7 @@ global:
   # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
   internalApiUrl: ""
   imageRegistry: ghcr.io/graalsystems
-  imageTag: "0.27.15"
+  imageTag: "0.27.16"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -85,16 +85,24 @@ global:
     # What the API lets a project choose as its `runtime` connector. Empty: only `executor`.
     # Add `k8s_job` for the steps that name their own image.
     allowedExecutors: []
+    # Where the coding agent runs (ADR 0146), for every executor, the API and the workers. `process`: in
+    # the runner's container, as its child (same uid, same /proc, same /app). `container`: in its OWN
+    # container of the run's pod, another uid, started by a launcher; it then holds neither the
+    # runner's environment (run token, git token, egress report key) nor /app. An executor that cannot
+    # start that container (it does not declare `separate_agent`) refuses the run, and `/readiness`
+    # says so first (`agent-isolation`); the runner refuses too (exit 100) rather than fall back to
+    # `process`. Needs Kubernetes >= 1.29 (native sidecar). Roll back by setting `process`.
+    agentIsolation: process
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
-  # yet — for example an extension shipped inactive (`CHOREGOS_ONTOLOGY_TRIAL: "1"`) — without forking the
-  # chart. A variable already set by the chart is REFUSED at render time: two values for the same
+  # yet — for example a setting an installed plugin reads (`ACME_PLUGIN_MODE: "strict"`) — without
+  # forking the chart. A variable already set by the chart is REFUSED at render time: two values for the same
   # name, Kubernetes keeps the last one without saying anything, and the chart's setting would be replaced
   # silently. Each entry has exactly one of `value` or `valueFrom` (refused otherwise); a secret is
   # mapped by `valueFrom.secretKeyRef`, never written as a plain `value` (S38-18).
   extraEnv: []
-  #   - name: CHOREGOS_ONTOLOGY_TRIAL
-  #     value: "1"
+  #   - name: ACME_PLUGIN_MODE
+  #     value: "strict"
   # OpenTelemetry GenAI traces (ADR 0018). The collector's OTLP/HTTP endpoint, given as
   # `OTEL_EXPORTER_OTLP_ENDPOINT` to the API, each worker, the migration Job and the embedded
   # gateway, whose callback puts each model call in its run's trace. Empty: tracing off, nothing
@@ -713,6 +721,15 @@ choregos-orchestrator:
     limits:
       cpu: "2"
       memory: 6Gi
+    # Under `global.runner.agentIsolation: container` (ADR 0146 §12) the agent's container takes the
+    # requests and the limits above, since the harness and the test suites are what use them; the
+    # runner's own container takes these (Python, git, the loopback listeners). Measured on
+    # 2026-11-19: the runner's modules 78 MiB resident, its `git fetch --depth 50` of a 121 MiB-pack
+    # repository 146 MiB at peak, commit and diff under 70 MiB. A pod then requests 1.25 CPU and 2.5 GiB
+    # (k8s_job) where a `process` pod requests 1 and 2 GiB.
+    ownResources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { cpu: "1", memory: 2Gi }
     # The pool's RuntimeClass. Prefer `global.runner.runtimeClass`, which the API reads too (this
     # value alone leaves `/readiness` unable to judge a gVisor policy). Both set: they must agree.
     runtimeClass: ""
@@ -738,13 +755,6 @@ choregos-orchestrator:
       # NetworkPolicies and refuses a tenant's (an Argo CD AppProject that blacklists them):
       # the platform then holds that promise itself, or nobody does.
       assignmentNetworkPolicy: true
-      # Where the coding agent runs (ADR 0146). `process`: in the runner's container, as its child
-      # (same uid, same /proc, same /app; what the platform shipped until 0.27). `container`: in
-      # its OWN container of the sandbox pod, another uid, started by a launcher; it then holds
-      # neither the runner's environment (run token, git token, egress report key) nor /app.
-      # `agent_sandbox` only: the runner refuses (exit 100) rather than fall back to `process`.
-      # Needs Kubernetes >= 1.29 (native sidecar). Roll back by setting `process`.
-      agentIsolation: process
     # The egress gate (S80-07f, ADR 0184 "Amendment: the egress gate"): the FIRST init container of
     # every pod that runs agent code (the `k8s_job` pod, its hosted agent's sidecar included, and the
     # `agent_sandbox` template, its ADR 0146 agent container included). It tries a direct TCP

@@ -68,8 +68,11 @@ def kubernetes_version(version: str | Mapping[str, Any] | None) -> tuple[int, in
     return (int(matched[1]), int(matched[2])) if matched else None
 
 
-def native_sidecars_refusal(version: str | Mapping[str, Any] | None) -> str | None:
-    """Why a hosted container cannot run on a cluster of this version; `None` when it can."""
+def native_sidecars_refusal(
+    version: str | Mapping[str, Any] | None, what: str = "a hosted agent"
+) -> str | None:
+    """Why a native sidecar (`what`: a hosted agent's container, or the agent's own under ADR 0146)
+    cannot run on a cluster of this version; `None` when it can."""
     parsed = kubernetes_version(version)
     shown = version.get("gitVersion") if isinstance(version, Mapping) else version
     wanted = ".".join(map(str, NATIVE_SIDECARS_MIN))
@@ -77,7 +80,7 @@ def native_sidecars_refusal(version: str | Mapping[str, Any] | None) -> str | No
         return f"{UNSUPPORTED_CLUSTER}: the cluster's Kubernetes version `{shown}` cannot be read"
     if parsed < NATIVE_SIDECARS_MIN:
         return (
-            f"{UNSUPPORTED_CLUSTER}: a hosted agent runs as a native sidecar, which needs Kubernetes "
+            f"{UNSUPPORTED_CLUSTER}: {what} runs as a native sidecar, which needs Kubernetes "
             f"{wanted} or later; this cluster runs {parsed[0]}.{parsed[1]}"
         )
     return None

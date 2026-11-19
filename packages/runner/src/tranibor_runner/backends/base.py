@@ -26,6 +26,9 @@ class LaunchPlan:
     #: Files for the agent's `$HOME`, outside the repository: what is written there never lands
     #: in the run's diff (ADR 0055: rtk's configuration).
     home_files: dict[str, str] = field(default_factory=dict)
+    #: Loopback ports the agent connects to in its own process tree (opencode's ACP layer talks to its own
+    #: HTTP server): the confinement's port rule must let them through (S65-04a).
+    local_ports: tuple[int, ...] = ()
 
     def materialize_home(self, home: Path) -> list[str]:
         """Writes `home_files` under the agent's `$HOME`. The directory belongs to the run, so

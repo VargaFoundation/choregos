@@ -7,9 +7,15 @@ container beside the runner (ADR 0080), cannot be honoured there, and the execut
 deployment whose default executor is `agent_sandbox` that would make those steps impossible, so
 `RoutingExecutor` sends them to a second executor (`k8s_job` by default).
 
-The choice is made once, at `start`, on `spec.runner_image` and `spec.agent_container`. Everything
-after is routed by `ref.kind`, which the orchestrator persists per run (`runs.executor_kind`):
-status, logs, cancel, renew, suspend and resume reach the executor that started the run.
+The agent's own container (ADR 0146 §9) routes too: a run under `container` that the default executor
+cannot isolate (it does not declare `separate_agent`) goes to the second one when that one can, and is
+refused, naming both, when neither can. A step that must go to the second executor is never sent back
+to the first for it: the first cannot honour its image.
+
+The choice is made once, at `start`, on `spec.runner_image`, `spec.agent_container` and
+`spec.agent_isolation`. Everything after is routed by `ref.kind`, which the orchestrator persists per
+run (`runs.executor_kind`): status, logs, cancel, renew, suspend and resume reach the executor that
+started the run.
 """
 
 from __future__ import annotations
@@ -19,8 +25,10 @@ from datetime import datetime
 from typing import Any
 
 from tranibor_core import ExecRef, ExecStatus, StageJobSpec
+from tranibor_core.agent_isolation import agent_isolation_refusal
 
 from ..base import Executor
+from .isolation import refuse_unless_separate
 
 
 class RoutingExecutor:
@@ -39,6 +47,9 @@ class RoutingExecutor:
         # A hosted agent's container beside the runner (ADR 0080): no pool sandbox has one.
         if spec.agent_container is not None:
             return True
+        # A code agent's own image as the agent's container (ADR 0146 §10): no pool sandbox has it.
+        if spec.agent_image and spec.agent_image != self.pool_image:
+            return True
         return bool(spec.runner_image) and spec.runner_image != self.pool_image
 
     def _delegate(self, ref: ExecRef) -> Executor:
@@ -48,8 +59,26 @@ class RoutingExecutor:
         """What the executor that runs THIS run can do."""
         return frozenset(self._delegate(ref).capabilities)
 
+    def _route(self, spec: StageJobSpec) -> Executor:
+        """The executor that takes this run. One that cannot isolate the agent is never chosen when the
+        other can; when neither can, the routing refuses before either is asked."""
+        if self._is_custom(spec):
+            return self.secondary
+        if agent_isolation_refusal(spec.agent_isolation, self._name(self.primary), self.primary.capabilities):
+            if agent_isolation_refusal(
+                spec.agent_isolation, self._name(self.secondary), self.secondary.capabilities
+            ):
+                names = f"{self._name(self.primary)}` or `{self._name(self.secondary)}"
+                refuse_unless_separate(names, frozenset(), spec)
+            return self.secondary
+        return self.primary
+
+    @staticmethod
+    def _name(executor: Executor) -> str:
+        return str(getattr(executor, "kind", "") or type(executor).__name__)
+
     async def start(self, spec: StageJobSpec) -> ExecRef:
-        return await (self.secondary if self._is_custom(spec) else self.primary).start(spec)
+        return await self._route(spec).start(spec)
 
     async def status(self, ref: ExecRef) -> ExecStatus:
         return await self._delegate(ref).status(ref)

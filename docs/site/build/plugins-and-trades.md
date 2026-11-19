@@ -46,7 +46,9 @@ the platform's own processes.
 | A connector type (a tracker, a directory, a market data feed) | an MCP server that implements the tracker profile | a connector type, through `tranibor_adapters.register` |
 | Effects of a governed action | | `effects.declare_effect` |
 | Its own tables, its own routes | | the `choregos.migrations` entry point, `extensions.declare_router` |
-| Gates and the facts they read, step effects for `does:`, inbound event types, finding types, stage roles | | the seams round C0 adds (ADR 0181) |
+| Gates and the facts they read | | `gates.gate` and `gates.context_provider` ([ADR 0181](../../adr/0181-the-contracts-speak-no-trade.md), round C0) |
+| Step effects for `does:` | | `step_effects.step_effect` (ADR 0181, round C0) |
+| Inbound event types, finding types, memory kinds, stage roles | | `INBOUND_EVENT_TYPES`, `FINDING_TYPES`, `MEMORY_KINDS` of `tranibor_contracts`, `stage_roles.declare_stage_roles` (ADR 0181, round C0) |
 | Durable code of its own (a release train) | | a worker seam (ADR 0181, round D) |
 
 A deterministic job step runs an image the operator allows (`CHOREGOS_JOB_IMAGES`); a plugin's template
@@ -54,7 +56,7 @@ names it.
 
 ## One example per trade
 
-- **Software delivery**: `software-delivery`, a first-party plugin, and the only example here with both
+- **Software delivery**: `software-delivery`, a first-party plugin with both
   halves. Its content is published today: the delivery agents (triage to the production go/no-go) and
   the `madr-4` skill. By 1.0 it also holds the repository templates, and its extension,
   `tranibor-software-delivery`, holds what the core carries today: the twelve gates that read a diff or
@@ -71,9 +73,12 @@ names it.
 - **HR**: the joiners and leavers workflows (today the core's `joiners-leavers` template). Content
   only: two coordinator agents, two skills, two workflows whose every write to the directory, the device
   fleet, the carrier or the badge readers is a governed action on the organisation's connectors.
-- **Investment research**: `investment-research`, by 1.0 (today in the core). Content: the campaign
-  template, two agents, two skills, their evals, and the job image that runs the deterministic quant
-  steps. Extension: the `marketdata` connector family.
+- **Investment research**: `investment-research`, a first-party plugin with both halves. Content: the
+  campaign template, two agents, two skills, their evals and the setup procedures of its connectors.
+  Extension: the `marketdata` connector family, the distribution `tranibor-investment-research` in
+  `plugins/investment-research/` of the core's repository, which the published images install. Its
+  template's deterministic steps run `choregos-quant` in the plugin's job image,
+  `tranibor-investment-research`, which each release builds FROM its own runner image.
 
 ## What changes before 1.0
 
@@ -90,11 +95,15 @@ first-party plugin like any other, in its own distribution, before 1.0.
 | The release train, its routes and the DORA figures | `software-delivery` |
 | The repository templates | `software-delivery`'s content |
 | `packages/ontology` | removed |
-| The `quant` command and the investment template, the `marketdata` connectors | `investment-research` |
+| The `quant` command and the investment template | `investment-research`: done (S83-07) |
+| The `marketdata` connectors | `investment-research`'s extension: done (S83-08) |
 
 Gate names, event types and effect names do not change: stored workflows and subscribers keep working
-once the plugin is installed. A renamed field is served under both names for one minor release, then
-only under the new one.
+once the plugin is installed. A renamed name is served beside its former one for a window of at least
+two weeks, then only under the new one. One list, `tranibor_contracts.window`, names every former name
+and the release that removes it: the roles, the fields and the role groups renamed in round C1 leave in
+0.30.0. Until then a request may send either spelling, a response carries both fields, and an identity
+provider may send `contributors` and `approvers` beside `developers` and `release-captains`.
 
 ## Go further
 

@@ -1,4 +1,9 @@
-"""Only the ontology service still imports the API, and never more than today (ADR 0099)."""
+"""No package imports the API (ADR 0099).
+
+The ontology service was the last one: it went with the package (ADR 0181, O4-1), and the ceiling of
+22 import statements it held fell to zero. A package that needs code of the API moves that code to
+`packages/core` instead.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +12,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ROOT / "packages"
-ALLOWED = Path("ontology") / "src" / "tranibor_ontology" / "service"
 
-# Measured at 87ea1831d. Lower it in the PR that removes imports; raise it only for a mechanical
-# rename that splits an existing statement, saying so in the PR body, or by amending ADR 0099.
-CEILING = 22
+# Was 22 (measured at 87ea1831d, all in the ontology service), 0 since the ontology was removed. It
+# is raised only by amending ADR 0099.
+CEILING = 0
 
 
 def _is_api(name: str) -> bool:
@@ -34,32 +38,24 @@ def api_imports_by_file(packages: Path) -> dict[Path, int]:
     return found
 
 
-def violations(found: dict[Path, int]) -> list[str]:
-    return sorted(str(path) for path in found if not path.is_relative_to(ALLOWED))
-
-
-def test_only_the_ontology_service_imports_the_api() -> None:
+def test_no_package_imports_the_api() -> None:
     found = api_imports_by_file(PACKAGES)
-    assert not violations(found), (
-        f"packages importing tranibor_api outside tranibor_ontology/service: {violations(found)} "
-        "(ADR 0099: move shared code to packages/core)"
-    )
     total = sum(found.values())
     assert total <= CEILING, (
         f"packages/*/src imports tranibor_api {total} times, the ceiling is {CEILING}: "
-        "a new import is refused (ADR 0099: move shared code to packages/core)"
+        f"{sorted(str(path) for path in found)} (ADR 0099: move shared code to packages/core)"
     )
 
 
 def test_the_detector_counts_and_places_imports(tmp_path: Path) -> None:
-    inside = tmp_path / "ontology/src/tranibor_ontology/service/a.py"
-    outside = tmp_path / "core/src/tranibor_core/b.py"
     for path, source in (
-        (inside, "from tranibor_api.db import x\nimport tranibor_api.config\n"),
-        (outside, "from tranibor_api.db import y\n"),
+        (
+            tmp_path / "plugin/src/tranibor_plugin/a.py",
+            "from tranibor_api.db import x\nimport tranibor_api.config\n",
+        ),
+        (tmp_path / "core/src/tranibor_core/b.py", "from tranibor_api.db import y\nimport tranibor_core\n"),
     ):
         path.parent.mkdir(parents=True)
         path.write_text(source, encoding="utf-8")
     found = api_imports_by_file(tmp_path)
-    assert sum(found.values()) == 3
-    assert violations(found) == ["core/src/tranibor_core/b.py"]
+    assert found == {Path("plugin/src/tranibor_plugin/a.py"): 2, Path("core/src/tranibor_core/b.py"): 1}

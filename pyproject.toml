@@ -1,6 +1,6 @@
 [project]
 name = "choregos-workspace"
-version = "0.27.15"
+version = "0.27.16"
 description = "Choregos — plateforme de delivery agentique (GRAAL.SYSTEMS SAS)"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -8,10 +8,8 @@ license = { text = "Apache-2.0" }
 dependencies = [
   "tranibor-contracts",
   "tranibor-core",
-  "tranibor-ontology",
   "tranibor-adapters",
   "tranibor-runner",
-  "tranibor-quant",
   "tranibor-tools-mcp",
   "tranibor-playbooks",
   "tranibor-cli",
@@ -19,13 +17,13 @@ dependencies = [
   "tranibor-orchestrator",
   "tranibor-agent-sdk",
   "tranibor-outpost",
+  # The extension of the `investment-research` plugin (ADR 0181 O4-4): its own distribution.
+  "tranibor-investment-research",
   # The former names (ADR 0176 R2): empty wheels that ship the `choregos_*` import aliases.
   "choregos-contracts", # compat-ok
   "choregos-core", # compat-ok
-  "choregos-ontology", # compat-ok
   "choregos-adapters", # compat-ok
   "choregos-runner", # compat-ok
-  "choregos-quant", # compat-ok
   "choregos-tools-mcp", # compat-ok
   "choregos-playbooks", # compat-ok
   "choregos-cli", # compat-ok
@@ -59,16 +57,14 @@ dev = [
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["packages/*", "apps/api", "apps/orchestrator", "compat/*"]
+members = ["packages/*", "apps/api", "apps/orchestrator", "compat/*", "plugins/investment-research"]
 exclude = ["packages/contracts/ts", "apps/web"]
 
 [tool.uv.sources]
 tranibor-contracts = { workspace = true }
 tranibor-core = { workspace = true }
-tranibor-ontology = { workspace = true }
 tranibor-adapters = { workspace = true }
 tranibor-runner = { workspace = true }
-tranibor-quant = { workspace = true }
 tranibor-tools-mcp = { workspace = true }
 tranibor-playbooks = { workspace = true }
 tranibor-cli = { workspace = true }
@@ -76,12 +72,11 @@ tranibor-api = { workspace = true }
 tranibor-orchestrator = { workspace = true }
 tranibor-agent-sdk = { workspace = true }
 tranibor-outpost = { workspace = true }
+tranibor-investment-research = { workspace = true }
 choregos-contracts = { workspace = true } # compat-ok
 choregos-core = { workspace = true } # compat-ok
-choregos-ontology = { workspace = true } # compat-ok
 choregos-adapters = { workspace = true } # compat-ok
 choregos-runner = { workspace = true } # compat-ok
-choregos-quant = { workspace = true } # compat-ok
 choregos-tools-mcp = { workspace = true } # compat-ok
 choregos-playbooks = { workspace = true } # compat-ok
 choregos-cli = { workspace = true } # compat-ok
@@ -124,6 +119,8 @@ max-statements = 80
 "**/tests/**" = ["S", "PLR", "ASYNC"]
 "tests/**" = ["S", "PLR", "ASYNC"]
 "**/fakes/**" = ["S"]
+# A plugin extension's fake (ADR 0005), named after its family rather than kept under `fakes/`.
+"plugins/*/src/**/fake.py" = ["S"]
 # Development defaults, never real secrets.
 "apps/api/src/tranibor_api/config.py" = ["S105"]
 "apps/api/src/tranibor_api/security.py" = ["S105"]
@@ -155,10 +152,10 @@ plugins = ["pydantic.mypy"]
 exclude = ["(^|/)(\\.venv|node_modules|generated)/", "^apps/web/"]
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = "packages/contracts/src:packages/core/src:packages/ontology/src:packages/adapters/src:packages/runner/src:packages/quant/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:packages/agent-sdk/src:packages/outpost/src:examples/agents/plain/src:apps/api/src:apps/orchestrator/src"
+mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:packages/agent-sdk/src:packages/outpost/src:plugins/investment-research/src:examples/agents/plain/src:apps/api/src:apps/orchestrator/src"
 
 [[tool.mypy.overrides]]
-module = ["celpy.*", "temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*", "openpyxl.*", "lxml.*"]
+module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*", "openpyxl.*", "lxml.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -169,7 +166,7 @@ disallow_untyped_defs = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["packages", "apps", "tests"]
+testpaths = ["packages", "apps", "plugins", "tests"]
 # The evals' toy repositories have their own tests: the evals matrix runs them in a throwaway
 # copy, not the platform's suite.
 norecursedirs = [
@@ -199,7 +196,7 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 branch = true
-source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/ontology/src", "packages/playbooks/src", "packages/quant/src", "packages/tools-mcp/src", "packages/outpost/src"]
+source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/playbooks/src", "packages/tools-mcp/src", "packages/outpost/src", "plugins/investment-research/src"]
 omit = ["*/generated/*", "*/tests/*"]
 
 [tool.coverage.report]

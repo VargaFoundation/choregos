@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from tranibor_adapters.executor.aca import AcaExecutor
 from tranibor_adapters.executor.agent_sandbox import runtime_class_refusal
 from tranibor_api.services.readiness import (
     ConnectorFact,
@@ -14,6 +15,8 @@ from tranibor_api.services.readiness import (
     RuntimeFact,
     TemplateWorkflowFact,
     evaluate,
+    isolation_fact,
+    item_agent_isolation,
     item_backend,
     item_budgets,
     item_connector_secrets,
@@ -36,6 +39,7 @@ from tranibor_api.services.readiness import (
     runtime_fact,
 )
 from tranibor_contracts import Policy, ProjectConfig
+from tranibor_core.agent_isolation import agent_isolation_refusal
 
 NOW = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
 
@@ -483,3 +487,45 @@ def test_an_adopted_workflow_behind_its_catalogue_entry_is_to_check() -> None:
     assert behind.fix.href == "/p/dev/workflows/library"
     (gone,) = item_workflow_catalogue(facts(adopted=(("ghostly", "org/ghostly@1", None),)))
     assert gone.state == "check" and "no longer offers" in gone.detail
+
+
+# ADR 0146 §9 (S65-04d): the agent's own container ─────────────────────────────────────────
+
+
+@pytest.fixture
+def isolated(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
+    monkeypatch.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", "container")
+    return monkeypatch
+
+
+def test_under_process_nothing_is_judged(isolated: pytest.MonkeyPatch) -> None:
+    isolated.setenv("CHOREGOS_RUNNER_AGENT_ISOLATION", "process")
+    assert isolation_fact({}) is None
+    assert item_agent_isolation(facts(isolation=None)) == []
+
+
+def test_under_the_fakes_nothing_is_judged(isolated: pytest.MonkeyPatch) -> None:
+    isolated.setenv("CHOREGOS_FAKES", "1")
+    assert isolation_fact({}) is None
+
+
+def test_an_executor_that_cannot_isolate_is_to_do_with_the_sentence_start_raises(
+    isolated: pytest.MonkeyPatch,
+) -> None:
+    fact = isolation_fact({"runtime": connector("runtime", "aca")})
+    assert fact is not None and fact.executor == "aca"
+    assert fact.refusal == agent_isolation_refusal("container", "aca", AcaExecutor.capabilities)
+    (item,) = item_agent_isolation(facts(isolation=fact))
+    assert item.state == "todo" and item.fix.by == "platform_operator"
+    assert "`aca`" in item.detail and "separate_agent" in item.detail
+    assert evaluate(facts(isolation=fact)).ready is False
+
+
+def test_a_warm_pool_rendered_with_the_agents_container_is_done(isolated: pytest.MonkeyPatch) -> None:
+    fact = isolation_fact({})
+    assert fact is not None and fact.executor == "agent_sandbox" and fact.refusal is None
+    (item,) = item_agent_isolation(facts(isolation=fact))
+    assert item.state == "done"
+    assert "`agent_sandbox`" in item.detail

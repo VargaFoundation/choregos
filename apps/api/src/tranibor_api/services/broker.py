@@ -30,6 +30,7 @@ from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_contracts import Role
 from tranibor_core.argument_grants import interpolate, narrowed, violation
 from tranibor_core.mcp import data_once, serializes
 
@@ -361,7 +362,9 @@ async def tool_action(  # noqa: PLR0913 - one action: what, by whom, why, keywor
             "with": {"connector": tool.connector.name, **declared.compensation},
         }
     # Who approves (ADR 0052): the members of the group the organisation named for this operation —
-    # with at least a developer's rank on the project —, otherwise the project's owners (ADR 0035).
+    # with at least a contributor's rank on the project —, otherwise the project's owners (ADR 0035).
+    # The rule is stored, so it names the role as every reader of the previous release does
+    # (`Role.stored`, ADR 0181 C1).
     # `{project}-maintainers` is this project's maintainers (S59-11, as for a workflow's people, S59-01):
     # one operation rule of the organisation serves every project, the action stores the resolved group.
     from tranibor_core.dsl.groups import group_for
@@ -369,7 +372,12 @@ async def tool_action(  # noqa: PLR0913 - one action: what, by whom, why, keywor
     approval = (
         ApprovalSpec(
             approvers=[
-                Approver(role="developer", group=group_for(tool.operation.approver_group, project.slug))
+                Approver.model_validate(
+                    {
+                        "role": str(Role.CONTRIBUTOR.stored),
+                        "group": group_for(tool.operation.approver_group, project.slug),
+                    }
+                )
             ]
         )
         if tool.operation.approver_group

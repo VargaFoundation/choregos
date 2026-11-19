@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Several keys for one field, used in turn (S39-30b, ADR 0089).
 
-The shared `Pool` (failover, round robin, cool-down, bench), what a pooled field resolves to, and two
-adapters that adopt it: a market-data provider whose quota answer moves the call to the next key, and
-a search backend whose refused key does the same. A pool of one behaves exactly as before.
+The shared `Pool` (failover, round robin, cool-down, bench), what a pooled field resolves to, and an
+adapter that adopts it: a search backend whose refused key moves the call to the next key. A pool of one
+behaves exactly as before. The `investment-research` extension's providers adopt it too: their tests are
+in `plugins/investment-research/tests/test_key_pool.py`.
 """
 
 from __future__ import annotations
@@ -16,12 +17,9 @@ import httpx
 import pytest
 from tranibor_adapters.http import pool as pool_module
 from tranibor_adapters.http.pool import Pool
-from tranibor_adapters.marketdata import AlphaVantageProvider, RateLimited
 from tranibor_adapters.registry import resolved_configuration, validate_config
 from tranibor_adapters.web_search import BraveSearch, SearchError, SearchRateLimited
 from tranibor_core.egress import hosts_of_config
-
-from .test_marketdata import ALPHA_DAILY
 
 KEYS = ["key-one-AAAA", "key-two-BBBB", "key-three-CCCC"]
 
@@ -176,7 +174,7 @@ def test_key_rotation_is_a_setting_of_a_pooling_type_only() -> None:
     with pytest.raises(Exception, match="failover"):
         validate_config("web_search", "brave", {"key_rotation": "random"})
     with pytest.raises(Exception, match="one key per field"):
-        validate_config("marketdata", "yahoo", {"key_rotation": "failover"})
+        validate_config("web_search", "firecrawl", {"key_rotation": "failover"})
 
 
 def test_a_list_of_urls_gives_each_host() -> None:
@@ -186,30 +184,7 @@ def test_a_list_of_urls_gives_each_host() -> None:
     ]
 
 
-# ── two adapters that adopt it ──────────────────────────────────────────────────────────────
-
-
-async def test_a_market_data_quota_answer_moves_to_the_next_key() -> None:
-    seen: list[str] = []
-
-    def answer(request: httpx.Request) -> httpx.Response:
-        seen.append(request.url.params["apikey"])
-        if request.url.params["apikey"] == KEYS[0]:
-            return httpx.Response(200, json={"Information": f"limit reached for {KEYS[0]}"})
-        return httpx.Response(200, json=ALPHA_DAILY)
-
-    provider = AlphaVantageProvider(transport=httpx.MockTransport(answer), api_key=KEYS[:2])
-    bars = await provider.get_bars("AAPL", "2024-01-02", "2024-01-31")
-    assert len(bars["bars"]) == 2 and seen == [KEYS[0], KEYS[1]]
-    again = await provider.get_bars("AAPL", "2024-01-02", "2024-01-31")
-    assert again["bars"] and seen[-1] == KEYS[1], "the limited key rests"
-
-
-async def test_market_data_with_every_key_limited_is_a_rate_limit() -> None:
-    transport = httpx.MockTransport(lambda _r: httpx.Response(429))
-    provider = AlphaVantageProvider(transport=transport, api_key=KEYS[:2])
-    with pytest.raises(RateLimited, match="every key is resting"):
-        await provider.get_bars("AAPL", "2024-01-02", "2024-01-31")
+# ── an adapter that adopts it ──────────────────────────────────────────────────────────────
 
 
 async def test_a_refused_search_key_moves_to_the_next_and_no_key_leaks() -> None:
@@ -241,32 +216,3 @@ async def test_a_single_refused_search_key_is_the_old_error() -> None:
     brave = BraveSearch(api_key=KEYS[0], transport=httpx.MockTransport(lambda _r: httpx.Response(403)))
     with pytest.raises(SearchError, match=r"refused \(HTTP 403\)"):
         await brave.search("python")
-
-
-async def test_tiingo_sends_the_key_of_each_call_and_moves_past_a_refused_one() -> None:
-    """Tiingo's key is a header: set once at construction, every call of a pool would carry the first
-    key whatever the turn (S39-30d). Set per request, a refused key moves the call to the next."""
-    from tranibor_adapters.marketdata import TiingoProvider
-
-    from .test_marketdata import TIINGO_ROWS
-
-    seen: list[str] = []
-
-    def answer(request: httpx.Request) -> httpx.Response:
-        token = request.headers["Authorization"].removeprefix("Token ")
-        seen.append(token)
-        if token == KEYS[0]:
-            return httpx.Response(401, json={"detail": "Invalid token"})
-        return httpx.Response(200, json=TIINGO_ROWS)
-
-    tiingo = TiingoProvider(transport=httpx.MockTransport(answer), api_key=KEYS[:2])
-    bars = await tiingo.get_bars("AAPL", "2020-08-28", "2020-08-31")
-    assert len(bars["bars"]) == 2 and seen == [KEYS[0], KEYS[1]]
-
-
-def test_a_composite_pools_its_tiingo_keys() -> None:
-    from tranibor_adapters.registry import spec_of
-
-    tiingo, composite = spec_of("marketdata", "tiingo"), spec_of("marketdata", "composite")
-    assert tiingo is not None and tiingo.pooled_fields == ("api_key",)
-    assert composite is not None and "tiingo_api_key" in composite.pooled_fields

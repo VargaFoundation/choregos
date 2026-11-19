@@ -7,7 +7,7 @@ import { BriefcaseBusiness, Clock3, Inbox, KeyRound, Link2, Play, ScrollText, Sh
 import { Avatar } from "@/components/accounts/avatar";
 import { MemberLinkedAccounts } from "@/components/accounts/member-linked-accounts";
 import { SourceBadge } from "@/components/groups/source-badge";
-import { ROLE_LABELS } from "@/components/members";
+import { roleLabel } from "@/components/members";
 import { Badge, Card, Empty, ErrorNote, ReadState, StateBadge, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { relative, shortDate, usd } from "@/lib/format";
@@ -162,7 +162,7 @@ function AccessCard({ profile: p }: { profile: MemberProfile }) {
     <Card title="Access" icon={ShieldCheck} data-testid="profile-access">
       <dl className="grid grid-cols-[max-content_1fr] items-start gap-x-6 gap-y-3 text-sm">
         <dt className="text-ink-muted">Organisation role</dt>
-        <dd>{p.org_role ? <span title={p.org_role}>{ROLE_LABELS[p.org_role]}</span> : <span className="text-ink-muted">None</span>}</dd>
+        <dd>{p.org_role ? <span title={p.org_role}>{roleLabel(p.org_role)}</span> : <span className="text-ink-muted">None</span>}</dd>
         <dt className="text-ink-muted">Projects</dt>
         <dd>
           {p.project_roles.length === 0 ? (
@@ -174,7 +174,7 @@ function AccessCard({ profile: p }: { profile: MemberProfile }) {
                   <Link href={`/p/${r.project_slug}`} data-verbatim>
                     {r.project_name || r.project_slug}
                   </Link>{" "}
-                  <span className="text-ink-muted">· {ROLE_LABELS[r.role]}</span>
+                  <span className="text-ink-muted">· {roleLabel(r.role)}</span>
                 </li>
               ))}
             </ul>

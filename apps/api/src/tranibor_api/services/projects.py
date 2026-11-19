@@ -107,7 +107,7 @@ async def project_stats(session: AsyncSession, project: Project) -> ProjectStats
         active_work_items=int(active),
         cost_month_eur=round(float(cost), 4),
         trains_pending=int(trains),
-        first_pass_merge_rate=await first_pass_merge_rate(session, project.id),
+        first_pass_acceptance_rate=await first_pass_merge_rate(session, project.id),
     )
 
 
