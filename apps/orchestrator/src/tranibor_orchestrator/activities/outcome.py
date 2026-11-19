@@ -22,7 +22,7 @@ from tranibor_api.services.budget_alerts import unsent_month_alerts
 from tranibor_api.services.budgets import ticket_budget, ticket_spent
 from tranibor_api.services.model_catalogue import priced_spend
 from tranibor_api.services.tickets import outputs_to_store
-from tranibor_contracts import EventType, StageInput, StageResult, StageStatus
+from tranibor_contracts import CHANGE_REQUEST, EventType, StageInput, StageResult, StageStatus
 from tranibor_core import Message, Spend, elapsed_seconds, utcnow
 from tranibor_core.decision_ledger import declared_confidences
 from tranibor_core.domain import DiffSummary
@@ -285,8 +285,11 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
                 outputs=outputs_to_store(outputs, declared_outputs),
                 types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
             )
-        if result.artifacts.pr_url:
-            item.pr_url = result.artifacts.pr_url
+        # The change the step proposes: a `change_request` link, or `pr_url`, its former name, which a
+        # runner of the previous release still writes (ADR 0181 C1).
+        change_request = result.artifacts.link(CHANGE_REQUEST) or result.artifacts.pr_url
+        if change_request:
+            item.pr_url = change_request
         if result.status == StageStatus.DONE and project is not None and run.backend != JOB_BACKEND:
             await _record_declared_confidences(session, project, item, run, result, declared_outputs)
         recorded = await _persist_findings(session, run, item, result)

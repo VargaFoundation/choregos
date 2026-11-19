@@ -16,7 +16,16 @@ from tranibor_contracts import Role
 
 from .conftest import login
 
-ROLES = [Role.VIEWER, Role.DEVELOPER, Role.RELEASE_CAPTAIN, Role.PROJECT_OWNER, Role.ORG_ADMIN]
+#: Both spellings of a renamed role (ADR 0181 C1): a row may hold either until the window closes.
+ROLES = [
+    Role.VIEWER,
+    Role.DEVELOPER,
+    Role.RELEASE_CAPTAIN,
+    Role.CONTRIBUTOR,
+    Role.APPROVER,
+    Role.PROJECT_OWNER,
+    Role.ORG_ADMIN,
+]
 
 
 def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple[str, str, str, Any]]:

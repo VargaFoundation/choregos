@@ -1671,16 +1671,22 @@ Roles come from **groups**, and a group names its organisation:
 |---|---|
 | `choregos:<org>:org-admins` | `org_admin` on `<org>` |
 | `choregos:<org>:product-owners` | `project_owner` |
-| `choregos:<org>:release-captains` | `release_captain` |
-| `choregos:<org>:developers` | `developer` |
+| `choregos:<org>:approvers` (formerly `release-captains`) | `approver` (formerly `release_captain`) |
+| `choregos:<org>:contributors` (formerly `developers`) | `contributor` (formerly `developer`) |
 | `choregos:<org>:viewers` | `viewer` |
+
+`approvers` and `contributors` are the neutral names of `release-captains` and `developers`
+([ADR 0181](adr/0181-the-contracts-speak-no-trade.md) round C1). Until 0.30.0 both spellings give
+the same role, and the API may answer either `approver` or `release_captain`, `contributor` or
+`developer`; rename the groups at the identity provider before upgrading to 0.30.0, which reads only
+the new ones.
 
 The same claim carries an organisation's **human groups** (ADR 0052): a workflow's
 `group: architects` is matched by a member carrying `architects` or `choregos:<org>:architects`
 (the one mapper prefix `choregos:<org>:` serves roles and human groups). A group namespaced for
 another organisation never counts. The groups are stored as sent.
 
-Unprefixed groups (`developers`, `org-admins`) apply only when `global.oidc.defaultOrg`
+Unprefixed groups (`contributors`, `org-admins`) apply only when `global.oidc.defaultOrg`
 names the organisation they belong to; otherwise they are ignored. Before 2026-09-24 a
 group granted its role on **every** organisation of the instance.
 
@@ -2210,6 +2216,18 @@ the `ontology:` extension of the `joiners-leavers` template are gone. It was off
 | A plugin of your own that declared a template installer, tools for people or effects | The extension seam it used stays: nothing of it was specific to the ontology. | Nothing. |
 
 The downgrade of `b4d6f8a0c2e5` does not create the tables again.
+
+**Neutral names beside the former ones** ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), round C1).
+Every former name is listed, with the release that removes it, in `tranibor_contracts.window`: those of C1
+leave in **0.30.0** (not before 2026-12-07).
+
+| What | What happens | What to do |
+| :-- | :-- | :-- |
+| The roles `developer`, `release_captain` | `contributor` and `approver` are their neutral names: a request may send either, both hold the same permissions, and a membership keeps the spelling its row holds. Writers switch to the new spelling in 0.29.0; 0.30.0 rewrites the remaining rows. | A script or a values file that names a role: switch it before 0.30.0. |
+| The role groups `developers`, `release-captains` | `contributors` and `approvers` give the same roles. | Rename the groups at the identity provider before 0.30.0. |
+| `WorkItem.pr_url`, `repository`, `repository_fixed`; `ProcessStep.writes_branch`; `WorkflowCatalogueEntry.needs_repository`; `ArtifactFlow.in_pull_request`; `first_pass_merge_rate` | Served beside `links` (`rel: change_request`), `workspace`, `workspace_fixed`, `writes_workspace`, `needs_workspace`, `in_change_request`, `first_pass_acceptance_rate`. | A client of the REST API reads the new names before 0.30.0. |
+| A step result's `artifacts.pr_url` | Read beside `artifacts.links`. | Nothing. |
+| The OpenAPI title | "Tranibor API". | Nothing. |
 
 ## Upgrading past 0.27.13: the egress gate
 
