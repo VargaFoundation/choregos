@@ -8,7 +8,7 @@ metadata:
 actors:
   refiner: { type: agent, role: refine, model: "profile:standard" }
   owner: { type: human, group: product-owners, sla_hours: 24 }
-  dev: { type: agent, role: implement, model: "profile:by_size" }
+  dev: { type: agent, role: implement, model: "profile:by_size", needs: [scm] }
   checker: { type: agent, role: verify, model: "profile:standard" }
   ci: { type: system }
   captain: { type: human, group: release-captains, sla_hours: 4 }

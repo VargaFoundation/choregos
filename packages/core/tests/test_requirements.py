@@ -98,7 +98,7 @@ def test_what_the_platform_does_is_required_by_the_effect_not_by_the_name() -> N
     ).yaml
     workflow, _ = parse_workflow(text, strict=False)
     reasons = {e.capability: " ".join(e.reasons) for e in requirements([workflow])}
-    assert "opens a pull request" in reasons["scm"]
+    assert "opens the pull request" in reasons["scm"]
     assert "in_service is production" in reasons["cd"]
 
 

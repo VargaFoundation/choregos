@@ -7,6 +7,7 @@ import { Card, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import type { MemoryAbGroup } from "@/lib/types";
+import { acceptanceRate } from "@/lib/neutral-names";
 
 const WEEKS = [4, 12, 26] as const;
 
@@ -62,7 +63,7 @@ function Group({ title, group }: { title: string; group?: MemoryAbGroup }) {
           <dt className="text-ink-muted">Tickets</dt>
           <dd>{group.tickets ?? 0}</dd>
           <dt className="text-ink-muted">Merged at first pass</dt>
-          <dd>{group.first_pass_merge_rate === undefined ? "—" : percent(group.first_pass_merge_rate)}</dd>
+          <dd>{acceptanceRate(group) === undefined ? "—" : percent(acceptanceRate(group))}</dd>
           <dt className="text-ink-muted">Cost per ticket</dt>
           <dd>{usd(group.cost_per_ticket_usd)}</dd>
           <dt className="text-ink-muted">Projects</dt>

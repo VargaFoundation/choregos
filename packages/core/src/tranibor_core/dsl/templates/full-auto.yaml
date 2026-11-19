@@ -8,10 +8,10 @@ metadata:
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
   refiner: { type: agent, role: refine, model: "profile:standard" }
-  dev: { type: agent, role: implement, model: "profile:by_size" }
+  dev: { type: agent, role: implement, model: "profile:by_size", needs: [scm] }
   checker: { type: agent, role: verify, model: "profile:standard" }
-  reviewer: { type: agent, role: review, model: "profile:strong", fresh_context: true }
-  fixer: { type: agent, role: fix_ci, model: "profile:standard" }
+  reviewer: { type: agent, role: review, model: "profile:strong", fresh_context: true, needs: [scm] }
+  fixer: { type: agent, role: fix_ci, model: "profile:standard", needs: [scm] }
   ci: { type: system }
   captain: { type: human, group: release-captains, sla_hours: 4 }
 states:
@@ -73,6 +73,7 @@ transitions:
     from: fixing_ci
     to: pr_open
     by: fixer
+    repairs: ci_failed
     inputs: [spec_markdown]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   # Held to the merge (ADR 0171): the merge names the commit its own gates judged, so what the

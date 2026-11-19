@@ -55,6 +55,7 @@ jobs:
           filters: |
             python:
               - 'packages/**'
+              - 'plugins/**'
               - 'apps/api/**'
               - 'apps/orchestrator/**'
               - 'tools/**'
@@ -76,6 +77,8 @@ jobs:
               - 'packages/contracts/**'
             docker:
               - 'docker/**'
+              # A first-party extension the images install, and the job image it builds (ADR 0181).
+              - 'plugins/investment-research/**'
               # The scan lives in this workflow: changing it must run it (S40-16e).
               - '.github/workflows/ci.yml'
               # The lockfiles the Dockerfiles copy: a dependency bump changes the image (#857).
@@ -253,9 +256,9 @@ jobs:
         with: { enable-cache: true }
       - run: uv sync --frozen
       - name: lint
-        run: uv run ruff check packages apps/api apps/orchestrator tools tests && uv run ruff format --check packages apps/api apps/orchestrator tools tests
+        run: uv run ruff check packages apps/api apps/orchestrator plugins tools tests && uv run ruff format --check packages apps/api apps/orchestrator plugins tools tests
       - name: typing
-        run: uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools
+        run: uv run mypy packages/*/src apps/api/src apps/orchestrator/src plugins/*/src tools
       - name: tests and coverage
         run: uv run pytest -n 4 --cov --cov-report=xml -q
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -512,6 +515,18 @@ jobs:
           exit-code: "1"
           severity: CRITICAL
           ignore-unfixed: true
+      # The `investment-research` job image is built FROM the runner (ADR 0181 O4-3): off main, FROM the
+      # one just loaded, through the `docker` driver that sees local images; on main, FROM the one just
+      # pushed. Its command must start; the release builds and signs it the same way.
+      - name: the investment-research job image builds FROM this runner, and its command starts
+        if: matrix.image == 'runner'
+        env:
+          RUNNER_IMAGE: ${{ github.ref == 'refs/heads/main' && format('ghcr.io/graalsystems/tranibor-runner@{0}', steps.build.outputs.digest) || format('ghcr.io/graalsystems/tranibor-runner:{0}', github.sha) }}
+        run: |
+          # Run by the id of the image just built: nothing pulled, nothing named that could move.
+          docker buildx build --builder default --load -f plugins/investment-research/Dockerfile \
+            --build-arg "RUNNER_IMAGE=${RUNNER_IMAGE}" --iidfile /tmp/investment-research.iid .
+          docker run --rm --entrypoint choregos-quant "$(cat /tmp/investment-research.iid)" --help >/dev/null
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         if: github.ref == 'refs/heads/main'
       - name: keyless signature, under both names

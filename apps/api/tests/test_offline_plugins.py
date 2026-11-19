@@ -46,6 +46,8 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
     index = offline_index(OFFLINE)
     assert {name: sorted(v) for name, v in index.releases.items()} == {
         "authoring": ["1.1.0"],
+        # The investment research template's plugin (S83-07), from the graalsystems index.
+        "investment-research": ["0.1.0"],
         "mcp-clients": ["1.0.0"],
         "netops": ["1.2.0"],
         "requests": ["1.1.0"],

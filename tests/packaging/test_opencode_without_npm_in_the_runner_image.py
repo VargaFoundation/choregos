@@ -45,3 +45,13 @@ def test_what_is_baked_belongs_to_the_runner_user_and_is_checked() -> None:
 def test_the_bake_comes_after_the_versions_lock_is_in_the_image() -> None:
     lock_copy = "COPY packages/runner/src/tranibor_runner/backends/versions.lock /etc/choregos"
     assert DOCKERFILE.index(lock_copy) < DOCKERFILE.index('"@opencode-ai/plugin@')
+
+
+def test_opencode_finds_the_files_it_writes_at_start_so_it_writes_none() -> None:
+    """S65-04a: in its own container the agent is uid 1001 with a read-only root, and under Landlock the
+    config root is no write root: opencode 1.18.31 wrote `.gitignore` and `opencode.jsonc` there at
+    start, failed (`FileSystem.writeFile`) and exited before `initialize`. The build starts it once so
+    that both exist, and checks them."""
+    bake = DOCKERFILE.split("mkdir -p /opt/choregos/xdg-config/opencode", 1)[1].split("chown -R", 1)[0]
+    assert "XDG_CONFIG_HOME=/opt/choregos/xdg-config" in bake and "opencode acp" in bake
+    assert "test -f .gitignore && test -f opencode.jsonc" in bake

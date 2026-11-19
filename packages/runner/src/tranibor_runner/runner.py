@@ -57,7 +57,7 @@ from .hosted_workspace import HostedWorkspaceError, export_tree, import_tree
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
-from .launcher import SHARED_UMASK, Launcher
+from .launcher import SHARED_UMASK, Launcher, share_with_group
 from .local_tools import start_if_absent
 from .local_tools import stop as stop_tools
 from .loopback import Loopback
@@ -780,6 +780,7 @@ class Runner:
         # The two containers run as different users and share one volume: what the runner writes
         # there must be writable by the group the pod's `fsGroup` gives both (the launcher does the same).
         os.umask(SHARED_UMASK)
+        share_with_group(self.settings.workspace)
         self.launcher = launcher
         self.isolation = {"mode": "container", "launcher": address}
         return None
@@ -907,6 +908,7 @@ class Runner:
             self.settings.tools_url,
             *confine.endpoint_urls(agent_env),
             *(str(server["url"]) for server in plan.mcp_servers if server.get("url")),
+            *(f"http://127.0.0.1:{port}" for port in plan.local_ports),
         ]
         confinement = confine.Confinement(
             mode=mode,

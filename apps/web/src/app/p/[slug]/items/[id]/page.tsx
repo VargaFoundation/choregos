@@ -48,6 +48,7 @@ import { WorkflowChip } from "@/components/workflow-chip";
 import { fieldTitles } from "@/components/workflows/fields";
 import { useWorkflowDefinition } from "@/components/workflows/use-workflow";
 import { nextStep } from "@/lib/next-step";
+import { changeRequestOf } from "@/lib/neutral-names";
 
 /** While an agent runs or a person is awaited, the journey is re-read: the map follows. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
@@ -87,6 +88,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   if (item.error) return <ErrorNote>{(item.error as Error).message}</ErrorNote>;
   if (!item.data) return <Empty>Loading…</Empty>;
   const data = item.data;
+  const changeRequest = changeRequestOf(data);
   const next = nextStep(data, journey.data);
 
   async function control(action: string) {
@@ -207,7 +209,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               />
               {/* What the agent proposes is read here, before deciding, not in the Artifacts card below. */}
               <div className="mb-3">
-                <AgentProposal slug={slug} runs={runs.data} prUrl={data.pr_url} />
+                <AgentProposal slug={slug} runs={runs.data} prUrl={changeRequestOf(data)} />
               </div>
               {/* What the person's client prepared through the MCP door (ADR 0163): taken or discarded. */}
               {data.pending_request.draft && (
@@ -292,12 +294,12 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               item={data}
               onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
             />
-            {data.pr_url && (
+            {changeRequest && (
               <>
                 <dt className="text-ink-muted">Pull request</dt>
                 <dd className="min-w-0 truncate">
-                  <a href={data.pr_url} target="_blank" rel="noreferrer">
-                    {data.pr_url.replace(/^https?:\/\//, "")}
+                  <a href={changeRequest} target="_blank" rel="noreferrer">
+                    {changeRequest.replace(/^https?:\/\//, "")}
                   </a>
                 </dd>
               </>

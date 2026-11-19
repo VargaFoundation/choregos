@@ -180,7 +180,8 @@ export type PageMeta = {
   has_more: boolean;
 };
 
-export type Role = "org_admin" | "project_owner" | "developer" | "release_captain" | "viewer";
+/** `contributor` does the project's work and decides its work items; `approver` also approves what leaves for production (ADR 0181 C1). `developer` and `release_captain` are their former names: a request may send either spelling, and a response gives the one the row holds, until the release the window list names (`tranibor_contracts.window`). */
+export type Role = "org_admin" | "project_owner" | "contributor" | "approver" | "viewer" | "developer" | "release_captain";
 
 export type Size = "S" | "M" | "L" | "XL";
 
@@ -415,7 +416,10 @@ export type ProjectStats = {
   cost_month_eur?: number;
   budget_month_eur?: number | null;
   trains_pending?: number;
+  /** The former name of `first_pass_acceptance_rate`, until the release the window list names (ADR 0181 C1). */
   first_pass_merge_rate?: number | null;
+  /** The share of the work items accepted without a rework loop (ADR 0181 C1). */
+  first_pass_acceptance_rate?: number | null;
   cycle_time_p50_hours?: number | null;
 };
 
@@ -1054,7 +1058,8 @@ export type ActionEffectSpec = {
 
 export type ActionApproval = {
   approvers?: Array<{
-    role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    /** The least rank an approver holds; `developer` and `release_captain` are the former names of `contributor` and `approver` (ADR 0181 C1). */
+    role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
     /** an identity-provider group the approver must also belong to (ADR 0052) */
     group?: string | null;
     min?: number;
@@ -1242,8 +1247,10 @@ export type WorkflowCatalogueEntry = {
   summary: string;
   tags: Array<string>;
   requires: Array<WorkflowCatalogueRequirement>;
-  /** it requires an `scm`: a project without a repository cannot run it */
+  /** The former name of `needs_workspace`, until the release the window list names (ADR 0181 C1). */
   needs_repository: boolean;
+  /** it requires a workspace its steps read and write (an `scm` today): a project without one cannot run it (ADR 0181 C1) */
+  needs_workspace?: boolean;
   /** the human groups its actors name (ADR 0044) */
   groups: Array<string>;
   agents: Array<WorkflowCatalogueAgent>;
@@ -1418,8 +1425,10 @@ export type ProcessStep = {
   output_types?: {
     [key: string]: string;
   };
-  /** True for an agent or job step whose transition carries a gate that reads the diff: it changes the work item's branch. */
+  /** The former name of `writes_workspace`, until the release the window list names (ADR 0181 C1). */
   writes_branch?: boolean;
+  /** True for an agent or job step whose transition carries a gate that reads the diff: it changes the work item's workspace (ADR 0181 C1). */
+  writes_workspace?: boolean;
 };
 
 /** A typed operation. `op` says which one; the other fields depend on it (`name`, `spec`, `from`, `to`, `id`, `transition`, `field`, `value`, `raw`, `unset`, `gate`, `text`, `index`, `style`, `swap`). `set_workflow` edits `metadata.description`, `metadata.inputs`, `metadata.catalogue` and `initial` (ADR 0112). `style: block` writes a collection value as indented lines; `swap` with `text` puts a key's exact lines back in place of its current ones. */
@@ -3619,8 +3628,10 @@ export type ArtifactFlow = {
   origin: "step" | "feedback" | "field" | "missing";
   /** True when the platform gives it to every agent stage. */
   context?: boolean;
-  /** True when the pull request body carries it. */
+  /** The former name of `in_change_request`, until the release the window list names (ADR 0181 C1). */
   in_pull_request?: boolean;
+  /** True when the change request's body carries it (the pull request, for a repository; ADR 0181 C1). */
+  in_change_request?: boolean;
 };
 
 export type WorkflowTemplate = {
@@ -5267,6 +5278,12 @@ export type ApiTokenCreated = ApiToken & {
   token: string;
 };
 
+/** Where some work can be seen, by relation (ADR 0181 C1): `change_request` is the change a step proposes. */
+export type Link = {
+  rel: string;
+  url: string;
+};
+
 /** Why a ticket's interpreter died. The ticket will not move again without a restart. */
 export type WorkflowFailure = {
   message: string;
@@ -5301,11 +5318,18 @@ export type WorkItem = {
   paused?: boolean;
   current_run?: RunSummary | null;
   pending_request?: HumanRequest | null;
+  /** The former name of the `change_request` link, until the release the window list names (ADR 0181 C1). */
   pr_url?: string | null;
-  /** The repository the work item works on (ADR 0124): the one it is fixed to, else its `fields.repository`, else the project's primary; null for a project without a repository. */
+  /** Where the work item's work can be seen, by relation: `change_request` for the change it proposes (ADR 0181 C1). */
+  links?: Array<Link>;
+  /** The former name of `workspace`, until the release the window list names (ADR 0181 C1). */
   repository?: string | null;
-  /** Whether the target is fixed (ADR 0124 §3): a step touched its repository, so `fields.repository` may no longer name another one. */
+  /** The former name of `workspace_fixed`, until the release the window list names (ADR 0181 C1). */
   repository_fixed?: boolean;
+  /** The workspace the work item works on (ADR 0124, ADR 0181 C1): the repository it is fixed to, else its `fields.repository`, else the project's primary; null for a project without one. */
+  workspace?: string | null;
+  /** Whether the workspace is fixed (ADR 0124 §3): a step touched it, so `fields.repository` may no longer name another one. */
+  workspace_fixed?: boolean;
   totals: Totals;
   /** The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise. */
   budget_usd?: number | null;
@@ -6189,7 +6213,9 @@ export type CostReport = {
 export type MemoryAbGroup = {
   projects?: Array<string>;
   tickets?: number;
+  /** The former name of `first_pass_acceptance_rate`, until the release the window list names (ADR 0181 C1). */
   first_pass_merge_rate?: number;
+  first_pass_acceptance_rate?: number;
   cost_per_ticket_usd?: number;
 };
 

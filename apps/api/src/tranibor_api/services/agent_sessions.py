@@ -943,6 +943,7 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
             tokens_in=spend.tokens_in,
             tokens_out=spend.tokens_out,
             tokens_cached=spend.tokens_cached,
+            tokens_cache_write=spend.tokens_cache_write,
             cost_usd=spend.cost_usd,
             fx_rate=settings.fx_usd_eur,
         )

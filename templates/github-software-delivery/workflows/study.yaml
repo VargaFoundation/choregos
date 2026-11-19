@@ -18,8 +18,8 @@ initial: inbox
 actors:
   spec_writer: { type: agent, role: refine, agent: spec-writer, model: "profile:standard" }
   researcher: { type: agent, role: research, agent: researcher, model: "profile:standard" }
-  architect: { type: agent, role: architect, agent: architect, model: "profile:standard" }
-  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  architect: { type: agent, role: architect, agent: architect, model: "profile:standard", needs: [scm] }
+  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
   platform: { type: system }
   architects: { type: human, group: architects, sla_hours: 48 }
 states:

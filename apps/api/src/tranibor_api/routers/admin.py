@@ -286,16 +286,19 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
             )
         )
     ).scalar_one_or_none()
+    # Either spelling of a renamed role is accepted; the row is written with the one every reader of
+    # the previous release knows (`Role.stored`, ADR 0181 C1, ADR 0098 §4).
+    stored = body.role.stored
     if existing is None:
         existing = Membership(
             user_id=user.id,
             org_id=organization.id,
             project_id=project.id if project else None,
-            role=str(body.role),
+            role=str(stored),
         )
         session.add(existing)
     else:
-        existing.role = str(body.role)
+        existing.role = str(stored)
     await record(
         session,
         principal,
@@ -303,10 +306,10 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
         org_id=organization.id,
         target_type="user",
         target_id=user.id,
-        role=str(body.role),
+        role=str(stored),
     )
     return MembershipDto(
-        user_id=user.id, email=user.email, org=org, project_slug=body.project_slug, role=body.role
+        user_id=user.id, email=user.email, org=org, project_slug=body.project_slug, role=stored
     )
 
 

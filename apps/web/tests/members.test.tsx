@@ -51,8 +51,8 @@ describe("members per scope", () => {
   it("one row per person: their organisation role, and their projects", () => {
     const people = peopleOf(MEMBERSHIPS);
     expect(people.map((p) => p.email)).toEqual(["augustin@acme.dev", "lea@acme.dev", "marc@acme.dev"]);
-    expect(people[1]).toMatchObject({ orgRole: "developer", projects: [{ slug: "billing-api", role: "project_owner" }] });
-    expect(people[2]).toMatchObject({ orgRole: null, projects: [{ slug: "checkout-web", role: "developer" }] });
+    expect(people[1]).toMatchObject({ orgRole: "contributor", projects: [{ slug: "billing-api", role: "project_owner" }] });
+    expect(people[2]).toMatchObject({ orgRole: null, projects: [{ slug: "checkout-web", role: "contributor" }] });
   });
 
   it("the organisation's page lists a person once, and offers a project picker", async () => {

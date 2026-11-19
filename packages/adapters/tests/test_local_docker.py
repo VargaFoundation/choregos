@@ -188,7 +188,7 @@ async def test_the_logs_and_the_cancellation() -> None:
     ex = executor_for(docker)
     assert [line async for line in ex.logs(ExecRef(kind="local_docker", name="c"))] == ["a", "b", "c"]
     await ex.cancel(ExecRef(kind="local_docker", name="c"))
-    assert docker.calls[-1] == ["rm", "-f", "c", "c-agent"], "a hosted agent beside it goes too"
+    assert docker.calls[-1] == ["rm", "-f", "c", "c-agent", "c-launcher"], "the agent's containers go too"
 
 
 DIGEST = "sha256:" + "a" * 64
@@ -245,7 +245,7 @@ async def test_a_finished_runner_stops_the_agent_beside_it() -> None:
     docker = _Docker(inspect=(0, done, ""))
     exec_status = await executor_for(docker).status(ExecRef(kind="local_docker", name="c"))
     assert exec_status.state == "succeeded"
-    assert ["rm", "--force", "c-agent"] in docker.calls
+    assert ["rm", "--force", "c-agent", "c-launcher"] in docker.calls
     running = _Docker(inspect=(0, json.dumps([{"State": {"Running": True}}]), ""))
     await executor_for(running).status(ExecRef(kind="local_docker", name="c"))
     assert not [a for a in running.calls if a[0] == "rm"], "a running sidecar is left alone"
@@ -287,4 +287,11 @@ async def test_pruning_a_finished_run_removes_its_workspace_volume_too() -> None
     names = "\n".join(f"choregos-run-{i}" for i in range(11))
     docker = _Docker(inspect=(1, "", "no such container"), ps=(0, names, ""))
     await executor_for(docker).start(spec())
-    assert ["volume", "rm", "--force", "choregos-run-10-workspace"] in docker.calls
+    assert [
+        "volume",
+        "rm",
+        "--force",
+        "choregos-run-10-workspace",
+        "choregos-run-10-tree",
+        "choregos-run-10-exchange",
+    ] in docker.calls

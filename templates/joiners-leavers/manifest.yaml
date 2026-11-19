@@ -34,10 +34,5 @@ defaults:
   # they are already there.
   skills: [./skills/onboarding-procedure, ./skills/access-profiles]
   agents: [./agents/onboarding-coordinator.yaml, ./agents/offboarding-coordinator.yaml]
-  # Installed in the PROJECT by the ontology plugin, when it is active: the registry of what a
-  # joiner opens and what a leaver closes. Without it the project is born without one (the audit
-  # log says so).
-  extensions:
-    ontology: ./ontology
 inputs: []
 steps: []

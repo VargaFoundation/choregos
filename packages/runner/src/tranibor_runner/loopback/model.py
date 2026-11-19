@@ -44,6 +44,9 @@ from . import Record
 
 #: What the container may ask of the model, under `/v1/`.
 PATHS = frozenset({"chat/completions", "responses", "messages", "embeddings", "models"})
+#: Asked of the model, never a turn: Anthropic's token count, which Claude Code calls before most
+#: messages (S65-04a: 21 calls in a 26-message step, each a 404 before it was served).
+_UNCOUNTED = frozenset({"messages/count_tokens"})
 #: Gemini's native API, which `gemini-cli` speaks (S65-04f): `v1beta/models/<model>:<action>`. LiteLLM
 #: serves these three at its root, and reads the key from `x-goog-api-key`, `Authorization` or `?key=`.
 _GEMINI = re.compile(r"^(?:v1beta|v1)/models/[^:]+:(generateContent|streamGenerateContent|countTokens)$")
@@ -111,7 +114,7 @@ class ModelProxy:
         gemini = _GEMINI.match(path)
         if gemini is not None:
             return await self._gemini(request, gemini.group(1))
-        if path not in PATHS and not stored:
+        if path not in PATHS and path not in _UNCOUNTED and not stored:
             return _error(404, "not_found", f"`/{path}` is not served on the loopback model")
         if request.method == "DELETE" and not stored:
             return _error(405, "method_not_allowed", f"`DELETE /{path}` is not served")
@@ -125,6 +128,9 @@ class ModelProxy:
             return _error(400, "invalid_request", "the body is not JSON")
         if not isinstance(body, dict):
             return _error(400, "invalid_request", "the body is not a JSON object")
+        body["model"] = self.stage_input.model.litellm_model
+        if path in _UNCOUNTED:
+            return await self._forward(request, path, body)
         limit = self.stage_input.budget.max_turns
         if self.count_turns and self.turns >= limit:
             self.refused_turns += 1
@@ -132,7 +138,6 @@ class ModelProxy:
             # 400, not 429: every SDK retries a 429 with backoff, and each retry is refused again.
             return _error(400, "max_turns", f"the step has used its {limit} model calls (max_turns)")
         self.turns += 1
-        body["model"] = self.stage_input.model.litellm_model
         return await self._forward(request, path, body)
 
     async def _gemini(self, request: Request, action: str) -> Response:
@@ -191,12 +196,17 @@ class ModelProxy:
         base = model.base_url.rstrip("/")
         if self.stage_input.gateway_key:
             headers["authorization"] = f"Bearer {self.stage_input.gateway_key}"
-            if path == "messages":
+            if path.startswith("messages"):
                 headers["x-api-key"] = self.stage_input.gateway_key
         if path.startswith("v1beta/"):  # Gemini's API sits at the gateway's root, not under `/v1`
             base = base.removesuffix("/v1")
             if self.stage_input.gateway_key:
                 headers["x-goog-api-key"] = self.stage_input.gateway_key
+        elif not base.endswith("/v1"):
+            # The platform names its gateway by its root (`CHOREGOS_GATEWAY_URL`, `http://litellm:4000`).
+            # LiteLLM serves `chat/completions` there too, but Anthropic's `messages` only under `/v1`
+            # (S65-04a: every Claude Code request was a 404 through the listener).
+            base = f"{base}/v1"
         query: list[tuple[str, str | int | float | bool | None]] = [
             (k, v) for k, v in request.query_params.multi_items() if k not in drop_query
         ]

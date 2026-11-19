@@ -124,14 +124,7 @@ FROZEN_PATHS = {
     # The 1.x joiners-leavers template is French on purpose: what S39-11c's script migrates (EXCLUDED).
     **{
         f"apps/api/tests/fixtures/joiners-leavers-v1/joiners-leavers/{name}": "French 1.x fixture (S39-11c)"
-        for name in (
-            "ontology/actions/consigner_le_badge.yaml",
-            "ontology/actions/consigner_le_compte.yaml",
-            "ontology/actions/consigner_le_poste.yaml",
-            "ontology/actions/consigner_une_arrivee.yaml",
-            "ontology/actions/constater_un_depart.yaml",
-            "skills/profils-d-acces/SKILL.md",
-        )
+        for name in ("skills/profils-d-acces/SKILL.md",)
     },
 }
 

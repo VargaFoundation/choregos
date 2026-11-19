@@ -166,8 +166,12 @@ def _who(wf: Workflow, t: Transition) -> tuple[str, str, str]:
     if isinstance(actor, DecisionActor):
         return "decision", name, _decision(actor)
     # What the platform does when it crosses it, in plain words (`does`, #175).
-    gesture = {"open_pr": ", which opens the pull request", "merge_pr": ", which merges the pull request"}
-    return "system", name, f"the platform{gesture.get(transition_effect(t) or '', '')}"
+    from ..step_effects import step_effect_of
+
+    effect = transition_effect(t)
+    gesture = step_effect_of(effect)
+    which = f", which {gesture.gesture}" if gesture else (f", which does `{effect}`" if effect else "")
+    return "system", name, f"the platform{which}"
 
 
 def _action(t: Transition) -> str | None:
@@ -249,6 +253,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
             if isinstance(actor, DecisionActor)
             else list(t.outputs)
         )
+        writes = isinstance(actor, AgentActor | JobActor) and bool(set(t.gate_names()) & DIFF_GATES)
         steps.append(
             {
                 "id": t.key,
@@ -278,8 +283,9 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "image": (str(actor.image) if actor.image else None) if isinstance(actor, JobActor) else None,
                 "inputs": list(t.inputs),
                 "output_types": dict(t.output_types),
-                "writes_branch": isinstance(actor, AgentActor | JobActor)
-                and bool(set(t.gate_names()) & DIFF_GATES),
+                "writes_workspace": writes,
+                # The former name, served beside it until the release the window list names (ADR 0181 C1).
+                "writes_branch": writes,
             }
         )
     return steps

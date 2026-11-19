@@ -105,14 +105,22 @@ class FakeGateway:
         return key
 
     def record_usage(
-        self, key_id: str, tokens_in: int, tokens_out: int, cached: int = 0, model: str = "platform/standard"
+        self,
+        key_id: str,
+        tokens_in: int,
+        tokens_out: int,
+        cached: int = 0,
+        model: str = "platform/standard",
+        cache_write: int = 0,
     ) -> Spend:
         """Simulates requests; refuses beyond the cap, like the real gateway."""
         gateway_model = next((m for m in self.models if model in {m.model_name, m.litellm_model}), None)
         cost = 0.0
         if gateway_model:
-            cost = (tokens_in - cached) / 1000 * (gateway_model.input_cost_per_1k or 0)
-            cost += cached / 1000 * (gateway_model.input_cost_per_1k or 0) * 0.1
+            price_in = gateway_model.input_cost_per_1k or 0
+            cost = (tokens_in - cached - cache_write) / 1000 * price_in
+            cost += cached / 1000 * price_in * 0.1
+            cost += cache_write / 1000 * price_in * 1.25  # Anthropic's 5-minute write
             cost += tokens_out / 1000 * (gateway_model.output_cost_per_1k or 0)
         current = self.spends.get(key_id, Spend())
         key = self.keys[key_id]
@@ -135,6 +143,7 @@ class FakeGateway:
             tokens_in=tokens_in,
             tokens_out=tokens_out,
             tokens_cached=cached,
+            tokens_cache_write=cache_write,
             cost_usd=cost,
             requests=1,
             models_used=[model],

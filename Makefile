@@ -11,7 +11,7 @@ KIND_CONFIG ?= dev/kind.yaml
 # Makefile did not.
 PNPM_VERSION ?= $(shell python3 -c "import json;print(json.load(open('apps/web/package.json'))['packageManager'].split('@')[1])")
 PNPM ?= corepack pnpm@$(PNPM_VERSION)
-PY_PATHS := packages apps/api apps/orchestrator tools tests
+PY_PATHS := packages apps/api apps/orchestrator plugins tools tests
 
 .PHONY: help
 help:  ## Print this help
@@ -47,7 +47,7 @@ format:  ## Format the Python code
 
 .PHONY: typecheck
 typecheck:  ## mypy --strict over packages and apps
-	$(UV) run mypy packages/*/src apps/api/src apps/orchestrator/src tools
+	$(UV) run mypy packages/*/src apps/api/src apps/orchestrator/src plugins/*/src tools
 
 .PHONY: test
 test:  ## Unit tests
