@@ -15,7 +15,7 @@ initial: inbox
 actors:
   framer: { type: agent, role: refine, agent: spec-writer, model: "profile:cheap" }
   researcher: { type: agent, role: research, agent: researcher, model: "profile:standard" }
-  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
   owners: { type: human, group: product-owners, sla_hours: 48 }
 states:
   inbox: { display: To frame, kind: wait, tracker: { status: Todo } }
