@@ -167,6 +167,8 @@ on a random loopback port, which the port rule refused), #1991 (gemini-cli read 
 untrusted workspace). Findings: #1986 (a `session/new` error escapes `Runner.execute`; a dead agent is
 seen only at the 60 s `initialize` timeout), #1987 (harness telemetry through 4003), #1990 (gemini-cli on
 a Claude model through LiteLLM's Gemini adapter).
+Since then `gemini-cli` is declared with Gemini models only (#1990: LiteLLM's adapter names every tool call
+`call_<function name>` and reads no id from the body, so no listener-side id can help).
 
 Not measured: the conformance suite file itself in this shape (its seven checks are read from the
 step's journal instead: `initialize`, MCP, the trivial prompt, the result, `max_turns` and the cost at
