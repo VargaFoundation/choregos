@@ -42,6 +42,20 @@ def deployment_agent_isolation(environ: Mapping[str, str]) -> AgentIsolation:
     )
 
 
+#: Why an executor that will not start the agent's container does not (S65-04l), added to its refusal
+#: so that the operator reads the reason, not only the missing word.
+WHY_NOT_SEPARATE: dict[str, str] = {
+    "tekton": (
+        "its PipelineRun's Task carries no agent sidecar, and the Task is copied into each project's "
+        "namespace, where an older copy would run the agent beside the runner"
+    ),
+    "aca": (
+        "a Container Apps job runs one container per execution here, and whether a job stops a second "
+        "container when the runner's ends was never run"
+    ),
+}
+
+
 def agent_isolation_refusal(asked: str, executor: str, capabilities: Iterable[str]) -> str | None:
     """Why `executor` cannot run a step under `asked`, or None when it can.
 
@@ -49,9 +63,11 @@ def agent_isolation_refusal(asked: str, executor: str, capabilities: Iterable[st
     cannot disagree, as `runtime_class_refusal` is for the warm pool's RuntimeClass."""
     if asked != "container" or SEPARATE_AGENT in frozenset(capabilities):
         return None
+    why = WHY_NOT_SEPARATE.get(executor)
     return (
         f"{AGENT_ISOLATION_UNAVAILABLE}: the deployment runs every agent in a container of its own "
         f"({AGENT_ISOLATION_ENV}=container, ADR 0146) and the `{executor}` executor cannot start one "
-        f"(it does not declare `{SEPARATE_AGENT}`); run the project on an executor that does, or set "
+        f"(it does not declare `{SEPARATE_AGENT}`{': ' + why if why else ''}); run the project on an "
+        "executor that does (`k8s_job`, `local_docker`, `agent_sandbox`), or set "
         "`global.runner.agentIsolation: process`"
     )

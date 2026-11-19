@@ -243,6 +243,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
 - **Accepted when**: `tests/conformance/executors/test_capabilities.py` shows `tekton` declaring
   `separate_agent` with a Task that carries the sidecar; `aca` either declares it with a live run
   recorded in STATUS, or refuses `container` with a reason that names it — one test either way.
+- **Done** (2026-11-19, STATUS S65-04l), the refusal for both: neither declares the capability (the two
+  were frozen by ADR 0180 when the work started); each refuses `container` naming itself and the reason.
+  A Task sidecar for `tekton` or a live two-container job for `aca` stays open for whoever needs them.
 
 ### S65-04m · chore(release): `container` is the default
 
