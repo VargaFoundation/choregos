@@ -263,13 +263,13 @@ COPY --from=builder --chown=1000:1000 /app /app
 # dependency only showed at the first agent launched in a cluster, as a `ModuleNotFoundError`
 # (it happened with `pydantic-settings`). Here, the build fails.
 RUN /app/.venv/bin/choregos-runner --help >/dev/null
-# Same for the deterministic backtest engine (a dependency of the runner package): a job stage
-# runs `choregos-quant` with no network, so it must be installed and start here.
-RUN /app/.venv/bin/choregos-quant --help >/dev/null
-# The platform's commands, by name, for whoever calls them so (a Tekton step's `choregos-runner run`,
-# a job's `choregos-quant`), without putting the venv's `python3` in front of the workspace (#713).
+# A job step's command comes from the image the operator maps for it (`CHOREGOS_JOB_IMAGES`, ADR 0056),
+# built FROM this one: the `investment-research` plugin's `choregos-quant` is in its own job image
+# (`plugins/investment-research/Dockerfile`, ADR 0181 O4-3), not here.
+# The platform's commands, by name, for whoever calls them so (a Tekton step's `choregos-runner run`),
+# without putting the venv's `python3` in front of the workspace (#713).
 RUN set -eux; \
-    for command in choregos-runner choregos-quant choregos-tools; do \
+    for command in choregos-runner choregos-tools; do \
       ln -s "/app/.venv/bin/$command" "/usr/local/bin/$command"; \
     done; \
     test "$(command -v python3)" = /usr/local/bin/python3; \

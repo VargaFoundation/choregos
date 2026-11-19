@@ -1212,12 +1212,16 @@ code, not judgement: give it to a `job`, not to an agent.
 
 ```yaml
 actors:
-  engine: { type: job, role: backtest, command: [choregos-quant, backtest, --out, out], image: quant, max_minutes: 20 }
+  engine: { type: job, role: backtest, command: [choregos-quant, backtest, --out, out], image: investment-research, max_minutes: 20 }
 ```
 
 `command` is an argv, never a shell line. `image` names an image the operator mapped in
-`CHOREGOS_JOB_IMAGES` (`{"quant": "registry/…@sha256:…"}`), built from the runner image; without it
-the job runs in the runner image, and an unknown name stops the step. A job gets no model and no
+`CHOREGOS_JOB_IMAGES` (`{"investment-research": "registry/…@sha256:…"}`), built FROM the runner image
+of the same release, since the runner runs the command; without it the job runs in the runner image,
+which carries no trade's command, and an unknown name stops the step. A plugin whose template has job
+steps ships its job image: the `investment-research` plugin's is `tranibor-investment-research`, built
+and signed by each release FROM that release's runner (`plugins/investment-research/Dockerfile`,
+[ADR 0181](adr/0181-the-contracts-speak-no-trade.md) O4-3). A job gets no model and no
 gateway key. The runner writes the work item's fields in `.choregos/fields.json`, runs the command
 with `CHOREGOS_WORKSPACE`, `CHOREGOS_RUN_ID`, `CHOREGOS_API_URL` and the run's own token
 `CHOREGOS_RUN_TOKEN` (to call a connector through the internal API), and reads back

@@ -56,7 +56,7 @@ names it.
 
 ## One example per trade
 
-- **Software delivery**: `software-delivery`, a first-party plugin, and the only example here with both
+- **Software delivery**: `software-delivery`, a first-party plugin with both
   halves. Its content is published today: the delivery agents (triage to the production go/no-go) and
   the `madr-4` skill. By 1.0 it also holds the repository templates, and its extension,
   `tranibor-software-delivery`, holds what the core carries today: the twelve gates that read a diff or
@@ -73,11 +73,12 @@ names it.
 - **HR**: the joiners and leavers workflows (today the core's `joiners-leavers` template). Content
   only: two coordinator agents, two skills, two workflows whose every write to the directory, the device
   fleet, the carrier or the badge readers is a governed action on the organisation's connectors.
-- **Investment research**: `investment-research`. Content: the campaign template, two agents, two
-  skills, their evals, the setup procedures of its connectors, and the job image that runs the
-  deterministic quant steps (by 1.0; today the template is still in the core). Extension: the
-  `marketdata` connector family, the distribution `tranibor-investment-research` in
-  `plugins/investment-research/` of the core's repository, which the published images install.
+- **Investment research**: `investment-research`, a first-party plugin with both halves. Content: the
+  campaign template, two agents, two skills, their evals and the setup procedures of its connectors.
+  Extension: the `marketdata` connector family, the distribution `tranibor-investment-research` in
+  `plugins/investment-research/` of the core's repository, which the published images install. Its
+  template's deterministic steps run `choregos-quant` in the plugin's job image,
+  `tranibor-investment-research`, which each release builds FROM its own runner image.
 
 ## What changes before 1.0
 
@@ -94,7 +95,7 @@ first-party plugin like any other, in its own distribution, before 1.0.
 | The release train, its routes and the DORA figures | `software-delivery` |
 | The repository templates | `software-delivery`'s content |
 | `packages/ontology` | removed |
-| The `quant` command and the investment template | `investment-research` |
+| The `quant` command and the investment template | `investment-research`: done (S83-07) |
 | The `marketdata` connectors | `investment-research`'s extension: done (S83-08) |
 
 Gate names, event types and effect names do not change: stored workflows and subscribers keep working

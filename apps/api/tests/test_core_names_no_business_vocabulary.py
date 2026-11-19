@@ -12,8 +12,8 @@ To see it fail, add a business word to any identifier of the core, for instance 
 `apps/api/src/tranibor_api/services/assistants.py`: the test names the file, the line and the word. To
 allow a word that is legitimately there, add the file to `ALLOWED` with the reason: the allowlist is checked
 both ways, so an entry that no longer matches anything fails too. A trade's code belongs in its plugin's
-extension (ADR 0181, `plugins/<name>/`), which this guard does not read: the `marketdata` connectors left
-the core for `investment-research`'s (S83-08), and the list only shrinks.
+extension (ADR 0181, `plugins/<name>/`), which this guard does not read: the `marketdata` connectors
+(S83-08) and the `quant` engine (S83-07) left the core for `investment-research`'s, and the list is empty.
 """
 
 from __future__ import annotations
@@ -37,9 +37,7 @@ VOCABULARY = {
     "securities",
 }
 #: file -> reason. Each entry names a word the file legitimately carries.
-ALLOWED: dict[str, str] = {
-    "packages/quant/src/tranibor_quant": "S38's research tooling reads market data through the S38 connector",
-}
+ALLOWED: dict[str, str] = {}
 
 
 def _words(name: str) -> list[str]:
