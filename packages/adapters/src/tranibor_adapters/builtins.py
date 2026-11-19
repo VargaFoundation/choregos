@@ -649,20 +649,15 @@ def _register_forges() -> None:
     )
 
 
-def _own_resources(raw: str) -> dict[str, dict[str, str]]:
-    """`{"requests": {...}, "limits": {...}}` as JSON (ADR 0146 §12): `runner_requests` and `runner_limits`
-    of `KubernetesJobExecutor`. Empty: nothing, the executor's defaults."""
+def _own_resources(raw: str, key: str) -> dict[str, str] | None:
+    """`requests` or `limits` of `{"requests": {...}, "limits": {...}}` as JSON (ADR 0146 §12), the
+    runner container's own. Empty or absent: None, the executor's defaults."""
     if not raw.strip():
-        return {}
+        return None
     import json
 
-    parsed = json.loads(raw)
-    found: dict[str, dict[str, str]] = {}
-    for key, argument in (("requests", "runner_requests"), ("limits", "runner_limits")):
-        values = parsed.get(key) or {}
-        if values:
-            found[argument] = {str(k): str(v) for k, v in values.items()}
-    return found
+    values = json.loads(raw).get(key) or {}
+    return {str(k): str(v) for k, v in values.items()} or None
 
 
 def _register_runtimes() -> None:
@@ -698,7 +693,8 @@ def _register_runtimes() -> None:
             egress_gate=gate_from_env(os.environ),
             # The runner container's own requests and limits beside the agent's (ADR 0146 §12), the
             # chart's `runner.ownResources`; the measured defaults when unset.
-            **_own_resources(os.environ.get("CHOREGOS_RUNNER_OWN_RESOURCES", "")),
+            runner_requests=_own_resources(os.environ.get("CHOREGOS_RUNNER_OWN_RESOURCES", ""), "requests"),
+            runner_limits=_own_resources(os.environ.get("CHOREGOS_RUNNER_OWN_RESOURCES", ""), "limits"),
         )
     )
     register("runtime", "agent_sandbox", _SHIPPED_SPECS[("runtime", "agent_sandbox")])(

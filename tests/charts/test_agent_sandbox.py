@@ -425,3 +425,14 @@ def test_the_jobs_agent_container_is_the_templates() -> None:
     template_agent = _agent(_pod(SEPARATE))
     keys = ("restartPolicy", "args", "env", "securityContext", "volumeMounts")
     assert {k: job_agent[k] for k in keys} == {k: template_agent[k] for k in keys}
+
+
+@needs_helm
+def test_the_workers_get_the_runners_own_resources() -> None:
+    deployment = _objects()["Deployment/choregos-orchestrator-executor"]
+    (container,) = deployment["spec"]["template"]["spec"]["containers"]
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert yaml.safe_load(env["CHOREGOS_RUNNER_OWN_RESOURCES"]) == {
+        "requests": {"cpu": "250m", "memory": "512Mi"},
+        "limits": {"cpu": "1", "memory": "2Gi"},
+    }

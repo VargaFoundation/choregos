@@ -157,7 +157,10 @@ class LocalDockerExecutor:
                 [
                     *("--driver", "local"),
                     *("--opt", "type=tmpfs", "--opt", "device=tmpfs"),
-                    *("--opt", f"o=uid={separate_agent.RUNNER_GID},gid={separate_agent.RUNNER_GID},mode=2775"),
+                    *(
+                        "--opt",
+                        f"o=uid={separate_agent.RUNNER_GID},gid={separate_agent.RUNNER_GID},mode=2775",
+                    ),
                 ],
             ),
         ):

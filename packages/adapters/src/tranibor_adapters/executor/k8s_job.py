@@ -133,7 +133,9 @@ class KubernetesJobExecutor:
             # Below 1.29 the API server drops `restartPolicy: Always` from the init container: the
             # pod would wait on the agent forever. Refused before anything is created.
             await self._require_native_sidecars(
-                "a hosted agent" if spec.agent_container is not None else "the agent's own container (ADR 0146)"
+                "a hosted agent"
+                if spec.agent_container is not None
+                else "the agent's own container (ADR 0146)"
             )
         name = self._name(spec.run_id)
         existing = await self.client.request("GET", f"{BATCH_API}/namespaces/{spec.namespace}/jobs/{name}")

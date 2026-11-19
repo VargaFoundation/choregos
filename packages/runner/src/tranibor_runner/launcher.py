@@ -63,7 +63,7 @@ def share_with_group(path: Path) -> bool:
     left as it is: False."""
     try:
         mode = path.stat().st_mode & 0o7777
-        os.chmod(path, mode | 0o2070)
+        os.chmod(path, mode | 0o2070)  # noqa: S103 - the group is the pod's two containers' only
     except OSError:
         return False
     return True
