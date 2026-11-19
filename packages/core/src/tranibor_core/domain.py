@@ -372,7 +372,11 @@ class VirtualKey(Model):
 class Spend(Model):
     tokens_in: int = 0
     tokens_out: int = 0
+    #: The input tokens read from the provider's cache, part of `tokens_in`.
     tokens_cached: int = 0
+    #: The input tokens written to the provider's cache (Anthropic cache creation), part of
+    #: `tokens_in`; dearer than a fresh token, where a read is far cheaper (S4-07, ADR 0188).
+    tokens_cache_write: int = 0
     cost_usd: float = 0.0
     requests: int = 0
     models_used: list[str] = Field(default_factory=list)
@@ -382,6 +386,7 @@ class Spend(Model):
             tokens_in=self.tokens_in + other.tokens_in,
             tokens_out=self.tokens_out + other.tokens_out,
             tokens_cached=self.tokens_cached + other.tokens_cached,
+            tokens_cache_write=self.tokens_cache_write + other.tokens_cache_write,
             cost_usd=self.cost_usd + other.cost_usd,
             requests=self.requests + other.requests,
             models_used=sorted(set(self.models_used) | set(other.models_used)),
