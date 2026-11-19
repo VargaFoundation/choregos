@@ -5905,7 +5905,54 @@ stories:
       - "a transition may declare repairs: <outcome>; the interpreter picks it on that outcome, behind a workflow.patched id, with a replayed history under tests/replay"
       - "one window list names each old name and the release that removes it; a test fails when pyproject's version reaches that release and the name is still there"
       - "memberships.role readers accept both spellings; the OpenAPI title is Tranibor API"
-    notes: "12-19 pd. R2 shipped in 0.27.14 without C1, so Python names take the window rule of REST and DSL names (ADR 0181 decision 6). The removal, at least two weeks after the round's release, is its own PR (S83-03b), with the memberships data migration once the enterprise group mapper emits the new names. 2027-01-04 to 2027-02-05; window closed by 2027-02-26."
+    notes: "12-19 pd. R2 shipped in 0.27.14 without C1, so Python names take the window rule of REST and DSL names (ADR 0181 decision 6). The removal, at least two weeks after the round's release, is its own PR (S83-03r), with the memberships data migration once the enterprise group mapper emits the new names. Started 2026-11-19 instead of 2027-01-04, split as S83-03a (contract), b (API), c (repairs and declared needs), d (console and CLI), r (removal in 0.30.0)."
+  - id: S83-03a
+    title: "contract(contracts): C1's neutral names beside the old ones, the window list and its test (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-02]
+    acceptance:
+      - "Role.CONTRIBUTOR and Role.APPROVER beside the former members; the role enums of the DSL and the REST contract take both spellings; WorkItem carries links, workspace and workspace_fixed beside pr_url, repository and repository_fixed; writes_workspace, needs_workspace, in_change_request and first_pass_acceptance_rate beside their former names; a stage result's artifacts carry links; a transition may declare repairs, an agent needs; the OpenAPI title is Tranibor API"
+      - "tranibor_contracts.window.WINDOW names every former name, where it is and the release that removes it; tests/architecture/test_the_window_list.py fails on a stale entry and on a name still there at its release"
+  - id: S83-03b
+    title: "feat(api): the API serves C1's neutral names beside the former ones, reads both role spellings and writes the former one for a release (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-03a]
+    acceptance:
+      - "responses carry both names; requests accept either role spelling; a contributor or approver holds the permissions of the role it renames; the role groups contributors and approvers sign in"
+  - id: S83-03c
+    title: "feat(core,orchestrator): a transition declares repairs and an agent declares needs, behind a workflow.patched id with a replayed history (ADR 0181 C1)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-03a]
+    acceptance:
+      - "the interpreter takes the transition that repairs an outcome, behind a workflow.patched id, and an archived history replays; the repository's templates declare repairs; the requirements read an agent's needs"
+  - id: S83-03d
+    title: "feat(web,cli): the console and the CLI read and send C1's neutral names (ADR 0181)"
+    stream: S83
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S83-03b]
+    acceptance:
+      - "the console and the CLI read the neutral fields, falling back to the former ones, and send contributor and approver"
+  - id: S83-03r
+    title: "contract(contracts,api): C1's former names leave in 0.30.0, the memberships rows rewritten (ADR 0181)"
+    stream: S83
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S83-03b, S83-03c, S83-03d]
+    acceptance:
+      - "every C1 entry of the window list is gone with its name; an Alembic migration rewrites memberships.role; the vocabulary guard's counts drop accordingly"
+    notes: "Not before 2026-12-07, two weeks after 0.28.0 (tranibor_contracts.window.C1). The writers switch in 0.29.0: ROLE_STORED_AS empties."
   - id: S83-04
     title: "contract(contracts,core,orchestrator,api): C2, the twelve gates, does, the delivery sections, scm/ci/cd event types, the train contract and DORA move to the software-delivery plugin (ADR 0181)"
     stream: S83

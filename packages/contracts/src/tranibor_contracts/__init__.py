@@ -179,6 +179,7 @@ from .skill_files import (
     skill_file_bytes,
 )
 from .stage import (
+    CHANGE_REQUEST,
     STAGE_INPUT_SCHEMA,
     STAGE_RESULT_SCHEMA,
     AgentRef,
@@ -195,6 +196,7 @@ from .stage import (
     JobSpec,
     KnowledgeRef,
     LaunchSpec,
+    Link,
     McpServerRef,
     MemoryItem,
     ModelRef,
@@ -339,6 +341,7 @@ __all__ = [
     "ARTIFACT_NAME_PATTERN",
     "ARTIFACT_TYPES",
     "CALL_SIGNATURE_TYPE",
+    "CHANGE_REQUEST",
     "CHECKED_TYPES",
     "CONNECTOR_KINDS",
     "DIFF_ARTIFACT",
@@ -441,6 +444,7 @@ __all__ = [
     "JobTools",
     "KnowledgeRef",
     "LaunchSpec",
+    "Link",
     "McpServerRef",
     "MemoryItem",
     "MemoryKind",

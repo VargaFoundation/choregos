@@ -1472,6 +1472,11 @@ export type StageResult = {
     branch?: string | null;
     commits?: Array<string>;
     pr_url?: string | null;
+    /** Where the step's work can be seen, by relation (ADR 0181 C1): `{rel: change_request, url}` for the change it proposes. It replaces `pr_url`, read until the release the window list names. */
+    links?: Array<{
+      rel: string;
+      url: string;
+    }>;
     transcript_url?: string | null;
     context_pack_url?: string | null;
     reports?: {
@@ -1747,6 +1752,8 @@ export type WorkflowAgentActor = {
   playbook?: string;
   /** A registry agent (ADR 0033): `slug`, or `slug@version`. Its version — the project's pinned one, otherwise the latest — sets the instructions, model, limits and budget; its instructions take precedence over the playbook. */
   agent?: string;
+  /** The connector kinds the agent works through, which the project must therefore connect (ADR 0181 C1): a workflow declares them instead of the platform guessing from the role's name. */
+  needs?: Array<string>;
 };
 
 export type WorkflowHumanActor = {
@@ -1827,7 +1834,8 @@ export type WorkflowActionEffect = {
 
 export type WorkflowActionApproval = {
   approvers?: Array<{
-    role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    /** the least rank an approver holds: `contributor`, `approver`, `project_owner` or `org_admin`. `developer` and `release_captain` are their former names, read until the release the window list names (ADR 0181 C1) */
+    role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
     /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052) */
     group?: string;
     min?: number;
