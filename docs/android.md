@@ -66,7 +66,7 @@ session's configuration).
 ## Notifications
 
 The phone is told when a decision waits for you, a run ends, an agent writes or a session ends, by Web Push
-([ADR 0194](adr/0194-a-persons-devices-are-told-by-web-push.md)) through
+(ADR 0194 (S81-02)) through
 [UnifiedPush](https://unifiedpush.org): no Google services.
 
 1. Install a UnifiedPush distributor on the phone (ntfy, from F-Droid or the Play Store).
