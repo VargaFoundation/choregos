@@ -41,6 +41,17 @@ For the real API, workers and Temporal, use the [local install](getting-started.
 Keycloak, Ecphoria — for whoever runs the API and the workers against them by hand; `make api` does
 not.
 
+A port already taken (a Postgres on 5432, a Keycloak on 8080) is overridden rather than edited in
+the compose file: `CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
+for the stack, `CHOREGOS_PORT` for the API, `PORT` for the console. The variables keep their
+prefix until the rename's last round ([ADR 0176](adr/0176-the-core-is-named-tranibor.md)).
+
+```bash
+CHOREGOS_PORT_POSTGRES=15432 CHOREGOS_PORT_KEYCLOAK=18080 docker compose -f dev/compose.yaml up -d
+CHOREGOS_PORT=8001 CHOREGOS_FAKES=1 uv run choregos-api
+PORT=3001 pnpm -C apps/web dev
+```
+
 Development accounts (Keycloak, realm `choregos`): `augustin` / `choregos` (owner),
 `marie` / `choregos` (release captain). Locally, `/auth/login?as=<email>` opens a session
 without the IdP — **only** when `CHOREGOS_DEV_LOGIN_ENABLED=true` (the chart sets it through
