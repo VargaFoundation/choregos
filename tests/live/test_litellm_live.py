@@ -2,14 +2,13 @@
 
 The plan rests two guarantees on this proxy: a run's cost is **measured at the gateway** (never
 declared by the agent) and the budget is a **hard ceiling** (the key refuses beyond it). No fake
-can prove that. This one checks it against a real LiteLLM:
+can prove that. This one checks it against a real LiteLLM in front of a real model. The stack of
+`tests/live/model/compose.yaml` is the chart's LiteLLM with both aliases on Claude Haiku 5.5; it is
+what `.github/workflows/live-model.yml` runs every night (S80-13):
 
-    docker run -d --name litellm -p 4000:4000 -v …/litellm.yaml:/app/config.yaml:ro \
-      -e LITELLM_MASTER_KEY=sk-… -e DATABASE_URL=postgresql://… \
-      ghcr.io/berriai/litellm:main-stable --config /app/config.yaml --port 4000
-
-    CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:4000 CHOREGOS_LIVE_LITELLM_KEY=sk-… \
-    uv run pytest tests/live -m live
+    ANTHROPIC_API_KEY=… docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
+    CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:14420 CHOREGOS_LIVE_LITELLM_KEY=sk-local-live-model-only \
+    uv run pytest tests/live/test_litellm_live.py -m live
 """
 
 from __future__ import annotations
@@ -112,9 +111,9 @@ async def test_a_run_key_can_only_call_its_models(gateway: LiteLlmGateway, base_
 async def test_the_cost_is_measured_at_the_gateway(gateway: LiteLlmGateway, base_url: str) -> None:
     """The S4 rule: a run's cost comes from the gateway, never from the agent.
 
-    On a priced model (`platform/cheap` → gpt-4o-mini): an alias whose price the proxy does not
-    know bills 0, which would prove nothing. The gateway writes its spend logs asynchronously,
-    hence the bounded wait.
+    On a priced model (`platform/cheap`, a model in LiteLLM's own price list): an alias whose price
+    the proxy does not know bills 0, which would prove nothing. The gateway writes its spend logs
+    asynchronously, hence the bounded wait.
     """
     import asyncio
 
@@ -151,10 +150,16 @@ async def test_the_cost_is_measured_at_the_gateway(gateway: LiteLlmGateway, base
 
 
 async def test_the_budget_is_a_hard_ceiling(gateway: LiteLlmGateway, base_url: str) -> None:
-    """A tiny budget must end up refusing — it is a mechanism, not an instruction."""
+    """A tiny budget must end up refusing — it is a mechanism, not an instruction.
+
+    The budget is below the price of ONE call on the cheapest model a night routes to (Claude Haiku
+    5.5 at $0.10 per million tokens in: the prompt alone costs about $0.00001), so the second call is
+    refused whatever the model answers. At $0.0001, short answers would need about five calls of the
+    six the loop allows.
+    """
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-4"},
-        budget_usd=0.0001,
+        budget_usd=0.000001,
         ttl_s=900,
         models=[MODEL],
     )
@@ -215,14 +220,18 @@ async def test_the_anthropic_format_goes_through_the_same_alias(
             },
             json={
                 "model": MODEL,
-                "max_tokens": 64,
+                # Room for a short thought and the text after it.
+                "max_tokens": 256,
                 "messages": [{"role": "user", "content": "hello"}],
             },
         )
     assert response.status_code == 200, response.text[:400]
     payload = response.json()
     assert payload["type"] == "message", "the response is in Anthropic format, not OpenAI"
-    assert payload["content"][0]["type"] == "text"
+    # A current model may think first (adaptive thinking is on by default): a `thinking` block can
+    # precede the text, and is Anthropic format too.
+    kinds = [block["type"] for block in payload["content"]]
+    assert set(kinds) <= {"thinking", "redacted_thinking", "text"} and "text" in kinds, payload
     assert "usage" in payload and payload["usage"]["input_tokens"] > 0
 
     await gateway.revoke(key.key)
