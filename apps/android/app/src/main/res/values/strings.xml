@@ -3,4 +3,5 @@
     <string name="voice_channel_name">Voice sessions</string>
     <string name="voice_notification_title">Voice session in progress</string>
     <string name="voice_notification_end">End session</string>
+    <string name="alerts_channel_name">Decisions and runs</string>
 </resources>

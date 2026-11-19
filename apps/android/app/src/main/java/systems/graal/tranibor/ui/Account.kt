@@ -1,5 +1,9 @@
 package systems.graal.tranibor.ui
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +36,7 @@ fun AccountScreen(graph: Graph) {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Labelled("Instance", session?.origin.orEmpty())
         Spacer(Modifier.height(8.dp))
+        Notifications(graph)
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("Sessions", style = MaterialTheme.typography.titleMedium)
         Load(graph, key = "sessions", fetch = { it.sessions() }) { sessions, reload ->
@@ -60,4 +65,35 @@ fun AccountScreen(graph: Graph) {
             }
         }) { Text("Sign out of this phone") }
     }
+}
+
+@Composable
+private fun Notifications(graph: Graph) {
+    val state by graph.push.state.collectAsState()
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) { graph.push.refresh() }
+    Text("Notifications", style = MaterialTheme.typography.titleMedium)
+    when {
+        state.subscriptionId != null -> {
+            Text("This phone is told when a decision waits for you, a run ends or an agent writes.")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { graph.push.sendTest() }) { Text("Send a test") }
+                OutlinedButton(onClick = { graph.push.disable() }) { Text("Turn off") }
+            }
+        }
+        state.distributors.isEmpty() -> Text(
+            "Notifications go through a UnifiedPush distributor, an app such as ntfy that you install from F-Droid or the Play Store. None is installed on this phone.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        else -> {
+            Text("Choose the app that delivers them:")
+            state.distributors.forEach { d ->
+                OutlinedButton(enabled = !state.registering, onClick = {
+                    if (Build.VERSION.SDK_INT >= 33) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    graph.push.enable(d)
+                }) { Text(d) }
+            }
+        }
+    }
+    state.message?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 }

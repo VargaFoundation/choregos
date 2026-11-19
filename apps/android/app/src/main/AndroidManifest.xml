@@ -33,6 +33,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- What a notification opens: tranibor://decision/<id>, tranibor://run/<id>, ... -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${deepLinkScheme}" />
+            </intent-filter>
         </activity>
 
         <!-- A voice session that goes on with the screen off (ADR 0193): the microphone is declared. -->
@@ -40,5 +47,14 @@
             android:name=".voice.VoiceService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- UnifiedPush: the distributor (ntfy, ...) delivers the decrypted payload here. -->
+        <service
+            android:name=".push.PushServiceImpl"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

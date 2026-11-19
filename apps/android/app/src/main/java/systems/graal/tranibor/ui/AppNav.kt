@@ -35,14 +35,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import systems.graal.tranibor.Graph
 import systems.graal.tranibor.net.Agent
+import systems.graal.tranibor.push.Destination
 
-private enum class Tab(val label: String) { Agents("Agents"), Assistants("Assistants"), Activity("Activity"), Account("Account") }
+private enum class Tab(val label: String) { Inbox("Inbox"), Agents("Agents"), Assistants("Assistants"), Activity("Activity"), Account("Account") }
 
 private sealed interface Route {
     data class AgentDetail(val slug: String) : Route
     data class AgentChat(val agent: Agent) : Route
     data class Chat(val id: String, val title: String) : Route
     data object Voice : Route
+    data object Fresh : Route
 }
 
 @Composable
@@ -59,7 +61,19 @@ private fun Signed(graph: Graph) {
     val stack = remember { mutableStateListOf<Route>() }
     var tab by remember { mutableStateOf(Tab.Agents) }
     var org by remember { mutableStateOf(graph.prefs.get("org")) }
+    var focus by remember { mutableStateOf<String?>(null) }
     val voice by graph.voice.state.collectAsState()
+    val link by graph.link.collectAsState()
+
+    LaunchedEffect(link) {
+        when (val d = link ?: return@LaunchedEffect) {
+            is Destination.Inbox -> { tab = Tab.Inbox; focus = d.id; stack.clear() }
+            is Destination.Activity -> { org = d.org; tab = Tab.Activity; stack.clear() }
+            is Destination.Agent -> { org = d.org; stack.clear(); stack += Route.AgentDetail(d.slug) }
+            Destination.Account -> { tab = Tab.Account; stack.clear() }
+        }
+        graph.link.value = null
+    }
 
     val route = stack.lastOrNull()
     BackHandler(enabled = route != null) { stack.removeLastOrNull() }
@@ -71,7 +85,7 @@ private fun Signed(graph: Graph) {
                 navigationIcon = {
                     if (route != null) IconButton(onClick = { stack.removeLastOrNull() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
-                actions = { if (route == null && tab != Tab.Assistants && tab != Tab.Account) OrgPicker(graph, org) { org = it; graph.prefs.put("org", it) } },
+                actions = { if (route == null && tab != Tab.Assistants && tab != Tab.Account && tab != Tab.Inbox) OrgPicker(graph, org) { org = it; graph.prefs.put("org", it) } },
             )
         },
         bottomBar = {
@@ -85,7 +99,8 @@ private fun Signed(graph: Graph) {
         Box(Modifier.padding(padding).fillMaxSize()) {
             if (route == null) {
                 Column2(voiceBanner = voice != null && voice?.phase != systems.graal.tranibor.voice.Phase.Ended, open = { stack += Route.Voice })
-                OrgScoped(graph, org, tab, openAgent = { stack += Route.AgentDetail(it.slug) }, openChat = { id, title -> stack += Route.Chat(id, title) })
+                OrgScoped(graph, org, tab, focus, openAgent = { stack += Route.AgentDetail(it.slug) },
+                    openChat = { id, title -> stack += Route.Chat(id, title) }, fresh = { stack += Route.Fresh })
             } else when (route) {
                 is Route.AgentDetail -> {
                     val o = org
@@ -96,6 +111,7 @@ private fun Signed(graph: Graph) {
                 is Route.AgentChat -> org?.let { AgentChat(graph, it, route.agent.slug, route.agent.project.orEmpty()) }
                 is Route.Chat -> ConversationChat(graph, route.id)
                 Route.Voice -> VoiceScreen(graph, leave = { stack.removeLastOrNull() })
+                Route.Fresh -> SignInScreen(graph, fresh = true, onDone = { stack.removeLastOrNull() })
             }
         }
     }
@@ -116,10 +132,11 @@ private fun Column2(voiceBanner: Boolean, open: () -> Unit) {
 
 @Composable
 private fun OrgScoped(
-    graph: Graph, org: String?, tab: Tab,
-    openAgent: (Agent) -> Unit, openChat: (String, String) -> Unit,
+    graph: Graph, org: String?, tab: Tab, focus: String?,
+    openAgent: (Agent) -> Unit, openChat: (String, String) -> Unit, fresh: () -> Unit,
 ) {
     when (tab) {
+        Tab.Inbox -> InboxScreen(graph, focus, fresh)
         Tab.Assistants -> AssistantsScreen(graph, openChat)
         Tab.Account -> AccountScreen(graph)
         Tab.Agents -> if (org == null) PickOrg(graph) else AgentList(graph, org, openAgent)
@@ -151,4 +168,5 @@ private fun titleOf(route: Route?, tab: Tab): String = when (route) {
     is Route.AgentChat -> route.agent.displayName
     is Route.Chat -> route.title
     Route.Voice -> "Voice"
+    Route.Fresh -> "Confirm it is you"
 }
