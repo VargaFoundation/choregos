@@ -46,7 +46,7 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- $fautes := list }}
 {{- if not $singleNode }}
 {{- if $g.database.embedded }}{{ $fautes = append $fautes "global.database.embedded" }}{{ end }}
-{{- /* S80-13: the embedded Temporal in `server` mode (auto-setup on PostgreSQL, ADR 0195) is the production
+{{- /* S80-14: the embedded Temporal in `server` mode (auto-setup on PostgreSQL, ADR 0195) is the production
        tier, not the SQLite bench: it is the one the serious environments may use. */}}
 {{- if and $g.temporal.embedded (ne (toString ((index .Values "choregos-temporal" | default dict).mode | default "dev")) "server") }}{{ $fautes = append $fautes "global.temporal.embedded (choregos-temporal.mode=dev, the SQLite bench)" }}{{ end }}
 {{- if $g.gateway.embedded }}{{ $fautes = append $fautes "global.gateway.embedded" }}{{ end }}
@@ -67,7 +67,7 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- end }}
 {{- end }}
 {{- /*
-S80-13: the embedded Temporal and the clients must agree on TLS. A client that dials TLS a server that
+S80-14: the embedded Temporal and the clients must agree on TLS. A client that dials TLS a server that
 speaks clear (or the reverse) fails at the first call, with an error that names neither side.
 */ -}}
 {{- if $g.temporal.embedded }}

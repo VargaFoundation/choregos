@@ -5742,7 +5742,7 @@ stories:
     priority: 3
     size: L
     depends_on: [S80-12, S80-06]
-    notes: "First move of ADR 0195. The temporal subchart gains tls (cert-manager chain or an existing secret, an nginx relay for start-dev), mode server (auto-setup on PostgreSQL), persistence.existingClaim and service.name. Not done: a handshake against a real Temporal over TLS on a cluster."
+    notes: "First move of ADR 0195. The temporal subchart gains tls (cert-manager chain or an existing secret, an nginx relay for start-dev), mode server (auto-setup on PostgreSQL), persistence.existingClaim and global.temporal.serviceName. Not done: a handshake against a real Temporal over TLS on a cluster."
   - id: S80-15
     title: "feat(charts): the LiteLLM subchart takes model prices, cache prices, a TLS database and a pinned image (ADR 0195)"
     stream: S80

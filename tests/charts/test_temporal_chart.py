@@ -1,4 +1,4 @@
-"""The embedded Temporal, as an operator's deployment uses it (S80-13, ADR 0195).
+"""The embedded Temporal, as an operator's deployment uses it (S80-14, ADR 0195).
 
 An operator's repository keeps its values and nothing else: the Temporal it runs is this subchart. Four
 things must hold for it to replace a hand-written manifest set: the Service name and the volume it
