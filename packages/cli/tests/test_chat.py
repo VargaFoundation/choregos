@@ -463,6 +463,15 @@ def platform(contract: Any) -> Any:
         yield Platform(router, contract)
 
 
+@pytest.fixture(autouse=True)
+def steady_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An input's cursor blinks every half second: a snapshot taken on a loaded runner caught it in either
+    phase. Held visible, a snapshot is one picture whatever the timing."""
+    from textual.widgets import Input
+
+    monkeypatch.setattr(Input, "_toggle_cursor", lambda self: setattr(self, "_cursor_visible", True))
+
+
 def make_app(**kwargs: Any) -> Any:
     from tranibor_cli.client import AsyncClient, Profile
     from tranibor_cli.workspace import Workspace
