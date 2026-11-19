@@ -169,11 +169,30 @@ thin rule between the two; the status of a run is a glyph, a word and a colour, 
 | Esc | Cancels the turn being answered; the platform books what it spent |
 | Ctrl-O, Ctrl-N, Ctrl-A | Switches conversation, starts a new one, switches assistant |
 | F2, or Enter or `d` on a decision | Opens a decision (see [Decide](#decide)) |
+| Ctrl-K | Opens the [palette](#the-palette) |
 | Ctrl-Q | Quits |
 
 A stop always needs a reason: an empty one is not sent. The reason is audited and shown on the work item.
 `x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to
 what you are on.
+
+### The palette
+
+Ctrl-K opens a search that reaches everything by name. Type a few letters, in order and not necessarily
+next to each other (`fnrd` finds `FIN-12 Fix the totals rounding`): the best match comes first and its
+letters are underlined. Up and Down move, Enter chooses, Esc closes. It lists:
+
+- the six **tabs**;
+- the **projects** of the organisation, and the **work items** the workspace has seen (those of the project
+  you have open, and those on the activity board): Enter shows them in the Projects tab;
+- the **assistants** ready for you, as Ctrl-A does;
+- the **other organisations** you may read: choosing one reads everything again for it (the same as
+  starting `choregos chat --org <slug>`);
+- the **commands**: decide what waits for you, stop the selected run or work item (`x` in Activity; it still
+  asks why), new conversation, open a conversation, choose the assistant, cancel the turn, quit.
+
+Nothing is only in the palette: each line says on its right the key or the tab that reaches it too, and the
+footer keeps every key. The palette does not open over a dialog.
 
 ## Watch the flow live
 
