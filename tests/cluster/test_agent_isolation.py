@@ -280,12 +280,14 @@ def job_result(ns: str, result: dict[str, Any]) -> dict[str, Any]:
     return {**json.loads(line[len("RESULT=") :]), "phase": pod["status"]["phase"], "agent": agent_state}
 
 
+@pytest.mark.capability("k8s_job", "separate_agent")
 def test_the_job_completes_and_its_agent_sidecar_ends_with_it(job_result: dict[str, Any]) -> None:
     """The Job ends on the runner's exit alone: the native sidecar is stopped, not waited for."""
     assert job_result["phase"] == "Succeeded"
     assert "terminated" in job_result["agent"]["state"], job_result["agent"]
 
 
+@pytest.mark.capability("k8s_job", "separate_agent")
 def test_the_jobs_agent_reads_nothing_of_the_runner_and_shares_the_work(job_result: dict[str, Any]) -> None:
     """The run token reaches the runner through the run's Secret (`secretKeyRef`), as the executor
     writes it; from the agent's container it is in no environment."""
