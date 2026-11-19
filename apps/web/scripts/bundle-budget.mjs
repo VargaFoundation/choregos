@@ -76,7 +76,6 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // states with the reason of a failure, the lane counts and the ticker) adds about 18 kB to main's 2576 kB; no new
 // dependency.
 const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2625);
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2600);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
