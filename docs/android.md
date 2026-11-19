@@ -41,9 +41,26 @@ the freshness flag. The app never keeps a way around it.
 | Agents | The organisation's agents with their runtime kind; stop an agent, watch it, star it; chat with a prompt agent (text, streamed). |
 | Assistants | Your assistants and conversations; continue one, in text, streamed. |
 | Activity | What runs now and what just ended, live; stop a run, a session or a turn. |
+| Agents (voice) | A voice agent has a *Talk* button: a spoken conversation, with a live transcript, mute and hang up. |
 | Account | Your sessions on this phone and elsewhere; sign out. |
 
 The organisation shown is the one chosen at the top right; a single organisation is chosen for you.
+
+## Talk to a voice agent
+
+Open a voice agent and press *Talk*; the app asks for the microphone the first time. It speaks to the
+agent over the realtime socket of [ADR 0080](adr/0080-hosted-prompt-and-voice-agents.md): 16-bit PCM at
+24 kHz, the server detects when you speak, and the app never sends `session.update` (the agent owns the
+session's configuration).
+
+- Capture uses the phone's echo cancellation and noise suppression, so the speaker does not feed the agent
+  back to itself. Speaking over the agent cuts it off at once (barge-in).
+- A Bluetooth headset is used when one is connected, a wired one next, the phone's speaker otherwise.
+- The session lives in a foreground service with a notification, so it goes on with the screen off or the
+  app in the background; *End session* in the notification hangs up.
+- If the link drops, the app resumes the same session within 30 seconds, from the last event it read.
+- When the session's spending cap or the agent's time limit is reached, the app says so in words ("The
+  spending limit of this voice session is reached.") instead of a close code.
 
 ## Build
 
@@ -92,4 +109,4 @@ secrets and a release job is added.
 ## What is not verified
 
 The unit suite covers the client, the sign-in, the stream readers and the parts of the app that hold logic.
-The screens have been compiled and linted, not run: no device or emulator took part in this work.
+The voice session is tested against a fake WebSocket server (state machine, resume, barge-in, caps), the codec and the framing by unit tests. Real audio capture and playback, echo cancellation, Bluetooth routing, the foreground service and the screens have been compiled and linted, not run: no device or emulator took part in this work.

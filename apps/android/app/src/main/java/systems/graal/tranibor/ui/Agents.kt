@@ -1,5 +1,10 @@
 package systems.graal.tranibor.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -27,10 +32,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 import systems.graal.tranibor.Graph
 import systems.graal.tranibor.net.Agent
 import systems.graal.tranibor.net.AgentSocial
+import systems.graal.tranibor.voice.VoiceConfig
+import systems.graal.tranibor.voice.Pcm
 
 @Composable
 fun AgentList(graph: Graph, org: String, open: (Agent) -> Unit) {
@@ -58,13 +66,39 @@ fun AgentList(graph: Graph, org: String, open: (Agent) -> Unit) {
  * gestures a phone does well: talk to it, stop it, follow it.
  */
 @Composable
-fun AgentDetail(graph: Graph, org: String, agent: Agent, chat: () -> Unit) {
+fun AgentDetail(graph: Graph, org: String, agent: Agent, chat: () -> Unit, talk: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var social by remember { mutableStateOf(agent.social ?: AgentSocial()) }
     var message by remember { mutableStateOf<String?>(null) }
     var confirmStop by remember { mutableStateOf(false) }
     var reason by remember { mutableStateOf("") }
+    var pendingVoice by remember { mutableStateOf<VoiceConfig?>(null) }
+
+    val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        // The microphone is the one that matters; notifications only make the session's notification visible.
+        if (granted[Manifest.permission.RECORD_AUDIO] == true) {
+            pendingVoice?.let { graph.voice.request(it); talk() }
+        } else {
+            message = "The microphone is needed to talk to a voice agent. Allow it in the system settings."
+        }
+        pendingVoice = null
+    }
+
+    fun startVoice(config: VoiceConfig) {
+        val needed = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            graph.voice.request(config)
+            talk()
+        } else {
+            pendingVoice = config
+            permissions.launch(needed.toTypedArray())
+        }
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(agent.displayName, style = MaterialTheme.typography.headlineSmall)
         agent.description?.takeIf { it.isNotBlank() }?.let { Text(it) }
@@ -79,7 +113,9 @@ fun AgentDetail(graph: Graph, org: String, agent: Agent, chat: () -> Unit) {
             Labelled("Runtime", kind)
             val project = agent.project
             when {
-                kind == "voice" -> Text("Talking to a voice agent is not in this build yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                kind == "voice" && project != null -> Primary("Talk") {
+                    startVoice(VoiceConfig(org, agent.slug, project, agent.displayName, runtime?.audio?.sampleRate ?: Pcm.DEFAULT_RATE))
+                }
                 kind == "prompt" && project != null -> Primary("Chat", onClick = chat)
                 kind == "hosted" -> Text("A hosted agent runs in the platform's sandbox; its sessions show in Activity.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 else -> Text("This agent cannot be used from the phone.", color = MaterialTheme.colorScheme.onSurfaceVariant)
