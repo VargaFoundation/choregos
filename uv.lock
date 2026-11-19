@@ -2513,7 +2513,7 @@ provides-extras = ["telemetry", "temporal"]
 
 [[package]]
 name = "tranibor-investment-research"
-version = "0.27.15"
+version = "0.27.16"
 source = { editable = "plugins/investment-research" }
 dependencies = [
     { name = "httpx" },
