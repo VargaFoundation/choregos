@@ -259,3 +259,22 @@ def test_an_ascii_terminal_gets_ascii_glyphs_and_bars(
     said = _said(_run())
     assert "x failed 5s execute `make test`" in said and "+ done 2s read" in said
     assert "#" * 20 in said and "█" not in said
+
+
+def test_json_is_the_whole_journal_for_a_script_and_draws_nothing(platform: Platform) -> None:
+    platform.events(_journal("opencode-run-journal.json"))
+    platform.run(backend="opencode")
+    result = _run("--json")
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert len(body["steps"]) == 29 and len(body["plan"]) == 6 and body["context"] is None
+    assert body["run"]["id"] == RUN
+    # More than the 40 latest calls a screen shows is a screen's choice, not the data's.
+    assert "tool calls" not in result.output
+
+
+def test_json_asks_for_a_run_and_not_to_follow_it(platform: Platform) -> None:
+    from tranibor_cli.main import app
+
+    assert CliRunner().invoke(app, ["activity", "--json"]).exit_code != 0
+    assert _run("--json", "--watch").exit_code != 0
