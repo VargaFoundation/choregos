@@ -13,7 +13,7 @@ metadata:
   description: "UX and accessibility audit: review against the design system and WCAG, acceptance by a product owner. Read-only."
 initial: inbox
 actors:
-  designer: { type: agent, role: review, agent: ux-designer, model: "profile:standard" }
+  designer: { type: agent, role: review, agent: ux-designer, model: "profile:standard", needs: [scm] }
   owners: { type: human, group: product-owners, sla_hours: 48 }
 states:
   inbox: { display: To audit, kind: wait, tracker: { status: Todo } }

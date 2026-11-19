@@ -14,9 +14,9 @@ metadata:
   description: "Security audit: supply-chain scan, code security review, compliance review, acceptance by the security team. Read-only."
 initial: inbox
 actors:
-  scanner: { type: agent, role: review, agent: secops, model: "profile:standard" }
-  reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
-  compliance: { type: agent, role: review, agent: compliance, model: "profile:standard", fresh_context: true }
+  scanner: { type: agent, role: review, agent: secops, model: "profile:standard", needs: [scm] }
+  reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
+  compliance: { type: agent, role: review, agent: compliance, model: "profile:standard", fresh_context: true, needs: [scm] }
   security: { type: human, group: security, sla_hours: 48 }
 states:
   inbox: { display: To audit, kind: wait, tracker: { status: Todo } }

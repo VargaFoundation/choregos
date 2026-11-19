@@ -72,6 +72,10 @@ IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
 #: A system transition can open one child work item per element of a list and wait until every child
 #: is settled (S38-12, ADR 0057). No history before this marker holds a `spawn:`.
 FAN_OUT = "fan-out-and-join"
+#: A transition declares the outcome it repairs (`repairs: ci_failed`, ADR 0181 C1), and the interpreter
+#: takes it on that outcome instead of guessing a repair from the agent's role. Asked only for a
+#: workflow that declares one; no history before this marker holds such a workflow.
+REPAIRS_DECLARED = "repairs-declared"
 
 #: `prepare_stage` mints a run's key at what is left, and refuses to start a stage below the floor
 #: (S27-02, ADR 0047): the stage is then sent to a person without a run. Before this marker,
@@ -437,7 +441,12 @@ class WorkflowInterpreter(
                     engine = self._migrate(engine)
                 continue
 
-            transition = engine.select_transition(self.state, self.last_outcome, self.last_outputs)
+            # The condition first, `patched` next: a workflow that declares no `repairs:` asks nothing,
+            # so no history of one gains a marker (ADR 0181 C1).
+            repairs = engine.declares_repairs and workflow.patched(REPAIRS_DECLARED)
+            transition = engine.select_transition(
+                self.state, self.last_outcome, self.last_outputs, repairs=repairs
+            )
             self.last_outcome = None
             await self._note_transition_taken(params, transition)
             if transition is None:

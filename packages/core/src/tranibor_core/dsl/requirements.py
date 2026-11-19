@@ -7,7 +7,9 @@ DEDUCED from what its workflows do:
 
 - a guarantee reads capabilities (`scope_respected` a diff; `ci_green` the PR's checks, through the
   repository, which was not the CI, something nothing reads): `gate_needs`;
-- an agent whose role works in a repository (`implement`, `fix_ci`...) requires an `scm`;
+- an agent requires the connector kinds its `needs:` declares (ADR 0181 C1). A workflow stored before
+  `needs:` existed declares none: for it, an agent whose role works in a repository (`implement`,
+  `fix_ci`...) requires an `scm`, and one that checks production a `cd`, guessed from the role's name;
 - a release train, a production state (`production: true`, or `deployed_prod*` for a workflow
   written before #175) or a check in prod require a `cd`;
 - a system transition that opens or merges a PR (`does`, or a `pr_*` / `merged*` state for a
@@ -30,7 +32,8 @@ from tranibor_contracts.workflow import is_production_state, transition_effect
 from ..gates import gate_needs
 from ..step_effects import step_effect_of
 
-#: The roles whose playbook works in a repository: they read a diff, push a branch.
+#: The guess for a workflow that declares no `needs:` (one stored before ADR 0181 C1): the roles whose
+#: playbook works in a repository, they read a diff, push a branch.
 ROLES_IN_A_REPOSITORY = frozenset(
     {"implement", "fix_ci", "address_review", "review", "release_notes", "architect", "document"}
 )
@@ -61,8 +64,14 @@ class _Reasons:
             reasons.append(reason)
 
 
+def declares_needs(workflow: Workflow) -> bool:
+    """Whether an agent of this workflow declares its `needs:` (ADR 0181 C1); then none is guessed."""
+    return any(getattr(spec, "needs", None) is not None for spec in workflow.actors.values())
+
+
 def _actors(workflow: Workflow, reasons: _Reasons) -> None:
     name = workflow.metadata.name
+    declared = declares_needs(workflow)
     for actor, spec in workflow.actors.items():
         if spec.type == ActorType.JOB:
             reasons.require("runtime", f"{name}: the job {actor} runs somewhere")
@@ -76,6 +85,12 @@ def _actors(workflow: Workflow, reasons: _Reasons) -> None:
         reasons.require("runtime", f"{name}: the agent {actor} runs somewhere")
         reasons.require("gateway", f"{name}: the agent {actor} calls models")
         role = str(getattr(spec, "role", ""))
+        if declared:
+            for capability in getattr(spec, "needs", None) or ():
+                reasons.require(
+                    capability, f"{name}: the agent {actor} ({role}) works through a `{capability}`"
+                )
+            continue
         if role in ROLES_IN_A_REPOSITORY:
             reasons.require("scm", f"{name}: the agent {actor} ({role}) works in a repository")
         if role in ROLES_IN_PRODUCTION:
