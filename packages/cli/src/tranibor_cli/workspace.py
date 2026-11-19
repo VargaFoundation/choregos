@@ -52,6 +52,8 @@ from textual.widgets.tree import TreeNode
 
 from . import activity, decide, money, run_activity, theme
 from .client import ApiError, AsyncClient, Profile
+from .live import _workflow as default_workflow  # the command's own pick: same rule, same words
+from .live_app import LiveFlowPane
 from .live_view import reason_long
 from .run_steps import RunSteps
 
@@ -485,7 +487,8 @@ class Workspace(App[None]):
                         yield Static(id="projects-run-body")
                 yield DecisionList(id="decisions")
                 yield OptionList(id="artefacts")
-                yield Static("", id="live-view", classes="placeholder")
+                with Vertical(id="live-view"):
+                    yield Static("", id="live-note", classes="placeholder")
             with VerticalScroll(id="context"):
                 yield Static(id="context-body")
         yield Footer()
@@ -506,7 +509,7 @@ class Workspace(App[None]):
         "projects": "#projects-list",
         "decisions": "#decisions",
         "artefacts": "#artefacts",
-        "live": "#live-view",
+        "live": "#live-view",  # the pane takes it once it is mounted (`open_live`)
     }
 
     def on_resize(self, event: Any) -> None:
@@ -521,7 +524,6 @@ class Workspace(App[None]):
         tree.show_root = False
         tree.show_guides = True
         self.query_one("#projects-run").display = False
-        self.query_one("#live-view", Static).update("The live flow of a workflow is coming.")
         self.query_one("#prompt", Input).focus()
         self.set_interval(activity.REDRAW_EVERY_S, self.tick)
         self.draw_header()
@@ -540,13 +542,124 @@ class Workspace(App[None]):
         """Show a tab (`1`..`6`, a click on its name, Tab) and move the focus into it."""
         if name not in self.VIEW_WIDGET:
             return
+        leaving_live = self.current_view == "live" and name != "live"
         self.current_view = name
         self.query_one("#views", ContentSwitcher).current = self.VIEW_WIDGET[name]
         self.draw_tabs()
         self.draw_context()
-        self.query_one(self.VIEW_FOCUS[name]).focus()
+        if leaving_live:
+            self.run_worker(self.close_live(), group="live-tab", exit_on_error=False)  # no stream unseen
+        if name == "live":
+            self.run_worker(self.open_live(), group="live-tab", exit_on_error=False)
+        else:
+            self.query_one(self.VIEW_FOCUS[name]).focus()
         if name == "projects":
             self.run_worker(self.refresh_projects(), group="projects", exit_on_error=False)
+
+    # ───────────────────────────── the Live tab ─────────────────────────────
+
+    def _live_project(self) -> dict[str, Any] | None:
+        """The project the Live tab draws: the one open in Projects, else the one under its cursor, else the
+        first."""
+        if self.depth >= 1 and self.project is not None:
+            return self.project
+        listed = self.projects or []
+        picked = self._highlighted(self.query_one("#projects-list", DrillList))
+        return next((p for p in listed if str(p["id"]) == picked), listed[0] if listed else None)
+
+    def _live_pane(self) -> LiveFlowPane | None:
+        found = self.query(LiveFlowPane)
+        return found.first() if found else None
+
+    def _say_live(self, text: Text) -> None:
+        note = self.query_one("#live-note", Static)
+        note.update(text)
+        note.display = True
+
+    async def open_live(self) -> None:
+        """Draw the live flow of the project's default workflow: `choregos live`'s pane, the same widget."""
+        project = self._live_project()
+        if project is None:
+            pane = self._live_pane()
+            if pane is not None:
+                await pane.remove()
+            self._say_live(
+                Text(
+                    f"{DASH} the projects are not readable right now"
+                    if self.projects is None
+                    else "No project to show yet.",
+                    style="dim",
+                )
+            )
+            return
+        try:
+            listed = await self.api.get(f"/projects/{project['slug']}/workflows")
+            listed = listed["items"] if isinstance(listed, dict) else listed or []
+            name, is_default = default_workflow(listed, None)
+        except (ApiError, httpx.TransportError, LookupError) as exc:
+            self._say_live(Text(f"{project['name']}: {exc}", style="red"))
+            return
+        if self.current_view != "live":
+            return  # the person went elsewhere while the workflows were read
+        pane = self._live_pane()
+        if pane is not None and (pane.project["id"], pane.workflow) == (project["id"], name):
+            pane.focus()
+            return
+        if pane is not None:
+            await pane.remove()
+        self.query_one("#live-note", Static).display = False
+        pane = LiveFlowPane(self.api, self.organisation, project, name, is_default=is_default)
+        await self.query_one("#live-view", Vertical).mount(pane)
+        pane.focus()
+        self.draw_context()
+
+    async def close_live(self) -> None:
+        """Leaving the tab closes its stream: the pane is read again, from fresh, when the tab is shown."""
+        pane = self._live_pane()
+        if pane is not None and self.current_view != "live":
+            await pane.remove()
+            self.draw_context()
+
+    @on(LiveFlowPane.Moved)
+    def live_moved(self) -> None:
+        self.draw_context()
+
+    def _context_live(self) -> RenderableType:
+        pane = self._live_pane()
+        if pane is None or pane.view is None:
+            return Text(
+                "The live flow of the project's workflow, drawn from what its items are doing.", style="dim"
+            )
+        card = next((c for c in pane.view["cards"] if c["id"] == pane.selected), None)
+        if card is None:
+            return facts(
+                str(pane.project.get("name") or pane.slug),
+                [("workflow", pane.workflow)],
+                Text("No item is in this workflow yet.", style="dim"),
+            )
+        lane = next((x["display"] for x in pane.view["lanes"] if x["state"] == card["lane"]), card["lane"])
+        rows: list[tuple[str, Text | str]] = [("station", str(lane)), ("workflow", pane.workflow)]
+        notes: list[Text] = []
+        status = card["status"]
+        if status == "failed":
+            failure = card.get("failure") or {}
+            rows.append(("failed", Text(reason_long(failure.get("reason")), style="red")))
+            if failure.get("summary"):
+                notes.append(Text(decide.clean(str(failure["summary"]))))
+        elif status == "waiting":
+            waiting = card.get("waiting") or {}
+            rows.append(("waiting for", str(waiting.get("label") or waiting.get("kind") or DASH)))
+        elif status == "running":
+            running = card.get("running") or {}
+            rows.append(
+                ("running", " · ".join(str(running[k]) for k in ("stage", "agent") if running.get(k)))
+            )
+        else:
+            rows.append(("status", str(status)))
+        notes += [Text(""), Text("Enter opens it.", style="dim")]
+        return facts(
+            Text.assemble((str(card["key"]), "bold"), "  ", decide.clean(str(card["title"]))), rows, *notes
+        )
 
     def _step_view(self, step: int) -> None:
         names = [name for name, _label in TABS]
@@ -1235,6 +1348,8 @@ class Workspace(App[None]):
             return self._context_decision(item)
         if view == "projects":
             return self._context_projects()
+        if view == "live":
+            return self._context_live()
         if view == "artefacts":
             found = next(
                 (

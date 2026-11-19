@@ -201,6 +201,40 @@ def _project(pid: str, slug: str, name: str, *, active: int, month: float) -> di
     }
 
 
+#: The Live tab's workflow: three stations and a decline, enough to draw (`choregos live` has the full one).
+FLOW_GRAPH: dict[str, Any] = {
+    "nodes": [
+        {"id": "triage", "display": "Triage", "kind": "agent", "lane": "agent", "terminal": False},
+        {"id": "implement", "display": "Implement", "kind": "agent", "lane": "agent", "terminal": False},
+        {"id": "done", "display": "Done", "kind": "terminal", "lane": "terminal", "terminal": True},
+    ],
+    "edges": [
+        {
+            "id": "triage->implement:nominal",
+            "from": "triage",
+            "to": "implement",
+            "kind": "nominal",
+            "label": "",
+            "wildcard": False,
+            "actor": "triager",
+        },
+        {
+            "id": "implement->done:nominal",
+            "from": "implement",
+            "to": "done",
+            "kind": "nominal",
+            "label": "",
+            "wildcard": False,
+            "actor": "coder",
+        },
+    ],
+}
+
+
+def _flow_item(wid: str, key: str, title: str, state: str, **extra: Any) -> dict[str, Any]:
+    return _work_item(wid, key, title, state, 1.0) | {"workflow_name": "delivery"} | extra
+
+
 def _work_item(wid: str, key: str, title: str, state: str, cost: float) -> dict[str, Any]:
     return {
         "id": wid,
@@ -299,6 +333,61 @@ class Platform:
         router.get(f"{V1}/projects/p-1/work-items").mock(side_effect=self._items)
         router.get(f"{V1}/projects/p-2/work-items").mock(side_effect=self._items)
         router.get(url__regex=rf"{re.escape(V1)}/work-items/[^/]+/runs").mock(side_effect=self._item_runs)
+        # The Live tab (S67-28): `choregos live`'s routes, for the project under the cursor (by slug).
+        self.flow_items: list[dict[str, Any]] = [
+            _flow_item("wi-12", "FIN-12", "Fix the totals rounding", "implement"),
+            _flow_item("wi-9", "FIN-9", "Add the VAT column", "triage"),
+        ]
+        self.workflows_status = 200
+        self.flow_reads: list[str] = []
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows$").mock(side_effect=self._workflows)
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows/delivery$").mock(
+            return_value=Response(
+                200,
+                json={
+                    "name": "delivery",
+                    "version": 3,
+                    "source": "project",
+                    "yaml": "name: delivery\n",
+                    "json": {"initial": "triage"},
+                    "checksum": "x",
+                    "is_active": True,
+                    "is_default": True,
+                },
+            )
+        )
+        router.post(f"{V1}/workflows/validate").mock(
+            return_value=Response(
+                200,
+                json=contract(
+                    "WorkflowValidation",
+                    {"valid": True, "errors": [], "warnings": [], "graph": FLOW_GRAPH},
+                ),
+            )
+        )
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/work-items").mock(side_effect=self._flow)
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/costs").mock(
+            return_value=Response(
+                200,
+                json=contract(
+                    "CostReport",
+                    {"group_by": "day", "rows": [], "total": {"cost_usd": 2.5, "cost_eur": 2.25}},
+                ),
+            )
+        )
+
+    def _workflows(self, request: Any) -> Response:
+        if self.workflows_status != 200:
+            return Response(self.workflows_status, json={"title": "Forbidden", "detail": "no"})
+        summary = {"name": "delivery", "version": 3, "is_default": True, "open_items": 2}
+        return Response(200, json=[self.contract("WorkflowSummary", summary)])
+
+    def _flow(self, request: Any) -> Response:
+        self.flow_reads.append(request.url.path)
+        items = [] if request.url.path.endswith("/docs-site/work-items") else self.flow_items
+        return Response(
+            200, json=self.contract("WorkItemPage", {"items": items, "meta": {"has_more": False}})
+        )
 
     def _projects(self, request: Any) -> Response:
         if self.projects_status != 200:
@@ -546,7 +635,8 @@ async def test_the_workspace_is_one_screen_of_tabs_and_each_tab_shows_its_part(p
         await show(pilot, "projects")
         assert "Billing API" in screen_text(app)
         await show(pilot, "live")
-        assert "coming" in screen_text(app)
+        await until(pilot, lambda: drawn(app), "the live flow")
+        assert "Implement" in screen_text(app) and "coming" not in screen_text(app)
 
 
 def _pending_action() -> dict[str, Any]:
@@ -625,6 +715,132 @@ async def test_every_status_is_a_word(platform: Platform) -> None:
         text = screen_text(app)
     for word in ("○ queued", "● running", "✓ done", "✗ failed", "■ cancelled", "✗ timed out"):
         assert word in text, word
+
+
+# ─────────────────────────────── the Live tab (S67-28) ───────────────────────────────
+
+
+def drawn(app: Any) -> bool:
+    """The Live tab's pane has read its workflow and drawn it."""
+    from tranibor_cli.live_app import LiveFlowPane
+
+    found = app.query(LiveFlowPane)
+    return bool(found) and found.first().drawing is not None
+
+
+def flow(app: Any) -> Any:
+    from tranibor_cli.live_app import LiveFlowPane
+
+    return app.query_one(LiveFlowPane)
+
+
+def flow_lines(app: Any) -> str:
+    return "\n".join(line.plain for line in flow(app).drawing.lines)
+
+
+async def test_the_live_tab_draws_the_flow_of_the_first_project_with_the_widget_of_choregos_live(
+    platform: Platform,
+) -> None:
+    from tranibor_cli import live_app
+
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        drawing = flow_lines(app)
+        text = screen_text(app)
+        assert type(flow(app)) is live_app.LiveFlowPane
+        assert flow(app).project["slug"] == "billing-api" and flow(app).workflow == "delivery"
+        assert "Triage" in drawing and "Implement" in drawing and "Done" in drawing
+        assert "FIN-12" in drawing and "FIN-9" in drawing
+        assert "Billing API" in text and "delivery" in text
+        assert "billing-api" in " ".join(platform.flow_reads)
+        assert app.focused is flow(app)
+
+
+async def test_the_live_tab_draws_the_project_under_the_projects_cursor(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "projects")
+        await until(pilot, lambda: "Docs site" in screen_text(app), "the projects")
+        await pilot.press("down")
+        await pilot.pause()
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        assert flow(app).project["slug"] == "docs-site"
+        assert "FIN-12" not in flow_lines(app)
+
+
+async def test_the_context_pane_follows_the_token_and_names_a_failure_by_its_reason(
+    platform: Platform,
+) -> None:
+    failure = {"reason": "budget", "summary": "The run spent its budget at the 31st call."}
+    platform.hold = [
+        (
+            "activity.upsert",
+            _entry(
+                "run-bad", status="failed", ended_at=_iso(NOW), project_slug="billing-api", failure=failure
+            ),
+        )
+    ]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        seen: dict[str, str] = {}
+        for _ in range(3):
+            await pilot.pause(0.1)
+            seen[str(flow(app).selected)] = " ".join(pane(app).split())
+            await pilot.press("right")
+        assert len(seen) == 2  # two tokens, the pane followed each
+        failed = next(body for body in seen.values() if "budget spent" in body)
+        assert "31st call" in failed and "FIN-12" in failed
+        other = next(body for body in seen.values() if "budget spent" not in body)
+        assert "FIN-9" in other and "31st call" not in other
+
+
+async def test_leaving_the_live_tab_closes_its_stream_and_coming_back_reads_it_again(
+    platform: Platform,
+) -> None:
+    from tranibor_cli.live_app import LiveFlowPane
+
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        await show(pilot, "activity")
+        await until(pilot, lambda: not app.query(LiveFlowPane), "the pane closed")
+        reads = len(platform.flow_reads)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow again")
+        assert len(platform.flow_reads) > reads
+
+
+async def test_an_unreadable_workflow_is_said_in_the_tab_and_the_workspace_goes_on(
+    platform: Platform,
+) -> None:
+    platform.workflows_status = 403
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: "Billing API" in screen_text(app), "the problem said")
+        assert not app.query("#flow-pane")
+        await show(pilot, "activity")
+        assert "FIN-12" in screen_text(app)
+
+
+async def test_no_project_to_show_is_said(platform: Platform) -> None:
+    platform.projects = []
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: "No project to show" in screen_text(app), "the note")
 
 
 # ───────────────────────── failures and decisions in one line (S67-22) ─────────────────────────
@@ -1212,7 +1428,7 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
-@pytest.mark.parametrize("view", ["conversation", "activity", "projects", "decisions", "artefacts"])
+@pytest.mark.parametrize("view", ["conversation", "activity", "projects", "decisions", "artefacts", "live"])
 def test_the_workspace_snapshot(
     snap_compare: Any,
     platform: Platform,
@@ -1221,15 +1437,43 @@ def test_the_workspace_snapshot(
     columns: str,
     view: str,
 ) -> None:
+    from tranibor_cli import live_app
+
     if colour == "no-color":
         monkeypatch.setenv("NO_COLOR", "1")
+    # The Live tab is drawn against pinned clocks and without motion: a snapshot is one instant.
+    monkeypatch.setenv("CHOREGOS_NO_MOTION", "1")
+    monkeypatch.setenv("TZ", "UTC")
+    monkeypatch.setattr(live_app, "now", lambda: NOW)
+    monkeypatch.setattr(live_app, "mono", lambda: 1000.0)
     _showcase(platform)
+    # What the stream says to the Live tab: FIN-12 runs, FIN-9 failed (its reason is a word on the token).
+    if view == "live":
+        platform.hold = [
+            ("activity.upsert", _entry(RUN)),
+            (
+                "activity.upsert",
+                _entry(
+                    "run-bad",
+                    work_item_id="wi-9",
+                    work_item_key="FIN-9",
+                    status="failed",
+                    ended_at=_iso(NOW),
+                    failure={"reason": "loop", "summary": "The same tool call five times."},
+                ),
+            ),
+        ]
     app = make_app(conversation=CID)
 
     async def settled(pilot: Any) -> None:
         await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
         await show(pilot, view)
+        if view == "live":
+            await until(pilot, lambda: drawn(app) and flow(app).connection == "live", "the live flow")
+            await until(
+                pilot, lambda: any(c["status"] == "failed" for c in flow(app).view["cards"]), "the failure"
+            )
         await pilot.pause(0.3)
 
     assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
