@@ -891,6 +891,10 @@
         "read_timeout_ms": {
           "type": "integer"
         },
+        "scoped_by_id": {
+          "default": false,
+          "type": "boolean"
+        },
         "tenant": {
           "type": "string"
         }
