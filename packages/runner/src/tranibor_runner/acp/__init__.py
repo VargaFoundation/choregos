@@ -3,7 +3,14 @@
 
 from __future__ import annotations
 
-from .client import AcpClient, AgentProtocolError, AgentUnreachableError, PromptOutcome
+from .client import (
+    AcpClient,
+    AgentDidNotStartError,
+    AgentExitedError,
+    AgentProtocolError,
+    AgentUnreachableError,
+    PromptOutcome,
+)
 from .protocol import (
     ACP_VERSION,
     PROTOCOL_VERSION,
@@ -17,6 +24,8 @@ __all__ = [
     "ACP_VERSION",
     "PROTOCOL_VERSION",
     "AcpClient",
+    "AgentDidNotStartError",
+    "AgentExitedError",
     "AgentProtocolError",
     "AgentUnreachableError",
     "Notification",

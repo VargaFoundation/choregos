@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -171,6 +172,61 @@ async def test_a_prompt_to_an_agent_that_died_is_unreachable_not_a_timeout(tmp_p
         with pytest.raises(AgentUnreachableError) as refusal:
             await client.prompt("work", timeout=1.0)
     assert "code 3" in str(refusal.value), refusal.value
+
+
+async def test_an_agent_that_exits_before_initialize_is_said_to_have_exited_at_once(tmp_path: Path) -> None:
+    """#1986: an agent that died at start was seen only when `initialize` timed out, 60 s later. The
+    request is raced against the agent's end: it fails when the agent exits, with its code and stderr."""
+    from tranibor_runner.acp import AgentExitedError
+
+    client = await _client(tmp_path, {"exit_at_start": 1})
+    async with client:
+        started = asyncio.get_running_loop().time()
+        with pytest.raises(AgentExitedError) as exited:
+            await asyncio.wait_for(client.initialize(), timeout=15)
+        assert asyncio.get_running_loop().time() - started < 15
+    assert exited.value.code == 1
+    assert "exited before it answered `initialize` (code 1)" in str(exited.value)
+    assert "read-only file system" in str(exited.value), "its last error lines are said"
+
+
+async def test_through_the_launcher_an_agent_that_exits_at_start_is_said_to_have_exited_at_once(
+    tmp_path: Path,
+) -> None:
+    """The same under `container` (ADR 0146): the launcher reports the remote process's exit code,
+    and the request fails on it instead of at its timeout (#1986)."""
+    from tranibor_runner import launcher as lc
+    from tranibor_runner.acp import AgentExitedError
+
+    from .conftest import free_port
+
+    port = free_port()
+    server = await asyncio.start_server(lc.handle, "127.0.0.1", port)
+    try:
+        client = AcpClient(
+            [sys.executable, str(FAKE_AGENT)],
+            cwd=str(tmp_path),
+            env={"FAKE_AGENT_SCRIPT": json.dumps({"exit_at_start": 7})},
+            launcher=lc.Launcher("127.0.0.1", port),
+        )
+        async with client:
+            with pytest.raises(AgentExitedError) as exited:
+                await asyncio.wait_for(client.initialize(), timeout=15)
+    finally:
+        server.close()
+        await server.wait_closed()
+    assert exited.value.code == 7
+    assert "read-only file system" in str(exited.value)
+
+
+async def test_a_refused_session_is_a_protocol_error_naming_the_agents_error(tmp_path: Path) -> None:
+    from tranibor_runner.acp import AgentProtocolError
+
+    client = await _client(tmp_path, {"fail_session_new": True})
+    async with client:
+        await client.initialize()
+        with pytest.raises(AgentProtocolError, match=r"session/new refused.*directory"):
+            await client.new_session(str(tmp_path))
 
 
 def test_protocol_methods_are_covered() -> None:
