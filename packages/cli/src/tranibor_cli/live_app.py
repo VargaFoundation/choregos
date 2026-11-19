@@ -27,7 +27,7 @@ from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from . import activity, live_flow, live_view, run_activity, theme
+from . import activity, live_flow, live_view, money, run_activity, theme
 from .client import ApiError, AsyncClient
 from .run_steps import RunSteps
 
@@ -199,7 +199,7 @@ class LiveFlowPane(Vertical, can_focus=True):
         self.state: Json | None = None
         self.view: Json | None = None
         self.drawing: live_view.Drawing | None = None
-        self.currency = "EUR"
+        self.currency: str | None = None  # unknown: each amount in its own symbol, never relabelled
         self.spend: str | None = None
         self.connection = "reconnecting"
         self.error: str | None = None
@@ -262,7 +262,7 @@ class LiveFlowPane(Vertical, can_focus=True):
             self.spend = None  # unreadable is a dash, never 0 (ADR 0141 §2)
             return
         total = report.get("total") or {}
-        self.spend = live_view.money(total.get("cost_usd"), total.get("cost_eur"), self.currency)
+        self.spend = money.Amount(usd=total.get("cost_usd"), eur=total.get("cost_eur")).text(self.currency)
 
     async def load(self) -> None:
         """The first read: the workflow's graph, the organisation's currency, the items, the day's spend."""
@@ -274,10 +274,10 @@ class LiveFlowPane(Vertical, can_focus=True):
             orgs = await self.api.get("/orgs")
             orgs = orgs["items"] if isinstance(orgs, dict) else orgs
             self.currency = next(
-                (o.get("currency") or "EUR" for o in orgs if o["slug"] == self.organisation), "EUR"
+                (o.get("currency") or "EUR" for o in orgs if o["slug"] == self.organisation), None
             )
         except ApiError:
-            self.currency = "EUR"
+            self.currency = None
         items = await self.read_items()
         await self.read_spend()
         self.apply(live_flow.initial_state(self.graph, items, {"day_start": day_start(now())}), reset=True)

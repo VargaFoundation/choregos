@@ -874,18 +874,6 @@ _TICKER = {
 }
 
 
-def money(usd: float | None, eur: float | None, currency: str) -> str:
-    """An amount in the organisation's currency, with its symbol; unknown is `—`, never 0 (ADR 0141 §2).
-
-    The cost report carries both totals, so a euro organisation is never shown dollars relabelled. When
-    S67-25's `money.py` lands this is its one call.
-    """
-    value = eur if currency == "EUR" else usd
-    if value is None:
-        return "—"
-    return f"€{value:.2f}" if currency == "EUR" else f"${value:.2f}"
-
-
 def local_time(iso: str | None) -> str:
     if not iso:
         return "--:--:--"

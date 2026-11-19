@@ -171,6 +171,8 @@ class Platform:
         self.items = board()
         self.spend: float | None = 2.5
         self.currency = "EUR"
+        self.orgs_status = 200
+        self.spend_usd_only = False
         self.stream: asyncio.Queue[bytes | None] = asyncio.Queue()
         self.stream_opens = 0
         self.item_reads = 0
@@ -240,6 +242,8 @@ class Platform:
         )
 
     def _orgs(self, request: Any) -> Response:
+        if self.orgs_status != 200:
+            return Response(self.orgs_status, json={"title": "Forbidden", "detail": "no"})
         return Response(
             200, json=[self.contract("Org", {"slug": "acme", "name": "Acme", "currency": self.currency})]
         )
@@ -254,7 +258,9 @@ class Platform:
         self.cost_params = dict(request.url.params)
         if self.spend is None:
             return Response(403, json={"title": "Forbidden", "detail": "no"})
-        total = {"cost_usd": self.spend, "cost_eur": round(self.spend * 0.9, 2)}
+        total: dict[str, float] = {"cost_usd": self.spend}
+        if not self.spend_usd_only:
+            total["cost_eur"] = round(self.spend * 0.9, 2)
         return Response(
             200, json=self.contract("CostReport", {"group_by": "day", "rows": [], "total": total})
         )
@@ -786,10 +792,13 @@ def test_a_failure_reason_is_a_word() -> None:
     assert live_view.reason_long("something_new") == "something new"  # an unknown reason is still said
 
 
-def test_money_is_in_the_organisations_currency_and_unknown_is_a_dash() -> None:
-    assert live_view.money(3.0, 2.7, "EUR") == "€2.70"
-    assert live_view.money(3.0, 2.7, "USD") == "$3.00"
-    assert live_view.money(None, None, "EUR") == "—"
+async def test_an_unreadable_currency_shows_the_spend_in_its_own_symbol(platform: Platform) -> None:
+    platform.orgs_status = 403
+    platform.spend_usd_only = True
+    app = make_app()
+    async with app.run_test(size=(190, 40)) as pilot:
+        await ready(pilot)
+        assert "$2.50 spent today" in screen_text(app)  # dollars, said as dollars: never relabelled euros
 
 
 # ─────────────────────────────────── the entry point ───────────────────────────────────
