@@ -13,7 +13,7 @@ classifiers = [
 ]
 dependencies = [
   # The official ACP SDK: the JSON-RPC connection, the schema models. Pinned exactly.
-  "agent-client-protocol==0.12.1",
+  "agent-client-protocol==1.0.0",
   # The MCP client the tools go through.
   "mcp>=1.20",
   # The OpenAI-compatible client of `ctx.llm` (the gateway speaks that API).
