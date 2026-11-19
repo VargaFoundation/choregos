@@ -111,6 +111,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "revisions (/work-items/{id}/artifacts) and downloads one through .../{ref}/content",
     "/releases/{id}": "one release by id, for API callers; the console reads a project's releases "
     "(/projects/{id}/releases) and acts on one through /releases/{id}/approve and /abort",
+    "/push/vapid-public-key": "the phone application reads it before it subscribes (ADR 0194, S81-04); the "
+    "console registers no device, it lists and removes the ones the phone registered",
     "/orgs/{org}/skills/{slug}/versions": "publishes a version from its files as JSON, for API callers; the "
     "console publishes through the zip import (/skills/import) and the git import (/skills/import-git)",
 }

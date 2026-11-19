@@ -5196,6 +5196,72 @@ export type BrowserSession = {
   current: boolean;
 };
 
+/** What a device may ask to be told about (`kinds` of a subscription): `decision.awaiting` (an action waits for a decision the person may take, a human step), `run.ended` (a run the person started reached a final state), `agent.notification` (an item of `GET /orgs/{org}/agent-notifications`), `session.ended` (a hosted agent session the person opened ended). */
+export type PushKind = "decision.awaiting" | "run.ended" | "agent.notification" | "session.ended";
+
+export type PushVapidKey = {
+  /** The uncompressed P-256 point (65 bytes, leading 0x04), base64url without padding. */
+  public_key: string;
+};
+
+export type PushSubscriptionCreate = {
+  /** The push service's URL for this device. https, public host. */
+  endpoint: string;
+  keys: {
+    /** The device's ECDH public key (65 bytes), base64url (RFC 8291). */
+    p256dh: string;
+    /** The device's 16-byte authentication secret, base64url (RFC 8291). */
+    auth: string;
+  };
+  /** How the person recognises the device (`Pixel 8`). */
+  device_name: string;
+  /** The kinds this device is told about; null or absent: all of them. */
+  kinds?: Array<PushKind> | null;
+};
+
+/** A registered device. The endpoint itself is a capability and is never echoed: its host is, for the person to recognise the push service. */
+export type PushSubscription = {
+  id: string;
+  device_name: string;
+  /** The host of the push service (`ntfy.sh`, `fcm.googleapis.com`). */
+  endpoint_host: string;
+  kinds: Array<PushKind>;
+  created_at: string;
+  /** The last time the push service accepted a message for this device. */
+  last_delivered_at?: string | null;
+  /** The last time delivery failed for a reason other than the device being gone (a gone device is deleted). */
+  last_failure_at?: string | null;
+};
+
+export type PushTestResult = {
+  /** The push service accepted the message (2xx). */
+  delivered: boolean;
+  /** What the push service answered; null when it could not be reached. */
+  status_code?: number | null;
+  /** The push service said the device is gone (404 or 410): the subscription was deleted. */
+  removed: boolean;
+};
+
+export type PushRef = {
+  /** What the message is about; `none` for a test. */
+  type: "action" | "run" | "agent" | "agent_session" | "none";
+  id: string;
+};
+
+/** The JSON a device receives. It travels as an RFC 8291 `aes128gcm` message that only the device can read, and it is minimal on purpose: a title, one line, and references the application resolves with its own credential (nothing here is a secret or content of a work item). Not returned by any route; documented here for the applications that decode it. `kind` is one of `PushKind` or `push.test`. */
+export type PushPayload = {
+  kind: "decision.awaiting" | "run.ended" | "agent.notification" | "session.ended" | "push.test";
+  title: string;
+  /** One line. */
+  body: string;
+  /** The organisation's slug; empty for a test. */
+  org: string;
+  ref: PushRef;
+  /** A path of the console (`/orgs/acme/...`), relative to the instance's origin: the application opens it on the server it is signed in to. */
+  url: string;
+  at: string;
+};
+
 export type DeviceAuthorizationRequest = {
   /** What asks: it becomes the session's `kind`. */
   client_kind: "cli" | "editor";
@@ -6531,6 +6597,7 @@ export interface Operations {
   createMachineAccount: { method: "POST"; path: "/projects/{id}/machine-accounts"; body: MachineAccountCreate; response: MachineAccount };
   createMachineToken: { method: "POST"; path: "/projects/{id}/machine-accounts/{slug}/tokens"; body: MachineTokenCreate; response: ApiTokenCreated };
   createMyDelegation: { method: "POST"; path: "/me/delegations"; body: DelegationCreate; response: Delegation };
+  createMyPushSubscription: { method: "POST"; path: "/me/push-subscriptions"; body: PushSubscriptionCreate; response: PushSubscription };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
@@ -6564,6 +6631,7 @@ export interface Operations {
   deleteMyAvatar: { method: "DELETE"; path: "/me/avatar"; body: never; response: void };
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
   deleteMyLinkedAccount: { method: "DELETE"; path: "/me/linked-accounts/{account_id}"; body: never; response: void };
+  deleteMyPushSubscription: { method: "DELETE"; path: "/me/push-subscriptions/{id}"; body: never; response: void };
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOrgGroup: { method: "DELETE"; path: "/orgs/{org}/groups/{slug}"; body: never; response: void };
@@ -6696,6 +6764,7 @@ export interface Operations {
   }>;
 } };
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
+  getPushVapidPublicKey: { method: "GET"; path: "/push/vapid-public-key"; body: never; response: PushVapidKey };
   getRelayOutboundProxy: { method: "GET"; path: "/internal/orgs/{org}/outbound-proxy/{kind}"; body: never; response: RelayOutboundProxy };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
   getRelinkPlan: { method: "GET"; path: "/platform/identity/relink"; body: never; response: RelinkPlan };
@@ -6856,6 +6925,7 @@ export interface Operations {
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMyLinkedAccounts: { method: "GET"; path: "/me/linked-accounts"; body: never; response: MyLinkedAccounts };
   listMyPending: { method: "GET"; path: "/me/pending"; body: never; response: PendingList };
+  listMyPushSubscriptions: { method: "GET"; path: "/me/push-subscriptions"; body: never; response: Array<PushSubscription> };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -7047,6 +7117,7 @@ export interface Operations {
 }; response: WebhookAck };
   testConnector: { method: "POST"; path: "/projects/{id}/connectors/{kind}/test"; body: never; response: ConnectorTestResult };
   testMcpGateway: { method: "POST"; path: "/orgs/{org}/mcp-gateway/test"; body: McpGatewayTestRequest; response: McpGatewayTest };
+  testMyPushSubscription: { method: "POST"; path: "/me/push-subscriptions/{id}/test"; body: never; response: PushTestResult };
   testOutboundProxy: { method: "POST"; path: "/orgs/{org}/outbound-proxy/test"; body: never; response: OutboundProxyTest };
   theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };

@@ -114,6 +114,8 @@ import type {
   BrowserSession,
   DeviceRequest,
   EndedSessions,
+  DevicePushSubscription,
+  PushTestResult,
   Artifact,
   ArtifactRef,
   AdminSection,
@@ -894,6 +896,12 @@ export const api = {
       body: JSON.stringify({ decision }),
     }),
   endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  /** My devices that are told by Web Push (ADR 0194): listed here, registered by the phone application. */
+  myPushSubscriptions: () => request<DevicePushSubscription[]>("/me/push-subscriptions"),
+  deletePushSubscription: (id: string) =>
+    request<void>(`/me/push-subscriptions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  testPushSubscription: (id: string) =>
+    request<PushTestResult>(`/me/push-subscriptions/${encodeURIComponent(id)}/test`, { method: "POST" }),
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),
   connectorTypes: () => request<ConnectorType[]>("/connectors/types"),
