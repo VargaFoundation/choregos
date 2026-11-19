@@ -136,8 +136,8 @@ async def test_publishing_a_workflow_that_names_a_catalogue_agent_installs_it(
     from tranibor_core.dsl import template_yaml
 
     yaml = template_yaml("default-simple").replace(
-        'dev: { type: agent, role: implement, model: "profile:by_size" }',
-        'dev: { type: agent, role: implement, model: "profile:by_size", agent: developer }',
+        'dev: { type: agent, role: implement, model: "profile:by_size", needs: [scm] }',
+        'dev: { type: agent, role: implement, model: "profile:by_size", needs: [scm], agent: developer }',
     )
     assert "agent: developer" in yaml
     published = await client.put(
