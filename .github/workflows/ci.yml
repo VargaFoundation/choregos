@@ -488,7 +488,11 @@ jobs:
           # Off main nothing is pushed, so the image is loaded into the runner's Docker (a single
           # platform, linux/amd64) for the Trivy step below to scan under the same tag (S40-16e).
           load: ${{ github.ref != 'refs/heads/main' }}
-          tags: ghcr.io/graalsystems/choregos-${{ matrix.image }}:${{ github.sha }}
+          # Both names of ADR 0176 R3, one build and one digest: `tranibor-*` from now on, and `choregos-*`
+          # beside it for the deprecation window (the release does the same with its tags).
+          tags: |
+            ghcr.io/graalsystems/tranibor-${{ matrix.image }}:${{ github.sha }}
+            ghcr.io/graalsystems/choregos-${{ matrix.image }}:${{ github.sha }}
           build-args: REVISION=${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
           # SBOM and SLSA provenance attached to the image (BuildKit attestations). SECURITY.md
@@ -504,15 +508,18 @@ jobs:
           # Its one exception: a third-party SDK's docstrings inside SkillSpector (ADR 0095).
           TRIVY_SECRET_CONFIG: trivy-secret.yaml
         with:
-          image-ref: ghcr.io/graalsystems/choregos-${{ matrix.image }}:${{ github.sha }}
+          image-ref: ghcr.io/graalsystems/tranibor-${{ matrix.image }}:${{ github.sha }}
           exit-code: "1"
           severity: CRITICAL
           ignore-unfixed: true
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         if: github.ref == 'refs/heads/main'
-      - name: keyless signature
+      - name: keyless signature, under both names
         if: github.ref == 'refs/heads/main'
-        run: cosign sign --yes ghcr.io/graalsystems/choregos-${{ matrix.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          for name in tranibor choregos; do
+            cosign sign --yes "ghcr.io/graalsystems/${name}-${{ matrix.image }}@${{ steps.build.outputs.digest }}"
+          done
 
   local-install:
     # `docker compose up` on a clean runner, then one work item through it in fakes mode (S28-04):

@@ -39,9 +39,10 @@ Three shapes were weighed (see the rejected alternatives); the project lead chos
    the sync with that reason. Like a Confluence service account, everything that identity can read
    under the prefix becomes readable by the base's readers; the procedure says so.
 3. **A resource is its URI; the listing is complete.** `resources/list` is followed to its last page
-   (at most 50, an error beyond); whatever the server no longer lists leaves the base at the next
-   sync; a listing that fails fails the sync and deletes nothing. A resource gone between the listing
-   and its read (`-32002`) is skipped and said; the sync goes on.
+   (at most 1000, an error beyond, and a cursor the server gives twice is a loop, an error at once:
+   a catalogue pages far beyond a tool list's 50); whatever the server no longer lists leaves the
+   base at the next sync; a listing that fails fails the sync and deletes nothing. A resource gone
+   between the listing and its read (`-32002`) is skipped and said; the sync goes on.
 4. **Version: the server's word when it gives one, the content's digest otherwise.** A resource that
    declares `annotations.lastModified` is read again only when it changes. One that does not is read
    at every sync, and the platform's digest decides whether it changed: correct, and as costly as the
@@ -50,7 +51,10 @@ Three shapes were weighed (see the rejected alternatives); the project lead chos
    safe for a file name, with the extension its `mimeType` calls for, so that it is converted as what
    it is; an unknown `text/*` is text, any other unknown type is skipped as "format not converted".
    Two resources listed under one name both carry a short digest of their URI. A `text` content is
-   UTF-8, a `blob` base64. A resource with an `http(s)` URI links to it; another links nowhere.
+   UTF-8, a `blob` base64. A resource that answers several contents (a collection, each part under
+   its own URI, as the protocol's reference server does) is one document: its JSON parts as one JSON
+   array, its text parts one after the other; binary parts are not joined, the resource is skipped
+   and said. A resource with an `http(s)` URI links to it; another links nowhere.
 6. **The Open Knowledge Format header travels as for any source (ADR 0174).** A resource whose text
    opens with an OKF header is read with it: `title`, `sources`, `status: deprecated` (neither served
    nor searched). Its `verified` stays a claim (`source_verified`), whoever the server is.
@@ -74,8 +78,9 @@ Three shapes were weighed (see the rejected alternatives); the project lead chos
 - The base is a copy, refreshed on a schedule: what agents read is as current as the last sync, and
   is served and indexed like any document. Live figures are not knowledge; they stay a tool call
   through the broker.
-- A server with thousands of unversioned resources is read in full at every sync. The base's limits
-  bound it; the schedule is the owner's lever.
+- A server with thousands of unversioned resources is listed in full at every sync, but read only
+  up to the base's limit of documents (`CHOREGOS_KNOWLEDGE_MAX_DOCUMENTS`, 500 by default): a
+  resource beyond it is skipped without being read. The schedule is the owner's other lever.
 
 ## Rejected alternatives
 
