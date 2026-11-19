@@ -34,6 +34,10 @@ from .specs import (
 )
 
 
+def _truthy(value: object) -> bool:
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
@@ -704,6 +708,8 @@ def _register_memory_and_gateways() -> None:
             token=cfg.get("token", _env("CHOREGOS_MEMORY_TOKEN", "")),
             tenant=cfg.get("tenant"),
             read_timeout_ms=int(cfg.get("read_timeout_ms", 300)),
+            # Off until the deployment runs an Ecphoria that confines the by-id tools to a tenant.
+            scoped_by_id=_truthy(cfg.get("scoped_by_id", _env("CHOREGOS_MEMORY_SCOPED_BY_ID", ""))),
         )
     )
     # `pgvector`: a deprecated alias of `lexical`: the name promised vectors, the code does a

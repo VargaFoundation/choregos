@@ -14,7 +14,13 @@ from typing import Any
 import httpx
 import pytest
 from tranibor_adapters.fakes.mcp import FakeMcpServer
-from tranibor_adapters.memory.ecphoria import MCP_READ_TOOLS, MCP_WRITE_TOOLS, EcphoriaMemory
+from tranibor_adapters.memory.ecphoria import (
+    MCP_BY_ID_READ_TOOLS,
+    MCP_BY_ID_WRITE_TOOLS,
+    MCP_READ_TOOLS,
+    MCP_WRITE_TOOLS,
+    EcphoriaMemory,
+)
 from tranibor_contracts import McpServerRef, StageInput
 from tranibor_core.hosted import loopback_url
 from tranibor_runner.guardrails import GuardRails
@@ -33,8 +39,8 @@ EVERY_TOOL = [
         "query",
         "ingest",
         "set_state",
-        "delete_memory",
-        "update_memory",
+        *MCP_BY_ID_READ_TOOLS,
+        *MCP_BY_ID_WRITE_TOOLS,
     )
 ]
 
@@ -44,9 +50,16 @@ def _memory(writes: bool) -> McpServerRef:
     return adapter.mcp_server("billing-api", writes=writes)
 
 
-def _step(stage_input: StageInput, writes: bool = True) -> StageInput:
+def _scoped_memory(writes: bool) -> McpServerRef:
+    """The memory of a deployment whose Ecphoria confines the by-id tools to the call's tenant."""
+    adapter = EcphoriaMemory("http://ecphoria:8432", token=KEY, scoped_by_id=True)
+    return adapter.mcp_server("billing-api", writes=writes)
+
+
+def _step(stage_input: StageInput, writes: bool = True, *, scoped_by_id: bool = False) -> StageInput:
+    ref = _scoped_memory(writes) if scoped_by_id else _memory(writes)
     return stage_input.model_copy(
-        update={"tools": stage_input.tools.model_copy(update={"mcp": {"memory": _memory(writes)}})}
+        update={"tools": stage_input.tools.model_copy(update={"mcp": {"memory": ref}})}
     )
 
 
@@ -224,3 +237,96 @@ async def test_a_server_the_runner_does_not_scope_is_relayed_as_before(stage_inp
     assert agent.server.calls == [("query", {"sql": "select 1", "tenant_id": "anything"})]
     assert json.dumps(open_ref.model_dump())  # no scope: the contract's defaults
     assert not open_ref.scoped
+
+
+# ───────────────────── the by-id tools, once Ecphoria confines them to a tenant ─────────────────────
+
+
+def test_by_id_tools_stay_hidden_unless_the_deployment_says_ecphoria_scopes_them() -> None:
+    """Ecphoria 0.2.5 acts on any tenant's id: against it the three tools must not be offered."""
+    for writes in (False, True):
+        tools = _memory(writes).allowed_tools or []
+        assert not {*MCP_BY_ID_READ_TOOLS, *MCP_BY_ID_WRITE_TOOLS} & set(tools)
+        assert "X-Ecphoria-Tenant" not in _memory(writes).env
+
+
+def test_the_scoped_adapter_offers_history_to_a_reader_and_update_delete_to_a_writer_only() -> None:
+    reading, writing = _scoped_memory(False), _scoped_memory(True)
+
+    assert reading.allowed_tools == [*MCP_READ_TOOLS, "memory_history"]
+    assert writing.allowed_tools == [
+        *MCP_READ_TOOLS,
+        "memory_history",
+        *MCP_WRITE_TOOLS,
+        "update_memory",
+        "delete_memory",
+    ]
+    for tool in ("update_memory", "delete_memory"):
+        assert tool not in (reading.allowed_tools or [])
+    # still out: the tools that take the tenant from the (tenantless) credential, and the ids not asked for
+    for tool in ("query", "ingest", "set_state", "link_memory", "memory_feedback", "memory_provenance"):
+        assert tool not in (writing.allowed_tools or [])
+    assert writing.scope_arguments == {"tenant_id": "billing-api"}
+    assert writing.env == {"Authorization": f"Bearer {KEY}", "X-Ecphoria-Tenant": "billing-api"}
+
+
+def test_the_scoped_server_still_hands_the_agent_neither_key_nor_tenant(stage_input: StageInput) -> None:
+    view = agent_view(_step(stage_input, scoped_by_id=True), PORTS)
+
+    assert view.tools.mcp["memory"] == McpServerRef(url=f"{loopback_url(PORTS[1])}/mcp/memory")
+    assert KEY not in view.model_dump_json() and "billing-api" not in view.model_dump_json()
+
+
+@pytest.mark.parametrize("verbatim", [True, False])
+async def test_a_by_id_call_carries_the_run_tenant_in_the_argument_and_in_the_header(
+    stage_input: StageInput, verbatim: bool
+) -> None:
+    agent = Agent(_step(stage_input, scoped_by_id=True), _server())
+    agent.proxy.verbatim = verbatim
+
+    answer = await agent.call("delete_memory", id="mem-1", tenant_id="another-project")
+
+    assert answer.status_code == 200
+    assert agent.server.calls == [("delete_memory", {"id": "mem-1", "tenant_id": "billing-api"})]
+    [(_, headers, _)] = [r for r in agent.server.received if r[2].get("method") == "tools/call"]
+    assert headers["x-ecphoria-tenant"] == "billing-api"
+    assert headers["authorization"] == f"Bearer {KEY}"
+
+
+@pytest.mark.parametrize("tool", ["update_memory", "delete_memory"])
+async def test_a_read_binding_cannot_update_or_delete_even_when_scoped(
+    stage_input: StageInput, tool: str
+) -> None:
+    agent = Agent(_step(stage_input, writes=False, scoped_by_id=True), _server())
+
+    refused = await agent.call(tool, id="mem-1", content="x")
+    history = await agent.call("memory_history", id="mem-1")
+
+    assert refused.json()["result"]["isError"] is True
+    assert history.status_code == 200
+    assert [name for name, _ in agent.server.calls] == ["memory_history"]
+
+
+async def test_the_scoped_writer_lists_the_by_id_tools(stage_input: StageInput) -> None:
+    agent = Agent(_step(stage_input, scoped_by_id=True), _server())
+
+    answer = await agent.post({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+
+    names = [t["name"] for t in answer.json()["result"]["tools"]]
+    assert {"memory_history", "update_memory", "delete_memory"} <= set(names)
+    assert "query" not in names
+
+
+def test_the_deployment_switch_reads_truthy_values() -> None:
+    from tranibor_adapters.builtins import _truthy
+
+    assert [_truthy(v) for v in ("1", "true", "On", True, "", "0", "false", None)] == [
+        True,
+        True,
+        True,
+        True,
+        False,
+        False,
+        False,
+        False,
+    ]

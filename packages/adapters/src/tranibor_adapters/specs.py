@@ -510,7 +510,14 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("memory", "ecphoria"): ConnectorTypeSpec(
         "Ecphoria (memory and knowledge base)",
         ("memory",),
-        _object_schema({"base_url": _TEXT, "tenant": _TEXT, "read_timeout_ms": _INTEGER}),
+        _object_schema(
+            {
+                "base_url": _TEXT,
+                "tenant": _TEXT,
+                "read_timeout_ms": _INTEGER,
+                "scoped_by_id": {"type": "boolean", "default": False},
+            }
+        ),
         ("token",),
     ),
     ("memory", "lexical"): ConnectorTypeSpec("lexical (fallback, no service)", ("memory",)),

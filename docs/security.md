@@ -310,8 +310,14 @@ runner's loopback, never directly ([ADR 0146](adr/0146-the-runner-and-the-agent-
 Ecphoria's key is held by the runner; the agent sees a loopback address and no header. The runner overwrites `tenant_id`
 with the run's project in every call and relays only `search_memory`, `get_memories`, `list_contradictions`, plus
 `add_memory` and `remember` when the binding is `write`. Everything else Ecphoria exposes is refused, because with a
-tenantless key it would cross tenants (`query`, `ingest`, `set_state`, the id-based tools): that is an Ecphoria limit,
-named here, not a rule of ours. A JSON-RPC batch is refused. Without container isolation the server is not given to the
+tenantless key it would cross tenants (`query`, `ingest`, `set_state`, the graph tools): that is an Ecphoria limit,
+named here, not a rule of ours. The id-based tools were refused for the same reason on Ecphoria 0.2.5 (a memory id is a
+global handle there). An Ecphoria that confines them to one tenant (the MCP and REST read `X-Ecphoria-Tenant` as a hard scope;
+another tenant's id answers "memory not found", never "forbidden") lets a deployment set `scoped_by_id`
+(`CHOREGOS_MEMORY_SCOPED_BY_ID=1`): the agent is then also offered `memory_history`, and, with a `write` binding,
+`update_memory` and `delete_memory`, and the runner sends the run's tenant in that header beside the forced `tenant_id`.
+The switch is off by default, because against 0.2.5 these three tools would reach every project's memories.
+A JSON-RPC batch is refused. Without container isolation the server is not given to the
 agent at all. The memory a run is *given* (the context pack and `choregos_search_memory`) is unchanged.
 
 ## A customer's own identity provider

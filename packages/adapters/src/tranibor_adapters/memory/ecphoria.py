@@ -21,11 +21,20 @@ from ..errors import UpstreamError
 #: What an agent may do on Ecphoria's MCP server for ITS project's memory. Only the tools whose tenant is
 #: the one the caller NAMES (`tenant_id`, which the runner then forces to the run's): the others take the
 #: tenant from the credential, and the deployment's key carries none (`<key>@:admin`), so `query`, `ingest`,
-#: `set_state`, `embed`, the sessions and the graph tools would reach every tenant, and `update_memory`,
-#: `delete_memory`, `memory_history`, `link_memory`, `memory_feedback` and `memory_provenance` take a bare
-#: id that is not checked against any tenant. Measured on ecphoria 0.2.5 (`mcp/transport.rs`).
+#: `set_state`, `embed`, the sessions and the graph tools would reach every tenant. Measured on ecphoria
+#: 0.2.5 (`mcp/transport.rs`): `update_memory`, `delete_memory`, `memory_history`, `link_memory`,
+#: `memory_feedback` and `memory_provenance` took a bare id that was not checked against any tenant.
 MCP_READ_TOOLS = ("search_memory", "get_memories", "list_contradictions")
 MCP_WRITE_TOOLS = ("add_memory", "remember")
+#: What an agent may ALSO do once the memory server confines every by-id tool to one tenant (Ecphoria with
+#: the by-id tenant scope: the call's tenant, fixed by the runner, decides, and another tenant's id answers
+#: "memory not found"). `memory_history` is a read, `update_memory` and `delete_memory` are writes. Offered
+#: only when the deployment says its Ecphoria is that one (`scoped_by_id`): against 0.2.5 they would reach
+#: every project's memories. `link_memory`, `memory_feedback`, `memory_provenance` stay out (not asked for).
+MCP_BY_ID_READ_TOOLS = ("memory_history",)
+MCP_BY_ID_WRITE_TOOLS = ("update_memory", "delete_memory")
+#: The header that fixes the tenant of every MCP call at the transport, whatever the arguments say.
+TENANT_HEADER = "X-Ecphoria-Tenant"
 
 
 class EcphoriaMemory:
@@ -40,7 +49,11 @@ class EcphoriaMemory:
         read_timeout_ms: int = 300,
         write_timeout_s: float = 2.0,
         client: httpx.AsyncClient | None = None,
+        scoped_by_id: bool = False,
     ) -> None:
+        #: The Ecphoria behind `base_url` confines the by-id memory tools (`memory_history`, `update_memory`,
+        #: `delete_memory`) to the call's tenant. Set by the deployment once that server is the one running.
+        self.scoped_by_id = scoped_by_id
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.tenant = tenant
@@ -82,12 +95,20 @@ class EcphoriaMemory:
         `/mcp` with the deployment's credential (held by the runner, never by the agent), the tenant this
         adapter writes that namespace under forced on every call, and only the memory tools of the
         binding's mode. The agent reads and writes what the orchestrator reads and writes, nothing else."""
-        tenant = self._headers(namespace)["X-Ecphoria-Tenant"]
+        tenant = self._headers(namespace)[TENANT_HEADER]
+        env = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        reads, writes_ = list(MCP_READ_TOOLS), list(MCP_WRITE_TOOLS)
+        if self.scoped_by_id:
+            # The tenant travels twice: as the forced `tenant_id` argument and as a header Ecphoria honours
+            # for every tool, so the scope holds even for a call whose arguments the model shaped.
+            env[TENANT_HEADER] = tenant
+            reads += MCP_BY_ID_READ_TOOLS
+            writes_ += MCP_BY_ID_WRITE_TOOLS
         return McpServerRef(
             url=f"{self.base_url}/mcp",
-            env={"Authorization": f"Bearer {self.token}"} if self.token else {},
+            env=env,
             scope_arguments={"tenant_id": tenant},
-            allowed_tools=[*MCP_READ_TOOLS, *(MCP_WRITE_TOOLS if writes else ())],
+            allowed_tools=[*reads, *(writes_ if writes else ())],
         )
 
     def _circuit_open(self) -> bool:
