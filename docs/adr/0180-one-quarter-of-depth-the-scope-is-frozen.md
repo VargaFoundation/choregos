@@ -61,7 +61,7 @@ verdict.
 | :-- | :-- | :-- |
 | S65-04, the runner and the agent in separate containers (ADR 0146) | **finish** | Continues as roadmap workstream S1: the separate container becomes the default, proved under gVisor. |
 | S64, activity and tokens (ADRs 0141, 0142) | **finish** | Its partial rows close; the assistant halves (S64-09) are frozen with S63. |
-| S67, the terminal (ADR 0154) | **finish** | Its partial rows and S67-03 close; nothing else is opened, except the workspace redesign and the live view of [ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md) (S67-18 to S67-28, amendment of 2026-11-18). |
+| S67, the terminal (ADR 0154) | **finish** | Its partial rows and S67-03 close; nothing else is opened, except the workspace redesign and the live view of [ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md) (S67-18 to S67-29, amendment of 2026-11-18). |
 | S58, several repositories (ADR 0124) | **finish** | All its stories are ✅ on 2026-11-17: nothing left to do. |
 | S62, the CLI and the A2A door | **finish** | S62-07 (the weekly binary build, green on 2026-11-17) is re-read and closed. |
 | S70, sign-in security in the core (ADR 0170) | **finish** | Re-authentication and revocation (S70-23) close; the SAML console screen (S70-24), the GitHub App from a manifest beyond github.com (S70-21) and the "talk to your data" plugin (S70-22, an assistant) are frozen. |
@@ -144,5 +144,5 @@ The mechanism is the smallest that does not stop the project's single maintainer
 
 The project lead, who decided this record, asked on 2026-11-18 for a cleaner and more complete terminal
 workspace and for a live view of a workflow processing its items, on the web and in the terminal
-([ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md)). Those stories (S67-18 to S67-28) are
+([ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md)). Those stories (S67-18 to S67-29) are
 added to S67, a stream this record lets finish; no stream is opened, and the row of S67 above names them.

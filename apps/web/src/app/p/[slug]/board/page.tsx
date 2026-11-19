@@ -5,17 +5,23 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
+import { LiveIndicator, useActivityFeed } from "@/components/live/live-kit";
+import { LiveBoardSection } from "@/components/workflows/live-board-section";
+import { useSession } from "@/lib/session";
+import { type Currency, monthStart, usdToCurrency } from "@/lib/spend";
 import { Button, Drawer, Empty, ErrorNote } from "@/components/ui";
 import { WorkflowChip } from "@/components/workflow-chip";
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 import { boardWorkflows, columnsFromGraph, itemsOf, visibleColumns } from "@/components/workflows/board";
-import { BoardSection, type BoardSectionModel } from "@/components/workflows/board-section";
+import { type BoardSectionModel } from "@/components/workflows/board-section";
 import { NewWorkItemForm } from "@/components/workflows/new-work-item";
 import { useShowEmptyColumns } from "@/components/workflows/show-empty-columns";
-import { api, WORK_ITEMS_CAP } from "@/lib/api";
+import { api, IS_MOCK, WORK_ITEMS_CAP } from "@/lib/api";
 import { trackerOf } from "@/lib/tracker";
 import type { WorkItemDto } from "@/lib/types";
+
+const NO_ITEMS: WorkItemDto[] = [];
 
 /**
  * The project's board (ADR 0031, S16-10): one section per workflow, the default first, each with the
@@ -51,6 +57,19 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
       };
     }),
   });
+  // The board is live (ADR 0187 §4): one activity stream for the project, read by each workflow's section.
+  const { org, orgs } = useSession();
+  const currency: Currency = orgs.find((o) => o.slug === org)?.currency === "USD" ? "USD" : "EUR";
+  const feed = useActivityFeed({ org, slug, demo: IS_MOCK });
+  const today = new Date().toISOString().slice(0, 10);
+  // What the ledger says for this month: today's spend, and its rate to the organisation's currency.
+  const spendReport = useQuery({
+    queryKey: ["live-spend", slug, today],
+    queryFn: () => api.costs(slug, "day", { since: monthStart(new Date()) }),
+    refetchInterval: 60_000,
+  });
+  const spentToday = spendReport.data?.rows.find((r) => r.key === today)?.cost_usd ?? (spendReport.data ? 0 : null);
+  const usdTo = spendReport.data ? usdToCurrency(spendReport.data.total) : null;
   const [showEmpty, setShowEmpty] = useShowEmptyColumns();
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   // A work item is filed from here whatever the tracker: with an external one the platform creates
@@ -102,7 +121,8 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
             {showEmpty ? "Hide empty columns" : `Show empty columns (${hiddenColumns})`}
           </Button>
         )}
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-3">
+          <LiveIndicator connection={feed.connection} wall={false} />
           <Button tone="accent" size="sm" onClick={() => setNouvelle(true)}>
             New work item
           </Button>
@@ -168,8 +188,25 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
           <Link href={pathname}>See all workflows</Link>
         </Empty>
       )}
-      {sections.map((section) => (
-        <BoardSection key={section.name} slug={slug} section={section} alone={sections.length === 1} onDecided={refresh} />
+      {sections.map((section, index) => (
+        <LiveBoardSection
+          // A new version of the workflow starts a new flow.
+          key={`${section.name}|${section.version ?? ""}`}
+          slug={slug}
+          model={section}
+          graph={validations[index]?.data?.graph}
+          items={items.data?.items ?? NO_ITEMS}
+          isDefault={shown[index]?.name === defaultWorkflow}
+          showEmpty={showEmpty}
+          feed={feed}
+          // The demo plays its story once, on the default workflow.
+          demo={IS_MOCK && shown[index]?.name === defaultWorkflow}
+          alone={sections.length === 1}
+          onDecided={refresh}
+          currency={currency}
+          usdTo={usdTo}
+          spentTodayUsd={spentToday}
+        />
       ))}
     </div>
   );

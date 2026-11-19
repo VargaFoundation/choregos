@@ -13,6 +13,12 @@ from tranibor_core.models import estimate_tokens
 class FakeMemory:
     """Test memory: enough to test the context pack, the supersession and the pending queue."""
 
+    def mcp_server(self, namespace: str, *, writes: bool) -> Any:
+        """Serves an MCP server as the Ecphoria adapter does (scope and tools of the binding)."""
+        from ..memory.ecphoria import EcphoriaMemory
+
+        return EcphoriaMemory("http://fake-memory:8432").mcp_server(namespace, writes=writes)
+
     def __init__(self) -> None:
         self.facts: dict[str, list[Memory]] = {}
         self.pending: dict[str, list[Memory]] = {}
@@ -138,14 +144,26 @@ class FakeMemory:
         return False
 
     async def ingest_events(self, project: str, events: list[dict[str, Any]]) -> None:
-        """Upsert idempotent par `external_id`."""
+        """Upsert like Ecphoria's batch write: a memory is keyed on its SUBJECT (`external_id` is only
+        metadata there), identical content is a confirmation, other content supersedes. A fake keyed on
+        `external_id` alone hid a loop that superseded its own lessons on every pass."""
         for event in events:
             external_id = event.get("external_id")
+            subject = str(event.get("subject", "")).strip().lower()
             existing = next(
-                (m for m in self.facts.get(project, []) if m.provenance.get("external_id") == external_id),
+                (
+                    m
+                    for m in self.facts.get(project, [])
+                    if m.status != "superseded"
+                    and (
+                        m.subject.strip().lower() == subject
+                        if subject
+                        else m.provenance.get("external_id") == external_id
+                    )
+                ),
                 None,
             )
-            if existing and external_id:
+            if existing:
                 if existing.content != event.get("content", ""):
                     existing.status = "superseded"
                     existing.valid_to = utcnow()

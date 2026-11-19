@@ -9,6 +9,13 @@ choregos_api.rbac`, `from choregos_core.dsl import validate` and `isinstance` ch
 pydantic models all see one class, not two. A process that imports an old name gets one
 `DeprecationWarning` for that package, naming the new import.
 
+`python -m choregos_api.migrate` runs `tranibor_api.migrate` as `__main__`: the loader gives runpy the
+real module's code (#1899).
+
+The aliases are for the runtime only. A shim ships no `py.typed` and no stubs, so a type checker does
+not see through it (`mypy` reports `import-untyped` for every `choregos_*` import): code that is type
+checked imports `tranibor_*` (ADR 0176, amendment of #1899).
+
 This module lives in the lowest package (every other one depends on `tranibor-contracts`) so that
 each shim stays three lines long and carries no logic of its own.
 """
@@ -18,6 +25,7 @@ from __future__ import annotations
 import importlib
 import importlib.abc
 import importlib.machinery
+import importlib.util
 import sys
 import types
 import warnings
@@ -26,17 +34,49 @@ from collections.abc import Sequence
 __all__ = ["install_alias"]
 
 
-class _AliasLoader(importlib.abc.Loader):
-    """Hands the import system the module that already exists, and executes nothing."""
+class _AliasLoader(importlib.abc.InspectLoader):
+    """Hands the import system the module `<new>.<rest>`, imported under its own name.
 
-    def __init__(self, module: types.ModuleType) -> None:
-        self._module = module
+    `import <old>.<rest>` gets the module object of `<new>.<rest>` (`create_module`), and nothing is
+    executed twice. `python -m <old>.<rest>` (runpy) does not import the module: it asks the loader
+    for the code and runs it as `__main__`, so `get_code`, `get_source`, `is_package` and
+    `get_filename` answer for the real module, through the real module's own loader (#1899).
+    """
+
+    def __init__(self, real: importlib.machinery.ModuleSpec) -> None:
+        self._real = real
+        self._real_spec: importlib.machinery.ModuleSpec | None = None
 
     def create_module(self, spec: importlib.machinery.ModuleSpec) -> types.ModuleType:
-        return self._module
+        module = importlib.import_module(self._real.name)
+        self._real_spec = module.__spec__
+        return module
 
     def exec_module(self, module: types.ModuleType) -> None:
-        return None
+        # `module_from_spec` stamped the alias spec on the real module: it keeps its own, so that
+        # `tranibor_x.y.__spec__.name` stays `tranibor_x.y` after someone imported `choregos_x.y`.
+        if self._real_spec is not None:
+            module.__spec__ = self._real_spec
+
+    def _delegate(self) -> importlib.abc.InspectLoader:
+        loader = self._real.loader
+        if not isinstance(loader, importlib.abc.InspectLoader):
+            raise ImportError(f"{self._real.name} has no loader that gives its code", name=self._real.name)
+        return loader
+
+    def get_code(self, fullname: str) -> types.CodeType | None:
+        return self._delegate().get_code(self._real.name)
+
+    def get_source(self, fullname: str) -> str | None:
+        return self._delegate().get_source(self._real.name)
+
+    def is_package(self, fullname: str) -> bool:
+        return self._real.submodule_search_locations is not None
+
+    def get_filename(self, fullname: str) -> str:
+        if self._real.origin is None:
+            raise ImportError(f"{self._real.name} has no file", name=self._real.name)
+        return self._real.origin
 
 
 class _AliasFinder(importlib.abc.MetaPathFinder):
@@ -55,18 +95,24 @@ class _AliasFinder(importlib.abc.MetaPathFinder):
             if not fullname.startswith(old + "."):
                 continue
             real = new + fullname[len(old) :]
+            # Found, not imported: `python -m` runs the code as `__main__` without importing the
+            # module first, and an import here would execute it twice.
             try:
-                module = importlib.import_module(real)
+                found = importlib.util.find_spec(real)
             except ModuleNotFoundError as exc:
                 if exc.name == real or (exc.name and real.startswith(exc.name + ".")):
-                    return None  # there is no such submodule under the new name either
+                    return None  # a parent of it is a module, not a package
                 raise
-            return importlib.machinery.ModuleSpec(
+            if found is None:
+                return None  # there is no such submodule under the new name either
+            spec = importlib.machinery.ModuleSpec(
                 fullname,
-                _AliasLoader(module),
-                origin=getattr(module, "__file__", None),
-                is_package=hasattr(module, "__path__"),
+                _AliasLoader(found),
+                origin=found.origin,
+                is_package=found.submodule_search_locations is not None,
             )
+            spec.has_location = found.has_location
+            return spec
         return None
 
 

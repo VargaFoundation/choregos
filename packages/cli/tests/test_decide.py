@@ -456,6 +456,7 @@ def _pilot_env(platform: Platform, token: str = "chs_session") -> Any:
         )
     )
     router.get(f"{V1}/me/inbox").mock(return_value=Response(200, json=contract("InboxList", {"items": []})))
+    router.get(f"{V1}/orgs").mock(return_value=Response(403, json={"detail": "no"}))
     router.get(f"{V1}/orgs/acme/costs").mock(return_value=Response(403, json={"detail": "no"}))
     router.get(f"{V1}/orgs/acme/projects").mock(return_value=Response(403, json={"detail": "no"}))
     router.get(f"{V1}/orgs/acme/activity").mock(

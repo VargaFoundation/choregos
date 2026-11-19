@@ -1,10 +1,10 @@
 [project]
 name = "choregos-orchestrator"
-version = "0.27.13"
+version = "0.27.15"
 description = "Deprecated name of tranibor-orchestrator: an empty wheel that depends on it and ships the `choregos_orchestrator` import alias (ADR 0176, R2)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
-dependencies = ["tranibor-orchestrator==0.27.13", "tranibor-contracts==0.27.13"]
+dependencies = ["tranibor-orchestrator==0.27.15", "tranibor-contracts==0.27.15"]
 
 [build-system]
 requires = ["hatchling"]

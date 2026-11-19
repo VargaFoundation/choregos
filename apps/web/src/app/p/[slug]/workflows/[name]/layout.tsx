@@ -14,6 +14,7 @@ import { useWorkflow } from "@/components/workflows/use-workflow";
 // The graph first (S55-06): a workflow is read as a picture, the list of steps is one tab away.
 const VUES = [
   { suffix: "", label: "Graph" },
+  { suffix: "/flow", label: "Flow" },
   { suffix: "/steps", label: "Steps" },
   { suffix: "/yaml", label: "YAML" },
   { suffix: "/history", label: "History" },

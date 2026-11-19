@@ -27,7 +27,7 @@ from tranibor_core.outbound_proxy import pop_proxies, push_proxies
 from tranibor_core.redaction import redact
 
 from ..config import get_settings
-from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, OrgConnector
+from ..db.models import KnowledgeBase, KnowledgeDocument, KnowledgeSource, Organization, OrgConnector
 from ..db.org_aliases import organisation_by_slug_or_alias
 from ..db.session import session_scope
 from ..logging import get_logger
@@ -45,9 +45,9 @@ from .formats import FORMATS, DocumentRefusedError, accept
 
 logger = get_logger("choregos.knowledge.sync")
 
-KINDS = ("sharepoint", "confluence", "web", "git")
-#: kinds opened through an organisation `documents` connector, which holds the credentials
-CONNECTED_KINDS = frozenset({"sharepoint", "confluence"})
+KINDS = ("sharepoint", "confluence", "web", "git", "mcp")
+#: kinds opened through an organisation connector, which holds the credentials
+CONNECTED_KINDS = frozenset({"sharepoint", "confluence", "mcp"})
 #: kinds that read public material without a connector, and a private one with it
 OPTIONALLY_CONNECTED = frozenset({"git", "web"})
 #: the connector types a connected source kind may be served by
@@ -56,7 +56,12 @@ SOURCE_CONNECTOR_TYPES: dict[str, frozenset[str]] = {
     "confluence": frozenset({"confluence"}),
     "git": frozenset({"git"}),
     "web": frozenset({"web"}),
+    # The resources of an MCP server (ADR 0191), direct or through the organisation's gateway; an
+    # outpost's rendezvous carries tool calls only.
+    "mcp": frozenset({"mcp", "mcp-gateway"}),
 }
+#: the connector kind a source kind is served by; `documents` when not listed
+SOURCE_CONNECTOR_KIND: dict[str, str] = {"mcp": "mcp"}
 
 
 class SourceUnavailableError(RuntimeError):
@@ -69,6 +74,8 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     # A git or web source's connector is opened below, once the network policy has been read: a private
     # repository or a walled site obeys the ceiling at every sync like a public one, and keeps the
     # organisation's user agent.
+    if source.kind == "mcp":
+        return await _mcp_source(session, source)
     if source.kind in CONNECTED_KINDS:
         connector = await _source_connector(session, source)
         resolved = await resolved_configuration(
@@ -146,6 +153,60 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
     raise SourceUnavailableError(f"unknown source kind `{source.kind}`")
 
 
+async def _mcp_source(session: Any, source: KnowledgeSource) -> DocumentSource:
+    """The resources of the MCP connector a source names (ADR 0191), read under the connector's own
+    identity: a sync has no person to act for, so a connector that answers people only is refused.
+    The organisation's network ceiling is read at every sync, and its gateway is gone through when
+    the connector is a gateway's, exactly as for a run's call."""
+    from tranibor_adapters.documents.mcp import McpResourceSource, checked_config
+
+    from ..services.identity_exchange import SERVICE, supports_identity
+    from ..services.mcp_gateway import RouteRefusal, connector_client, route_of
+    from ..services.mcp_gateway_identity import CallIdentity
+
+    connector = await _source_connector(session, source)
+    if not supports_identity(connector, SERVICE):
+        raise SourceUnavailableError(
+            f"the connector `{connector.name}` answers people only (no `service` identity): "
+            "a sync acts for nobody, so it cannot read it"
+        )
+    try:
+        route = await route_of(session, connector)
+    except RouteRefusal as refused:
+        raise SourceUnavailableError(str(refused)) from refused
+    net = await ceiling_network(session, source.org_id)
+    if route.host is not None:
+        ok, reason = decide(route.host, net)
+        if not ok:
+            logger.warning(
+                "network.refused", org=source.org_id, source=source.id, host=route.host, reason=reason
+            )
+            raise SourceUnavailableError(
+                PlatformNetworkRefused(route.host, reason, f"knowledge source `{source.name}`").message()
+            )
+    organisation = await session.get(Organization, source.org_id)
+
+    async def identity() -> CallIdentity:
+        return CallIdentity(
+            org=organisation.slug if organisation is not None else source.org_id,
+            org_id=source.org_id,
+            subject=f"knowledge-source:{source.name}",
+            purpose="knowledge-sync",
+            connector=connector.name,
+            server=(connector.config or {}).get("server"),
+        )
+
+    try:
+        client = await connector_client(session, connector, identity)
+    except RouteRefusal as refused:
+        raise SourceUnavailableError(str(refused)) from refused
+    if not (hasattr(client, "list_resources") and hasattr(client, "read_resource")):
+        raise SourceUnavailableError(
+            f"the connector `{connector.name}` is not reached over MCP here: its resources cannot be listed"
+        )
+    return McpResourceSource(client, **checked_config(dict(source.config or {})))
+
+
 async def github_app_credential(session: Any, org_id: str, url: str) -> Callable[[], Awaitable[str]]:
     """A one-hour installation token of the deployment's GitHub App for the repository at `url`, scoped
     to it with `contents: read`, minted when the source is read (S51-06, ADR 0117).
@@ -192,22 +253,24 @@ async def github_app_credential(session: Any, org_id: str, url: str) -> Callable
 
 
 async def _source_connector(session: Any, source: KnowledgeSource) -> OrgConnector:
-    """The `documents` connector a source names, of a type that may serve its kind."""
+    """The connector a source names (`documents`, or `mcp` for an `mcp` source), of a type that may
+    serve its kind."""
+    kind = SOURCE_CONNECTOR_KIND.get(source.kind, "documents")
     connector = (
         await session.execute(
             select(OrgConnector).where(
                 OrgConnector.org_id == source.org_id,
                 OrgConnector.name == source.connector,
-                OrgConnector.kind == "documents",
+                OrgConnector.kind == kind,
             )
         )
     ).scalar_one_or_none()
     if connector is None:
-        raise SourceUnavailableError(f"the `documents` connector `{source.connector}` does not exist")
+        raise SourceUnavailableError(f"the `{kind}` connector `{source.connector}` does not exist")
     allowed = SOURCE_CONNECTOR_TYPES.get(source.kind, frozenset())
     if connector.type not in allowed:
         raise SourceUnavailableError(
-            f"the connector `{source.connector}` is a documents/{connector.type} connector: "
+            f"the connector `{source.connector}` is a {kind}/{connector.type} connector: "
             f"a {source.kind} source needs {' or '.join(sorted(allowed))}"
         )
     return connector  # type: ignore[no-any-return]

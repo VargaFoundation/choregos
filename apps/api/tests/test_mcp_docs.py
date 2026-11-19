@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient, Response
 
-from .conftest import login
+from .conftest import SUITE_ON_POSTGRES, login
 
 ADMIN = "admin@northwind.dev"
 BASE = "https://docs.example.test/choregos"
@@ -428,3 +428,153 @@ def test_an_ontology_cannot_take_the_names_of_the_doors_tools() -> None:
     caller = Caller(principal=Principal(user_id="u", email="u@x.test"), token=None, scopes=frozenset())
     ctx = Context(session=None, caller=caller, project=None, org=None, console="")  # type: ignore[arg-type]
     assert {tool.name for tool in core_tools(ctx)} <= RESERVED_TOOLS
+
+
+# ───────────────────────────── as resources (ADR 0191 §8) ─────────────────────────────
+
+
+async def _result(client: AsyncClient, token: str, method: str, **params: Any) -> dict[str, Any]:
+    response = await _rpc(client, token, method, params)
+    assert response.status_code == 200, response.text
+    assert "error" not in response.json(), response.json()
+    return dict(response.json()["result"])
+
+
+async def test_every_page_is_a_resource_listed_page_after_page(
+    client: AsyncClient, admin: str, docs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from tranibor_api.mcp import resources
+
+    monkeypatch.setattr(resources, "PAGE_SIZE", 2)
+    token = await _token(client, "mcp:read")
+    capabilities = (await _result(client, token, "initialize"))["capabilities"]
+    assert capabilities["resources"] == {"listChanged": False}
+    listed: list[dict[str, Any]] = []
+    cursor: str | None = None
+    for _ in range(5):
+        page = await _result(client, token, "resources/list", **({"cursor": cursor} if cursor else {}))
+        listed += page["resources"]
+        cursor = page.get("nextCursor")
+        if cursor is None:
+            break
+    assert cursor is None, "five pages, three answers, the last one without a cursor"
+    by_name = {r["name"]: r for r in listed}
+    assert set(by_name) == {"index", "concepts", "integrate/triggers", "use/big", "use/workflows"}
+    workflows = by_name["use/workflows"]
+    assert workflows["uri"] == f"{BASE}/use/workflows"
+    assert (workflows["title"], workflows["mimeType"]) == ("Workflows", "text/markdown")
+    mtime = (docs_dir / "01-use" / "workflows.md").stat().st_mtime
+    expected = datetime.fromtimestamp(mtime, UTC).isoformat(timespec="seconds")
+    assert workflows["annotations"]["lastModified"] == expected
+    assert by_name["concepts"]["uri"] == f"{BASE}/concepts/"
+
+    read = await _result(client, token, "resources/read", uri=workflows["uri"])
+    (content,) = read["contents"]
+    assert content["uri"] == workflows["uri"] and content["mimeType"] == "text/markdown"
+    assert content["text"].startswith("---\ntitle: Workflows\n---\n\n# Workflows\n")
+    assert "sidebar_position" not in content["text"], "the site's own front matter is not the header"
+    assert workflows["size"] == len(content["text"].encode())
+
+
+async def test_a_resource_is_read_by_its_listed_uri_only(
+    client: AsyncClient, admin: str, docs_dir: Path
+) -> None:
+    token = await _token(client, "mcp:read")
+    for uri in ("use/workflows", f"{BASE}/use/linked", f"{BASE}/use/_partial", "https://elsewhere.test/x"):
+        refused = (await _rpc(client, token, "resources/read", {"uri": uri})).json()
+        assert refused["error"]["code"] == -32002, uri
+    missing = (await _rpc(client, token, "resources/read", {})).json()
+    assert missing["error"]["code"] == -32602
+    cursor = (await _rpc(client, token, "resources/list", {"cursor": "99"})).json()
+    assert cursor["error"]["code"] == -32602
+
+
+async def test_a_build_without_documentation_lists_no_resource(
+    client: AsyncClient, admin: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tranibor_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_DOCS_DIR", str(tmp_path / "absent"))
+    reset_settings_cache()
+    token = await _token(client, "mcp:read")
+    assert (await _result(client, token, "resources/list")) == {"resources": []}
+    gone = (await _rpc(client, token, "resources/read", {"uri": f"{BASE}/use/workflows"})).json()
+    assert gone["error"]["code"] == -32002
+
+
+async def test_a_resource_read_is_audited(client: AsyncClient, admin: str, docs_dir: Path) -> None:
+    from sqlalchemy import select
+    from tranibor_api.db.models import AuditLog, Organization
+    from tranibor_api.db.session import session_scope
+
+    token = await _token(client, "mcp:read")
+    await _result(client, token, "resources/list")
+    await _result(client, token, "resources/read", uri=f"{BASE}/use/workflows")
+    await _rpc(client, token, "resources/read", {"uri": f"{BASE}/use/nowhere"})
+    async with session_scope() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(AuditLog).where(AuditLog.action == "mcp.call").order_by(AuditLog.ts)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        org = (
+            await session.execute(select(Organization).where(Organization.slug == "northwind"))
+        ).scalar_one()
+    assert [(r.target_type, r.target_id, r.payload["issue"], r.org_id) for r in rows] == [
+        ("mcp_resource", "*", "ok", org.id),
+        ("mcp_resource", "use/workflows", "ok", org.id),
+        ("mcp_resource", "*", "refused", org.id),
+    ]
+
+
+@pytest.mark.skipif(
+    not SUITE_ON_POSTGRES,
+    reason="the sync holds its transaction while the door it calls writes: SQLite has one writer",
+)
+async def test_a_knowledge_base_copies_this_documentation_through_the_door(
+    client: AsyncClient, app: Any, admin: str, docs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The source of kind `mcp` against a real server (ADR 0191): the platform's own door, in process."""
+    import tranibor_adapters
+    from httpx import ASGITransport
+    from tranibor_api.knowledge.sync import sync_source
+
+    class Door:
+        def transport(self) -> ASGITransport:
+            return ASGITransport(app=app)
+
+    monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", Door())
+    token = await _token(client, "mcp:read")
+    monkeypatch.setenv("CONNECTOR_KB_DOCS_TOKEN", token)
+    await login(client, ADMIN)
+    knowledge = "/api/v1/orgs/northwind/knowledge"
+    base = await client.post(knowledge, json={"slug": "docs", "name": "Docs", "serving_mode": "index"})
+    assert base.status_code == 201, base.text
+    connector = await client.post(
+        "/api/v1/orgs/northwind/connectors",
+        json={"name": "tranibor-docs", "kind": "mcp", "type": "mcp", "config": {"url": "http://test/mcp"},
+              "secret_refs": {"token": "env:CONNECTOR_KB_DOCS_TOKEN"}},
+    )  # fmt: skip
+    assert connector.status_code == 201, connector.text
+    source = await client.post(
+        f"{knowledge}/docs/sources",
+        json={"kind": "mcp", "name": "Tranibor documentation", "connector": "tranibor-docs",
+              "config": {"uri_prefix": f"{BASE}/use/"}},
+    )  # fmt: skip
+    assert source.status_code == 201, source.text
+
+    first = await sync_source("northwind", source.json()["id"])
+    assert (first["added"], first["skipped"]) == (2, 0), first
+    listed = (await client.get(f"{knowledge}/docs")).json()["documents"]
+    assert {d["filename"] for d in listed} == {"use-workflows.md", "use-big.md"}
+    found = await client.post(f"{knowledge}/docs/search", json={"query": "kumquat"})
+    assert {h["filename"] for h in found.json()["hits"] if "kumquat" in h["excerpt"]} == {"use-workflows.md"}
+
+    again = await sync_source("northwind", source.json()["id"])
+    assert again["unchanged"] == 2, "the pages' lastModified did not move: nothing read again"

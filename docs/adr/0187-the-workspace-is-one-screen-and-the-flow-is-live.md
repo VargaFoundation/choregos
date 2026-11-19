@@ -1,8 +1,11 @@
 # 0187 — The workspace is one screen of tabs, and a workflow's flow is shown live
 
-- **Status**: accepted, 2026-11-18 (the product owner's request and go of the same day)
-- **Concerns**: `packages/cli` (the `choregos chat` workspace, a new `choregos live`), `apps/web` (a new
-  `/p/{slug}/live` page), `ActivityEntry` in `packages/contracts/openapi.yaml` (one optional field),
+- **Status**: accepted, 2026-11-18 (the product owner's request and go of the same day).
+  Amended 2026-11-18: the product owner's correction ("you made me a live board; merge that with the board,
+  and show the workflow moving the tickets through"): §4 now says the board is live and the flow is a view
+  of the workflow, not a second board.
+- **Concerns**: `packages/cli` (the `choregos chat` workspace, a new `choregos live`), `apps/web` (the board kept live,
+  and a workflow's flow view), `ActivityEntry` in `packages/contracts/openapi.yaml` (one optional field),
   `services/activity.py`; amends [ADR 0154](0154-the-terminal-is-a-surface-of-the-platform.md) §3 (the
   workspace's screen model) and [ADR 0180](0180-one-quarter-of-depth-the-scope-is-frozen.md) §2 (the row of
   S67); builds on [ADR 0031](0031-several-workflows-per-project.md) (the board's columns are the workflow's
@@ -77,34 +80,50 @@ A surface prints the reason as a word (`loop`, `budget spent`, `too many tool ca
 demand. A pending item whose title is longer than one line is shown on one line; its full text is in the
 context pane. No surface prints a provider's raw error body in a list.
 
-### 4. A workflow's flow is shown live, on the web and in the terminal
+### 4. The board is live, and a workflow's flow shows its tickets travelling
 
-A **live view** of one workflow (or of a project's workflows, one band each): the workflow's states as
-**lanes** (the board's columns, ADR 0031, read from the validated graph), each work item a **card** in the
-lane of its state. A card whose item has a run in flight shows the stage, the agent, the elapsed time
-and the spend ticking, and a pulse; a card moves to its next lane when its state changes; a failed run
-turns the card red with §3's reason; a card waiting for a person is amber with what it waits for. Each lane
-header counts the items in it and the items that left it today. A ticker at the bottom lists the last
-events (a run started, ended, failed; an item moved; a decision taken).
+Two views of the same data, and no third page for them:
 
-Its data are **routes that exist**: the workflow definition and its validation (lanes), `GET
-/projects/{id}/work-items` (cards), `GET /orgs/{org}/activity/stream` filtered by project and workflow (what
-runs, `activity.upsert` and `activity.ended`); on `activity.ended` the item is read again, which is how a
-card learns its new state. No new route, no polling faster than the stream.
+**The board, refreshed live.** The project's board (ADR 0031: the workflow's states as columns, read from
+the validated graph) follows the organisation's activity stream, filtered by project. A card whose item has
+a run in flight shows the stage, the agent (once, when it is the stage's own name), the elapsed time ticking
+and the spend in the organisation's currency, with a soft pulse; a card moves to its next column, sliding
+there, when its state changes; a failed run turns the card red with §3's reason; a card waiting for a person
+is amber with what it waits for. A `LIVE` / `RECONNECTING` indicator sits in the board's header, each
+workflow's section has a summary line (in flight, waiting for a person, failed, done today, spent today) and
+a folded strip of the last events (a run started, ended, failed; an item moved; a decision taken).
 
-**Web**: `/p/{slug}/live`, linked from the board and the project's navigation; a "wall" mode (full
-screen, larger type, no navigation) for a screen in a room. Motion uses CSS transitions and the
-browser's View Transitions where available, no animation dependency; `prefers-reduced-motion` turns
-every motion into a plain change of place.
+**The workflow's flow.** The workflow as its map (`components/workflows/map`) laid out left to right: the
+nominal path as stations, the side states (rejections, retries, escalations, human waits) on a row below,
+the transitions as smooth curves. A station says who acts (an agent, a person, the platform) and how many
+items are in it. Each work item is a **token**, a small pill with its key coloured by status, parked at its
+current station; when its state changes the token **travels along the edge** from the old station to the
+new one and the edge lights up. A station with a run in flight glows in the workflow's hue and its token
+has a spinning ring (elapsed and spend on hover); a failed run flashes the token red with the reason; a
+human wait is amber. A summary bar (in flight, waiting for a person, failed today, done today, spent today),
+the ticker, and a **wall mode** (full screen, large type, `project · workflow`, a clock) complete it.
+Clicking a station lists its items; clicking a token opens the item. It is the "Flow" tab of
+`/p/{slug}/workflows/{name}` and the project navigation's "Flow" entry, which opens the default workflow's
+flow with a workflow switcher.
 
-**Terminal**: `choregos live [--project] [--workflow]` and the workspace's Live tab draw the same lanes as
-columns of cards (a lane per column, narrow lanes collapsing to counts below 100 columns), with a spinner
-on running cards and the ticker as the last lines.
+Their data are **routes that exist**: the workflow definition and its validation (stations, columns),
+`GET /projects/{id}/work-items` (items), `GET /orgs/{org}/activity/stream` filtered by project (what runs,
+`activity.upsert` and `activity.ended`); on `activity.ended` the items are read again, which is how a card
+or a token learns its new state. No new route, no polling faster than the stream (the items are polled every
+5 s only while the stream is down). Motion uses CSS transforms and the Web Animations API, no animation
+dependency; `prefers-reduced-motion` turns every motion into a plain change of place (a card jumps, a token
+jumps, nothing pulses).
+
+**Terminal**: `choregos live [--project] [--workflow]` and the workspace's Live tab draw the flow as a
+horizontal pipeline of stations with the tokens parked at them (the side states on a row below; narrow
+terminals collapse a station to its count), a spinner on running tokens, and the ticker as the last lines.
+The reduction records the last transition each item took (from, to, and the graph edge) so that the
+terminal can draw the same travel as the web.
 
 **One reduction, two renderers**: the step from (definition, items, stream events) to (lanes, cards,
-ticker) is a pure function written twice, in TypeScript and in Python, and both are tested against the
-same recorded fixtures (`packages/contracts/fixtures/live/`), so the web and the terminal cannot show a
-different flow for the same events.
+transitions, ticker) is a pure function written twice, in TypeScript and in Python, and both are tested
+against the same recorded fixtures (`packages/contracts/fixtures/live/`), so the web and the terminal cannot
+show a different flow for the same events.
 
 ### 5. What this does not do
 
@@ -119,4 +138,4 @@ different flow for the same events.
 - `ActivityEntry.failure` is a contract change (contract-first pull request, then the service).
 - The live view's two reductions must stay equal: a fixture added for one is run by both.
 - ADR 0180's row for S67 becomes "finish, plus the workspace redesign and the live view of ADR 0187
-  (S67-18 to S67-28)". No other stream is opened.
+  (S67-18 to S67-29)". No other stream is opened.

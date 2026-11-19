@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -84,7 +84,12 @@ async def _marked_items(session: Any, ids: set[str | None]) -> set[str]:
 
 def _failed_run_lesson(project: str, run: Any) -> dict[str, Any]:
     """The lesson of a failed run, as an ingestion event: one per run (`run:<id>`), wherever it is
-    written from — the run's own outcome (S51-02) or the `run_lessons` source — so it is kept once."""
+    written from — the run's own outcome (S51-02) or the `run_lessons` source — so it is kept once.
+
+    The subject carries the run id. Ecphoria keys a memory on its subject, not on `external_id`: with
+    a subject shared by every failed run of a stage, two runs with different content superseded each
+    other on every memory-loop pass (5,259 superseded versions against 27 active ones in prod). One
+    subject per run makes re-sending the same lesson a confirmation, and keeps each run's lesson."""
     reason = (run.result or {}).get("reason") or "failed"
     namespace, propose = _write_target(project, run)
     return {
@@ -93,7 +98,7 @@ def _failed_run_lesson(project: str, run: Any) -> dict[str, Any]:
         "_run_id": run.id,
         "external_id": f"run:{run.id}",
         "kind": "run_lesson",
-        "subject": f"run_lesson:{project}:{run.stage_role}",
+        "subject": f"run_lesson:{project}:{run.stage_role}:{run.id}",
         "content": f"The {run.stage_role} step failed ({reason}) — attempt {run.attempt}.",
         "source": "orchestrator",
     }
@@ -130,6 +135,19 @@ async def keep_the_lesson_of_a_failed_run(run_id: str) -> dict[str, Any]:
         return {"written": True}
 
 
+async def _failed_runs_after(session: Any, project_id: str, cursor: str | None) -> list[Run]:
+    """The failed runs of a project touched after the cursor (all of them without one).
+
+    The cursor is the watermark the previous pass returned, carried by the memory loop (none on its
+    first pass or on a requested re-import). A failed run is final, so what was sent once is not sent
+    again: no new version, no embedding call, no duplicate proposal.
+    """
+    query = select(Run).where(Run.project_id == project_id, Run.status == "failed")
+    if cursor:
+        query = query.where(Run.updated_at > datetime.fromisoformat(cursor))
+    return list((await session.execute(query.order_by(Run.updated_at))).scalars().all())
+
+
 @activity.defn(name="ingest_sources")
 async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
     """Build facts from the platform state and push them as an idempotent upsert."""
@@ -139,6 +157,7 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
         if not bundle.engine.memory_enabled():
             return {"facts": 0, "skipped": "memory disabled"}
         events: list[dict[str, Any]] = []
+        extra: dict[str, Any] = {}
 
         if "closed_issues" in sources:
             since = utcnow() - timedelta(days=365)
@@ -169,15 +188,9 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 )
 
         if "run_lessons" in sources:
-            runs = (
-                (
-                    await session.execute(
-                        select(Run).where(Run.project_id == bundle.project.id, Run.status == "failed")
-                    )
-                )
-                .scalars()
-                .all()
-            )
+            runs = await _failed_runs_after(session, bundle.project.id, payload.get("run_lessons_since"))
+            if runs:
+                extra["run_lessons_watermark"] = max(r.updated_at for r in runs).isoformat()
             marked = await _marked_items(session, {run.work_item_id for run in runs})
             events += [_failed_run_lesson(bundle.slug, r) for r in runs if r.work_item_id not in marked]
 
@@ -255,7 +268,7 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 await _propose_events(adapter, namespace, batch)
             else:
                 await adapter.ingest_events(namespace, batch)
-        return {"facts": len(events), "sources": sources}
+        return {"facts": len(events), "sources": sources, **extra}
 
 
 @activity.defn(name="ingest_alert")

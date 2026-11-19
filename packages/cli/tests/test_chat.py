@@ -267,6 +267,7 @@ class Platform:
             )
         )
         self.spend(1.2345)
+        self.currency("USD")
         self.pending([])
         router.get(f"{V1}/orgs/acme/activity").mock(side_effect=self._listing)
         router.get(f"{V1}/orgs/acme/activity/stream").mock(side_effect=self._stream)
@@ -341,13 +342,25 @@ class Platform:
         self.router.get(f"{V1}/me/assistants").mock(return_value=Response(200, json=body))
 
     def spend(self, cost: float | None) -> None:
-        body = {"group_by": "day", "rows": [], "total": {"cost_usd": cost, "cost_eur": 0.0}}
+        body = {
+            "group_by": "day",
+            "rows": [],
+            "total": {"cost_usd": cost, "cost_eur": None if cost is None else cost * 0.9},
+        }
         status = 200 if cost is not None else 403
         self.router.get(f"{V1}/orgs/acme/costs").mock(
             return_value=Response(
                 status, json=self.contract("CostReport", body) if cost is not None else {"detail": "no"}
             )
         )
+
+    def currency(self, code: str | None) -> None:
+        """`GET /orgs`: the organisation's currency (None: the route is refused)."""
+        if code is None:
+            self.router.get(f"{V1}/orgs").mock(return_value=Response(403, json={"detail": "no"}))
+            return
+        org = {"slug": "acme", "name": "Acme", "currency": code}
+        self.router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[org]))
 
     def pending(self, items: list[dict[str, Any]] | None) -> None:
         """`GET /me/pending`: what waits for the person (None: the route is refused)."""
@@ -1163,6 +1176,7 @@ def test_the_projects_tab_snapshot_at_each_depth(
     if colour == "no-color":
         monkeypatch.setenv("NO_COLOR", "1")
     _showcase(platform)
+    platform.currency("EUR")
     app = make_app(conversation=CID)
     shown = {1: "FIN-9", 2: "backend", 3: "Read the totals code"}
 
@@ -1238,7 +1252,7 @@ def test_version_and_the_other_commands_import_no_textual_module() -> None:
         "import sys\n"
         "from tranibor_cli.main import app\n"
         "from typer.testing import CliRunner\n"
-        "for words in (['--version'], ['activity', '--help'], ['ask', '--help']):\n"
+        "for words in (['--version'], ['activity', '--help'], ['ask', '--help'], ['live', '--help']):\n"
         "    assert CliRunner().invoke(app, words).exit_code == 0\n"
         "print(sorted(m for m in sys.modules if m.split('.')[0] == 'textual'))\n"
     )
@@ -1253,7 +1267,7 @@ def test_the_workspace_module_is_the_only_one_importing_textual() -> None:
         for path in source.glob("*.py")
         if any(line.startswith(("import textual", "from textual")) for line in path.read_text().splitlines())
     )
-    assert importing == ["workspace.py"]
+    assert importing == ["live_app.py", "workspace.py"]
 
 
 async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platform: Platform) -> None:
@@ -1274,6 +1288,7 @@ async def _open_projects(pilot: Any) -> Any:
 
 
 async def test_the_projects_tab_lists_every_project_even_one_with_no_activity(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
     platform.pending([_pending_action()])
     async with make_app().run_test(size=(160, 40)) as pilot:
         app = await _open_projects(pilot)
@@ -1289,6 +1304,7 @@ async def test_the_projects_tab_lists_every_project_even_one_with_no_activity(pl
 async def test_enter_goes_down_to_items_then_runs_then_steps_and_backspace_goes_back_up(
     platform: Platform,
 ) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
     async with make_app().run_test(size=(160, 40)) as pilot:
         app = await _open_projects(pilot)
         await pilot.press("enter")
@@ -1313,6 +1329,7 @@ async def test_enter_goes_down_to_items_then_runs_then_steps_and_backspace_goes_
 
 
 async def test_escape_at_the_top_of_projects_still_cancels_nothing_and_stays(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
     async with make_app().run_test(size=(160, 40)) as pilot:
         app = await _open_projects(pilot)
         await pilot.press("escape", "backspace")
@@ -1320,6 +1337,7 @@ async def test_escape_at_the_top_of_projects_still_cancels_nothing_and_stays(pla
 
 
 async def test_a_project_with_no_work_item_says_so(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
     async with make_app().run_test(size=(160, 40)) as pilot:
         app = await _open_projects(pilot)
         await pilot.press("down", "enter")
@@ -1327,8 +1345,26 @@ async def test_a_project_with_no_work_item_says_so(platform: Platform) -> None:
 
 
 async def test_an_unreadable_projects_route_is_said_not_shown_empty(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
     platform.projects_status = 403
     async with make_app().run_test(size=(160, 40)) as pilot:
         await pilot.pause()
         await show(pilot, "projects")
         await until(pilot, lambda: "not readable" in screen_text(pilot.app), "the refusal")
+
+
+async def test_the_amounts_follow_the_organisations_currency(platform: Platform) -> None:
+    platform.currency("EUR")
+    async with make_app(conversation=CID).run_test(size=(160, 40)) as pilot:
+        app = pilot.app
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        text = screen_text(app)
+        assert "€1.11 today" in text and "$" not in text.split("today")[0].splitlines()[-1]
+
+
+async def test_an_unreadable_currency_keeps_each_amounts_own_symbol(platform: Platform) -> None:
+    platform.currency(None)
+    async with make_app(conversation=CID).run_test(size=(160, 40)) as pilot:
+        app = pilot.app
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        assert "today" in screen_text(app) and "€1.11 today" in screen_text(app)

@@ -627,7 +627,7 @@ async def _draft_decision(ctx: Context, arguments: dict[str, Any]) -> tuple[str,
     }
 
 
-async def _file_under_the_callers_organisation(ctx: Context) -> None:
+async def file_under_the_callers_organisation(ctx: Context) -> None:
     """A documentation read targets no organisation: its audit row is filed under the caller's, when
     they belong to exactly one, so that its administrators read it. Under RLS a row without an
     organisation is readable at platform scope only. A project's door and an external agent already
@@ -660,7 +660,7 @@ async def _docs_search(ctx: Context, arguments: dict[str, Any]) -> tuple[str, An
     query = arguments.get("query")
     if not isinstance(query, str) or not query.strip():
         raise ToolRefused("argument `query` missing: a few words, such as `budget policy`")
-    await _file_under_the_callers_organisation(ctx)
+    await file_under_the_callers_organisation(ctx)
     index, base = _docs_index()
     try:
         hits = index.search(query[:500], _limit(arguments, default=8, maximum=20))
@@ -688,7 +688,7 @@ async def _docs_read(ctx: Context, arguments: dict[str, Any]) -> tuple[str, Any]
     reference = arguments.get("slug")
     if not isinstance(reference, str):
         raise ToolRefused("argument `slug` missing: one from docs_search, such as `use/workflows`")
-    await _file_under_the_callers_organisation(ctx)
+    await file_under_the_callers_organisation(ctx)
     index, base = _docs_index()
     anchor = arguments.get("section")
     if not isinstance(anchor, str) or not anchor.strip():

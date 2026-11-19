@@ -304,6 +304,15 @@ administrator accepts it. Publishing a version that binds a global memory needs 
 caller cannot see answers 404, and "unknown memory" at publication, so its existence is not revealed.
 Facts carry their organisation and sit under forced row-level security.
 
+**Memory through MCP.** An agent that binds `project:shared` reaches that project's memory (Ecphoria's MCP) through the
+runner's loopback, never directly ([ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md) §7, S65-04j).
+Ecphoria's key is held by the runner; the agent sees a loopback address and no header. The runner overwrites `tenant_id`
+with the run's project in every call and relays only `search_memory`, `get_memories`, `list_contradictions`, plus
+`add_memory` and `remember` when the binding is `write`. Everything else Ecphoria exposes is refused, because with a
+tenantless key it would cross tenants (`query`, `ingest`, `set_state`, the id-based tools): that is an Ecphoria limit,
+named here, not a rule of ours. A JSON-RPC batch is refused. Without container isolation the server is not given to the
+agent at all. The memory a run is *given* (the context pack and `choregos_search_memory`) is unchanged.
+
 ## A customer's own identity provider
 
 When an edition lets each organisation sign in with its own provider

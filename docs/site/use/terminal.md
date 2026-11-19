@@ -110,7 +110,7 @@ choregos activity --watch --project billing-api
 `activity` draws what runs in the organisation as a tree: project, work item, run (stage, agent, model),
 then your own sessions. Each line has a status (a glyph and a word), the elapsed time, the tokens and the
 cost so far. A cost the platform cannot say shows as "—", never as 0. Below the tree, what ended in the
-last hour; last, a line `N running · $X today`. It only reads: stopping stays in the console and in the
+last hour; last, a line `N running · X today`, in the organisation's currency (`€` or `$`). An amount the platform gives in the other currency only is converted with the ratio of the organisation's own cost report, or, with no spend yet, printed with its own symbol, never relabelled. It only reads: stopping stays in the console and in the
 [workspace](#the-workspace).
 
 - **`--watch`** keeps the tree live until you press Ctrl-C or the stream ends. Elapsed times move every
@@ -151,7 +151,7 @@ and what was spent today (`—` when the platform cannot say, never a false zero
 | --- | --- |
 | 1 Conversation | The conversation, and the composer (`›`, the cost of the turn at its right) |
 | 2 Activity | The live tree: projects, work items, runs; what ended in the last hour |
-| 3 Projects | Every project you can read, including those with no activity: running, waiting for you, spend this month. Enter opens a project's work items, Enter again an item's runs, Enter again a run's plan and steps; Backspace or Esc goes back up. Amounts here are in euros, as the platform reports them. |
+| 3 Projects | Every project you can read, including those with no activity: running, waiting for you, spend this month. Enter opens a project's work items, Enter again an item's runs, Enter again a run's plan and steps; Backspace or Esc goes back up. Amounts are in the organisation's currency. |
 | 4 Decisions | What waits for you, grouped by project, with its count in the tab |
 | 5 Artefacts | What was delivered to you |
 | 6 Live | The live flow of a workflow (coming) |
@@ -174,6 +174,32 @@ thin rule between the two; the status of a run is a glyph, a word and a colour, 
 A stop always needs a reason: an empty one is not sent. The reason is audited and shown on the work item.
 `x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to
 what you are on.
+
+## Watch the flow live
+
+```bash
+choregos live
+choregos live --project billing-api --workflow delivery
+```
+
+`live` opens a full-screen view of one workflow: its stations as boxes joined by arrows, the side states
+(rejections, retries, waits for a person) on a row below, and each work item as a token parked in the station
+it is in. A token is blue with a spinner while a run works on it, amber while a person has to decide, red
+with a word for why when it failed (`loop`, `budget`, `turns`), dim when idle and green when done. When an
+item changes station its token travels along the arrow and the arrow stays lit for a moment. The header says
+`LIVE` or `RECONNECTING`; under it, a line counts what is in flight, waiting for a person, failed and done
+today, with the day's spend in your organisation's currency (a dash when the platform cannot say). The last
+events scroll at the bottom.
+
+- **Keys.** Left and right walk the tokens, Enter opens the item (its runs and their steps, as
+  `activity --run` shows them), Escape closes it, `q` quits.
+- **Narrow terminals.** Below what the stations need, each shows its counts instead of its tokens and the
+  selected token is named; below that, the view scrolls sideways.
+- **No colour, no motion.** `NO_COLOR` draws without colour and without animation (shape still tells the
+  state: a failed station is double-ruled, a running one heavy). `--no-motion` (or `CHOREGOS_NO_MOTION`)
+  keeps the colours but stops the spinner and the travel. A terminal that cannot draw Unicode gets plain
+  ASCII.
+- **It only reads.** Nothing is written, and it needs a terminal; in a script use `choregos activity`.
 
 ## Decide
 

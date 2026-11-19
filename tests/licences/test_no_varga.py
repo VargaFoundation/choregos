@@ -32,16 +32,13 @@ ALLOWED = {
     "infra/policies/images.yaml": "admits the images published before the move",
     "infra/policies/plugin-servers.yaml": "admits the plugin servers published before the move",
     "infra/bootstrap/gvisor.yaml": "the gVisor installer image exists only in the frozen namespace",
-    "README.md": "names the Ecphoria image, which exists only in the frozen namespace",
-    "charts/choregos/charts/ecphoria/values.yaml": "the Ecphoria image exists only in the frozen namespace",
-    "compose.yaml": "Ecphoria's pinned 0.2.5 image exists only in the frozen namespace",
-    "dev/compose.yaml": "Ecphoria's pinned 0.2.5 image exists only in the frozen namespace",
     ".github/workflows/code-agent-examples.yml": "the runner image exists only in the frozen namespace",
     "examples/agents/langgraph/Dockerfile": "the runner image exists only in the frozen namespace",
     "examples/agents/openai-agents/Dockerfile": "the runner image exists only in the frozen namespace",
     "examples/agents/plain/Dockerfile": "the runner image exists only in the frozen namespace",
     "examples/agents/pydantic-ai/Dockerfile": "the runner image exists only in the frozen namespace",
     "tests/tools/test_publishing_identity.py": "the policy keeps the frozen plugin namespace",
+    "tests/charts/test_frozen_image_signers.py": "pins the signers of the images published before the move",
     "apps/api/tests/test_catalogue_provenance_migration.py": "an old migration records the old source name",
 }
 

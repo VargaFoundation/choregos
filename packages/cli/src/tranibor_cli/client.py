@@ -110,6 +110,7 @@ class Client:
         self._client.close()
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        kwargs.pop("quiet", None)  # a refusal is raised here whatever it says; `_ReadableClient` reads it
         response = self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             try:

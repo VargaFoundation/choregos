@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import os
 import platform
+import shutil
+import subprocess
 import sys
 import webbrowser
 from pathlib import Path
@@ -17,9 +19,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import __version__, device_login, theme
+from . import __version__, device_login, money, theme
 from . import chat as chat_module
 from . import client as client_module
+from . import live as live_module
 from .a2a import a2a_app
 from .activity import activity
 from .artifacts import artifacts_app
@@ -91,6 +94,12 @@ def _root(
             "--no-color", help="No colour, as `NO_COLOR` does: glyphs and words carry every status."
         ),
     ] = False,
+    org: Annotated[
+        str | None,
+        typer.Option(
+            "--org", help="The organisation the bare `choregos` workspace opens on (the profile's otherwise)."
+        ),
+    ] = None,
 ) -> None:
     """Options of `choregos` itself, before any command."""
     if no_color:
@@ -99,7 +108,7 @@ def _root(
         # A bare `choregos` (ADR 0154 §3): the workspace in a terminal, the help anywhere else, so that no
         # script which pipes it changes behaviour.
         if chat_module.interactive():
-            chat_module.open_workspace()
+            chat_module.open_workspace(org=org)
         else:
             typer.echo(ctx.get_help())
         raise typer.Exit()
@@ -108,6 +117,7 @@ def _root(
 app.command("ask")(ask)
 app.command("activity")(activity)
 app.command("chat")(chat_module.chat)
+app.command("live")(live_module.live)
 app.add_typer(artifacts_app, name="artifacts")
 
 # Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
@@ -152,12 +162,15 @@ class TransportSafeClient(Client):
 
 
 class _ReadableClient(TransportSafeClient):
-    """Also: an API error becomes a red line and exit code 1."""
+    """Also: an API error becomes a red line and exit code 1 (`quiet=True`: the caller reads the error)."""
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
+        quiet = bool(kwargs.pop("quiet", False))
         try:
             return super().request(method, path, **kwargs)
         except ApiError as exc:
+            if quiet:
+                raise
             fail(str(exc))
             return None
 
@@ -169,6 +182,15 @@ def client() -> Client:
 def fail(message: str) -> None:
     console.print(f"[red]✗[/red] {message}")
     raise typer.Exit(1)
+
+
+def _pricing(api: Client, org: str | None = None) -> money.Pricing:
+    """The organisation's currency and rate (`money.Pricing`), the profile's organisation when none is named;
+    with none, amounts keep their own symbol."""
+    try:
+        return money.Pricing(api, api.profile.organisation(org))
+    except NoOrganisationError:
+        return money.Pricing(api, None)
 
 
 def _organisation(profile: Profile, org: str | None) -> str:
@@ -210,6 +232,8 @@ def login(
     one: get it from the console, under My account, then pass it with `--token`).
     """
     api_url = api_url or _known_instance() or typer.prompt("Instance address (https://…)")
+    # Signing in again to the same instance keeps the organisation chosen the first time.
+    org = org or _saved_organisation(api_url)
     if token:
         profile = Profile(api_url=api_url, token=token, org=org)
     else:
@@ -231,7 +255,12 @@ def login(
     except ApiError as exc:
         fail(f"sign-in refused: {exc}")
         return
-    console.print(f"[green]✓[/green] signed in as {me['email']} — profile written to {path}")
+    if not profile.org:
+        profile.org = _choose_organisation(TransportSafeClient(profile))
+        if profile.org:
+            path = profile.save()
+    where = f" in [bold]{profile.org}[/bold]" if profile.org else ""
+    console.print(f"[green]✓[/green] signed in as {me['email']}{where} — profile written to {path}")
 
 
 def _device_sign_in(profile: Profile, *, org: str | None, fresh: bool, open_browser: bool) -> str:
@@ -252,6 +281,36 @@ def _device_sign_in(profile: Profile, *, org: str | None, fresh: bool, open_brow
     return str(session["access_token"])
 
 
+def _saved_organisation(api_url: str) -> str:
+    """The organisation the profile already holds for this instance; "" for another instance or none."""
+    if not client_module.CONFIG_PATH.exists():
+        return ""
+    saved = Profile.load()
+    return saved.org if saved.api_url.rstrip("/") == api_url.rstrip("/") else ""
+
+
+def _choose_organisation(http: Client) -> str:
+    """The person's only organisation, or the one they pick in a terminal; "" when it cannot be decided."""
+    try:
+        slugs = [str(org["slug"]) for org in http.get("/orgs")]
+    except ApiError:
+        return ""
+    if len(slugs) <= 1:
+        return slugs[0] if slugs else ""
+    if chat_module.interactive():
+        console.print("Your organisations: " + ", ".join(slugs))
+        while True:  # `click.Choice` would do it, but the native binary ships Typer without `click`
+            chosen = str(typer.prompt("Default organisation", default=slugs[0])).strip()
+            if chosen in slugs:
+                return chosen
+            console.print(f"[yellow]![/yellow] {chosen!r} is not one of yours")
+    console.print(
+        f"[yellow]![/yellow] you belong to {len(slugs)} organisations ({', '.join(slugs)}): "
+        "save one with `choregos login --org <slug>`"
+    )
+    return ""
+
+
 def _known_instance() -> str:
     """The instance this CLI already talks to: the saved profile's, else `CHOREGOS_API_URL`; "" when none."""
     if client_module.CONFIG_PATH.exists():
@@ -265,14 +324,28 @@ def _browser_reachable() -> bool:
     if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
         return False
     if sys.platform.startswith("linux"):
-        wsl = "microsoft" in platform.release().lower()
-        return wsl or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        return _wsl() or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     return True
 
 
+def _wsl() -> bool:
+    return sys.platform.startswith("linux") and "microsoft" in platform.release().lower()
+
+
 def _open(url: str) -> bool:
-    """Ask the system to open `url`; False when it could not (then the link is all the person gets)."""
+    """Ask the system to open `url`; False when it could not (then the link is all the person gets).
+
+    Under WSL the Windows browser is started directly, its output discarded: through `webbrowser`, the
+    interop of a detached Windows program printed `tcgetpgrp failed: Not a tty` in the middle of the sign-in.
+    """
     try:
+        if _wsl():
+            wslview = shutil.which("wslview")
+            command = [wslview, url] if wslview else ["rundll32.exe", "url.dll,FileProtocolHandler", url]
+            subprocess.Popen(  # noqa: S603 — a fixed program and the console's own link
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            return True
         return bool(webbrowser.open(url))
     except Exception:  # a broken browser setup must not stop the sign-in
         return False
@@ -507,7 +580,8 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
     api = client()
     organization = _organisation(api.profile, org)
     page = api.get(f"/orgs/{organization}/projects")
-    table = Table("slug", "name", "status", "active work items", "cost this month (€)", "trains")
+    table = Table("slug", "name", "status", "active work items", "cost this month", "trains")
+    pricing = money.Pricing(api, organization)
     for project in page["items"]:
         stats = project.get("stats", {})
         table.add_row(
@@ -515,7 +589,7 @@ def projects_list(org: Annotated[str | None, typer.Option()] = None) -> None:
             project["name"],
             project["status"],
             str(stats.get("active_work_items", 0)),
-            f"{stats.get('cost_month_eur', 0):.2f}",
+            pricing.text(money.amount(stats, eur="cost_month_eur")),
             str(stats.get("trains_pending", 0)),
         )
     console.print(table)
@@ -602,8 +676,10 @@ def projects_readiness(project: str) -> None:
 
 @items_app.command("list")
 def items_list(project: str, state: Annotated[str | None, typer.Option()] = None) -> None:
-    page = client().get(f"/projects/{project}/work-items", params={"state": state} if state else None)
-    table = Table("work item", "title", "state", "size", "cost (€)", "PR")
+    api = client()
+    page = api.get(f"/projects/{project}/work-items", params={"state": state} if state else None)
+    pricing = _pricing(api)
+    table = Table("work item", "title", "state", "size", "cost", "PR")
     for item in page["items"]:
         totals = item.get("totals", {})
         table.add_row(
@@ -611,7 +687,7 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
             item["title"][:60],
             item.get("state_display") or item["state"],
             item.get("size") or "—",
-            f"{totals.get('cost_eur', 0):.2f}",
+            pricing.text(money.amount(totals)),
             item.get("pr_url") or "—",
         )
     console.print(table)
@@ -677,7 +753,7 @@ def items_show(item_id: str) -> None:
     console.print(f"[bold]{item['tracker_key']}[/bold] — {item['title']}")
     console.print(f"state: {item.get('state_display') or item['state']} · size {item.get('size') or '—'}")
     totals = item.get("totals", {})
-    console.print(f"cost: {totals.get('cost_eur', 0):.2f} € ({totals.get('runs', 0)} runs)")
+    console.print(f"cost: {_pricing(api).text(money.amount(totals))} ({totals.get('runs', 0)} runs)")
     timeline = api.get(f"/work-items/{item_id}/timeline")
     table = Table("when", "what", "detail")
     for entry in timeline[-15:]:
@@ -731,8 +807,10 @@ def items_action(
 
 @runs_app.command("list")
 def runs_list(item_id: str) -> None:
-    runs = client().get(f"/work-items/{item_id}/runs")
-    table = Table("run", "stage", "attempt", "status", "backend · model", "cost ($)")
+    api = client()
+    runs = api.get(f"/work-items/{item_id}/runs")
+    pricing = _pricing(api)
+    table = Table("run", "stage", "attempt", "status", "backend · model", "cost")
     for run in runs:
         table.add_row(
             run["id"][:12],
@@ -740,7 +818,7 @@ def runs_list(item_id: str) -> None:
             str(run.get("attempt", 1)),
             run["status"],
             f"{run.get('backend') or '—'} · {(run.get('model') or '—').split('/')[-1]}",
-            f"{run.get('cost_usd', 0):.2f}",
+            pricing.text(money.amount(run)),
         )
     console.print(table)
 
