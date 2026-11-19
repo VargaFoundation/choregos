@@ -5,7 +5,7 @@ A plugin is the one unit a trade ships, with two halves under one name
 [ADR 0181](../../docs/adr/0181-the-contracts-speak-no-trade.md)):
 
 - **its content** (the research campaign template, its two agents and skills, their evals, the setup
-  procedures of its connectors) is published from `graalsystems/tranibor-agents` as the plugin
+  procedures of its connectors) is published from the platform's plugin repository as the plugin
   `investment-research`, and an organisation administrator installs it;
 - **its extension**, this distribution, is the code the trade runs inside the platform's processes. The
   API and the workers load it from the `choregos.plugins` entry point `investment-research`
