@@ -199,8 +199,8 @@ async def test_a_scripted_model_plays_the_fixture_case_and_every_assertion_passe
     journal = await play_case(case, instructions="be brief", tools=TOOLS, complete=complete)
     assert journal.names() == [QUOTE] and journal.calls[0].arguments == {"isin": "FR0000000001"}
     assert journal.texts == [CITED]
-    sent = complete.bodies[-1]["messages"]  # type: ignore[attr-defined]
-    assert sent[-2]["role"] == "tool" and json.loads(sent[-2]["content"])["price"] == 12.34, "scripted result"
+    sent = complete.bodies[-1]["messages"]  # type: ignore[attr-defined]  # the body as sent (S4-08: a copy)
+    assert sent[-1]["role"] == "tool" and json.loads(sent[-1]["content"])["price"] == 12.34, "scripted result"
     assert evaluate_case(case, journal).passed
 
 
