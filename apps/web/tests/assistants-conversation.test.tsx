@@ -11,6 +11,7 @@ vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind", me: { m
 
 const mocks = vi.hoisted(() => ({
   myAssistants: vi.fn(),
+  installations: vi.fn(),
   openConversation: vi.fn(),
   myConversations: vi.fn(),
   deleteConversation: vi.fn(),
@@ -52,6 +53,7 @@ const summary = { id: "c1", title: "Rates", agent: "analyst", agent_version: 1, 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.myAssistants.mockResolvedValue({ items: [assistant()] });
+  mocks.installations.mockResolvedValue({ items: [] });
   mocks.conversationActions.mockResolvedValue({ items: [] });
   mocks.memory.mockResolvedValue({ space: "preferred_sources", scope: "user", kind: "facts", writes: "agent_proposes", subjects: [] });
 });
@@ -75,6 +77,25 @@ describe("the assistants of my audience", () => {
     mocks.myAssistants.mockResolvedValue({ items: [] });
     wrap(<AssistantsList />);
     expect(await screen.findByText("No assistant yet")).toBeInTheDocument();
+  });
+
+  it("offers to configure only the installations I manage, in the console's organisation", async () => {
+    const other = { ...assistant("ready"), slug: "guide", display_name: "Guide" };
+    const elsewhere = { ...assistant("ready"), org: "contoso", slug: "invest", display_name: "Elsewhere" };
+    mocks.myAssistants.mockResolvedValue({ items: [assistant("ready"), other, elsewhere] });
+    mocks.installations.mockResolvedValue({ items: [{ slug: "invest" }] });
+    wrap(<AssistantsList />);
+    expect(await screen.findByRole("link", { name: "Configure" })).toHaveAttribute("href", "/assistants/manage/invest");
+    expect(screen.getAllByRole("link", { name: "Configure" })).toHaveLength(1);
+    expect(mocks.installations).toHaveBeenCalledWith("northwind");
+  });
+
+  it("offers no configuration when the installations are refused", async () => {
+    mocks.installations.mockRejectedValue(new Error("forbidden"));
+    wrap(<AssistantsList />);
+    expect(await screen.findByText("Investment assistant")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.installations).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: "Configure" })).not.toBeInTheDocument();
   });
 
   it("shows a refusal to open", async () => {

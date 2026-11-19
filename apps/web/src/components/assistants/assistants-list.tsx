@@ -8,13 +8,21 @@ import { useState } from "react";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { Badge, Button, Card, Empty, ErrorNote, ReadState, buttonClasses } from "@/components/ui";
 import { assistantsApi, type MyAssistant } from "@/lib/assistants-api";
+import { useSession } from "@/lib/session";
 
 const TONE = { ready: "succeeded", incomplete: "waiting", suspended: "neutral" } as const;
 
-/** The assistants of my audience: converse with one, or open what it remembers and does for me. */
+/**
+ * The assistants of my audience: converse with one, open what it remembers and does for me, and,
+ * for the installations I own, open their configuration. The API lists only the installations its
+ * caller may manage, so that list decides which cards offer "Configure"; a refusal hides the link.
+ */
 export function AssistantsList() {
   const router = useRouter();
+  const { org } = useSession();
   const assistants = useQuery({ queryKey: ["my-assistants"], queryFn: assistantsApi.myAssistants });
+  const managed = useQuery({ queryKey: ["installations", org], queryFn: () => assistantsApi.installations(org) });
+  const manages = (a: MyAssistant) => a.org === org && (managed.data?.items ?? []).some((i) => i.slug === a.slug);
   const [error, setError] = useState<string | null>(null);
   const open = useMutation({
     mutationFn: (a: MyAssistant) => assistantsApi.openConversation(a.org, a.slug),
@@ -68,6 +76,14 @@ export function AssistantsList() {
                 >
                   Memory, accounts and tasks
                 </Link>
+                {manages(a) && (
+                  <Link
+                    href={`/assistants/manage/${encodeURIComponent(a.slug)}`}
+                    className={buttonClasses("ghost")}
+                  >
+                    Configure
+                  </Link>
+                )}
               </div>
             </div>
           </Card>
