@@ -38,6 +38,7 @@ SOURCE_FIELDS = {
     },
     "web": {"connector", "url", "max_depth", "max_pages", "exclude", "include_documents", "headers"},
     "git": {"connector", "url", "ref", "paths"},
+    "mcp": {"connector", "uri_prefix", "mime_types"},
 }
 
 

@@ -36,6 +36,8 @@ INVALID_REQUEST: Final = -32600
 METHOD_NOT_FOUND: Final = -32601
 INVALID_PARAMS: Final = -32602
 INTERNAL_ERROR: Final = -32603
+#: The code MCP gives a `resources/read` of a resource the server does not hold.
+RESOURCE_NOT_FOUND: Final = -32002
 
 
 def negotiate(requested: object) -> str:

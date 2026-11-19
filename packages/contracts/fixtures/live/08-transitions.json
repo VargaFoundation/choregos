@@ -1,0 +1,316 @@
+{
+  "name": "08-transitions",
+  "description": "A re-read that sees a card change state records the move it took, from, to and the graph edge: an edge with an id gives its id (plan-to-implement, review-rejects), one without gives from->to, a state change the graph has no edge for gives a null edge (implement to done), a second move replaces the first, and a card that did not move has none.",
+  "graph": {
+    "nodes": [
+      {
+        "id": "plan",
+        "display": "Plan",
+        "kind": "agent"
+      },
+      {
+        "id": "implement",
+        "display": "Implement",
+        "kind": "agent"
+      },
+      {
+        "id": "review",
+        "display": "Review",
+        "kind": "wait"
+      },
+      {
+        "id": "done",
+        "display": "Done",
+        "kind": "terminal",
+        "terminal": true
+      }
+    ],
+    "edges": [
+      {
+        "id": "plan-to-implement",
+        "from": "plan",
+        "to": "implement"
+      },
+      {
+        "from": "implement",
+        "to": "review"
+      },
+      {
+        "id": "review-rejects",
+        "from": "review",
+        "to": "implement",
+        "kind": "reject"
+      },
+      {
+        "from": "review",
+        "to": "done"
+      }
+    ]
+  },
+  "items": [
+    {
+      "id": "w1",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-1",
+      "title": "Item 1",
+      "state": "plan",
+      "totals": {}
+    },
+    {
+      "id": "w2",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-2",
+      "title": "Item 2",
+      "state": "review",
+      "totals": {}
+    },
+    {
+      "id": "w3",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-3",
+      "title": "Item 3",
+      "state": "implement",
+      "totals": {}
+    },
+    {
+      "id": "w4",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-4",
+      "title": "Item 4",
+      "state": "plan",
+      "totals": {}
+    }
+  ],
+  "steps": [
+    {
+      "at": "2026-11-18T15:00:10Z",
+      "items": [
+        {
+          "id": "w1",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-1",
+          "title": "Item 1",
+          "state": "implement",
+          "totals": {}
+        },
+        {
+          "id": "w2",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-2",
+          "title": "Item 2",
+          "state": "implement",
+          "totals": {}
+        },
+        {
+          "id": "w3",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-3",
+          "title": "Item 3",
+          "state": "done",
+          "totals": {}
+        },
+        {
+          "id": "w4",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-4",
+          "title": "Item 4",
+          "state": "plan",
+          "totals": {}
+        }
+      ]
+    },
+    {
+      "at": "2026-11-18T15:00:20Z",
+      "items": [
+        {
+          "id": "w1",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-1",
+          "title": "Item 1",
+          "state": "review",
+          "totals": {}
+        },
+        {
+          "id": "w2",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-2",
+          "title": "Item 2",
+          "state": "implement",
+          "totals": {}
+        },
+        {
+          "id": "w3",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-3",
+          "title": "Item 3",
+          "state": "done",
+          "totals": {}
+        },
+        {
+          "id": "w4",
+          "project_slug": "acme-web",
+          "tracker_key": "ACME-4",
+          "title": "Item 4",
+          "state": "plan",
+          "totals": {}
+        }
+      ]
+    }
+  ],
+  "now": "2026-11-18T15:01:00Z",
+  "options": {
+    "day_start": "2026-11-18T00:00:00Z"
+  },
+  "expected": {
+    "lanes": [
+      {
+        "state": "plan",
+        "display": "Plan",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 1,
+        "closed_today": 0,
+        "cards": [
+          "w4"
+        ]
+      },
+      {
+        "state": "implement",
+        "display": "Implement",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 2,
+        "closed_today": 0,
+        "cards": [
+          "w2"
+        ]
+      },
+      {
+        "state": "review",
+        "display": "Review",
+        "kind": "wait",
+        "terminal": false,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 1,
+        "closed_today": 0,
+        "cards": [
+          "w1"
+        ]
+      },
+      {
+        "state": "done",
+        "display": "Done",
+        "kind": "terminal",
+        "terminal": true,
+        "hors_workflow": false,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w3"
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "id": "w4",
+        "key": "ACME-4",
+        "title": "Item 4",
+        "lane": "plan",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": null
+      },
+      {
+        "id": "w2",
+        "key": "ACME-2",
+        "title": "Item 2",
+        "lane": "implement",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": {
+          "from": "review",
+          "to": "implement",
+          "edge": "review-rejects"
+        }
+      },
+      {
+        "id": "w3",
+        "key": "ACME-3",
+        "title": "Item 3",
+        "lane": "done",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": {
+          "from": "implement",
+          "to": "done",
+          "edge": null
+        }
+      },
+      {
+        "id": "w1",
+        "key": "ACME-1",
+        "title": "Item 1",
+        "lane": "review",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": {
+          "from": "implement",
+          "to": "review",
+          "edge": "implement->review"
+        }
+      }
+    ],
+    "ticker": [
+      {
+        "at": "2026-11-18T15:00:20Z",
+        "kind": "moved",
+        "key": "ACME-1",
+        "stage": null,
+        "from": "implement",
+        "to": "review",
+        "reason": null
+      },
+      {
+        "at": "2026-11-18T15:00:10Z",
+        "kind": "moved",
+        "key": "ACME-3",
+        "stage": null,
+        "from": "implement",
+        "to": "done",
+        "reason": null
+      },
+      {
+        "at": "2026-11-18T15:00:10Z",
+        "kind": "moved",
+        "key": "ACME-2",
+        "stage": null,
+        "from": "review",
+        "to": "implement",
+        "reason": null
+      },
+      {
+        "at": "2026-11-18T15:00:10Z",
+        "kind": "moved",
+        "key": "ACME-1",
+        "stage": null,
+        "from": "plan",
+        "to": "implement",
+        "reason": null
+      }
+    ]
+  }
+}

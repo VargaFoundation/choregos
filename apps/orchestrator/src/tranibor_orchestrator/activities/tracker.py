@@ -111,6 +111,29 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
         return {"state": state_name, "display": state.display if state else state_name}
 
 
+@activity.defn(name="record_status_comment_missed")
+async def record_status_comment_missed(payload: dict[str, Any]) -> dict[str, Any]:
+    """Publish that the tracker did not take the status comment once its retries were spent (S62-20).
+
+    The work item goes on (S62-17); this event is what its timeline shows, so a person knows the board
+    may lag until the next state rewrites the comment. It touches no tracker: only the database.
+    """
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_id"])
+        item = await load_work_item(session, payload["work_item_id"])
+        missed = {"state": payload.get("state") or item.state, "error": str(payload.get("error") or "")[:500]}
+        await persist_event(
+            session,
+            EventType.WORKITEM_STATUS_COMMENT_MISSED,
+            project_id=bundle.project.id,
+            work_item_id=item.id,
+            project_slug=bundle.slug,
+            subject=item.tracker_key,
+            **missed,
+        )
+    return missed
+
+
 @activity.defn(name="update_status_comment")
 async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
     """Rewrite the single status comment and the structured fields of the board (§4.3)."""

@@ -1,6 +1,6 @@
 ---
 title: Knowledge
-description: Give agents documents to read, from uploads, Confluence, SharePoint, git or the web, and decide who may use and change them.
+description: Give agents documents to read, from uploads, Confluence, SharePoint, git, the web or an MCP server, and decide who may use and change them.
 sidebar_position: 5
 ---
 
@@ -24,6 +24,8 @@ shows how to create one, feed it, keep it current, and decide who uses it.
 - For an organisation-wide knowledge base, or one shared by several projects: **Organisation admin**.
 - To sync from Confluence or SharePoint: a connector of that kind, declared by an organisation admin
   (see [Connectors](connectors.md)).
+- To sync from an MCP server's resources (a data platform, a data catalogue): an MCP connector,
+  declared by an organisation admin.
 
 An [assistant](assistants.md) reads the knowledge bases its plugin seeded, and cites the documents it
 uses.
@@ -63,9 +65,19 @@ syncing, with a progress bar.
   20 MiB each by default. Each file is converted to text in the background; uploading a file with the
   same name replaces it.
 - **Add a source** that syncs on a schedule: a **Confluence space or page tree**, **SharePoint /
-  OneDrive**, a **git repository** or a **web site**. For a web source, tick **This page only (no links
+  OneDrive**, a **git repository**, a **web site** or an **MCP server's resources**. For a web source, tick **This page only (no links
   followed)** for one address, and **Include linked documents (PDF, Word, PowerPoint, Excel)** to read
   the files it links to.
+
+An **MCP server's resources** source reads what the server publishes as MCP resources: a data
+platform's table descriptions, a catalogue's glossary, a product's reference pages. Narrow it with a
+**URI prefix** and **media types**. A resource the server stops listing leaves the base at the next
+sync.
+
+Another Tranibor instance is one such server: its MCP door publishes its documentation as resources
+(see [MCP](../integrate/mcp.md)). Declare an MCP connector to `https://<instance>/mcp` with a token of
+scope `mcp:read`, then a source with the prefix of the pages you want, such as
+`https://<docs site>/use/`.
 
 Each source shows when it last synced, what it added, updated, deleted or skipped, and its last error.
 A document deleted at the source leaves the base at the next sync.
@@ -109,8 +121,9 @@ A **restricted** base is read by people only through a grant, and served to a ru
 the person who started the work item. A work item started by a schedule or a tracker names no person,
 so its runs stop before they start. What such a run writes stays visible only to the base's readers.
 
-A sync from Confluence or SharePoint reads with a service account: everything that account can read
-in the chosen space becomes readable by the base's readers. Give that account access to what you mean
+A sync from Confluence, SharePoint or an MCP server reads with the connector's own account: everything
+that account can read in the chosen space (or under the chosen prefix) becomes readable by the base's
+readers. Give that account access to what you mean
 to share, and nothing else.
 
 ## Turn a base into a skill
@@ -172,6 +185,7 @@ not list are left alone. These commands need an organisation admin's token.
 | A document reads **Failed** | Read its reason: a scanned PDF, a file too large, a format the converter does not read. Fix the file and upload it again |
 | A source cannot be added: the host is not allowed | The organisation must open that host for its network. An admin presses **Allow and continue**; anyone else presses **Ask an administrator** |
 | A Confluence or SharePoint source cannot sync | The organisation has no connector of that kind yet; ask an organisation admin |
+| An MCP source fails with "answers people only" | The connector has no credential of its own; a sync acts for nobody. Ask an admin to give it one |
 | A run stops before it starts and names a knowledge base | The run's project is not served that base, or the base is restricted and the work item names no person who reads it |
 
 ## Go further

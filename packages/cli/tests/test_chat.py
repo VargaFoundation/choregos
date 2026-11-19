@@ -12,7 +12,8 @@ import json
 import re
 import subprocess
 import sys
-from collections.abc import AsyncIterator, Callable
+import time
+from collections.abc import AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ from typing import Any
 import pytest
 import respx
 from httpx import Response
+from textual.binding import Binding
 from typer.testing import CliRunner
 
 API = "http://api.test"
@@ -188,6 +190,67 @@ def _agent_node(node_id: str, parent: str | None, kind: str, **changes: Any) -> 
     } | changes
 
 
+def _project(pid: str, slug: str, name: str, *, active: int, month: float) -> dict[str, Any]:
+    return {
+        "id": pid,
+        "slug": slug,
+        "org": "acme",
+        "name": name,
+        "status": "active",
+        "config": {},
+        "workflow_name": "delivery",
+        "stats": {"active_work_items": active, "cost_month_eur": month, "budget_month_eur": 100.0},
+    }
+
+
+#: The Live tab's workflow: three stations and a decline, enough to draw (`choregos live` has the full one).
+FLOW_GRAPH: dict[str, Any] = {
+    "nodes": [
+        {"id": "triage", "display": "Triage", "kind": "agent", "lane": "agent", "terminal": False},
+        {"id": "implement", "display": "Implement", "kind": "agent", "lane": "agent", "terminal": False},
+        {"id": "done", "display": "Done", "kind": "terminal", "lane": "terminal", "terminal": True},
+    ],
+    "edges": [
+        {
+            "id": "triage->implement:nominal",
+            "from": "triage",
+            "to": "implement",
+            "kind": "nominal",
+            "label": "",
+            "wildcard": False,
+            "actor": "triager",
+        },
+        {
+            "id": "implement->done:nominal",
+            "from": "implement",
+            "to": "done",
+            "kind": "nominal",
+            "label": "",
+            "wildcard": False,
+            "actor": "coder",
+        },
+    ],
+}
+
+
+def _flow_item(wid: str, key: str, title: str, state: str, **extra: Any) -> dict[str, Any]:
+    return _work_item(wid, key, title, state, 1.0) | {"workflow_name": "delivery"} | extra
+
+
+def _work_item(wid: str, key: str, title: str, state: str, cost: float) -> dict[str, Any]:
+    return {
+        "id": wid,
+        "project_slug": "billing-api",
+        "tracker_key": key,
+        "title": title,
+        "state": state,
+        "state_display": state.replace("_", " "),
+        "size": "M",
+        "totals": {"cost_eur": cost},
+        "pr_url": None,
+    }
+
+
 class Platform:
     """Every route the workspace reads, faked; what it sends is kept for the test to look at."""
 
@@ -240,6 +303,7 @@ class Platform:
             )
         )
         self.spend(1.2345)
+        self.currency("USD")
         self.pending([])
         router.get(f"{V1}/orgs/acme/activity").mock(side_effect=self._listing)
         router.get(f"{V1}/orgs/acme/activity/stream").mock(side_effect=self._stream)
@@ -261,19 +325,133 @@ class Platform:
         )
         router.get(url__regex=rf"{re.escape(V1)}/runs/[^/]+/agents").mock(side_effect=self._agents)
         router.post(f"{V1}/work-items/wi-12/actions").mock(side_effect=self._stop)
+        # The Projects tab (S67-23): every readable project, a project's items, an item's runs.
+        self.projects: list[dict[str, Any]] = [
+            _project("p-1", "billing-api", "Billing API", active=2, month=41.5),
+            _project("p-2", "docs-site", "Docs site", active=0, month=0.0),
+        ]
+        self.projects_status = 200
+        router.get(f"{V1}/orgs/acme/projects").mock(side_effect=self._projects)
+        router.get(f"{V1}/projects/p-1/work-items").mock(side_effect=self._items)
+        router.get(f"{V1}/projects/p-2/work-items").mock(side_effect=self._items)
+        router.get(url__regex=rf"{re.escape(V1)}/work-items/[^/]+/runs").mock(side_effect=self._item_runs)
+        # The Live tab (S67-28): `choregos live`'s routes, for the project under the cursor (by slug).
+        self.flow_items: list[dict[str, Any]] = [
+            _flow_item("wi-12", "FIN-12", "Fix the totals rounding", "implement"),
+            _flow_item("wi-9", "FIN-9", "Add the VAT column", "triage"),
+        ]
+        self.workflows_status = 200
+        self.flow_reads: list[str] = []
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows$").mock(side_effect=self._workflows)
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows/delivery$").mock(
+            return_value=Response(
+                200,
+                json={
+                    "name": "delivery",
+                    "version": 3,
+                    "source": "project",
+                    "yaml": "name: delivery\n",
+                    "json": {"initial": "triage"},
+                    "checksum": "x",
+                    "is_active": True,
+                    "is_default": True,
+                },
+            )
+        )
+        router.post(f"{V1}/workflows/validate").mock(
+            return_value=Response(
+                200,
+                json=contract(
+                    "WorkflowValidation",
+                    {"valid": True, "errors": [], "warnings": [], "graph": FLOW_GRAPH},
+                ),
+            )
+        )
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/work-items").mock(side_effect=self._flow)
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/costs").mock(
+            return_value=Response(
+                200,
+                json=contract(
+                    "CostReport",
+                    {"group_by": "day", "rows": [], "total": {"cost_usd": 2.5, "cost_eur": 2.25}},
+                ),
+            )
+        )
+
+    def _workflows(self, request: Any) -> Response:
+        if self.workflows_status != 200:
+            return Response(self.workflows_status, json={"title": "Forbidden", "detail": "no"})
+        summary = {"name": "delivery", "version": 3, "is_default": True, "open_items": 2}
+        return Response(200, json=[self.contract("WorkflowSummary", summary)])
+
+    def _flow(self, request: Any) -> Response:
+        self.flow_reads.append(request.url.path)
+        items = [] if request.url.path.endswith("/docs-site/work-items") else self.flow_items
+        return Response(
+            200, json=self.contract("WorkItemPage", {"items": items, "meta": {"has_more": False}})
+        )
+
+    def _projects(self, request: Any) -> Response:
+        if self.projects_status != 200:
+            return Response(self.projects_status, json={"title": "Forbidden", "detail": "no"})
+        # `Project.config` refers to a schema file the `contract` fixture cannot resolve: the part the
+        # workspace reads (`stats`) is validated, the rest is the fixture's limit.
+        for project in self.projects:
+            self.contract("ProjectStats", project["stats"])
+        return Response(200, json={"items": self.projects, "meta": {"has_more": False}})
+
+    def _items(self, request: Any) -> Response:
+        if request.url.path.endswith("/p-2/work-items"):
+            return Response(
+                200, json=self.contract("WorkItemPage", {"items": [], "meta": {"has_more": False}})
+            )
+        items = [
+            _work_item("wi-12", "FIN-12", "Fix the totals rounding", "in_progress", 12.5),
+            _work_item("wi-9", "FIN-9", "Add the VAT column", "done", 3.0),
+        ]
+        return Response(
+            200, json=self.contract("WorkItemPage", {"items": items, "meta": {"has_more": False}})
+        )
+
+    def _item_runs(self, request: Any) -> Response:
+        runs = [
+            {
+                "id": RUN,
+                "status": "running",
+                "stage_role": "implement",
+                "attempt": 2,
+                "backend": "claude-code",
+                "model": "anthropic/sonnet-4.5",
+                "cost_usd": 0.84,
+                "started_at": _iso(NOW - timedelta(minutes=4, seconds=12)),
+            }
+        ]
+        return Response(200, json=[self.contract("RunSummary", r) for r in runs])
 
     def assistants(self, items: list[dict[str, Any]]) -> None:
         body = self.contract("MyAssistantList", {"items": items})
         self.router.get(f"{V1}/me/assistants").mock(return_value=Response(200, json=body))
 
     def spend(self, cost: float | None) -> None:
-        body = {"group_by": "day", "rows": [], "total": {"cost_usd": cost, "cost_eur": 0.0}}
+        body = {
+            "group_by": "day",
+            "rows": [],
+            "total": {"cost_usd": cost, "cost_eur": None if cost is None else cost * 0.9},
+        }
         status = 200 if cost is not None else 403
         self.router.get(f"{V1}/orgs/acme/costs").mock(
             return_value=Response(
                 status, json=self.contract("CostReport", body) if cost is not None else {"detail": "no"}
             )
         )
+
+    def currency(self, code: str | None) -> None:
+        """`GET /orgs`: the organisation's currency (None: the route is refused)."""
+        if code is None:
+            self.router.get(f"{V1}/orgs").mock(return_value=Response(403, json={"detail": "no"}))
+            return
+        org = {"slug": "acme", "name": "Acme", "currency": code}
+        self.router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[org]))
 
     def pending(self, items: list[dict[str, Any]] | None) -> None:
         """`GET /me/pending`: what waits for the person (None: the route is refused)."""
@@ -375,6 +553,15 @@ def platform(contract: Any) -> Any:
         yield Platform(router, contract)
 
 
+@pytest.fixture(autouse=True)
+def steady_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An input's cursor blinks every half second: a snapshot taken on a loaded runner caught it in either
+    phase. Held visible, a snapshot is one picture whatever the timing."""
+    from textual.widgets import Input
+
+    monkeypatch.setattr(Input, "_toggle_cursor", lambda self: setattr(self, "_cursor_visible", True))
+
+
 def make_app(**kwargs: Any) -> Any:
     from tranibor_cli.client import AsyncClient, Profile
     from tranibor_cli.workspace import Workspace
@@ -407,6 +594,8 @@ def node_with(app: Any, text: str) -> Any:
 async def put_cursor_on(pilot: Any, text: str) -> None:
     from tranibor_cli.workspace import FlightTree
 
+    pilot.app.action_show_view("activity")
+    await pilot.pause()
     tree = pilot.app.query_one(FlightTree)
     tree.focus()
     tree.move_cursor(node_with(pilot.app, text), animate=False)
@@ -416,22 +605,49 @@ async def put_cursor_on(pilot: Any, text: str) -> None:
 # ───────────────────────────────── the five parts ─────────────────────────────────
 
 
-async def test_the_workspace_shows_its_five_parts(platform: Platform) -> None:
+def pane(app: Any) -> str:
+    """What the context pane (right of the rule) shows."""
+    return "\n".join(line.partition("│")[2].strip() for line in screen_text(app).splitlines())
+
+
+async def show(pilot: Any, view: str) -> None:
+    pilot.app.action_show_view(view)
+    await pilot.pause()
+
+
+async def test_the_workspace_is_one_screen_of_tabs_and_each_tab_shows_its_part(platform: Platform) -> None:
     platform.pending([_pending_action()])
     platform.finished = [_entry("run-done", status="succeeded", ended_at=_iso(NOW), work_item_key="FIN-9")]
-    app = make_app()
+    app = make_app(conversation=CID)
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
-        await until(pilot, lambda: bool(app.pending), "decisions")
+        await until(pilot, lambda: bool(app.pending) and app.conversation is not None, "loaded")
+        home = screen_text(app)
+        for number, name in enumerate(
+            ["Conversation", "Activity", "Projects", "Decisions", "Artefacts", "Live"], 1
+        ):
+            assert f"{number} {name}" in home or f"{number}  {name}" in home, name
+        assert "Say something" in home
+        assert "acme · finance" in home and "1 running" in home and "1 waiting for you" in home
+        assert "$1.23 today" in home
+        assert app.query_one("#views").current == "view-conversation"
+        await show(pilot, "activity")
         text = screen_text(app)
-    assert "Conversation" in text and "Say something" in text
-    assert "billing-api" in text and "FIN-12" in text and "● running" in text
-    assert "implement · coder" in text and "4m12s · 12.3k in / 800 out · $0.84" in text
-    assert "Decisions" in text and "⏸ waiting for you  Merge the release train" in text
-    assert "F2 decides one" in text
-    assert "digest.md · weekly-digest v2" in text and "Quarter close · finance" in text
-    assert "acme · 1 running · 1 waiting for you · $1.23 today" in text
-    assert "Ended in the last hour" in text
+        assert "billing-api" in text and "FIN-12" in text and "● running" in text
+        assert "implement · coder" in text and "4m12s · 12.3k in / 800 out · $0.84" in text
+        assert "Ended in the last hour" in text
+        await show(pilot, "decisions")
+        text = screen_text(app)
+        assert "Merge the release train" in text and "billing-api" in text
+        assert re.search(r"4 +Decisions +1", text)
+        await show(pilot, "artefacts")
+        text = screen_text(app)
+        assert re.search(r"digest\.md +weekly-digest v2", text)
+        await show(pilot, "projects")
+        assert "Billing API" in screen_text(app)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        assert "Implement" in screen_text(app) and "coming" not in screen_text(app)
 
 
 def _pending_action() -> dict[str, Any]:
@@ -472,15 +688,18 @@ async def test_unreadable_pending_actions_and_costs_are_dashes_not_zero(platform
         await until(pilot, lambda: app.live and bool(app.assistants), "loaded")
         await until(pilot, lambda: app.pending is None and app.board.in_flight != {}, "decisions")
         await pilot.pause(0.2)
+        head = screen_text(app)
+        await show(pilot, "decisions")
         text = screen_text(app)
-    assert "— waiting for you · — today" in text
-    assert "not readable right now" in text and "$0.00" not in text
+    assert "— waiting for you" in head and "— today" in head and "$0.00" not in head
+    assert "not readable right now" in text
 
 
 async def test_nothing_waiting_says_so(platform: Platform) -> None:
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
+        await show(pilot, "decisions")
         await pilot.pause(0.2)
         assert "nothing waits for you" in screen_text(app)
 
@@ -490,6 +709,7 @@ async def test_the_tree_follows_the_activity_stream(platform: Platform) -> None:
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
+        await show(pilot, "activity")
         await until(pilot, lambda: "FIN-20" in screen_text(app), "the streamed entry")
         assert "2 running" in screen_text(app)
 
@@ -502,9 +722,322 @@ async def test_every_status_is_a_word(platform: Platform) -> None:
     app = make_app()
     async with app.run_test(size=(160, 60)) as pilot:
         await ready(pilot)
+        await show(pilot, "activity")
         text = screen_text(app)
     for word in ("○ queued", "● running", "✓ done", "✗ failed", "■ cancelled", "✗ timed out"):
         assert word in text, word
+
+
+# ─────────────────────────────── the Live tab (S67-28) ───────────────────────────────
+
+
+def drawn(app: Any) -> bool:
+    """The Live tab's pane has read its workflow and drawn it."""
+    from tranibor_cli.live_app import LiveFlowPane
+
+    found = app.query(LiveFlowPane)
+    return bool(found) and found.first().drawing is not None
+
+
+def flow(app: Any) -> Any:
+    from tranibor_cli.live_app import LiveFlowPane
+
+    return app.query_one(LiveFlowPane)
+
+
+def flow_lines(app: Any) -> str:
+    return "\n".join(line.plain for line in flow(app).drawing.lines)
+
+
+async def test_the_live_tab_draws_the_flow_of_the_first_project_with_the_widget_of_choregos_live(
+    platform: Platform,
+) -> None:
+    from tranibor_cli import live_app
+
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        drawing = flow_lines(app)
+        text = screen_text(app)
+        assert type(flow(app)) is live_app.LiveFlowPane
+        assert flow(app).project["slug"] == "billing-api" and flow(app).workflow == "delivery"
+        assert "Triage" in drawing and "Implement" in drawing and "Done" in drawing
+        assert "FIN-12" in drawing and "FIN-9" in drawing
+        assert "Billing API" in text and "delivery" in text
+        assert "billing-api" in " ".join(platform.flow_reads)
+        assert app.focused is flow(app)
+
+
+async def test_the_live_tab_draws_the_project_under_the_projects_cursor(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "projects")
+        await until(pilot, lambda: "Docs site" in screen_text(app), "the projects")
+        await pilot.press("down")
+        await pilot.pause()
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        assert flow(app).project["slug"] == "docs-site"
+        assert "FIN-12" not in flow_lines(app)
+
+
+async def test_the_context_pane_follows_the_token_and_names_a_failure_by_its_reason(
+    platform: Platform,
+) -> None:
+    failure = {"reason": "budget", "summary": "The run spent its budget at the 31st call."}
+    platform.hold = [
+        (
+            "activity.upsert",
+            _entry(
+                "run-bad", status="failed", ended_at=_iso(NOW), project_slug="billing-api", failure=failure
+            ),
+        )
+    ]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        seen: dict[str, str] = {}
+        for _ in range(3):
+            await pilot.pause(0.1)
+            seen[str(flow(app).selected)] = " ".join(pane(app).split())
+            await pilot.press("right")
+        assert len(seen) == 2  # two tokens, the pane followed each
+        failed = next(body for body in seen.values() if "budget spent" in body)
+        assert "31st call" in failed and "FIN-12" in failed
+        other = next(body for body in seen.values() if "budget spent" not in body)
+        assert "FIN-9" in other and "31st call" not in other
+
+
+async def test_leaving_the_live_tab_closes_its_stream_and_coming_back_reads_it_again(
+    platform: Platform,
+) -> None:
+    from tranibor_cli.live_app import LiveFlowPane
+
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow")
+        await show(pilot, "activity")
+        await until(pilot, lambda: not app.query(LiveFlowPane), "the pane closed")
+        reads = len(platform.flow_reads)
+        await show(pilot, "live")
+        await until(pilot, lambda: drawn(app), "the live flow again")
+        assert len(platform.flow_reads) > reads
+
+
+async def test_an_unreadable_workflow_is_said_in_the_tab_and_the_workspace_goes_on(
+    platform: Platform,
+) -> None:
+    platform.workflows_status = 403
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: "Billing API" in screen_text(app), "the problem said")
+        assert not app.query("#flow-pane")
+        await show(pilot, "activity")
+        assert "FIN-12" in screen_text(app)
+
+
+async def test_no_project_to_show_is_said(platform: Platform) -> None:
+    platform.projects = []
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "live")
+        await until(pilot, lambda: "No project to show" in screen_text(app), "the note")
+
+
+# ───────────────────────── failures and decisions in one line (S67-22) ─────────────────────────
+
+BUDGET_BODY = (
+    '{"error": {"message": "Budget has been exceeded! Current cost: 10.2, Max budget: 10.0",'
+    ' "type": "budget_exceeded", "param": null, "code": "400"}}'
+)
+
+
+@pytest.mark.parametrize(
+    ("reason", "word"),
+    [
+        ("loop", "loop"),
+        ("budget", "budget spent"),
+        ("max_turns", "too many tool calls"),
+        ("timeout", "timed out"),
+        ("gateway", "gateway refused"),
+    ],
+)
+async def test_a_failed_run_prints_its_reason_as_a_word_and_its_summary_in_the_pane(
+    platform: Platform, reason: str, word: str
+) -> None:
+    failure = {"reason": reason, "summary": "The run stopped at the 31st call."}
+    platform.finished = [_entry("run-bad", status="failed", ended_at=_iso(NOW), failure=failure)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "failed")
+        await until(
+            pilot, lambda: "The run stopped at the 31st call." in pane(app), "the summary in the pane"
+        )
+        tree = "\n".join(line.partition("│")[0] for line in screen_text(app).splitlines())
+        assert "✗ failed" in tree and f"· {word}" in tree
+        assert "The run stopped" not in tree
+        assert word in pane(app)
+
+
+async def test_a_provider_error_body_never_reaches_a_list(platform: Platform) -> None:
+    failure = {"reason": BUDGET_BODY, "summary": "Budget exceeded."}
+    platform.finished = [_entry("run-bad", status="failed", ended_at=_iso(NOW), failure=failure)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "activity")
+        text = screen_text(app)
+    assert "✗ failed" in text and "{" not in text and "budget_exceeded" not in text
+
+
+async def test_a_long_decision_title_is_one_line_and_whole_in_the_pane(platform: Platform) -> None:
+    title = "Merge the release train\nit carries the ledger fix and 14 other changes " + "x" * 200
+    platform.pending([{**_pending_action(), "what": title}])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "decisions")
+        rows = [line.partition("│")[0] for line in screen_text(app).splitlines()]
+        assert sum("Merge the release train" in row for row in rows) == 1
+        assert not any("ledger fix" in row for row in rows)
+        assert "ledger fix" in pane(app)
+
+
+async def test_a_decision_whose_title_starts_with_a_blank_line_is_not_a_blank_row(platform: Platform) -> None:
+    platform.pending([{**_pending_action(), "what": "\n\nMerge the release train"}])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "decisions")
+        rows = [line.partition("│")[0] for line in screen_text(app).splitlines()]
+        assert any("Merge the release train" in row for row in rows)
+
+
+# ─────────────────────────────── the tabs (S67-21) ───────────────────────────────
+
+
+async def test_digits_tab_and_shift_tab_move_between_the_tabs(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        assert app.current_view == "conversation"
+        await pilot.press("tab")
+        assert app.current_view == "activity"
+        await pilot.press("shift+tab", "shift+tab")
+        assert app.current_view == "live", "the tabs wrap around"
+        await pilot.press("tab")
+        assert app.current_view == "conversation"
+        app.query_one("#tree").focus()
+        await pilot.press("4")
+        assert app.current_view == "decisions"
+        await pilot.press("2")
+        assert app.current_view == "activity"
+
+
+async def test_a_digit_typed_in_the_composer_is_a_character_not_a_tab(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await pilot.press("3", "4")
+        assert app.current_view == "conversation"
+        assert app.query_one("#prompt").value == "34"
+
+
+async def test_a_tab_is_chosen_with_a_click_on_its_name(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        row = next(
+            line for line in screen_text(app).splitlines() if "3 Projects" in line or "3  Projects" in line
+        )
+        await pilot.click("#tabs", offset=(row.index("Artefacts") + 2, 0))
+        assert app.current_view == "artefacts"
+
+
+async def test_the_tab_keys_do_nothing_over_a_dialog(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("x")
+        await pilot.pause()
+        assert "Stop run" in screen_text(app)
+        await pilot.press("tab")
+        assert app.current_view == "activity", "Tab moves the dialog's focus, not the workspace's tab"
+        assert "Stop run" in screen_text(app)
+
+
+async def test_the_header_counts_what_runs_and_what_waits(platform: Platform) -> None:
+    platform.pending([_pending_action(), _pending_proposal()])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        head = screen_text(app).splitlines()[1]
+    assert "acme" in head and "finance" in head
+    assert "1 running" in head and "2 waiting for you" in head and "$1.23 today" in head
+
+
+async def test_the_composer_is_one_line_with_the_cost_of_the_turn_at_its_right(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await pilot.press(*"How is the close?", "enter")
+        await until(pilot, lambda: "$0.0125" in str(app.query_one("#cost").render()), "the cost")
+        line = next(line for line in screen_text(app).splitlines() if "›" in line)
+    main = line.split("│")[0]
+    assert main.strip().startswith("›") and main.rstrip().endswith("$0.0125")
+
+
+async def test_the_context_pane_follows_the_selection(platform: Platform) -> None:
+    platform.in_flight = [_entry(RUN), _entry("run-queued-0001", status="queued", work_item_key="FIN-13")]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await until(pilot, lambda: "run-a1b2c3d4" in pane(app), "the run in the pane")
+        body = pane(app)
+        assert "FIN-12" in body and "coder" in body
+        await put_cursor_on(pilot, "FIN-13")
+        await pilot.pause()
+        assert pane(app) != body and "run-a1b2c3d4" not in pane(app)
+
+
+async def test_the_decisions_context_shows_what_the_highlighted_one_is(platform: Platform) -> None:
+    platform.pending([_pending_action(), _pending_proposal()])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "decisions")
+        first = pane(app)
+        await pilot.press("down")
+        await pilot.pause()
+        assert pane(app) != first
+
+
+@pytest.mark.parametrize(("columns", "shown"), [(160, True), (120, True), (119, False), (80, False)])
+async def test_the_context_pane_folds_below_120_columns(
+    platform: Platform, columns: int, shown: bool
+) -> None:
+    app = make_app()
+    async with app.run_test(size=(columns, 40)) as pilot:
+        await ready(pilot)
+        await pilot.pause()
+        assert app.query_one("#context").display is shown
 
 
 # ───────────────────────────────────── a turn ─────────────────────────────────────
@@ -518,12 +1051,13 @@ async def test_a_turn_is_sent_streamed_and_its_writes_are_listed(platform: Platf
         await pilot.press(*"How is the close?", "enter")
         await until(pilot, lambda: "✓ 1200 in / 80 out" in screen_text(app), "the end of the turn")
         text = screen_text(app)
+        await show(pilot, "decisions")
+        decisions = screen_text(app)
     assert platform.opened.call_count == 1, "the conversation is opened at the first message"
     assert platform.sent_turns == [{"input": "How is the close?", "stream": True}]
     assert "Hello, Quarter close is on track." in text and "you" in text
-    assert "⏸ waiting for you  Create the ticket FIN-12" in text
-    assert "write proposed by an assistant" in text and "F2 decides one" in text
-    assert "$0.0125" in text
+    assert "$0.0125" in text and re.search(r"4 +Decisions +1", text)
+    assert "Create the ticket FIN-12" in decisions and "write proposed by an assistant" in decisions
 
 
 async def test_escape_closes_the_stream_so_the_platform_cancels_the_turn(platform: Platform) -> None:
@@ -789,7 +1323,7 @@ async def test_an_unreadable_journal_is_said_on_the_node_and_the_workspace_goes_
         await ready(pilot)
         await expand_run(pilot)
         await until(pilot, lambda: "the journal cannot be read (403)" in screen_text(app), "the notice")
-        assert "Quarter close" in screen_text(app)
+        assert "FIN-12" in screen_text(app)
 
 
 async def test_what_a_backend_writes_in_meta_does_not_move_a_tool_call(platform: Platform) -> None:
@@ -838,6 +1372,7 @@ def _showcase(platform: Platform) -> None:
             work_item_key="OPS-4",
             project_slug="platform",
             ended_at=_iso(NOW),
+            failure={"reason": "budget", "summary": "The run spent its budget of $10.00 at the 31st call."},
         ),
         _entry(
             "run-done-00001",
@@ -862,6 +1397,16 @@ def _showcase(platform: Platform) -> None:
 SIZES = {"80": (80, 36), "160": (160, 44)}
 #: Taller, so that the tree's pane shows the whole expanded run.
 TALL = {"80": (80, 80), "160": (160, 76)}
+
+
+@pytest.fixture
+def utc(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The Live tab's ticker prints local times: pinned to UTC, as on CI, whatever the laptop's zone."""
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
 
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
@@ -892,7 +1437,7 @@ def test_the_workspace_snapshot_with_an_expanded_run(
     app = make_app(conversation=CID)
 
     async def settled(pilot: Any) -> None:
-        await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
         await put_cursor_on(pilot, "implement")
         await pilot.press("enter")
@@ -904,21 +1449,374 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
+@pytest.mark.parametrize("view", ["conversation", "activity", "projects", "decisions", "artefacts", "live"])
 def test_the_workspace_snapshot(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    utc: None,
+    colour: str,
+    columns: str,
+    view: str,
+) -> None:
+    from tranibor_cli import live_app
+
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    # The Live tab is drawn against pinned clocks and without motion: a snapshot is one instant.
+    monkeypatch.setenv("CHOREGOS_NO_MOTION", "1")
+    monkeypatch.setattr(live_app, "now", lambda: NOW)
+    monkeypatch.setattr(live_app, "mono", lambda: 1000.0)
+    _showcase(platform)
+    # What the stream says to the Live tab: FIN-12 runs, FIN-9 failed (its reason is a word on the token).
+    if view == "live":
+        platform.hold = [
+            ("activity.upsert", _entry(RUN)),
+            (
+                "activity.upsert",
+                _entry(
+                    "run-bad",
+                    work_item_id="wi-9",
+                    work_item_key="FIN-9",
+                    status="failed",
+                    ended_at=_iso(NOW),
+                    failure={"reason": "loop", "summary": "The same tool call five times."},
+                ),
+            ),
+        ]
+    app = make_app(conversation=CID)
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        # The header's counts and amount come from their own reads: a loaded CI runner draws them late.
+        await until(pilot, lambda: bool(app.board.in_flight), "what runs")
+        await until(pilot, lambda: app.today.usd is not None or app.today.eur is not None, "today's spend")
+        await show(pilot, view)
+        if view == "live":
+            await until(pilot, lambda: drawn(app) and flow(app).connection == "live", "the live flow")
+            await until(
+                pilot, lambda: any(c["status"] == "failed" for c in flow(app).view["cards"]), "the failure"
+            )
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
+@pytest.mark.parametrize("depth", [1, 2, 3])
+def test_the_projects_tab_snapshot_at_each_depth(
     snap_compare: Any,
     platform: Platform,
     monkeypatch: pytest.MonkeyPatch,
     colour: str,
     columns: str,
+    depth: int,
 ) -> None:
     if colour == "no-color":
         monkeypatch.setenv("NO_COLOR", "1")
     _showcase(platform)
+    platform.currency("EUR")
+    app = make_app(conversation=CID)
+    shown = {1: "FIN-9", 2: "backend", 3: "Read the totals code"}
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and app.projects is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await show(pilot, "projects")
+        for level in range(1, depth + 1):
+            await pilot.press("enter")
+            await until(pilot, lambda key=shown[level]: key in screen_text(app), f"depth {level}")
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
+
+
+# ─────────────────────────────── the palette (S67-24) ───────────────────────────────
+
+
+async def _palette(pilot: Any, query: str = "") -> None:
+    """Ctrl-K, then the query typed: leaves the palette open on what it narrowed to."""
+    await pilot.press("ctrl+k")
+    await until(pilot, lambda: "Enter chooses · Up and Down move" in screen_text(pilot.app), "the palette")
+    if query:
+        await pilot.press(*query)
+        await pilot.pause()
+
+
+def _palette_lines(app: Any) -> list[str]:
+    return [
+        line
+        for line in screen_text(app).splitlines()
+        if re.search(r"\b(tab|command|project|item|assistant|organisation)\b", line)
+    ]
+
+
+async def test_ctrl_k_opens_the_palette_from_every_tab_and_escape_closes_it(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        for name in ("conversation", "activity", "projects", "decisions", "artefacts", "live"):
+            await show(pilot, name)
+            await _palette(pilot)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert "Up and Down move" not in screen_text(app), name
+            assert app.current_view == name
+
+
+async def test_ctrl_k_in_the_composer_does_not_delete_what_is_typed(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await pilot.press(*"hello")
+        await pilot.press("home", "ctrl+k")
+        await until(pilot, lambda: "Up and Down move" in screen_text(app), "the palette")
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.query_one("#prompt").value == "hello"
+
+
+async def test_the_palette_lists_every_kind_with_the_key_that_also_reaches_it(platform: Platform) -> None:
+    platform.assistants(
+        [
+            {"org": "acme", "slug": "finance", "name": "Finance", "status": "ready"},
+            {"org": "acme", "slug": "legal", "name": "Legal", "status": "ready"},
+        ]
+    )
+    platform.currency("EUR")
+    platform.router.get(f"{V1}/orgs").mock(
+        return_value=Response(200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex"}])
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.projects is not None and "globex" in app.organisations, "the lists")
+        entries = app.palette_entries()
+        kinds = {e.kind for e in entries}
+        assert kinds == {"tab", "command", "project", "item", "assistant", "organisation"}
+        labels = {e.label for e in entries}
+        assert {"Billing API", "Docs site", "FIN-12", "finance Finance", "legal Legal", "globex"} <= labels
+        assert "acme" not in labels  # the organisation the person is in is not a place to go to
+        assert all(e.reach for e in entries)
+        # Nothing is only in the palette: a command's key is bound, a tab's digit is bound.
+        bound = {b.key for b in type(app).BINDINGS if isinstance(b, Binding)}
+        for entry in entries:
+            if entry.kind == "tab":
+                assert entry.reach.removeprefix("key ") in bound, entry
+            elif entry.kind == "command" and entry.reach != "x":
+                assert entry.reach.lower().replace("esc", "escape").replace("-", "+") in bound, entry
+            elif entry.kind == "assistant":
+                assert "ctrl+a" in bound
+        assert "ctrl+k" in bound
+        await _palette(pilot)
+        shown = screen_text(app)
+        assert "F2" in shown and "Ctrl-N" in shown and "key 3" in shown
+
+
+async def test_a_tab_is_reached_by_name_with_a_few_letters(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "artf")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "artefacts"
+        assert "Up and Down move" not in screen_text(app)
+
+
+async def test_a_project_is_opened_by_name_then_an_item_by_its_key(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.projects is not None, "the projects")
+        await _palette(pilot, "billing")
+        await pilot.press("enter")
+        await until(pilot, lambda: "FIN-9" in screen_text(app), "the project's items")
+        assert app.current_view == "projects" and app.depth == 1
+        await _palette(pilot, "fin9")
+        await pilot.press("enter")
+        await until(pilot, lambda: app.depth == 2 and "backend" in screen_text(app), "the item's runs")
+        assert app.item is not None and app.item["tracker_key"] == "FIN-9"
+
+
+async def test_an_item_on_the_board_is_reached_from_another_tab(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.projects is not None, "the projects")
+        await show(pilot, "decisions")
+        await _palette(pilot, "fin12")
+        await pilot.press("enter")
+        await until(pilot, lambda: app.depth == 2 and app.item_runs is not None, "the item's runs")
+        assert app.current_view == "projects" and app.item is not None
+        assert app.item["tracker_key"] == "FIN-12"
+
+
+async def test_an_assistant_is_chosen_by_name(platform: Platform) -> None:
+    platform.assistants(
+        [
+            {"org": "acme", "slug": "finance", "name": "Finance", "status": "ready"},
+            {"org": "acme", "slug": "legal", "name": "Legal", "status": "ready"},
+        ]
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        assert app.assistant is None
+        await _palette(pilot, "legal")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.assistant == "legal"
+        assert "legal" in screen_text(app)
+
+
+async def test_another_organisation_is_chosen_by_name_and_read_again(platform: Platform) -> None:
+    platform.router.get(f"{V1}/orgs").mock(
+        return_value=Response(
+            200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}]
+        )
+    )
+    platform.router.get(f"{V1}/orgs/globex/activity").mock(
+        return_value=Response(200, json=platform.contract("ActivityList", {"in_flight": [], "finished": []}))
+    )
+    platform.router.get(f"{V1}/orgs/globex/activity/stream").mock(return_value=Response(200, text=""))
+    platform.router.get(f"{V1}/orgs/globex/projects").mock(
+        return_value=Response(200, json={"items": [], "meta": {"has_more": False}})
+    )
+    platform.router.get(f"{V1}/orgs/globex/costs").mock(return_value=Response(403, json={"detail": "no"}))
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: "globex" in app.organisations, "the organisations")
+        assert "acme" in screen_text(app)
+        await _palette(pilot, "globex")
+        await pilot.press("enter")
+        await until(pilot, lambda: app.organisation == "globex" and app.projects == [], "globex read")
+        assert "globex" in screen_text(app) and "acme" not in screen_text(app)
+        assert app.board.in_flight == {}
+        assert app.currency == "USD"
+
+
+async def test_the_stop_command_asks_for_a_reason_like_the_key(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await show(pilot, "decisions")
+        await _palette(pilot, "stop")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "activity"
+        assert "Stop run run-a1b2c3d4" in screen_text(app)
+        await pilot.press(*"wrong branch", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the stop")
+    assert platform.stops == [(f"/api/v1/runs/{RUN}/cancel", {"reason": "wrong branch"})]
+
+
+async def test_the_new_conversation_command_starts_one(platform: Platform) -> None:
+    app = make_app(conversation=CID)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.conversation is not None, "the conversation")
+        await show(pilot, "activity")
+        await _palette(pilot, "new conv")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.conversation is None and app.conversation_id is None
+        assert app.current_view == "conversation"
+
+
+async def test_the_decide_command_says_when_nothing_waits(platform: Platform) -> None:
+    platform.pending([])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "decide")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "nothing waits for you" in [n.message for n in app._notifications]
+
+
+async def test_a_query_nothing_is_called_like_says_so_and_enter_does_nothing(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "zzzq")
+        assert "nothing is called like that" in screen_text(app)
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "Up and Down move" in screen_text(app)  # still open
+        assert app.current_view == "conversation"
+
+
+async def test_up_and_down_move_the_choice_and_the_best_match_is_first(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "act")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "activity"  # "Activity" before "Cancel the turn", "Stop the run…"
+        await _palette(pilot, "act")
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        assert app.current_view != "activity" or "Up and Down move" not in screen_text(app)
+
+
+async def test_the_palette_key_does_nothing_over_a_dialog(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("x")
+        await pilot.pause()
+        assert "Stop run" in screen_text(app)
+        await pilot.press("ctrl+k")
+        await pilot.pause()
+        assert "Up and Down move" not in screen_text(app) and "Stop run" in screen_text(app)
+
+
+async def test_the_footer_keeps_every_key_and_shows_the_palette(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        footer = screen_text(app).splitlines()[-1]
+        assert "Palette" in footer and "Decide" in footer and "New" in footer and "Quit" in footer
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
+@pytest.mark.parametrize("query", ["", "fin"], ids=["empty", "typed"])
+def test_the_palette_snapshot(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    colour: str,
+    columns: str,
+    query: str,
+) -> None:
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    _showcase(platform)
+    platform.assistants(
+        [
+            {"org": "acme", "slug": "finance", "name": "Finance", "status": "ready"},
+            {"org": "acme", "slug": "legal", "name": "Legal", "status": "ready"},
+        ]
+    )
+    platform.router.get(f"{V1}/orgs").mock(
+        return_value=Response(
+            200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}]
+        )
+    )
     app = make_app(conversation=CID)
 
     async def settled(pilot: Any) -> None:
-        await until(pilot, lambda: app.live and "Quarter close" in screen_text(app), "the workspace")
-        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await until(pilot, lambda: app.live and app.projects is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending) and "globex" in app.organisations, "the lists")
+        await _palette(pilot, query)
         await pilot.pause(0.3)
 
     assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
@@ -984,7 +1882,7 @@ def test_version_and_the_other_commands_import_no_textual_module() -> None:
         "import sys\n"
         "from tranibor_cli.main import app\n"
         "from typer.testing import CliRunner\n"
-        "for words in (['--version'], ['activity', '--help'], ['ask', '--help']):\n"
+        "for words in (['--version'], ['activity', '--help'], ['ask', '--help'], ['live', '--help']):\n"
         "    assert CliRunner().invoke(app, words).exit_code == 0\n"
         "print(sorted(m for m in sys.modules if m.split('.')[0] == 'textual'))\n"
     )
@@ -999,7 +1897,7 @@ def test_the_workspace_module_is_the_only_one_importing_textual() -> None:
         for path in source.glob("*.py")
         if any(line.startswith(("import textual", "from textual")) for line in path.read_text().splitlines())
     )
-    assert importing == ["workspace.py"]
+    assert importing == ["live_app.py", "workspace.py"]
 
 
 async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platform: Platform) -> None:
@@ -1009,3 +1907,94 @@ async def test_a_read_that_lands_after_the_workspace_closed_draws_nothing(platfo
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
     app.draw_tree()  # the widgets are gone
+
+
+async def _open_projects(pilot: Any) -> Any:
+    app = pilot.app
+    await until(pilot, lambda: app.projects is not None, "the projects")
+    await show(pilot, "projects")
+    await until(pilot, lambda: "Docs site" in screen_text(app), "the projects listed")
+    return app
+
+
+async def test_the_projects_tab_lists_every_project_even_one_with_no_activity(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    platform.pending([_pending_action()])
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        text = screen_text(app)
+        assert re.search(r"Billing API +1 +1 +€41\.50", text)
+        assert re.search(r"Docs site +0 +0 +€0\.00", text)
+        assert "Projects" in text
+        assert "Billing API" in pane(app) and "budget" in pane(app)
+        await pilot.press("down")
+        assert "Docs site" in pane(app)
+
+
+async def test_enter_goes_down_to_items_then_runs_then_steps_and_backspace_goes_back_up(
+    platform: Platform,
+) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        await pilot.press("enter")
+        await until(pilot, lambda: "FIN-12" in screen_text(app), "the items")
+        text = screen_text(app)
+        assert "Projects › Billing API" in text and "Fix the totals rounding" in text
+        assert "€12.50" in text and "FIN-9" in text
+        await pilot.press("enter")
+        await until(pilot, lambda: "implement" in screen_text(app), "the runs")
+        assert "Projects › Billing API › FIN-12" in screen_text(app)
+        assert "● running" in screen_text(app) and "#2" in screen_text(app)
+        await pilot.press("enter")
+        await until(pilot, lambda: "Read the totals code" in screen_text(app), "the steps")
+        assert "Projects › Billing API › FIN-12 › implement #2" in screen_text(app)
+        await pilot.press("backspace")
+        assert "Projects › Billing API › FIN-12" in screen_text(app) and "#2" in screen_text(app)
+        assert "Read the totals code" not in screen_text(app)
+        await pilot.press("escape")
+        assert "Fix the totals rounding" in screen_text(app) and app.depth == 1
+        await pilot.press("backspace")
+        assert app.depth == 0 and "Docs site" in screen_text(app)
+
+
+async def test_escape_at_the_top_of_projects_still_cancels_nothing_and_stays(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        await pilot.press("escape", "backspace")
+        assert app.depth == 0 and app.current_view == "projects"
+
+
+async def test_a_project_with_no_work_item_says_so(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        app = await _open_projects(pilot)
+        await pilot.press("down", "enter")
+        await until(pilot, lambda: "no work item yet" in screen_text(app), "the empty project")
+
+
+async def test_an_unreadable_projects_route_is_said_not_shown_empty(platform: Platform) -> None:
+    platform.currency("EUR")  # a project's month is in euros: an organisation in euros shows it as given
+    platform.projects_status = 403
+    async with make_app().run_test(size=(160, 40)) as pilot:
+        await pilot.pause()
+        await show(pilot, "projects")
+        await until(pilot, lambda: "not readable" in screen_text(pilot.app), "the refusal")
+
+
+async def test_the_amounts_follow_the_organisations_currency(platform: Platform) -> None:
+    platform.currency("EUR")
+    async with make_app(conversation=CID).run_test(size=(160, 40)) as pilot:
+        app = pilot.app
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        text = screen_text(app)
+        assert "€1.11 today" in text and "$" not in text.split("today")[0].splitlines()[-1]
+
+
+async def test_an_unreadable_currency_keeps_each_amounts_own_symbol(platform: Platform) -> None:
+    platform.currency(None)
+    async with make_app(conversation=CID).run_test(size=(160, 40)) as pilot:
+        app = pilot.app
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        assert "today" in screen_text(app) and "€1.11 today" in screen_text(app)

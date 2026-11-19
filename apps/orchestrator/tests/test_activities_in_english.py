@@ -80,6 +80,7 @@ RECORDED_ACTIVITY_NAMES = {
     "reconcile_tracker",
     "record_hosted_build",
     "record_run_outcome",
+    "record_status_comment_missed",
     "reduce_distillation",
     "release_suspended_run",
     "request_approval",

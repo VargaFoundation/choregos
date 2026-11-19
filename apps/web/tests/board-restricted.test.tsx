@@ -11,6 +11,10 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/p/billing-api/board",
   useSearchParams: () => new URLSearchParams(),
 }));
+vi.mock("@/lib/session", () => ({
+  useSession: () => ({ org: "acme", orgs: [{ slug: "acme", currency: "EUR" }], me: null }),
+}));
+
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {

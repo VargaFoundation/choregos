@@ -1,0 +1,105 @@
+{
+  "name": "07-no-graph",
+  "description": "A workflow whose graph is unknown (the validator gave none): every state of the items is a lane of its own, outside the workflow, in the order first seen.",
+  "graph": null,
+  "items": [
+    {
+      "id": "w1",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-1",
+      "title": "A",
+      "state": "alpha",
+      "totals": {},
+      "state_display": "Alpha"
+    },
+    {
+      "id": "w2",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-2",
+      "title": "B",
+      "state": "beta",
+      "totals": {}
+    },
+    {
+      "id": "w3",
+      "project_slug": "acme-web",
+      "tracker_key": "ACME-3",
+      "title": "C",
+      "state": "alpha",
+      "totals": {}
+    }
+  ],
+  "steps": [],
+  "now": "2026-11-18T15:00:00Z",
+  "options": {
+    "ticker_size": 5,
+    "day_start": "2026-11-18T00:00:00Z"
+  },
+  "expected": {
+    "lanes": [
+      {
+        "state": "alpha",
+        "display": "Alpha",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": true,
+        "count": 2,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w1",
+          "w3"
+        ]
+      },
+      {
+        "state": "beta",
+        "display": "beta",
+        "kind": null,
+        "terminal": false,
+        "hors_workflow": true,
+        "count": 1,
+        "left_today": 0,
+        "closed_today": 0,
+        "cards": [
+          "w2"
+        ]
+      }
+    ],
+    "cards": [
+      {
+        "id": "w1",
+        "key": "ACME-1",
+        "title": "A",
+        "lane": "alpha",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": null
+      },
+      {
+        "id": "w2",
+        "key": "ACME-2",
+        "title": "B",
+        "lane": "beta",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": null
+      },
+      {
+        "id": "w3",
+        "key": "ACME-3",
+        "title": "C",
+        "lane": "alpha",
+        "status": "idle",
+        "running": null,
+        "failure": null,
+        "waiting": null,
+        "transition": null
+      }
+    ],
+    "ticker": []
+  }
+}

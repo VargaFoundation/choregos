@@ -139,25 +139,92 @@ choregos chat --assistant billing
 choregos
 ```
 
-`choregos chat` opens the workspace: the conversation and its prompt on the left, the live tree (blue
-frame) and what waits for you (amber frame) on the right, what moved elsewhere below, and a status line.
-A bare `choregos` opens the same thing, but only when both its input and output are a terminal: anywhere
-else (a pipe, a script) it prints the help, so no script that calls it changes behaviour. `choregos chat`
-itself refuses to run without a terminal and points to `ask` and `activity`.
+`choregos chat` opens the workspace: one screen of six tabs, a one-line header, and a context pane on the
+right. A bare `choregos` opens the same thing, but only when both its input and output are a terminal:
+anywhere else (a pipe, a script) it prints the help, so no script that calls it changes behaviour.
+`choregos chat` itself refuses to run without a terminal and points to `ask` and `activity`.
+
+The header reads `organisation · assistant`, then how many runs are running, how many things wait for you
+and what was spent today (`—` when the platform cannot say, never a false zero). The tabs:
+
+| Tab | Shows |
+| --- | --- |
+| 1 Conversation | The conversation, and the composer (`›`, the cost of the turn at its right) |
+| 2 Activity | The live tree: projects, work items, runs; what ended in the last hour |
+| 3 Projects | Every project you can read, including those with no activity: running, waiting for you, spend this month. Enter opens a project's work items, Enter again an item's runs, Enter again a run's plan and steps; Backspace or Esc goes back up. Amounts are in the organisation's currency. |
+| 4 Decisions | What waits for you, grouped by project, with its count in the tab |
+| 5 Artefacts | What was delivered to you |
+| 6 Live | The live flow of the default workflow of the project open (or under the cursor) in Projects, else the first project: the same drawing as [`choregos live`](#watch-the-flow-live), stations, tokens and ticker. Left and right (or up and down) choose a token, Enter opens the item. Leaving the tab closes its stream. |
+
+The pane on the right follows the selection: the run, work item, decision or artefact under the cursor,
+in full. Below 120 columns it folds away and the main view takes the width. There are no frames, only one
+thin rule between the two; the status of a run is a glyph, a word and a colour, so `NO_COLOR` loses nothing.
+
+A list is one line per thing. A failed run prints its reason as a word after its status (`✗ failed · budget
+spent`, `loop`, `too many tool calls`, `timed out`, `gateway refused`) and its summary is in the pane; a reason
+that is not a short identifier (a provider's raw error body) reads `failed` and is never printed in a list. A
+decision's title longer than one line shows its first line, and the whole text is in the pane. `choregos
+activity` prints the same words.
 
 | Key | Does |
 | --- | --- |
-| Tab | Moves to the next pane |
+| Tab, Shift-Tab | Moves to the next or previous tab (works in the composer too) |
+| 1 to 6 | Goes to a tab (when you are not typing in the composer), as does a click on its name |
 | Enter, in the tree | Expands a project, a work item or a run (plan, tool calls, context, sub-agents) |
 | `x`, in the tree | Stops the run or work item under the cursor, **after asking why** |
 | Esc | Cancels the turn being answered; the platform books what it spent |
 | Ctrl-O, Ctrl-N, Ctrl-A | Switches conversation, starts a new one, switches assistant |
-| F2, or `d` in the decisions pane | Opens a decision (see [Decide](#decide)) |
+| F2, or Enter or `d` on a decision | Opens a decision (see [Decide](#decide)) |
+| Ctrl-K | Opens the [palette](#the-palette) |
 | Ctrl-Q | Quits |
 
 A stop always needs a reason: an empty one is not sent. The reason is audited and shown on the work item.
-`x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to the
-pane you are in.
+`x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to
+what you are on.
+
+### The palette
+
+Ctrl-K opens a search that reaches everything by name. Type a few letters, in order and not necessarily
+next to each other (`fnrd` finds `FIN-12 Fix the totals rounding`): the best match comes first and its
+letters are underlined. Up and Down move, Enter chooses, Esc closes. It lists:
+
+- the six **tabs**;
+- the **projects** of the organisation, and the **work items** the workspace has seen (those of the project
+  you have open, and those on the activity board): Enter shows them in the Projects tab;
+- the **assistants** ready for you, as Ctrl-A does;
+- the **other organisations** you may read: choosing one reads everything again for it (the same as
+  starting `choregos chat --org <slug>`);
+- the **commands**: decide what waits for you, stop the selected run or work item (`x` in Activity; it still
+  asks why), new conversation, open a conversation, choose the assistant, cancel the turn, quit.
+
+Nothing is only in the palette: each line says on its right the key or the tab that reaches it too, and the
+footer keeps every key. The palette does not open over a dialog.
+
+## Watch the flow live
+
+```bash
+choregos live
+choregos live --project billing-api --workflow delivery
+```
+
+`live` opens a full-screen view of one workflow: its stations as boxes joined by arrows, the side states
+(rejections, retries, waits for a person) on a row below, and each work item as a token parked in the station
+it is in. A token is blue with a spinner while a run works on it, amber while a person has to decide, red
+with a word for why when it failed (`loop`, `budget`, `turns`), dim when idle and green when done. When an
+item changes station its token travels along the arrow and the arrow stays lit for a moment. The header says
+`LIVE` or `RECONNECTING`; under it, a line counts what is in flight, waiting for a person, failed and done
+today, with the day's spend in your organisation's currency (a dash when the platform cannot say). The last
+events scroll at the bottom.
+
+- **Keys.** Left and right walk the tokens, Enter opens the item (its runs and their steps, as
+  `activity --run` shows them), Escape closes it, `q` quits.
+- **Narrow terminals.** Below what the stations need, each shows its counts instead of its tokens and the
+  selected token is named; below that, the view scrolls sideways.
+- **No colour, no motion.** `NO_COLOR` draws without colour and without animation (shape still tells the
+  state: a failed station is double-ruled, a running one heavy). `--no-motion` (or `CHOREGOS_NO_MOTION`)
+  keeps the colours but stops the spinner and the travel. A terminal that cannot draw Unicode gets plain
+  ASCII.
+- **It only reads.** Nothing is written, and it needs a terminal; in a script use `choregos activity`.
 
 ## Decide
 
