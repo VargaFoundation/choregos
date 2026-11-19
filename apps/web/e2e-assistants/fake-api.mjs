@@ -74,6 +74,8 @@ const action = {
   diff: { phone: { from: "01", to: "02" } },
   created_at: "2026-11-10T10:00:00Z",
 };
+// A second proposed write, refused by the reason journey; the first stays proposed for the others.
+const refusable = { ...action, id: "a2", operation: "cancel_order", arguments: { order: "O-9" }, summary: "Cancel order O-9", diff: null };
 const shipped = {
   items: [
     {
@@ -111,7 +113,14 @@ createServer(async (req, res) => {
   if (path === "/me/assistants/acme/coach/conversations") return json(res, 201, conversation);
   if (path === "/me/conversations") return json(res, 200, { items: [conversation], meta: { has_more: false } });
   if (path === "/me/conversations/c1") return json(res, 200, conversation);
-  if (path === "/me/conversations/c1/actions") return json(res, 200, { items: [action] });
+  if (path === "/me/conversations/c1/actions") return json(res, 200, { items: [action, refusable] });
+  if (path === "/me/conversations/c1/actions/a2/refuse") {
+    // As the API does: a refusal without a reason is accepted (the body is optional), a blank one is a 422.
+    if (payload && typeof payload.reason === "string" && payload.reason.trim() === "") return json(res, 422, { title: "Unprocessable Entity" });
+    refusable.status = "refused";
+    refusable.refusal_reason = payload?.reason ?? null;
+    return json(res, 200, refusable);
+  }
   if (path === "/me/assistants/acme/coach/memory-export") {
     return json(res, 200, { installation: "coach", organisation: "acme", exported_at: "2026-11-11T08:00:00Z", spaces: [memory] });
   }
