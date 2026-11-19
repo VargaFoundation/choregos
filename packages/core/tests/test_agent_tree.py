@@ -11,9 +11,11 @@ from tranibor_core.agent_tree import RULES, SubagentRule, agent_nodes
 FIXTURES = Path(__file__).parent / "fixtures" / "agent_tree"
 
 
-def _events(name: str) -> list[dict[str, Any]]:
+def _events(name: str, *, recorded: bool = False) -> list[dict[str, Any]]:
     data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
-    assert "NOT RECORDED FROM A LIVE RUN" in data["source"]
+    # A fixture says in its `source` whether a live run produced it; the claim is checked both ways, so a
+    # built fixture cannot pass for a recording nor the other way round.
+    assert data["source"].startswith("RECORDED") is recorded, data["source"][:60]
     events: list[dict[str, Any]] = data["events"]
     return events
 
@@ -40,10 +42,23 @@ def test_claude_code_sub_agents_are_nodes_with_their_own_calls() -> None:
 
 
 def test_opencode_gives_a_flat_list_and_no_sub_agent() -> None:
-    nodes = agent_nodes("opencode", _events("opencode-task.json"), root_id="run-1")
+    """On a journal RECORDED from a live opencode run that delegated (S67-12 finish): the `task` call is
+    there, the sub-agent's own calls are not, and the platform's `/runs/{id}/agents` said 6 calls."""
+    events = _events("opencode-task.json", recorded=True)
+    updates = [e["payload"]["update"] for e in events if e["type"] == "session/update"]
+    task = next(u for u in updates if u["sessionUpdate"] == "tool_call" and u["title"] == "task")
+    assert task["kind"] == "think"
+    # What the rule is read from: the real adapter sends no `_meta` and no parent id, and the delegating
+    # call finishes carrying the child session's answer.
+    assert not any("_meta" in u or "parentToolUseId" in json.dumps(u) for u in updates)
+    assert any(
+        u.get("toolCallId") == task["toolCallId"] and "<task_result>" in json.dumps(u.get("rawOutput"))
+        for u in updates
+    )
+    nodes = agent_nodes("opencode", events, root_id="run-1")
     assert [(n.id, n.kind) for n in nodes] == [("run-1", "agent")]
     # The `task` call is an ordinary call of the run, never guessed into a sub-agent.
-    assert nodes[0].tool_calls == 3
+    assert nodes[0].tool_calls == 6
 
 
 def test_a_backend_that_names_a_delegating_tool_but_sends_no_parent_id_is_flat() -> None:
