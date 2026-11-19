@@ -132,6 +132,8 @@ class GooseBackend(Backend):
 # `OPENCODE_DISABLE_DEFAULT_PLUGINS` skips opencode's built-in npm plugins (copilot/codex auth);
 # on 1.18.31 they asked for nothing, so the flag is belt and braces for a bump.
 OPENCODE_CONFIG_HOME = "/opt/choregos/xdg-config"
+#: The loopback port of opencode's own server (its `serve` default); no listener of the pod uses it.
+OPENCODE_SERVER_PORT = 4096
 
 OPENCODE_OFFLINE_ENV: dict[str, str] = {
     "OPENCODE_DISABLE_MODELS_FETCH": "1",
@@ -160,7 +162,12 @@ class OpenCodeBackend(Backend):
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
-        command = list(stage_input.agent.launch.command) or ["opencode", "acp"]
+        # `opencode acp` serves its sessions from an HTTP server of its own, on loopback, and connects to
+        # it: on a random port by default, which the confinement's port rule refuses (ADR 0094), and
+        # `session/new` failed with "OpenCode service failure" (S65-04a, 1.18.31 under Landlock ABI 7).
+        # The default command names the port, and the plan declares it.
+        custom = list(stage_input.agent.launch.command)
+        command = custom or ["opencode", "acp", "--port", str(OPENCODE_SERVER_PORT)]
         config = {
             "$schema": "https://opencode.ai/config.json",
             "provider": {
@@ -198,6 +205,7 @@ class OpenCodeBackend(Backend):
                 **stage_input.agent.launch.files,
             },
             mcp_servers=self.mcp_servers(stage_input),
+            local_ports=() if custom else (OPENCODE_SERVER_PORT,),
         )
 
     @staticmethod
