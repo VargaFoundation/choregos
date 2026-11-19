@@ -441,7 +441,7 @@ class Finding(Strict):
     title: str = Field(min_length=3, max_length=200)
     #: One of the core's `FindingType` (returned as the member), or a type an extension declared
     #: (`FINDING_TYPES.declare`, ADR 0181); any other is refused.
-    type: Annotated[str, AfterValidator(FINDING_TYPES.check)]
+    type: Annotated[str, AfterValidator(FINDING_TYPES.validate)]
     severity: Severity
     evidence: str = Field(min_length=1)
     suggested_fix: str | None = None

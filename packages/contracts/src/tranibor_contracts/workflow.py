@@ -451,7 +451,7 @@ class Transition(Strict):
     #: the console changed the behaviour without saying so (#175).
     #: A step effect by name (ADR 0181): the core's `open_pr` and `merge_pr`, or one an extension
     #: declared (`STEP_EFFECTS.declare`); any other is refused.
-    does: Annotated[str, AfterValidator(STEP_EFFECTS.check)] | None = None
+    does: Annotated[str, AfterValidator(STEP_EFFECTS.validate)] | None = None
     #: How the pull request is opened, on a transition that opens it (S51-11): `{draft: true}`.
     pull_request: PullRequestSpec | None = None
     #: A system transition can open one child work item per element of a list and wait for them
