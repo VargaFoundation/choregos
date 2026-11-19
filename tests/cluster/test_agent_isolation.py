@@ -17,7 +17,7 @@ On kind (runc) it runs with a test image and the repository's `launcher.py`:
 **On a deployed platform (S65-04o)**, `CHOREGOS_ISOLATION_PLATFORM_NAMESPACE=<namespace>` runs the same
 probe in that namespace, under its network policy, with what its warm pool's `SandboxTemplate` names:
 the real runner image (whose own `launcher` is the agent's container), its RuntimeClass (`gvisor` on
-the diametral clusters), its pull secrets and its egress gate. The warm-pool pod is the template's own
+the hardened clusters), its pull secrets and its egress gate. The warm-pool pod is the template's own
 pod with the runner's command replaced by the probe; the Job is the one `k8s_job` renders with the same
 settings. The probe then also asks, from the agent's container, whether the gate's target answers
 directly and what the platform's egress proxy answers without credentials. It creates its own objects
@@ -442,7 +442,7 @@ def _job_manifest(namespace: str) -> dict[str, Any]:
         runtime_class=template.get("runtimeClassName") if template else None,
     )
     # The agent's limits the platform gives its runs (its template's agent container): a namespace under
-    # a LimitRange refuses a pod beyond them (4Gi on the diametral clusters).
+    # a LimitRange refuses a pod beyond them (4Gi on the dev cluster this was proven on).
     agent_limits = next(
         (
             c.get("resources", {}).get("limits", {})

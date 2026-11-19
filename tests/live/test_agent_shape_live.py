@@ -10,7 +10,7 @@ step through `Runner.execute` with `agent_isolation=container`: fix a function, 
 credentialed MCP server, pass the project's checks (which run in the agent's container and probe it).
 
     CHOREGOS_LIVE_LITELLM_URL=https://… CHOREGOS_LIVE_LITELLM_KEY=sk-… \\
-    CHOREGOS_LIVE_RUNNER_IMAGE=ghcr.io/graalsystems/tranibor-runner:0.27.15 \\
+    CHOREGOS_LIVE_RUNNER_IMAGE=<registry>/tranibor-runner:<version> \\
     uv run pytest tests/live/test_agent_shape_live.py -m live -rs
 
 Optional: `CHOREGOS_LIVE_SHAPE_MODEL` (default `choregos-claude-haiku`, the cheapest model of the dev
