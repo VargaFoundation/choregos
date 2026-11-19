@@ -270,3 +270,79 @@ async def test_adding_the_source_opens_the_connectors_host_for_the_workers_that_
     (rule,) = [r for r in await rules_in_db("allowed") if r.host == "catalog.example.test"]
     assert set(rule.used_by) == {"api", "workers"}
     assert (await _sync(done.json()["id"]))["added"] == 4, "the workers' scope now lets the sync through"
+
+
+async def test_a_connector_behind_the_organisations_gateway_is_synced_through_it(
+    client: AsyncClient, admin: str, catalog: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`resources/list` and `resources/read` go through the gateway like a run's tool call, signed as
+    the source (ADR 0191 §7): the gateway relays them to the server it names."""
+    import tranibor_adapters
+    from tranibor_adapters.fakes.mcp_gateway import FakeMcpGateway, GatewayUpstream
+    from tranibor_api.secret_store import FakeSecretStore, set_secret_store
+    from tranibor_api.services import mcp_gateway as service
+
+    set_secret_store(FakeSecretStore())
+    service.clear_token_cache()
+    try:
+        state = await client.put(
+            f"{ORG}/mcp-gateway",
+            json={"mode": "available", "endpoint": "https://gw.example.test/{server}/mcp", "routing": "path",
+                  "auth": {"type": "jwt_assertion"}, "audience": "gw"},
+        )  # fmt: skip
+        assert state.status_code == 200, state.text
+        gateway = FakeMcpGateway(
+            auth="jwt_assertion",
+            jwks=(await client.get(f"{ORG}/mcp-gateway/jwks.json")).json(),
+            audience="gw",
+            issuer=state.json()["assertion"]["issuer"],
+            upstreams={"catalog": GatewayUpstream(server=catalog, token="catalog-key")},
+        )
+        monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", gateway)
+        declared = await client.post(
+            f"{ORG}/connectors",
+            json={"name": "catalog", "kind": "mcp", "type": "mcp-gateway", "config": {"server": "catalog"}},
+        )
+        assert declared.status_code == 201, declared.text
+        await _base(client)
+        source = await _source(client, uri_prefix="catalog://sales/")
+
+        summary = await _sync(source["id"])
+        assert (summary["added"], summary["skipped"]) == (3, 1), summary
+        relayed = [c for c in gateway.calls if c.method.startswith("resources/")]
+        assert {c.method for c in relayed} == {"resources/list", "resources/read"}
+        assert {c.server for c in relayed} == {"catalog"}
+        assert {(c.claims or {}).get("sub") for c in relayed} == {"knowledge-source:Data catalogue"}
+        assert "catalog://sales/orders" in _reads(catalog), "the server behind the gateway was read"
+    finally:
+        set_secret_store(None)
+        service.clear_token_cache()
+
+
+async def test_unversioned_resources_beyond_the_bases_limit_are_never_read(
+    client: AsyncClient, admin: str, catalog: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A large unversioned catalogue costs at most the base's limit in reads per sync: what is beyond
+    the limit is listed (over many pages) and skipped, never read; what is in the base is read again."""
+    from tranibor_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_KNOWLEDGE_MAX_DOCUMENTS", "20")
+    reset_settings_cache()
+    catalog.resources = [
+        {"uri": f"catalog://bulk/{n:03}", "name": f"table-{n:03}", "mimeType": "text/markdown"}
+        for n in range(130)
+    ]
+    catalog.contents = {r["uri"]: [{"uri": r["uri"], "text": f"# {r['name']}\n"}] for r in catalog.resources}
+    await _base(client)
+    await _connector(client)
+    source = await _source(client)
+
+    first = await _sync(source["id"])
+    assert (first["added"], first["skipped"]) == (20, 110), first
+    assert len([m for m, _, _ in catalog.received if m == "resources/list"]) == 65, "65 pages, all followed"
+    assert len(_reads(catalog)) == 20, "beyond the limit: listed, not read"
+
+    catalog.received.clear()
+    second = await _sync(source["id"])
+    assert (second["unchanged"], second["skipped"]) == (20, 110), second
+    assert sorted(_reads(catalog)) == [f"catalog://bulk/{n:03}" for n in range(20)]
