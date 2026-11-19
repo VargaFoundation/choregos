@@ -1350,6 +1350,38 @@ async def test_several_open_runs_each_show_their_own_journal(platform: Platform)
     assert text.index("stage01") < text.index("file01.py") < text.index("stage02") < text.index("file02.py")
 
 
+RECORDED_RUNS = Path(__file__).parent / "fixtures" / "dev-opencode-runs.json"
+
+
+async def test_several_open_runs_each_show_their_own_recorded_journal(platform: Platform) -> None:
+    """Three runs of a real instance (opencode, recorded), open together, each on the journal it served:
+    the count of calls in each node is the one the server's own `/runs/{id}/agents` gave for that run."""
+    recording = json.loads(RECORDED_RUNS.read_text())
+    assert recording["source"].startswith("RECORDED")
+    runs = recording["runs"]
+    platform.in_flight = [
+        _entry(
+            run["run_id"], work_item_id=f"wi-{n}", work_item_key=f"FIN-{100 + n}", stage_role=f"stage{n:02d}"
+        )
+        for n, run in enumerate(runs, start=1)
+    ]
+    for run in runs:
+        platform.journals[run["run_id"]] = run["events"]
+    expected = [run["agents"][0]["tool_calls"] for run in runs]
+    assert expected == [16, 9, 6]
+    app = make_app()
+    async with app.run_test(size=(160, 120)) as pilot:
+        await ready(pilot)
+        for n in (1, 2, 3):
+            await expand_run(pilot, f"stage{n:02d}")
+        ids = [run["run_id"] for run in runs]
+        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        await pilot.pause(0.3)
+        text = screen_text(app)
+    for count in expected:
+        assert f"Steps  {count} tool calls" in text, text
+
+
 async def test_many_open_runs_are_read_a_few_at_a_time_and_all_of_them_are_read(
     platform: Platform, monkeypatch: pytest.MonkeyPatch
 ) -> None:
