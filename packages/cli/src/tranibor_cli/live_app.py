@@ -21,8 +21,9 @@ from rich.console import Console
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.geometry import Region
+from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
@@ -75,6 +76,10 @@ def iso(moment: datetime) -> str:
 class ItemScreen(ModalScreen[None]):
     """One work item: what it is, why it waits or failed, and its latest run's steps (`activity --run`)."""
 
+    DEFAULT_CSS = """
+    ItemScreen { align: center middle; }
+    #item { width: 90%; height: 85%; border: round ansi_default; padding: 1 2; }
+    """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "dismiss", "Close"),
         Binding("q", "dismiss", "Close"),
@@ -150,26 +155,27 @@ class ItemScreen(ModalScreen[None]):
             body.update(Text(f"\nthe run could not be read: {exc}", style="red"))
 
 
-class LiveApp(App[None]):
-    TITLE = "choregos live"
-    ENABLE_COMMAND_PALETTE = False
-    CSS = """
-    Screen { layout: vertical; }
-    #header, #summary { height: 1; }
-    #scroll { height: 1fr; overflow-x: auto; overflow-y: auto; padding: 1 0 0 0; }
-    #flow { width: auto; height: auto; }
-    #ticker { height: auto; border-top: solid ansi_bright_black; }
-    #hint { height: 1; color: ansi_bright_black; }
-    ItemScreen { align: center middle; }
-    #item { width: 90%; height: 85%; border: round ansi_default; padding: 1 2; }
+class LiveFlowPane(Vertical, can_focus=True):
+    """The live flow of one workflow as a widget (S67-28): `choregos live` is this pane alone, the workspace's
+    Live tab is this pane beside its context pane. It owns the reads, the stream and the drawing; the
+    reduction (`live_flow`) and the drawing (`live_view`) are shared, nothing is drawn or reduced here."""
+
+    DEFAULT_CSS = """
+    LiveFlowPane { layout: vertical; height: 100%; }
+    LiveFlowPane #flow-header, LiveFlowPane #flow-summary { height: 1; }
+    LiveFlowPane #flow-scroll { height: 1fr; overflow-x: auto; overflow-y: auto; padding: 1 0 0 0; }
+    LiveFlowPane #flow { width: auto; height: auto; }
+    LiveFlowPane #flow-ticker { height: auto; border-top: solid ansi_bright_black; }
+    LiveFlowPane #flow-hint { height: 1; color: ansi_bright_black; }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("q", "quit", "Quit"),
-        Binding("ctrl+q", "quit", "Quit", show=False),
         Binding("left,up", "step(-1)", "Previous", show=False),
         Binding("right,down,tab", "step(1)", "Next", show=False),
         Binding("enter", "open_item", "Open"),
     ]
+
+    class Moved(Message):
+        """The selected token changed (or the first one was chosen): a context pane may follow it."""
 
     def __init__(
         self,
@@ -180,8 +186,10 @@ class LiveApp(App[None]):
         *,
         is_default: bool = False,
         motion: bool = True,
+        hint: str = " ←→ token   enter open",
     ) -> None:
-        super().__init__(ansi_color=True)
+        super().__init__(id="flow-pane")
+        self.hint = hint
         self.api, self.organisation, self.project = api, organisation, project
         self.workflow, self.is_default = workflow, is_default
         self.motion = motion and not reduced_motion()
@@ -205,22 +213,18 @@ class LiveApp(App[None]):
     # ───────────────────────────────────── layout ─────────────────────────────────────
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="header")
-        yield Static("", id="summary")
-        with VerticalScroll(id="scroll"):
+        yield Static("", id="flow-header")
+        yield Static("", id="flow-summary")
+        with VerticalScroll(id="flow-scroll"):
             yield Static(Text("loading…", style="dim"), id="flow")
-        yield Static("", id="ticker")
-        yield Static(Text(" ←→ token   enter open   q quit", style="dim"), id="hint")
+        yield Static("", id="flow-ticker")
+        yield Static(Text(self.hint, style="dim"), id="flow-hint")
 
     async def on_mount(self) -> None:
         self._reload = asyncio.Event()
         self.set_interval(TICK_S, self.tick)
         self.run_worker(self.follow(), exclusive=False, group="follow")
         self.run_worker(self.reload_loop(), exclusive=False, group="reload")
-
-    async def on_unmount(self) -> None:
-        with contextlib.suppress(Exception):
-            await self.api.close()
 
     # ───────────────────────────────────── data ─────────────────────────────────────
 
@@ -336,6 +340,7 @@ class LiveApp(App[None]):
                 self.moves[card["id"]] = (live_flow.edge_between(self.graph, old, card["lane"]), mono())
         if self.selected is None and self.view["cards"]:
             self.selected = self.view["cards"][0]["id"]
+            self.post_message(self.Moved())
         self.redraw(force=True)
 
     # ──────────────────────────────────── drawing ────────────────────────────────────
@@ -387,7 +392,7 @@ class LiveApp(App[None]):
         flow = self.query_one("#flow", Static)
         flow.update(Text("\n").join(self.drawing.lines))
         hue = ""
-        self.query_one("#header", Static).update(
+        self.query_one("#flow-header", Static).update(
             live_view.header(
                 str(self.project.get("name") or self.slug),
                 self.workflow,
@@ -398,16 +403,16 @@ class LiveApp(App[None]):
                 hue,
             )
         )
-        self.query_one("#summary", Static).update(live_view.summary(self.view, self.spend, width))
+        self.query_one("#flow-summary", Static).update(live_view.summary(self.view, self.spend, width))
         ticker = Text("\n").join(live_view.ticker_lines(self.view, TICKER_ROWS, width, self.ascii))
-        self.query_one("#ticker", Static).update(ticker)
+        self.query_one("#flow-ticker", Static).update(ticker)
         self.follow_cursor()
 
     def show_problem(self) -> None:
         text = Text(self.error or "loading…", style="red" if self.error else "dim")
         with contextlib.suppress(Exception):
             self.query_one("#flow", Static).update(text)
-            self.query_one("#header", Static).update(
+            self.query_one("#flow-header", Static).update(
                 live_view.header(
                     str(self.project.get("name") or self.slug),
                     self.workflow,
@@ -423,7 +428,7 @@ class LiveApp(App[None]):
             return
         x, y, w = self.drawing.token_at[self.selected]
         with contextlib.suppress(Exception):
-            self.query_one("#scroll", VerticalScroll).scroll_to_region(
+            self.query_one("#flow-scroll", VerticalScroll).scroll_to_region(
                 Region(max(0, x - 2), y, w + 4, 1), animate=False, spacing=None
             )
 
@@ -445,6 +450,7 @@ class LiveApp(App[None]):
         order = self.drawing.order
         index = order.index(self.selected) if self.selected in order else -1
         self.selected = order[(index + direction) % len(order)]
+        self.post_message(self.Moved())
         self.redraw(force=True)
 
     def action_open_item(self) -> None:
@@ -456,7 +462,51 @@ class LiveApp(App[None]):
         display = next(
             (lane["display"] for lane in self.view["lanes"] if lane["state"] == card["lane"]), card["lane"]
         )
-        self.push_screen(ItemScreen(self.api, card, str(display), ""))
+        self.app.push_screen(ItemScreen(self.api, card, str(display), ""))
+
+
+class LiveApp(App[None]):
+    """`choregos live`: the pane alone, full screen."""
+
+    TITLE = "choregos live"
+    ENABLE_COMMAND_PALETTE = False
+    CSS = "Screen { layout: vertical; }"
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("q", "quit", "Quit"),
+        Binding("ctrl+q", "quit", "Quit", show=False),
+    ]
+
+    def __init__(
+        self,
+        api: AsyncClient,
+        organisation: str,
+        project: Json,
+        workflow: str,
+        *,
+        is_default: bool = False,
+        motion: bool = True,
+    ) -> None:
+        super().__init__(ansi_color=True)
+        self.api = api
+        self.flow = LiveFlowPane(
+            api,
+            organisation,
+            project,
+            workflow,
+            is_default=is_default,
+            motion=motion,
+            hint=" ←→ token   enter open   q quit",
+        )
+
+    def compose(self) -> ComposeResult:
+        yield self.flow
+
+    def on_mount(self) -> None:
+        self.flow.focus()
+
+    async def on_unmount(self) -> None:
+        with contextlib.suppress(Exception):
+            await self.api.close()
 
 
 def run(

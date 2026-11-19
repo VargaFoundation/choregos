@@ -345,8 +345,8 @@ def screen_text(app: Any) -> str:
 
 
 def flow_text(app: live_app.LiveApp) -> str:
-    assert app.drawing is not None
-    return "\n".join(line.plain for line in app.drawing.lines)
+    assert app.flow.drawing is not None
+    return "\n".join(line.plain for line in app.flow.drawing.lines)
 
 
 async def until(pilot: Any, condition: Callable[[], bool], what: str) -> None:
@@ -360,13 +360,15 @@ async def until(pilot: Any, condition: Callable[[], bool], what: str) -> None:
 
 async def ready(pilot: Any) -> None:
     app = pilot.app
-    await until(pilot, lambda: (app.loaded and app.connection == "live") or app.loaded, "loaded")
-    await until(pilot, lambda: app.drawing is not None, "drawn")
+    await until(
+        pilot, lambda: (app.flow.loaded and app.flow.connection == "live") or app.flow.loaded, "loaded"
+    )
+    await until(pilot, lambda: app.flow.drawing is not None, "drawn")
 
 
 def card(app: live_app.LiveApp, key: str) -> dict[str, Any]:
-    assert app.view is not None
-    return next(c for c in app.view["cards"] if c["key"] == key)
+    assert app.flow.view is not None
+    return next(c for c in app.flow.view["cards"] if c["key"] == key)
 
 
 # ─────────────────────────────────── the board ───────────────────────────────────
@@ -383,7 +385,7 @@ async def test_the_board_is_drawn_from_the_workflow_and_its_items(platform: Plat
         # Another workflow's item is not on this flow; the legacy-free rest is.
         assert "ACME-108" not in text and "ACME-103" in text
         assert platform.stream_params == {"project": "acme-web"}
-        assert [c["key"] for c in app.view["cards"]].count("ACME-101") == 1  # type: ignore[index]
+        assert [c["key"] for c in app.flow.view["cards"]].count("ACME-101") == 1  # type: ignore[index]
 
 
 async def test_the_summary_counts_what_the_flow_holds_and_spend_is_in_the_orgs_currency(
@@ -451,7 +453,7 @@ async def test_a_run_starting_turns_a_token_blue_and_ticks_the_ticker(platform: 
         )
         await until(pilot, lambda: card(app, "ACME-101")["status"] == "running", "the run")
         assert "started triage" in screen_text(app)
-        assert app.connection == "live"
+        assert app.flow.connection == "live"
 
 
 async def test_a_token_that_changes_station_moves_to_its_new_station_and_travels_its_arrow(
@@ -463,22 +465,22 @@ async def test_a_token_that_changes_station_moves_to_its_new_station_and_travels
         platform.move("w3", "review", current_run=None)
         platform.push("activity.ended", entry("run-1", status="succeeded", ended_at="2026-11-18T15:00:00Z"))
         await until(pilot, lambda: card(app, "ACME-103")["lane"] == "review", "the move")
-        assert app.view is not None
-        assert any("moved" in str(t) or t["kind"] == "moved" for t in app.view["ticker"])
-        assert "w3" in app.drawing.token_at and app.moves["w3"][0] is not None  # type: ignore[union-attr]
+        assert app.flow.view is not None
+        assert any("moved" in str(t) or t["kind"] == "moved" for t in app.flow.view["ticker"])
+        assert "w3" in app.flow.drawing.token_at and app.flow.moves["w3"][0] is not None  # type: ignore[union-attr]
         # Mid-travel: the dot is on an arrow, the arrival is not drawn yet.
         environment["mono"] += live_app.TRAVEL_S / 2
-        app.redraw(force=True)
+        app.flow.redraw(force=True)
         text = flow_text(app)
         assert "●" in text.split("\n")[3] or "●" in "\n".join(text.split("\n")[:3])
         assert "ACME-103" in text
         # Arrived: no dot on an arrow, the token is at its station, highlighted for a while.
         environment["mono"] += live_app.TRAVEL_S
-        app.redraw(force=True)
-        assert app.motion_now().fresh["w3"] > 0.9
+        app.flow.redraw(force=True)
+        assert app.flow.motion_now().fresh["w3"] > 0.9
         environment["mono"] += live_app.HIGHLIGHT_S + 1
-        app.redraw(force=True)
-        assert "w3" not in app.moves
+        app.flow.redraw(force=True)
+        assert "w3" not in app.flow.moves
 
 
 async def test_the_arrow_a_token_took_is_lit_briefly(
@@ -490,10 +492,10 @@ async def test_the_arrow_a_token_took_is_lit_briefly(
         platform.move("w3", "review", current_run=None)
         platform.push("activity.ended", entry("run-1", status="succeeded", ended_at="2026-11-18T15:00:00Z"))
         await until(pilot, lambda: card(app, "ACME-103")["lane"] == "review", "the move")
-        edge = app.moves["w3"][0]
-        assert edge in app.motion_now().lit
+        edge = app.flow.moves["w3"][0]
+        assert edge in app.flow.motion_now().lit
         environment["mono"] += live_app.LIT_S + 0.1
-        assert edge not in app.motion_now().lit
+        assert edge not in app.flow.motion_now().lit
 
 
 async def test_a_failed_run_says_why_on_the_token_and_in_the_ticker(platform: Platform) -> None:
@@ -536,7 +538,7 @@ async def test_a_human_wait_appears_when_the_items_are_read_again(
         platform.push("activity.ended", entry("run-1", status="succeeded", ended_at="2026-11-18T15:00:00Z"))
         await until(pilot, lambda: card(app, "ACME-103")["status"] == "waiting", "the wait")
         environment["mono"] += live_app.TRAVEL_S + 0.1  # it has arrived: its glyph is back
-        app.redraw(force=True)
+        app.flow.redraw(force=True)
         assert "⏸ ACME-103" in flow_text(app)
         assert "3 waiting for a person" in screen_text(app)
 
@@ -559,15 +561,15 @@ async def test_a_dropped_stream_is_said_then_followed_again(platform: Platform) 
     app = make_app()
     async with app.run_test(size=(190, 40)) as pilot:
         await ready(pilot)
-        await until(pilot, lambda: app.connection == "live" or platform.stream_opens > 0, "the stream")
+        await until(pilot, lambda: app.flow.connection == "live" or platform.stream_opens > 0, "the stream")
         platform.push("activity.upsert", entry("run-1"))
-        await until(pilot, lambda: app.connection == "live", "live")
+        await until(pilot, lambda: app.flow.connection == "live", "live")
         platform.drop()
-        await until(pilot, lambda: app.connection == "reconnecting", "the drop")
+        await until(pilot, lambda: app.flow.connection == "reconnecting", "the drop")
         assert "RECONNECTING" in screen_text(app)
         await until(pilot, lambda: platform.stream_opens >= 2, "a second connection")
         platform.push("activity.upsert", entry("run-1"))
-        await until(pilot, lambda: app.connection == "live", "live again")
+        await until(pilot, lambda: app.flow.connection == "live", "live again")
         assert "LIVE" in screen_text(app)
 
 
@@ -592,13 +594,13 @@ async def test_arrows_walk_the_tokens_and_enter_opens_the_item(platform: Platfor
     app = make_app()
     async with app.run_test(size=(190, 40)) as pilot:
         await ready(pilot)
-        first = app.selected
+        first = app.flow.selected
         await pilot.press("right")
-        assert app.selected != first
+        assert app.flow.selected != first
         await pilot.press("left")
-        assert app.selected == first
-        app.selected = "w3"
-        app.redraw(force=True)
+        assert app.flow.selected == first
+        app.flow.selected = "w3"
+        app.flow.redraw(force=True)
         await pilot.press("enter")
         await until(pilot, lambda: "run-1" in screen_text(app), "the item's run")
         text = screen_text(app)
@@ -615,7 +617,7 @@ async def test_a_failed_items_reason_is_in_full_when_it_is_opened(platform: Plat
     app = make_app()
     async with app.run_test(size=(190, 40)) as pilot:
         await ready(pilot)
-        app.selected = "w9"
+        app.flow.selected = "w9"
         await pilot.press("enter")
         await until(pilot, lambda: "the gateway refused the call" in screen_text(app), "the reason")
 
@@ -633,10 +635,10 @@ async def test_the_selected_token_stays_in_view_on_a_narrow_terminal(platform: P
     app = make_app()
     async with app.run_test(size=(60, 30)) as pilot:
         await ready(pilot)
-        app.selected = "w7"  # in the last station, far to the right
-        app.redraw(force=True)
+        app.flow.selected = "w7"  # in the last station, far to the right
+        app.flow.redraw(force=True)
         await pilot.pause(0.2)
-        assert app.query_one("#scroll").scroll_x > 0
+        assert app.query_one("#flow-scroll").scroll_x > 0
         assert "ACME-107" in screen_text(app)
 
 
@@ -652,11 +654,11 @@ async def test_reduced_motion_has_no_spinner_and_no_travelling_token(
     app = make_app(motion=how != "flag")
     async with app.run_test(size=(190, 40)) as pilot:
         await ready(pilot)
-        assert app.motion is False
+        assert app.flow.motion is False
         platform.move("w3", "review", current_run=None)
         platform.push("activity.ended", entry("run-1", status="succeeded", ended_at="2026-11-18T15:00:00Z"))
         await until(pilot, lambda: card(app, "ACME-103")["lane"] == "review", "the move")
-        assert app.motion_now().travel == {} and app.motion_now().frame is None
+        assert app.flow.motion_now().travel == {} and app.flow.motion_now().frame is None
         assert not any(c in flow_text(app) for c in live_view.SPINNER)
         assert "ACME-103" in flow_text(app)  # at its station at once, nothing in between
 
@@ -667,10 +669,10 @@ async def test_motion_is_on_by_default_and_the_spinner_turns(
     app = make_app()
     async with app.run_test(size=(190, 40)) as pilot:
         await ready(pilot)
-        assert app.motion is True
+        assert app.flow.motion is True
         first = flow_text(app)
         environment["mono"] += 0.1
-        app.redraw(force=True)
+        app.flow.redraw(force=True)
         assert flow_text(app) != first  # the spinner's next frame
 
 
@@ -878,9 +880,9 @@ def _scripted(platform: Platform, travel: bool = False) -> Callable[[Any], Any]:
         clock = live_app.mono()
         # Arrival at the Review station (travel=False) or half way along its arrow (travel=True).
         offset = live_app.TRAVEL_S / 2 if travel else live_app.TRAVEL_S + 0.5
-        app.moves["w3"] = (app.moves["w3"][0], clock - offset)
-        app.selected = "w4"
-        app.redraw(force=True)
+        app.flow.moves["w3"] = (app.flow.moves["w3"][0], clock - offset)
+        app.flow.selected = "w4"
+        app.flow.redraw(force=True)
         await pilot.pause(0.1)
 
     return settled

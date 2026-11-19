@@ -154,11 +154,17 @@ and what was spent today (`—` when the platform cannot say, never a false zero
 | 3 Projects | Every project you can read, including those with no activity: running, waiting for you, spend this month. Enter opens a project's work items, Enter again an item's runs, Enter again a run's plan and steps; Backspace or Esc goes back up. Amounts are in the organisation's currency. |
 | 4 Decisions | What waits for you, grouped by project, with its count in the tab |
 | 5 Artefacts | What was delivered to you |
-| 6 Live | The live flow of a workflow (coming) |
+| 6 Live | The live flow of the default workflow of the project open (or under the cursor) in Projects, else the first project: the same drawing as [`choregos live`](#watch-the-flow-live), stations, tokens and ticker. Left and right (or up and down) choose a token, Enter opens the item. Leaving the tab closes its stream. |
 
 The pane on the right follows the selection: the run, work item, decision or artefact under the cursor,
 in full. Below 120 columns it folds away and the main view takes the width. There are no frames, only one
 thin rule between the two; the status of a run is a glyph, a word and a colour, so `NO_COLOR` loses nothing.
+
+A list is one line per thing. A failed run prints its reason as a word after its status (`✗ failed · budget
+spent`, `loop`, `too many tool calls`, `timed out`, `gateway refused`) and its summary is in the pane; a reason
+that is not a short identifier (a provider's raw error body) reads `failed` and is never printed in a list. A
+decision's title longer than one line shows its first line, and the whole text is in the pane. `choregos
+activity` prints the same words.
 
 | Key | Does |
 | --- | --- |
