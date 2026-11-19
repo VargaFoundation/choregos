@@ -14,8 +14,9 @@ import systems.graal.tranibor.auth.PrefsBlobStore
 import systems.graal.tranibor.auth.Session
 import systems.graal.tranibor.auth.SessionStore
 import systems.graal.tranibor.net.ApiClient
+import systems.graal.tranibor.voice.VoiceController
 
-/** What the app holds for its whole life: the session, the client built on it. */
+/** What the app holds for its whole life: the session, the client built on it, the voice session. */
 class Graph(private val context: Context) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -46,4 +47,6 @@ class Graph(private val context: Context) {
 
     /** Small per-device choices (the organisation last used). Not secrets. */
     val prefs = PrefsKeyValue(context, "tranibor.ui")
+
+    val voice = VoiceController(context, { _session.value?.origin }, { _session.value?.token })
 }

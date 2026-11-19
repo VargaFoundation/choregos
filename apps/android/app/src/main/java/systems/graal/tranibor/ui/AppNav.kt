@@ -42,6 +42,7 @@ private sealed interface Route {
     data class AgentDetail(val slug: String) : Route
     data class AgentChat(val agent: Agent) : Route
     data class Chat(val id: String, val title: String) : Route
+    data object Voice : Route
 }
 
 @Composable
@@ -58,6 +59,7 @@ private fun Signed(graph: Graph) {
     val stack = remember { mutableStateListOf<Route>() }
     var tab by remember { mutableStateOf(Tab.Agents) }
     var org by remember { mutableStateOf(graph.prefs.get("org")) }
+    val voice by graph.voice.state.collectAsState()
 
     val route = stack.lastOrNull()
     BackHandler(enabled = route != null) { stack.removeLastOrNull() }
@@ -82,18 +84,33 @@ private fun Signed(graph: Graph) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             if (route == null) {
+                Column2(voiceBanner = voice != null && voice?.phase != systems.graal.tranibor.voice.Phase.Ended, open = { stack += Route.Voice })
                 OrgScoped(graph, org, tab, openAgent = { stack += Route.AgentDetail(it.slug) }, openChat = { id, title -> stack += Route.Chat(id, title) })
             } else when (route) {
                 is Route.AgentDetail -> {
                     val o = org
                     if (o != null) Load(graph, key = o to route.slug, fetch = { api -> api.agents(o).first { it.slug == route.slug } }) { agent, _ ->
-                        AgentDetail(graph, o, agent, chat = { stack += Route.AgentChat(agent) })
+                        AgentDetail(graph, o, agent, chat = { stack += Route.AgentChat(agent) }, talk = { stack += Route.Voice })
                     }
                 }
                 is Route.AgentChat -> org?.let { AgentChat(graph, it, route.agent.slug, route.agent.project.orEmpty()) }
                 is Route.Chat -> ConversationChat(graph, route.id)
+                Route.Voice -> VoiceScreen(graph, leave = { stack.removeLastOrNull() })
             }
         }
+    }
+}
+
+@Composable
+private fun Column2(voiceBanner: Boolean, open: () -> Unit) {
+    if (!voiceBanner) return
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("A voice session is in progress.", color = MaterialTheme.colorScheme.primary)
+        TextButton(onClick = open) { Text("Return") }
     }
 }
 
@@ -133,4 +150,5 @@ private fun titleOf(route: Route?, tab: Tab): String = when (route) {
     is Route.AgentDetail -> "Agent"
     is Route.AgentChat -> route.agent.displayName
     is Route.Chat -> route.title
+    Route.Voice -> "Voice"
 }
