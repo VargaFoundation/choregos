@@ -253,3 +253,56 @@ async def test_the_same_file_read_the_opencode_way_eight_times_is_still_a_loop(
     (result,) = client.results
     assert (result.status.value, result.reason) == ("failed", "loop")
     assert "same call 5 times in a row" in result.summary
+
+
+def _cwd_only(n: int, status: str) -> dict[str, Any]:
+    return {
+        "toolCallId": f"tc-{n}",
+        "title": "bash",
+        "kind": "execute",
+        "status": status,
+        "rawInput": {"cwd": "/workspace"},
+    }
+
+
+def test_shell_calls_running_with_their_cwd_only_are_never_one_call() -> None:
+    """#1869 (prod 0.27.10, FON-319): the `cwd` is still all the arguments when the call is already
+    `in_progress`; the command comes with the `completed` update. The first non-`pending` arguments
+    were taken for the call's: five different commands, one fingerprint, `reason: loop`."""
+    guard = TurnGuard(loop_threshold=5)
+    for n, command in enumerate(["pytest -q", "ruff check .", "mypy src", "git diff", "pytest -x", "ls"]):
+        assert guard.observe(_cwd_only(n, "pending")) is None
+        assert guard.observe(_cwd_only(n, "in_progress")) is None
+        assert guard.observe(_shell(n, "completed", command)) is None
+    assert guard.tripped is None
+
+
+def test_shell_calls_without_a_status_and_a_cwd_only_are_never_one_call() -> None:
+    guard = TurnGuard(loop_threshold=5)
+    for n in range(8):
+        update = {"toolCallId": f"tc-{n}", "kind": "execute", "rawInput": {"cwd": "/workspace"}}
+        assert guard.observe(update) is None
+    assert guard.tripped is None
+
+
+def test_shell_calls_that_end_without_their_command_break_the_streak() -> None:
+    """A command never told is unknown, not "the same": it sits between two equal calls and splits them."""
+    guard = TurnGuard(loop_threshold=3)
+    for n in range(6):
+        assert guard.observe(_cwd_only(n, "pending")) is None
+        assert guard.observe({"toolCallId": f"tc-{n}", "status": "completed"}) is None
+    assert guard.tripped is None
+    for n in range(10, 12):
+        assert guard.observe(_shell(n, "in_progress", "pytest -q")) is None
+    assert guard.observe(_cwd_only(20, "pending")) is None
+    assert guard.observe({"toolCallId": "tc-20", "status": "completed"}) is None
+    assert guard.observe(_shell(21, "in_progress", "pytest -q")) is None, "the unknown call broke the streak"
+
+
+def test_a_shell_call_whose_command_comes_late_is_compared_on_it() -> None:
+    guard = TurnGuard(loop_threshold=3)
+    for n in range(2):
+        assert guard.observe(_cwd_only(n, "in_progress")) is None
+        assert guard.observe(_shell(n, "in_progress", "pytest -q")) is None
+    assert guard.observe(_cwd_only(2, "in_progress")) is None
+    assert guard.observe(_shell(2, "completed", "pytest -q")) == "loop"

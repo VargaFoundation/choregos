@@ -121,23 +121,36 @@ def activity(
     run: Annotated[
         str | None, typer.Option("--run", help="one run's steps instead: its plan, tool calls and context")
     ] = None,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="with --run: one JSON object, nothing drawn")
+    ] = False,
 ) -> None:
     """What runs in the organisation, as a tree: project, work item, run, with status, time, tokens and cost.
 
     Read-only. `--watch` follows the activity stream; elapsed times move every second. `--run ID` shows one
-    run's own steps (the agent's plan, its tool calls with state and time, what fills its context).
+    run's own steps (the agent's plan, its tool calls with state and time, what fills its context); with
+    `--json` they are one JSON object for a script (not with `--watch`).
     """
     from . import main
 
     api: Client = main.TransportSafeClient()
+    if as_json and not run:
+        main.fail("--json is for --run: the tree is read in the terminal")
+        return
     if run:
         from . import run_activity
 
         if project or workflow or agent or kind:
             main.fail("--run shows one run: it takes no --project, --workflow, --agent or --kind")
             return
+        if as_json and watch:
+            main.fail("--json prints once: it does not combine with --watch")
+            return
         try:
-            run_activity.show(api, run, watch=watch, out=theme.console())
+            if as_json:
+                typer.echo(run_activity.as_json(api, run))
+            else:
+                run_activity.show(api, run, watch=watch, out=theme.console())
         except ApiError as exc:
             main.fail(str(exc))
         return

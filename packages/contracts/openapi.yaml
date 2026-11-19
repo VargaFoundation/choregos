@@ -12929,6 +12929,7 @@ components:
               tokens_in: { type: integer, default: 0 }
               tokens_out: { type: integer, default: 0 }
               tokens_cached: { type: integer, default: 0 }
+              tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07" }
               runs: { type: integer, default: 0 }
         total:
           type: object
@@ -12939,6 +12940,7 @@ components:
             tokens_in: { type: integer, default: 0, description: "the input tokens of the report's lines, summed (ADR 0141 §1)" }
             tokens_out: { type: integer, default: 0 }
             tokens_cached: { type: integer, default: 0, description: "the input tokens the model read from its cache, part of tokens_in" }
+            tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache, part of tokens_in (S4-07)" }
     MemoryAbGroup:
       type: object
       properties:

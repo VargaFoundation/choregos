@@ -43,6 +43,27 @@ test("a write waiting for me shows what the source says it would change", async 
   await expect(page.getByTestId("action-diff")).toContainText('"to": "02"');
 });
 
+test("refusing a proposed write asks why, and the reason reaches the API (ADR 0154 §7)", async ({ page, request }) => {
+  await page.goto("/conversations/c1");
+  // A card is a <section>: a <div> filter would climb to the list holding both waiting writes.
+  const card = page.locator("section").filter({ hasText: "Cancel order O-9" });
+  await card.getByRole("button", { name: "Refuse" }).click();
+
+  // Nothing can be refused without a reason: the button that runs it is dead until one is typed.
+  const confirmation = page.getByTestId("confirmation");
+  const run = confirmation.getByRole("button", { name: "Refuse" });
+  await expect(run).toBeDisabled();
+  await confirmation.getByLabel(/Why you refuse it/).fill("  wrong order ");
+  await run.click();
+
+  // The card leaves the waiting writes, and the reason went to the API trimmed, in the body.
+  await expect(page.getByText("Cancel order O-9")).toHaveCount(0);
+  await expect(page.getByText("Update Ada's phone")).toBeVisible();
+  const sent = (await calls(request)).filter((c) => c.method === "POST" && c.path === "/me/conversations/c1/actions/a2/refuse");
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.body).toEqual({ reason: "wrong order" });
+});
+
 test("the memory page exports everything and adds a fact of my own", async ({ page, request }) => {
   await page.goto("/assistants/acme/coach");
   await expect(page.getByText("Prefers short meetings")).toBeVisible();
