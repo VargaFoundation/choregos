@@ -2023,6 +2023,12 @@ How people sign in to the instance is on **Administration → Identity** (below)
   deployment's list (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
   `allowedBackends`) only seeds new projects and the readiness check: it does not restrict existing ones. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
+  Two of them are held to a model family, a hard constraint no `allow_unvalidated` lifts: `claude-code`
+  takes Claude models only, `gemini-cli` Gemini models only. A stage that pairs one with another family is
+  refused when its model is resolved ("the backend `gemini-cli` only accepts gemini models (got …)", with the
+  reason), and the runner refuses it again at launch. For `gemini-cli` the reason is LiteLLM's Gemini adapter:
+  it names every tool call `call_<function name>`, so two calls of one tool share an id and Anthropic refuses
+  the turn; measured on the dev gateway, the step ran minutes before ending `invalid_result` (#1990).
 - **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
   deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
   others follow as *Not turned on here*, with what each needs (`agent_sandbox`: the

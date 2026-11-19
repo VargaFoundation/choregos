@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from tranibor_contracts import ApiFormat, ModelRef, StageInput
+from tranibor_core.models import BACKEND_MODEL_CONSTRAINT_REASONS
 
 
 @dataclass(slots=True)
@@ -162,11 +163,13 @@ class Backend:
         """
         effective = (model.provider_model or model.litellm_model).lower()
         if self.model_constraint and not any(token in effective for token in self.model_constraint):
+            reason = BACKEND_MODEL_CONSTRAINT_REASONS.get(self.name)
             raise ValueError(
                 f"the backend `{self.name}` only accepts "
                 f"{' / '.join(self.model_constraint)} models (got `{model.litellm_model}`"
                 + (f" → `{model.provider_model}`" if model.provider_model else "")
                 + ")"
+                + (f": {reason}" if reason else "")
             )
 
     @staticmethod

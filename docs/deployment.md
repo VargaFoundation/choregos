@@ -554,6 +554,12 @@ A project that names its own `agent` or `models` keeps them. When a runner pod d
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
 digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094, `120`: the fakes are on in staging or prod…), or why the container never started.
+An agent that fails before its first prompt is reported by the runner itself, with exit `30` and a
+failed result whose reason says how: `agent_unreachable` (it could not be started, or did not answer
+`initialize`), `agent_exited` (its process ended first: said when it ends, with its exit code, not after
+the 60 s `initialize` timeout) or `agent_session_refused` (it answered `session/new` with an error); the
+run's journal holds a `run.failed` event with the phase (`start`, `initialize`, `session`), the reason and
+the agent's last error lines (#1986).
 
 ## Theme
 
