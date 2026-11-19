@@ -103,6 +103,19 @@ async def test_with_a_launcher_the_agent_and_the_checks_run_through_it(
     assert any("fake_agent" in c for c in commands), commands
     assert any("make" in c for c in commands), "the project's checks run in the agent's container"
     assert os.umask(0o022) == lc.SHARED_UMASK, "the runner writes group-writable files into the shared volume"
+    # The tree's root is the group's too (S65-04h): a Docker volume filled from the image's `/workspace`
+    # is the runner's alone, and the agent's container writes there as another uid of the group.
+    mode = settings.workspace.stat().st_mode
+    assert mode & 0o070 == 0o070, oct(mode)
+
+
+def test_sharing_a_root_the_runner_does_not_own_is_left_to_the_volume(tmp_path: Any) -> None:
+    """A pod's `emptyDir` is the group's already (`fsGroup`); a root the runner cannot change is not
+    an error."""
+    assert lc.share_with_group(tmp_path / "absent") is False
+    tmp_path.chmod(0o700)
+    assert lc.share_with_group(tmp_path) is True
+    assert tmp_path.stat().st_mode & 0o7777 == 0o2770
 
 
 async def test_the_process_mode_is_unchanged_and_says_so(

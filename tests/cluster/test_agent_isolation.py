@@ -211,3 +211,89 @@ def test_the_shared_volumes_still_carry_the_work_both_ways(result: dict[str, Any
         "/exchange/from-agent": "agent",
         "/exchange/from-agent:append": "ok",
     }, result
+
+
+# S65-04h: the `k8s_job` executor's own Job, on the same kubelet ───────────────────────────────
+
+
+def _job_manifest(namespace: str) -> dict[str, Any]:
+    """The Job `KubernetesJobExecutor` renders under `container`, with the test's images and scripts in
+    place of the runner image's (the containers, their users, volumes, mounts, Secret reference and
+    sidecar are the executor's own). No egress gate: kind enforces no NetworkPolicy to wait for."""
+    from tranibor_adapters.executor.k8s_job import KubernetesJobExecutor
+    from tranibor_core.domain import StageJobSpec
+
+    spec = StageJobSpec(
+        run_id="isolation-job",
+        project_slug="demo",
+        namespace=namespace,
+        runner_image=IMAGE,
+        api_url="http://choregos-api:8000",
+        run_token=SECRET,
+        agent_isolation="container",
+        timeout_minutes=10,
+    )
+    executor = KubernetesJobExecutor(client=object())  # type: ignore[arg-type]
+    job = executor._job(spec, "run-isolation-job")
+    pod = job["spec"]["template"]["spec"]
+    pod.pop("serviceAccountName")  # the test namespace has no `choregos-runner` account
+    cfg = {"name": "cfg", "mountPath": "/cfg"}
+    pod["volumes"].append({"name": "cfg", "configMap": {"name": "isolation"}})
+    (agent,) = [c for c in pod["initContainers"] if c["name"] == "agent"]
+    agent.pop("args")
+    agent["command"] = ["python", "/cfg/launcher.py", "8766"]
+    agent["startupProbe"]["exec"]["command"] = ["python", "-c", PROBE_CODE]
+    agent["volumeMounts"].append(cfg)
+    (runner,) = pod["containers"]
+    runner.pop("args")
+    runner["command"] = ["python", "/cfg/runner.py", "runner-marker-8841"]
+    runner["volumeMounts"].append(cfg)
+    return job
+
+
+@pytest.fixture(scope="module")
+def job_result(ns: str, result: dict[str, Any]) -> dict[str, Any]:
+    """After `result` (it made the ConfigMap): the run's Secret, as the executor writes it, then the Job."""
+    secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": "run-isolation-job", "namespace": ns},
+        "stringData": {"token": SECRET},
+    }
+    kubectl_shared("apply", "-f", "-", input_text=json.dumps(secret))
+    kubectl_shared("apply", "-f", "-", input_text=json.dumps(_job_manifest(ns)))
+    selector = "choregos/run-id=isolation-job"
+    deadline, done = time.monotonic() + 300, {}
+    while time.monotonic() < deadline:
+        status = kubectl_shared("-n", ns, "get", "job", "run-isolation-job", "-o", "json", check=False)
+        done = (json.loads(status) if status.strip() else {}).get("status") or {}
+        if done.get("succeeded") or done.get("failed"):
+            break
+        time.sleep(3)
+    pod = json.loads(kubectl_shared("-n", ns, "get", "pod", "-l", selector, "-o", "json"))["items"][0]
+    name = pod["metadata"]["name"]
+    logs = kubectl_shared("-n", ns, "logs", name, "-c", "runner", check=False)
+    assert done.get("succeeded") == 1, f"job status={done}\nrunner:\n{logs[-1500:]}"
+    line = next((ln for ln in logs.splitlines() if ln.startswith("RESULT=")), "")
+    assert line, f"the runner printed no result:\n{logs[-1500:]}"
+    agent_state = next(s for s in pod["status"].get("initContainerStatuses", []) if s["name"] == "agent")
+    return {**json.loads(line[len("RESULT=") :]), "phase": pod["status"]["phase"], "agent": agent_state}
+
+
+@pytest.mark.capability("k8s_job", "separate_agent")
+def test_the_job_completes_and_its_agent_sidecar_ends_with_it(job_result: dict[str, Any]) -> None:
+    """The Job ends on the runner's exit alone: the native sidecar is stopped, not waited for."""
+    assert job_result["phase"] == "Succeeded"
+    assert "terminated" in job_result["agent"]["state"], job_result["agent"]
+
+
+@pytest.mark.capability("k8s_job", "separate_agent")
+def test_the_jobs_agent_reads_nothing_of_the_runner_and_shares_the_work(job_result: dict[str, Any]) -> None:
+    """The run token reaches the runner through the run's Secret (`secretKeyRef`), as the executor
+    writes it; from the agent's container it is in no environment."""
+    assert job_result["process"]["uid"] == "1000" and int(job_result["process"]["env_hits"]) >= 1
+    container = job_result["container"]
+    assert container["uid"] == "1001"
+    assert container["env_hits"] == "0", job_result
+    assert container["runner_processes"] == "0" and container["runner_file"] == "absent"
+    assert all(value in ("agent", "ok") for value in job_result["shared"].values()), job_result

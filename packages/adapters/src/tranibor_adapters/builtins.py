@@ -649,6 +649,17 @@ def _register_forges() -> None:
     )
 
 
+def _own_resources(raw: str, key: str) -> dict[str, str] | None:
+    """`requests` or `limits` of `{"requests": {...}, "limits": {...}}` as JSON (ADR 0146 §12), the
+    runner container's own. Empty or absent: None, the executor's defaults."""
+    if not raw.strip():
+        return None
+    import json
+
+    values = json.loads(raw).get(key) or {}
+    return {str(k): str(v) for k, v in values.items()} or None
+
+
 def _register_runtimes() -> None:
     """The executors of the agents' steps."""
     from tranibor_core.agent_isolation import deployment_agent_isolation
@@ -680,6 +691,10 @@ def _register_runtimes() -> None:
             # The egress gate (S80-07f), the chart's `runner.egressGate`: the deployment's, never a
             # connector's, so a project cannot turn it off.
             egress_gate=gate_from_env(os.environ),
+            # The runner container's own requests and limits beside the agent's (ADR 0146 §12), the
+            # chart's `runner.ownResources`; the measured defaults when unset.
+            runner_requests=_own_resources(os.environ.get("CHOREGOS_RUNNER_OWN_RESOURCES", ""), "requests"),
+            runner_limits=_own_resources(os.environ.get("CHOREGOS_RUNNER_OWN_RESOURCES", ""), "limits"),
         )
     )
     register("runtime", "agent_sandbox", _SHIPPED_SPECS[("runtime", "agent_sandbox")])(

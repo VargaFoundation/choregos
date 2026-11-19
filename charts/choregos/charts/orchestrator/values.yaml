@@ -41,6 +41,11 @@ runner:
   # `agent_sandbox` only: the executor for steps that name their own image. Empty: such a step is refused.
   customImageExecutor: k8s_job
   runtimeClass: ""
+  # The runner container's own requests and limits beside the agent's (ADR 0146 §12): see the umbrella
+  # chart's values.
+  ownResources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
   # `executor: agent_sandbox` only (ADR 0016): see the umbrella chart's values.
   warmPool:
     size: 0

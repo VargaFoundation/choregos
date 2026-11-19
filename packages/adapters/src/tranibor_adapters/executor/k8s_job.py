@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from tranibor_contracts import ExecutorKind
+from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import (
     RUN_GATEWAY_KEY_ENV,
     RUN_REMOTE_TOKEN_ENV,
@@ -37,7 +38,7 @@ from tranibor_core.exit_codes import explanation
 from tranibor_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER, native_sidecars_refusal
 
 from ..errors import UnsupportedClusterError
-from . import egress_gate
+from . import egress_gate, separate_agent
 from .isolation import refuse_unless_separate
 from .tekton import (
     CORE_API,
@@ -61,7 +62,10 @@ class KubernetesJobExecutor:
     # `queue` only: Kubernetes cannot suspend a Job that has ALREADY started without destroying
     # its pod, so neither `suspend` nor `snapshot` here. Saying so rather than letting it be
     # assumed is what will allow plugging in another one without breaking anything.
-    capabilities = frozenset({"queue", "renew"})
+    #
+    # `separate_agent` (ADR 0146): under `container` the pod gets the agent's own container, a native
+    # sidecar, on Kubernetes 1.29 or later (`separate_agent.py`); an older cluster is refused at `start`.
+    capabilities = frozenset({"queue", "renew", SEPARATE_AGENT})
 
     def __init__(  # noqa: PLR0913 - one option per deployment knob
         self,
@@ -75,6 +79,8 @@ class KubernetesJobExecutor:
         max_active: int = 0,
         image_pull_secrets: list[str] | None = None,
         egress_gate: EgressGate | None = None,
+        runner_requests: dict[str, str] | None = None,
+        runner_limits: dict[str, str] | None = None,
     ) -> None:
         self.client = client or KubernetesClient()
         self.service_account = service_account
@@ -100,6 +106,10 @@ class KubernetesJobExecutor:
         #: start until a direct connection out is refused. `None`: no gate (the chart's
         #: `runner.egressGate.enabled: false`, or a caller that says nothing).
         self.egress_gate = egress_gate
+        #: The runner container's own requests and limits when the agent has a container of its own
+        #: (ADR 0146 §12); the agent's container takes `spec.cpu`/`spec.memory` and the limits above.
+        self.runner_requests = dict(runner_requests or separate_agent.RUNNER_REQUESTS)
+        self.runner_limits = dict(runner_limits or separate_agent.RUNNER_LIMITS)
 
     async def server_version(self) -> dict[str, Any]:
         """The API server's `/version` body, read at the first call and kept. A failed read raises
@@ -109,8 +119,8 @@ class KubernetesJobExecutor:
             self._server_version = found if isinstance(found, dict) else {}
         return self._server_version
 
-    async def _require_native_sidecars(self) -> None:
-        refusal = native_sidecars_refusal(await self.server_version())
+    async def _require_native_sidecars(self, what: str) -> None:
+        refusal = native_sidecars_refusal(await self.server_version(), what)
         if refusal is not None:
             raise UnsupportedClusterError(refusal)
 
@@ -119,10 +129,14 @@ class KubernetesJobExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         refuse_unless_separate(str(self.kind), self.capabilities, spec)
-        if spec.agent_container is not None:
+        if spec.agent_container is not None or spec.agent_isolation == "container":
             # Below 1.29 the API server drops `restartPolicy: Always` from the init container: the
             # pod would wait on the agent forever. Refused before anything is created.
-            await self._require_native_sidecars()
+            await self._require_native_sidecars(
+                "a hosted agent"
+                if spec.agent_container is not None
+                else "the agent's own container (ADR 0146)"
+            )
         name = self._name(spec.run_id)
         existing = await self.client.request("GET", f"{BATCH_API}/namespaces/{spec.namespace}/jobs/{name}")
         if existing is not None:
@@ -333,11 +347,26 @@ class KubernetesJobExecutor:
             pod_spec["runtimeClassName"] = spec.runtime_class
         if self.image_pull_secrets:
             pod_spec["imagePullSecrets"] = [{"name": name} for name in self.image_pull_secrets]
+        if spec.agent_isolation == "container":
+            # ADR 0146: the agent's own container, before a hosted agent's sidecar when there is one
+            # (it then runs the project's checks only, under another name).
+            separate_agent.add_to_pod(
+                pod_spec,
+                spec.runner_image,
+                name=separate_agent.LAUNCHER_BESIDE_HOSTED
+                if spec.agent_container is not None
+                else separate_agent.AGENT_CONTAINER,
+                agent_requests={"cpu": spec.cpu, "memory": spec.memory},
+                agent_limits={"cpu": self.cpu_limit, "memory": self.memory_limit},
+                runner_requests=self.runner_requests,
+                runner_limits=self.runner_limits,
+            )
         if spec.agent_container is not None:
             self._add_agent_container(pod_spec, spec.agent_container)
         if self.egress_gate is not None:
-            # Last, so that it lands FIRST: before the hosted agent's sidecar, which starts before
-            # the runner and runs the author's code from its first instant (#1854).
+            # Last, so that it lands FIRST: before the agent's container (ADR 0146) and the hosted
+            # agent's sidecar, which start before the runner and run the agent's or the author's code
+            # from their first instant (#1854).
             egress_gate.add_to_pod(pod_spec, spec.runner_image, self.egress_gate)
         return {
             "apiVersion": "batch/v1",
@@ -551,8 +580,12 @@ class KubernetesJobExecutor:
             params={"labelSelector": f"choregos/run-id={ref.run_id}"},
         )
         for pod in (pods or {}).get("items", []):
+            # The `runner` container by name: under ADR 0146 the agent's is beside it, and its output
+            # (the launcher's, the agent's) is never what the platform archives as the run's log.
             text = await self.client.request(
-                "GET", f"{CORE_API}/namespaces/{ref.namespace}/pods/{pod['metadata']['name']}/log"
+                "GET",
+                f"{CORE_API}/namespaces/{ref.namespace}/pods/{pod['metadata']['name']}/log",
+                params={"container": "runner"},
             )
             for line in str(text or "").splitlines():
                 yield line

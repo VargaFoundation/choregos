@@ -197,6 +197,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
   gets a second container in the runner's network namespace. The tree and the exchange directory are
   mounted in both, the runner's directory in `runner` only, the agent's home in `agent` only. Both
   executors declare `separate_agent`.
+- **Done** (2026-11-19, STATUS S65-04h): both executors, the kind proof of the Job, and the runner's own
+  requests (§12: 250m/512Mi, limits 1/2Gi, measured). Beside a hosted agent the launcher's container is
+  named `launcher`.
 - **Accepted when**: the Job's `agent` container has `restartPolicy: Always`, no `secretKeyRef`, no
   `envFrom` and only those mounts; a cluster older than 1.29 is refused before anything is created;
   `docker run` for the agent names no secret variable; on a kind cluster the Job completes and the
