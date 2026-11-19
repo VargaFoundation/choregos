@@ -17,7 +17,7 @@ import sys
 from types import ModuleType
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-#: The trials with a results page. `dev-platform` has a README instead; `demo` and `knowledge` are tools.
+#: The trials with a results page. `demo` and `knowledge` are tools.
 TRIALS = (
     "claude-integration",
     "dev-project",
@@ -27,7 +27,6 @@ TRIALS = (
     "lakehouse",
     "local-start",
     "no-secret",
-    "ontology",
     "python",
 )
 
@@ -62,7 +61,7 @@ def test_every_trial_has_its_results_page_and_a_paragraph_in_the_index() -> None
     index = (ROOT / "trials" / "README.md").read_text(encoding="utf-8")
     for name in TRIALS:
         assert (ROOT / "trials" / name / "RESULTS.md").is_file(), name
-    for name in (*TRIALS, "dev-platform", "demo", "knowledge"):
+    for name in (*TRIALS, "demo", "knowledge"):
         assert f"`trials/{name}/`" in index, name
     assert not list((ROOT / "trials").rglob("RESULTATS.md"))
 
@@ -70,15 +69,11 @@ def test_every_trial_has_its_results_page_and_a_paragraph_in_the_index() -> None
 def test_the_paths_the_trials_name_resolve() -> None:
     for path in (
         "trials/local-start/run.sh",
-        "trials/local-start/scenario.py",
-        "trials/local-start/scenery.py",
-        "trials/local-start/extension.Dockerfile",
         "trials/local-start/initdb/01-application-role.sql",
         "trials/hr/scenario_hr.py",
         "trials/demo/prepare_the_demo.py",
         "trials/lakehouse/trial.py",
         "trials/lakehouse/scope.py",
-        "trials/dev-platform/infra_analysis.md",
         "trials/knowledge/example-kb.yaml",
         "tests/trials/test_scenario_dev.py",
     ):

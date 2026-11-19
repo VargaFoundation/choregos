@@ -8,7 +8,6 @@ license = { text = "Apache-2.0" }
 dependencies = [
   "tranibor-contracts",
   "tranibor-core",
-  "tranibor-ontology",
   "tranibor-adapters",
   "tranibor-runner",
   "tranibor-quant",
@@ -24,7 +23,6 @@ dependencies = [
   # The former names (ADR 0176 R2): empty wheels that ship the `choregos_*` import aliases.
   "choregos-contracts", # compat-ok
   "choregos-core", # compat-ok
-  "choregos-ontology", # compat-ok
   "choregos-adapters", # compat-ok
   "choregos-runner", # compat-ok
   "choregos-quant", # compat-ok
@@ -67,7 +65,6 @@ exclude = ["packages/contracts/ts", "apps/web"]
 [tool.uv.sources]
 tranibor-contracts = { workspace = true }
 tranibor-core = { workspace = true }
-tranibor-ontology = { workspace = true }
 tranibor-adapters = { workspace = true }
 tranibor-runner = { workspace = true }
 tranibor-quant = { workspace = true }
@@ -81,7 +78,6 @@ tranibor-outpost = { workspace = true }
 tranibor-investment-research = { workspace = true }
 choregos-contracts = { workspace = true } # compat-ok
 choregos-core = { workspace = true } # compat-ok
-choregos-ontology = { workspace = true } # compat-ok
 choregos-adapters = { workspace = true } # compat-ok
 choregos-runner = { workspace = true } # compat-ok
 choregos-quant = { workspace = true } # compat-ok
@@ -160,10 +156,10 @@ plugins = ["pydantic.mypy"]
 exclude = ["(^|/)(\\.venv|node_modules|generated)/", "^apps/web/"]
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = "packages/contracts/src:packages/core/src:packages/ontology/src:packages/adapters/src:packages/runner/src:packages/quant/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:packages/agent-sdk/src:packages/outpost/src:plugins/investment-research/src:examples/agents/plain/src:apps/api/src:apps/orchestrator/src"
+mypy_path = "packages/contracts/src:packages/core/src:packages/adapters/src:packages/runner/src:packages/quant/src:packages/tools-mcp/src:packages/playbooks/src:packages/cli/src:packages/agent-sdk/src:packages/outpost/src:plugins/investment-research/src:examples/agents/plain/src:apps/api/src:apps/orchestrator/src"
 
 [[tool.mypy.overrides]]
-module = ["celpy.*", "temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*", "openpyxl.*", "lxml.*"]
+module = ["temporalio.*", "mcp.*", "kubernetes_asyncio.*", "slack_sdk.*", "authlib.*", "jsonschema_rs.*", "prometheus_client.*", "structlog.*", "asyncpg.*", "openpyxl.*", "lxml.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -204,7 +200,7 @@ filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.coverage.run]
 branch = true
-source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/ontology/src", "packages/playbooks/src", "packages/quant/src", "packages/tools-mcp/src", "packages/outpost/src", "plugins/investment-research/src"]
+source = ["packages/core/src", "packages/runner/src", "packages/agent-sdk/src", "packages/adapters/src", "apps/api/src", "apps/orchestrator/src", "packages/cli/src", "packages/contracts/src", "packages/playbooks/src", "packages/quant/src", "packages/tools-mcp/src", "packages/outpost/src", "plugins/investment-research/src"]
 omit = ["*/generated/*", "*/tests/*"]
 
 [tool.coverage.report]

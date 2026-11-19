@@ -6,7 +6,6 @@ import Link from "next/link";
 import { use } from "react";
 import { DecisionDAction } from "@/components/actions/decision";
 import { InDoubt } from "@/components/actions/in-doubt";
-import { OntologyDetail } from "@/components/actions/ontology";
 import { SettleInDoubt, Settled, settlementOf } from "@/components/actions/settle";
 import { Status, propose } from "@/components/actions/status";
 import { Card, Empty, ErrorNote, Heading } from "@/components/ui";
@@ -46,7 +45,6 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
           <Settled action={a} />
         </Card>
       )}
-      <OntologyDetail action={a} />
       <Card title="Decision">
         {a.status === "pending_approval" ? (
           <DecisionDAction projet={slug} action={a} />

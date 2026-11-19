@@ -89,7 +89,6 @@ def test_the_renamed_files_have_english_paths() -> None:
     components = WEB / "src" / "components"
     for name in (
         "access.tsx",
-        "actions/ontology.tsx",
         "actions/status.tsx",
         "run-activity.tsx",
         "theme-picker.tsx",

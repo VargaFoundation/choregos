@@ -1,6 +1,6 @@
 """`global.extraEnv`: a setting the chart does not know yet, without forking the chart.
 
-To activate, for example, an extension shipped inactive. Two properties: the variable reaches ALL the
+To give, for example, a plugin a setting of its own. Two properties: the variable reaches ALL the
 processes that read the platform's settings -- the API, each worker, the migration Job, without
 which an extension activated in the API but not in the migrations would start without its tables -- and a
 variable already set by the chart is refused at render time, rather than silently replaced.
@@ -47,18 +47,18 @@ def _porteurs(rendu: str, name: str) -> tuple[set[str], set[str]]:
 
 
 def test_the_variable_reaches_every_process_of_the_platform() -> None:
-    rendu = _render("global.extraEnv[0].name=CHOREGOS_ONTOLOGY_TRIAL", "global.extraEnv[0].value=1")
+    rendu = _render("global.extraEnv[0].name=ACME_PLUGIN_MODE", "global.extraEnv[0].value=strict")
     assert rendu.returncode == 0, rendu.stderr[-400:]
-    readers, porteurs = _porteurs(rendu.stdout, "CHOREGOS_ONTOLOGY_TRIAL")
+    readers, porteurs = _porteurs(rendu.stdout, "ACME_PLUGIN_MODE")
     assert any("migration" in name for name in readers), f"the migration Job is not seen: {readers}"
     assert porteurs == readers, f"sans la variable : {sorted(readers - porteurs)}"
-    assert 'value: "1"' in rendu.stdout
+    assert 'value: "strict"' in rendu.stdout
 
 
 def test_without_a_value_nothing_is_added() -> None:
     rendu = _render()
     assert rendu.returncode == 0, rendu.stderr[-400:]
-    assert "CHOREGOS_ONTOLOGY_TRIAL" not in rendu.stdout
+    assert "ACME_PLUGIN_MODE" not in rendu.stdout
 
 
 def test_a_variable_already_set_by_the_chart_is_refused() -> None:

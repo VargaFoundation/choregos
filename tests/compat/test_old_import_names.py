@@ -29,7 +29,6 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = [
     ("contracts", "contracts", "packages/contracts"),
     ("core", "core", "packages/core"),
-    ("ontology", "ontology", "packages/ontology"),
     ("adapters", "adapters", "packages/adapters"),
     ("runner", "runner", "packages/runner"),
     ("quant", "quant", "packages/quant"),
@@ -258,5 +257,7 @@ def test_the_old_console_scripts_and_plugin_groups_are_unchanged() -> None:
     """R2 renames no command and no entry-point group: `choregos` stays beside `tranibor`."""
     cli = tomllib.loads((ROOT / "packages/cli/pyproject.toml").read_text())["project"]["scripts"]
     assert cli == {"tranibor": "tranibor_cli.main:main", "choregos": "tranibor_cli.main:main"}
-    ontology = tomllib.loads((ROOT / "packages/ontology/pyproject.toml").read_text())["project"]
-    assert set(ontology["entry-points"]) == {"choregos.plugins", "choregos.migrations"}
+    from tranibor_adapters import EXTENSION_GROUP
+    from tranibor_api.migrate import MIGRATIONS_GROUP
+
+    assert (EXTENSION_GROUP, MIGRATIONS_GROUP) == ("choregos.plugins", "choregos.migrations")
