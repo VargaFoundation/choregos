@@ -30,6 +30,7 @@ from typing import Any, Literal, Protocol
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_core.prompt_cache import with_prompt_cache
 
 from ..config import Settings, get_settings
 from ..db.models import Project, WorkflowDef
@@ -186,17 +187,19 @@ class GatewayWorkflowRouter:
                 response = await client.post(
                     f"{self.base_url}/v1/chat/completions",
                     headers={"Authorization": f"Bearer {self.key}"},
-                    json={
-                        "model": self.model,
-                        "messages": [
-                            {"role": "system", "content": INSTRUCTIONS},
-                            {"role": "user", "content": prompt},
-                        ],
-                        "response_format": {"type": "json_object"},
-                        "max_tokens": MAX_ANSWER_TOKENS,
-                        "temperature": 0,
-                        "metadata": {"choregos_agent": ROUTER_AGENT},
-                    },
+                    json=with_prompt_cache(
+                        {
+                            "model": self.model,
+                            "messages": [
+                                {"role": "system", "content": INSTRUCTIONS},
+                                {"role": "user", "content": prompt},
+                            ],
+                            "response_format": {"type": "json_object"},
+                            "max_tokens": MAX_ANSWER_TOKENS,
+                            "temperature": 0,
+                            "metadata": {"choregos_agent": ROUTER_AGENT},
+                        }
+                    ),
                 )
         except httpx.HTTPError as exc:
             raise RoutingError(f"the gateway did not answer: {type(exc).__name__}") from exc

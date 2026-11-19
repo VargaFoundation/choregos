@@ -474,6 +474,7 @@ stories:
     acceptance:
       - "Unvalidated combination refused with a link to the matrix; admin `allow_unvalidated` works"
 
+
   # ───────────────────────── S5 — Front ─────────────────────────
   - id: S5-01
     title: "Socle Next.js (App Router, TS strict, Tailwind, shadcn, TanStack Query, Auth.js OIDC Keycloak, next-intl FR/EN, Playwright) contre API mock"
@@ -5700,6 +5701,14 @@ stories:
     size: S
     depends_on: [S80-10]
     notes: "graalsystems/ecphoria 0.2.6 is the first release published to ghcr.io/graalsystems/ecphoria and -operator. The chart and both compose files pin 0.2.6-memory there; the allowlist of tests/licences/test_no_varga.py loses the four files that named the frozen Ecphoria address."
+  - id: S80-13
+    title: "ci: the gateway's guarantees are proven every night against a real model, Claude Haiku 5.5, with a capped key"
+    stream: S80
+    sprint: 1
+    priority: 7
+    size: S
+    depends_on: [S80-07e]
+    notes: ".github/workflows/live-model.yml: nightly at 03:30 UTC and on dispatch, never on a pull request, only on graalsystems/tranibor from main. tests/live/model/compose.yaml starts the chart's LiteLLM (guard, span callback) with every alias on anthropic/claude-haiku-5-5; tests/live/test_litellm_live.py runs through it, a skip fails the job. The repository secret ANTHROPIC_API_KEY (a dedicated workspace with a monthly cap) is in the environment of the step that starts LiteLLM only. Guarded by tests/ci/test_live_model_job.py."
   # ───────────── S81 — the phone is a surface of the platform ─────────────
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
@@ -5757,3 +5766,14 @@ stories:
     size: S
     depends_on: [S81-04]
     notes: "make android-ci (lint, unit tests, release build), an android job with every action pinned by SHA, release signing from secrets and an unsigned build without them, the APK attached to the release (ADR 0151); docs/android.md."
+  - id: S4-08
+    title: "Prompt caching on the platform's own model calls — stable prefix, `cache_control` on the Anthropic-family prefix, no-op elsewhere"
+    stream: S4
+    sprint: 2
+    priority: 8
+    size: M
+    depends_on: [S4-02]
+    acceptance:
+      - "Tools sorted, system first, volatile data after the breakpoint; two calls with different volatile input share a byte-identical prefix"
+      - "`cache_control: ephemeral` on the last tool and the last system block for an Anthropic-family model; no cache field for any other provider"
+      - "Cache counters read from `usage`; their ledger columns are S4-07's"

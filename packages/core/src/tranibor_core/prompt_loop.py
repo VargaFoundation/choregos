@@ -18,6 +18,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .prompt_cache import with_prompt_cache
+
 Complete = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 CallTool = Callable[[str, dict[str, Any]], Awaitable[str]]
 OnEvent = Callable[[str, dict[str, Any]], Awaitable[None]]
@@ -79,7 +81,7 @@ class LoopRequest:
             body["max_tokens"] = self.max_output_tokens
         if self.response_format == "json_object":
             body["response_format"] = {"type": "json_object"}
-        return body
+        return with_prompt_cache(body)
 
 
 async def run_loop(  # noqa: PLR0913 - the loop and its four hooks
