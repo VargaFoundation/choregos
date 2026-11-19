@@ -1,4 +1,4 @@
-"""The embedded LiteLLM takes what an operator's gateway needs (S80-14, ADR 0195).
+"""The embedded LiteLLM takes what an operator's gateway needs (S80-15, ADR 0195).
 
 Per-model endpoints and price sheets (cache prices, tiers), the database's host, user, password Secret
 and `sslmode`, the guard and the spans callback as switches (on by default), the image's local price
