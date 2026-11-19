@@ -30,6 +30,7 @@ ALLOWED_SOURCES = {
     "test_fan_out",
     "test_gateway_key_through_the_secret",
     "test_interpreter",
+    "test_llm_guard_on_the_run_key",
     "test_lost_run",
     "test_merged_is_what_was_judged",
     "test_project_day_team",

@@ -999,6 +999,14 @@
           },
           "type": "object"
         },
+        "key_mode": {
+          "default": "master",
+          "enum": [
+            "master",
+            "delegated"
+          ],
+          "type": "string"
+        },
         "team_id": {
           "type": "string"
         }
@@ -2370,7 +2378,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2549,7 +2557,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2745,7 +2753,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2905,7 +2913,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2974,7 +2982,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"

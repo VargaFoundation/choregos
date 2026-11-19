@@ -42,7 +42,7 @@ spec:
             - { name: ECPHORIA_EMBEDDING__OPENAI_BASE_URL, value: "{{ include "choregos.gatewayUrl" . }}/v1" }
             - { name: ECPHORIA_EMBEDDING__MODEL, value: {{ .Values.embedding.model | quote }} }
             - name: ECPHORIA_EMBEDDING__OPENAI_API_KEY
-              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: master-key } }
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" . }}, key: {{ include "choregos.gatewayKeyName" . }} } }
             {{- end }}
             # The index must be as wide as the vectors (`ecphoria doctor` warns when they differ).
             - { name: ECPHORIA_EMBEDDING__DIMENSION, value: {{ .Values.embedding.dimension | quote }} }

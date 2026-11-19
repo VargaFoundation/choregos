@@ -203,7 +203,7 @@ spec:
             - name: CHOREGOS_TOOL_SCRIPTS_ALLOWED
               value: {{ ternary "on" "off" (ne (($root.Values.runner.toolScripts | default dict).allowed) false) | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
-              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: {{ include "choregos.gatewayKeyName" $root }} } }
             {{- $concurrency := mergeOverwrite (deepCopy ($root.Values.concurrency | default dict)) (.concurrency | default dict) }}
             # What this pod takes on at once (S80-07a): the chart's `concurrency`, then the queue's.
             - name: CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES

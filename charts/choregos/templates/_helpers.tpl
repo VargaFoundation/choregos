@@ -193,6 +193,9 @@ proj-{slug}-runners
   value: {{ .Values.global.gateway.type | default "litellm" | quote }}
 - name: CHOREGOS_GATEWAY_URL
   value: {{ include "choregos.gatewayUrl" . | quote }}
+# `master` or `delegated` (ADR 0205); the helper refuses any other value.
+- name: CHOREGOS_GATEWAY_KEY_MODE
+  value: {{ (include "choregos.gatewayKeyName" . | eq "delegation-key") | ternary "delegated" "master" | quote }}
 - name: CHOREGOS_MEMORY_URL
   value: {{ include "choregos.memoryUrl" . | quote }}
 {{- with (include "choregos.memoryTokenSecret" .) }}
@@ -501,6 +504,22 @@ monitoring
 http://{{ .Release.Name }}-litellm:4000
 {{- else -}}
 {{ .Values.global.gateway.url }}
+{{- end -}}
+{{- end -}}
+
+{{/* The key of the gateway secret that holds the credential (S82-05, ADR 0205): the master key of the
+platform's own LiteLLM, or the delegation key of a service account on a gateway shared with others.
+The variable it feeds, CHOREGOS_GATEWAY_MASTER_KEY, keeps its historical name. */}}
+{{- define "choregos.gatewayKeyName" -}}
+{{- if eq (.Values.global.gateway.keyMode | default "master") "delegated" -}}
+{{- if .Values.global.gateway.embedded -}}
+{{- fail "global.gateway.keyMode=delegated is for a shared gateway: it cannot be combined with global.gateway.embedded=true (the embedded LiteLLM runs under its own master key)" -}}
+{{- end -}}
+delegation-key
+{{- else if eq (.Values.global.gateway.keyMode | default "master") "master" -}}
+master-key
+{{- else -}}
+{{- fail (printf "global.gateway.keyMode must be master or delegated, not %q" .Values.global.gateway.keyMode) -}}
 {{- end -}}
 {{- end -}}
 

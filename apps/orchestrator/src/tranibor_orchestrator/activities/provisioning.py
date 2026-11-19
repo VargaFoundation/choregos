@@ -13,6 +13,7 @@ from typing import Any
 
 import yaml
 from temporalio import activity
+from tranibor_adapters.gateway.project_team import ensure_project_team
 from tranibor_api.db.models import Project
 from tranibor_api.services import persist_event
 from tranibor_contracts import EventType
@@ -263,7 +264,12 @@ async def _gateway_create_team_and_budget(params: dict[str, Any], bundle: Any, s
     daily = bundle.engine.daily_budget()
     if daily is None:
         return "no daily project budget in the policy: no gateway team"
-    team = await bundle.adapters.gateway.ensure_team(project_team_id(bundle.project.id), daily)
+    team = await ensure_project_team(bundle.adapters.gateway, project_team_id(bundle.project.id), daily)
+    if team is None:
+        return (
+            f"the gateway has no teams (delegated key): the day budget, {daily:.2f} $, is held by "
+            "the platform from the measured spend"
+        )
     return f"gateway team `{team}` created, budget {daily:.2f} $ per day"
 
 

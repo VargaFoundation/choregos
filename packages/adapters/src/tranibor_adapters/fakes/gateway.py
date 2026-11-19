@@ -9,6 +9,7 @@ from typing import Any
 from tranibor_core.domain import GatewayModel, Spend, VirtualKey, utcnow
 
 from ..base import GATEWAY_CAPABILITIES
+from ..errors import ConfigurationError, UpstreamError
 
 DEFAULT_MODELS = [
     GatewayModel(
@@ -54,10 +55,19 @@ class FakeGateway:
         *,
         auto_usage: bool = False,
         capabilities: frozenset[str] | None = None,
+        delegated: bool = False,
+        account_budget_usd: float | None = None,
     ) -> None:
         # Scriptable down to any subset: a test of a platform behaviour that depends on what
         # the gateway cannot do (no hard budget, no spend readback) declares just that.
         self.capabilities = GATEWAY_CAPABILITIES if capabilities is None else frozenset(capabilities)
+        #: A gateway reached with a delegated service-account key (ADR 0205), as LiteLLM 1.105 serves
+        #: it: no teams, no `team_id` on a key, a key no richer than the account (`account_budget_usd`),
+        #: and a key minted without a budget or models is a caller's error the gateway would not catch.
+        self.delegated = delegated
+        self.account_budget_usd = account_budget_usd
+        if delegated:
+            self.capabilities = self.capabilities - {"teams"}
         self.models = models or list(DEFAULT_MODELS)
         # `auto_usage` simulates an agent's consumption: useful for the demo and for screenshots,
         # useless (and misleading) for cost tests.
@@ -73,6 +83,8 @@ class FakeGateway:
 
     async def ensure_team(self, team_id: str, budget_usd: float, duration: str = "1d") -> str:
         """Idempotent: a team that exists keeps its spend and gets its budget updated."""
+        if self.delegated:
+            raise ConfigurationError("a delegated key cannot create or update a team (LiteLLM: 401/403)")
         self.teams[team_id] = {"budget_usd": budget_usd, "duration": duration}
         self.team_spend.setdefault(team_id, 0.0)
         return team_id
@@ -85,6 +97,18 @@ class FakeGateway:
         models: list[str],
         team_id: str | None = None,
     ) -> VirtualKey:
+        if self.delegated:
+            if team_id is not None:
+                raise UpstreamError("litellm", "POST /key/generate → 403 : not a team admin", status_code=403)
+            if not models or budget_usd <= 0:
+                raise ConfigurationError("a delegated key is minted with a budget and models")
+            if self.account_budget_usd is not None and budget_usd > self.account_budget_usd:
+                raise UpstreamError(
+                    "litellm",
+                    f"POST /key/generate → 400 : max_budget ({budget_usd}) cannot exceed the caller's own "
+                    f"max_budget ({self.account_budget_usd})",
+                    status_code=400,
+                )
         self._minted += 1
         if team_id is not None:
             self.key_team[f"key-{self._minted}"] = team_id
