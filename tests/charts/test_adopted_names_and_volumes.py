@@ -1,4 +1,4 @@
-"""An embedded component adopts a Service name and a volume that already exist (S80-15, ADR 0195).
+"""An embedded component adopts a Service name and a volume that already exist (S80-16, ADR 0195).
 
 An operator whose clients already dial `litellm` and `ecphoria`, and whose data already sits in a claim,
 switches onto the chart by values: the names and the claim are kept, no claim is rendered over the

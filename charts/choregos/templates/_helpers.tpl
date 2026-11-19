@@ -524,7 +524,7 @@ monitoring
 {{- end -}}
 {{- end -}}
 
-{{- /* S80-15: the embedded Services' names, overridable so an operator whose clients already dial another
+{{- /* S80-16: the embedded Services' names, overridable so an operator whose clients already dial another
 name (`litellm`, `ecphoria`) keeps it (ADR 0195). Global, because the API, the workers and the other
 subcharts render the URLs from their own values. */ -}}
 {{- define "choregos.gatewayServiceName" -}}
