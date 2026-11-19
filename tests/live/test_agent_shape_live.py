@@ -195,12 +195,12 @@ def pod(gateway: Gateway, results: Path) -> Iterator[dict[str, str]]:
 
 
 def harnesses() -> list[Any]:
-    """The three harnesses; `gemini-cli` is expected to fail on a model that is not Gemini (#1990)."""
+    """The three harnesses; `gemini-cli` only on a Gemini model, the one family the platform gives it
+    (#1990: on another, LiteLLM's Gemini adapter gives two calls of one tool the same id)."""
     model = os.environ.get("CHOREGOS_LIVE_SHAPE_MODEL", "choregos-claude-haiku")
-    gemini = pytest.mark.xfail(
+    gemini = pytest.mark.skipif(
         "gemini" not in model.lower(),
-        reason="#1990: LiteLLM's Gemini adapter gives parallel calls of one function one id (Claude)",
-        strict=False,
+        reason="#1990: gemini-cli is refused on a model that is not Gemini (BACKEND_MODEL_CONSTRAINTS)",
     )
     return [pytest.param(name, marks=gemini) if name == "gemini-cli" else name for name in HARNESSES]
 

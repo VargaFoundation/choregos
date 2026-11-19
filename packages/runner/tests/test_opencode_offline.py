@@ -30,6 +30,8 @@ def _stage_env(
     stage_input = _minimal_stage_input(tmp_path)
     stage_input.agent.launch.env = launch_env
     backend = get_backend(backend_name)
+    if "gemini" in backend.model_constraint:  # gemini-cli runs on a Gemini model only (#1990)
+        stage_input.model.provider_model = "gemini/gemini-2.5-pro"
     plan = backend.launch_plan(stage_input, tmp_path)
     return {**plan.env, **backend.model_env(stage_input.model, key)}
 
