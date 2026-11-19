@@ -223,6 +223,51 @@ async def test_without_an_account_the_error_carries_the_consent_url_and_nothing_
     assert provider.requests == []
 
 
+async def test_the_rest_turn_names_the_account_to_connect_when_a_tool_answers_not_connected(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,
+    source: Any,
+    provider: FakeOAuthProvider,
+) -> None:
+    """Over HTTP, whole and streamed: the tool's `account_not_connected` is the answer's `missing_accounts`
+    (ADR 0154 §4, G1, S67-08), with the console's connect URL, and a turn without one carries none."""
+    from tranibor_api.config import get_settings
+
+    from .kits.conversations import ME as CONVERSATIONS
+    from .kits.conversations import _open
+
+    await _declare(client)
+    await _agent(
+        client,
+        mcp_servers=[{"connector": "fournisseur", "tools": ["suivi_*"], "identity": "user_consent"}],
+    )
+    conversation = await _open("northwind", admin)
+    url = f"{get_settings().public_url.rstrip('/')}/me/connected-accounts/fournisseur/connect?org=northwind"
+
+    upstream.model.call("fournisseur__suivi_commande", {"numero": "42"}).say("Done.")
+    whole = await client.post(
+        f"{CONVERSATIONS}/{conversation}/messages", json={"input": "Where is order 42?"}
+    )
+    assert whole.status_code == 200, whole.text
+    assert whole.json()["missing_accounts"] == [{"need": "fournisseur", "connect_url": url}]
+
+    upstream.model.say("Nothing to call.")
+    quiet = await client.post(f"{CONVERSATIONS}/{conversation}/messages", json={"input": "Thanks"})
+    assert quiet.json()["missing_accounts"] == [], "the list is the latest turn's"
+
+    upstream.model.call("fournisseur__suivi_commande", {"numero": "43"}).say("Done.")
+    streamed = await client.post(
+        f"{CONVERSATIONS}/{conversation}/messages", json={"input": "And 43?", "stream": True}
+    )
+    blocks = [b for b in streamed.text.replace("\r\n", "\n").split("\n\n") if "response.completed" in b]
+    (last,) = blocks
+    data = json.loads(next(line[6:] for line in last.split("\n") if line.startswith("data: ")))
+    assert data["missing_accounts"] == [{"need": "fournisseur", "connect_url": url}]
+    assert _calls(source) == [], "nothing reached the source"
+
+
 async def test_a_refresh_token_the_source_rotates_is_sealed_again(
     client: AsyncClient,
     project: dict[str, Any],
