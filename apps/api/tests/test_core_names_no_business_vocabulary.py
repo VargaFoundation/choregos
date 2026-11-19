@@ -45,9 +45,6 @@ ALLOWED: dict[str, str] = {
     "packages/adapters/src/tranibor_adapters/__init__.py": "exports the S38 fake `FAKE_MARKETDATA`",
     "packages/adapters/src/tranibor_adapters/specs.py": "registers the S38 `marketdata` connector type",
     "packages/adapters/src/tranibor_adapters/builtins.py": "registers the S38 `marketdata` connector type",
-    "packages/contracts/src/tranibor_contracts/workflow.py": (
-        "a comment names the S38 `marketdata` connector family a command may call"
-    ),
     "packages/quant/src/tranibor_quant": "S38's research tooling reads market data through the S38 connector",
 }
 
