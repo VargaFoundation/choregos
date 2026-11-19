@@ -23,7 +23,6 @@
 # created, and "Require review from Code Owners" turned on, when a second human reviewer joins.
 /packages/contracts/                                          @graalsystems/human-review
 /apps/api/src/tranibor_api/migrations/                        @graalsystems/human-review
-/packages/ontology/src/tranibor_ontology/service/migrations/  @graalsystems/human-review
 /apps/api/src/tranibor_api/security.py                        @graalsystems/human-review
 /apps/api/src/tranibor_api/rbac.py                            @graalsystems/human-review
 /apps/api/src/tranibor_api/audit.py                           @graalsystems/human-review

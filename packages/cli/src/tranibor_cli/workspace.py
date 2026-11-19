@@ -62,6 +62,7 @@ from .client import ApiError, AsyncClient, Profile
 from .live import _workflow as default_workflow  # the command's own pick: same rule, same words
 from .live_app import LiveFlowPane
 from .live_view import reason_long
+from .neutral_names import change_request_of
 from .run_steps import RunSteps
 
 #: Seconds before the activity stream is opened again after it ended or failed.
@@ -1646,7 +1647,7 @@ class Workspace(App[None]):
                 ("state", str(item.get("state_display") or item["state"])),
                 ("size", str(item.get("size") or DASH)),
                 ("spend", self.price(money.Amount(eur=totals.get("cost_eur")))),
-                ("pull request", str(item.get("pr_url") or DASH)),
+                ("pull request", change_request_of(item) or DASH),
             ],
             Text(""),
             Text(decide.clean(str(item["title"]))),

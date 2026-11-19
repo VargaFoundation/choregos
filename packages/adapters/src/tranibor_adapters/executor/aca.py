@@ -115,6 +115,8 @@ class AcaExecutor:
     """One ACA job per run, triggered manually, cleaned up by the ACA lifecycle."""
 
     kind = ExecutorKind.ACA
+    #: Never `separate_agent` (ADR 0146 §9, S65-04l): under `container` every run is refused at `start`,
+    #: with the reason in `tranibor_core.agent_isolation.WHY_NOT_SEPARATE`.
     capabilities: frozenset[str] = frozenset()
 
     def __init__(

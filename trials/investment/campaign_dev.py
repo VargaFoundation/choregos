@@ -12,6 +12,10 @@ Variables:
     CHOREGOS_DEV_PROJECT     (default research)
     CHOREGOS_DEV_ALPHAVANTAGE_KEY_FILE  a file holding the organisation's Alpha Vantage key (optional)
 
+Since S83-07 the template is the `investment-research` plugin's (ADR 0181): `prepare` installs the plugin
+from the deployment's `tranibor` source, and the deployment maps its job image
+(`global.images.jobs.investment-research`, the release's `tranibor-investment-research`).
+
 The key is the organisation's, not the platform's: `prepare` sends it as a value, which the API seals
 in the database (ADR 0058) and never returns. It never goes into the pods' environment (S39-06e).
 Without the file, an existing connector keeps the key it has.
@@ -106,12 +110,16 @@ def prepare() -> None:
                 ),
                 200,
             )
+        plugins = {p["name"] for p in read(http.get(f"/orgs/{ORG}/plugins"), 200)["items"]}
+        if "investment-research" not in plugins:
+            plugin = {"source": "tranibor", "name": "investment-research", "version": "0.1.0"}
+            read(http.post(f"/orgs/{ORG}/plugins/install", json=plugin), 201)
         projects = {p["slug"] for p in read(http.get(f"/orgs/{ORG}/projects"), 200)["items"]}
         if PROJECT not in projects:
             body = {
                 "slug": PROJECT,
                 "name": "Investment research",
-                "template_ref": "investment-research",
+                "template_ref": "plugin:investment-research/investment-research",
                 "config": {"slug": PROJECT, "org": ORG},
             }
             read(http.post(f"/orgs/{ORG}/projects", json=body), 201)

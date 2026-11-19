@@ -19,6 +19,7 @@ import {
   secondaryLabel,
   type GraphNode,
 } from "../workflows/map/layout";
+import { writesWorkspace } from "@/lib/neutral-names";
 
 /** Who carries a step: the shape of its box, and what it says in so many words. */
 export type StepKind = "agent" | "human" | "platform" | "train" | "decision";
@@ -177,7 +178,7 @@ function stepOf(
     agentRef: step?.agent ?? null,
     outputs: step?.outputs ?? [],
     inputs: step?.inputs ?? [],
-    writesBranch: step?.writes_branch ?? false,
+    writesBranch: writesWorkspace(step),
   };
 }
 

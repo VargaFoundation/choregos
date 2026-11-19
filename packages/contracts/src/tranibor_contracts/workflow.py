@@ -6,14 +6,20 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .enums import ActorType, StateKind, StateOutcome
+from .open_lists import CONNECTOR_KIND_PATTERN, OpenList
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,62}$")]
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
 
 AGENT_WILDCARD = "*agent"
+
+
+#: What the platform does when it takes a system transition (`does:`, ADR 0181): the core's two, which
+#: are the software-delivery plugin's in round C2 under the same names, and those extensions declare.
+STEP_EFFECTS = OpenList("step effect", r"^[a-z][a-z0-9_]{0,63}$", ("open_pr", "merge_pr"))
 
 
 class Strict(BaseModel):
@@ -67,6 +73,19 @@ class AgentActor(Strict):
     #: A registry agent (ADR 0033): `slug` or `slug@version`; its instructions take precedence over
     #: the playbook.
     agent: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$")
+    #: The connector kinds the agent works through, which the project must connect (ADR 0181 C1): the
+    #: workflow says it, the platform no longer guesses it from the role's name. Absent from the stored
+    #: spec when not written, so a workflow published before keeps its digest.
+    needs: list[Annotated[str, Field(pattern=CONNECTOR_KIND_PATTERN)]] | None = Field(
+        default=None, max_length=10
+    )
+
+    @field_validator("needs")
+    @classmethod
+    def _needs_once(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("`needs` names a connector kind more than once")
+        return value
 
     @property
     def playbook_name(self) -> str:
@@ -301,7 +320,11 @@ class ActionEffectSpec(Strict):
 
 
 class ActionApprover(Strict):
-    role: Literal["developer", "release_captain", "project_owner", "org_admin"] = "project_owner"
+    #: The least rank an approver holds. `developer` and `release_captain` are the former names of
+    #: `contributor` and `approver`, read until the release `window.WINDOW` names (ADR 0181 C1).
+    role: Literal["contributor", "approver", "project_owner", "org_admin", "developer", "release_captain"] = (
+        "project_owner"
+    )
     #: An identity-provider group the approver must ALSO belong to (ADR 0052): a rank says how
     #: much someone may decide, a group says who is competent to — `netops-approvers` for a firewall.
     group: str | None = Field(default=None, min_length=1, max_length=200)
@@ -443,7 +466,13 @@ class Transition(Strict):
     #: What the PLATFORM does when crossing a system transition: open the ticket's PR, or merge
     #: it. It used to be the prefix of the target state's name (`pr_`, `merged`): a rename from
     #: the console changed the behaviour without saying so (#175).
-    does: Literal["open_pr", "merge_pr"] | None = None
+    #: A step effect by name (ADR 0181): the core's `open_pr` and `merge_pr`, or one an extension
+    #: declared (`STEP_EFFECTS.declare`); any other is refused.
+    does: Annotated[str, AfterValidator(STEP_EFFECTS.validate)] | None = None
+    #: The outcome this transition repairs (ADR 0181 C1): taken from its state when the work item meets
+    #: that outcome (`ci_failed`, `changes_requested`, or one an event names), never on the normal
+    #: path. It replaces the platform's guess from the actor's role.
+    repairs: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_]{0,62}$")
     #: How the pull request is opened, on a transition that opens it (S51-11): `{draft: true}`.
     pull_request: PullRequestSpec | None = None
     #: A system transition can open one child work item per element of a list and wait for them
@@ -647,7 +676,7 @@ def implicit_effect(state: str) -> Literal["open_pr", "merge_pr"] | None:
     return None
 
 
-def transition_effect(transition: Transition) -> Literal["open_pr", "merge_pr"] | None:
+def transition_effect(transition: Transition) -> str | None:
     """What the platform does when crossing a system transition: written, otherwise deduced."""
     return transition.does or implicit_effect(transition.to)
 

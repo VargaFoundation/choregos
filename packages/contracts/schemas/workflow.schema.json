@@ -192,7 +192,7 @@
         "role": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]{1,31}$",
-          "description": "The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name."
+          "description": "The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, brief, deliver, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name."
         },
         "model": {
           "type": "string",
@@ -225,6 +225,16 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$",
           "description": "A registry agent (ADR 0033): `slug`, or `slug@version`. Its version — the project's pinned one, otherwise the latest — sets the instructions, model, limits and budget; its instructions take precedence over the playbook."
+        },
+        "needs": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+          },
+          "description": "The connector kinds the agent works through, which the project must therefore connect (ADR 0181 C1): a workflow declares them instead of the platform guessing from the role's name."
         }
       }
     },
@@ -534,13 +544,15 @@
           "$ref": "#/$defs/task",
           "description": "a task a person does: a form whose values become fields, an attestation"
         },
+        "repairs": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "description": "The outcome this transition repairs (ADR 0181 C1): it is taken from its state when the work item meets that outcome (`ci_failed`, `changes_requested`, or any outcome an event names), and never on the normal path."
+        },
         "does": {
           "type": "string",
-          "enum": [
-            "open_pr",
-            "merge_pr"
-          ],
-          "description": "What the platform does when it takes a system transition: open the work item's pull request, or merge it (before #175: the `pr_` or `merged` prefix of the target state)."
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "description": "What the platform does when it takes a system transition, a step effect by name (ADR 0181): the core's open_pr (open the work item's pull request) and merge_pr (merge it), or one an installed extension declares; the platform refuses any other (before #175: the `pr_` or `merged` prefix of the target state)."
         },
         "pull_request": {
           "type": "object",
@@ -698,11 +710,14 @@
               "role": {
                 "type": "string",
                 "enum": [
-                  "developer",
-                  "release_captain",
+                  "contributor",
+                  "approver",
                   "project_owner",
-                  "org_admin"
-                ]
+                  "org_admin",
+                  "developer",
+                  "release_captain"
+                ],
+                "description": "the least rank an approver holds: `contributor`, `approver`, `project_owner` or `org_admin`. `developer` and `release_captain` are their former names, read until the release the window list names (ADR 0181 C1)"
               },
               "group": {
                 "type": "string",

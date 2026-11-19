@@ -19,11 +19,12 @@ KEY = "cle-marketdata-du-coffre"
 
 @pytest.fixture
 def market(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    import tranibor_adapters
-    from tranibor_adapters.fakes.marketdata import FakeMarketData
+    # The connector type and its fake are the `investment-research` extension's (ADR 0181 O4-4), loaded by
+    # the API from its entry point.
+    from tranibor_investment_research.marketdata import fake as fakes
 
-    fake = FakeMarketData()
-    monkeypatch.setattr(tranibor_adapters, "FAKE_MARKETDATA", fake)
+    fake = fakes.FakeMarketData()
+    monkeypatch.setattr(fakes, "FAKE", fake)
     monkeypatch.setenv("CONNECTOR_TEST_MARKETDATA_KEY", KEY)
     yield fake
 

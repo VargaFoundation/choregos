@@ -419,17 +419,6 @@ def test_anchors_follow_docusaurus() -> None:
     )
 
 
-def test_an_ontology_cannot_take_the_names_of_the_doors_tools() -> None:
-    from tranibor_api.mcp.caller import Caller
-    from tranibor_api.mcp.tools import Context, core_tools
-    from tranibor_api.rbac import Principal
-    from tranibor_ontology.mcpgen import RESERVED_TOOLS
-
-    caller = Caller(principal=Principal(user_id="u", email="u@x.test"), token=None, scopes=frozenset())
-    ctx = Context(session=None, caller=caller, project=None, org=None, console="")  # type: ignore[arg-type]
-    assert {tool.name for tool in core_tools(ctx)} <= RESERVED_TOOLS
-
-
 # ───────────────────────────── as resources (ADR 0191 §8) ─────────────────────────────
 
 

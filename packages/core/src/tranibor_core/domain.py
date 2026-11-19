@@ -7,11 +7,13 @@ They are serialisable (pydantic) because they cross the Temporal activity bounda
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from tranibor_contracts import (
+    MEMORY_KINDS,
     ExecutorKind,
     MemoryKind,
     ReleaseStatus,
@@ -311,6 +313,9 @@ class StageJobSpec(Model):
     #: Where the step's agent runs (ADR 0146, `tranibor_core.agent_isolation`): `container` asks the
     #: executor for the agent's own container, and one that cannot start it refuses the run.
     agent_isolation: Literal["process", "container"] = "process"
+    #: The image of the agent's own container under `container` (ADR 0146 §10): the operator's, for an
+    #: agent written in code (ADR 0063), whose runner is then the platform's image. None: the runner's.
+    agent_image: str | None = None
 
 
 class ExecRef(Model):
@@ -432,8 +437,27 @@ class Provenance(Model):
     ts: datetime = Field(default_factory=utcnow)
 
 
+#: A memory kind: one of the core's `MemoryKind` (returned as the member) or one an extension declared
+#: (`tranibor_contracts.MEMORY_KINDS`, ADR 0181); a stored one is read back with the `stored` context.
+MemoryKindName = Annotated[str, AfterValidator(MEMORY_KINDS.validate)]
+
+
+def _kind_read_back(value: Any) -> Any:
+    """A memory read back from the store keeps its kind, declared or not any more (ADR 0098 §4)."""
+    text = str(value)
+    if text in MEMORY_KINDS.core:
+        return MemoryKind(text)
+    if re.fullmatch(MEMORY_KINDS.pattern, text):
+        return text
+    raise ValueError(f"not a memory kind: {text!r}")
+
+
+#: The kind of a memory read back: any that matches the list's pattern.
+StoredMemoryKind = Annotated[str, AfterValidator(_kind_read_back)]
+
+
 class Fact(Model):
-    kind: MemoryKind
+    kind: MemoryKindName
     subject: str
     content: str
     external_id: str | None = None
@@ -445,7 +469,7 @@ class Fact(Model):
 
 class Memory(Model):
     id: str
-    kind: MemoryKind
+    kind: StoredMemoryKind
     subject: str
     content: str
     score: float | None = None

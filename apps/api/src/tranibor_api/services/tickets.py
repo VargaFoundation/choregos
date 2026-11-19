@@ -241,8 +241,8 @@ async def work_item_dto(
             else None
         ),
         pr_url=item.pr_url,
-        repository=repository,
-        repository_fixed=repository_fixed,
+        workspace=repository,
+        workspace_fixed=repository_fixed,
         totals=totals,
         budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),

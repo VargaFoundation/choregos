@@ -11,13 +11,13 @@ actors:
   refiner: { type: agent, role: refine, model: "profile:standard" }
   owner: { type: human, group: product-owners, sla_hours: 24, escalate_to: captain }
   planner: { type: agent, role: plan, model: "profile:standard" }
-  dev: { type: agent, role: implement, model: "profile:by_size" }
+  dev: { type: agent, role: implement, model: "profile:by_size", needs: [scm] }
   checker: { type: agent, role: verify, model: "profile:standard" }
-  reviewer: { type: agent, role: review, model: "profile:strong", fresh_context: true }
-  responder: { type: agent, role: address_review, model: "profile:by_size" }
-  fixer: { type: agent, role: fix_ci, model: "profile:standard" }
-  scribe: { type: agent, role: release_notes, model: "profile:cheap" }
-  sentinel: { type: agent, role: verify_prod, model: "profile:standard" }
+  reviewer: { type: agent, role: review, model: "profile:strong", fresh_context: true, needs: [scm] }
+  responder: { type: agent, role: address_review, model: "profile:by_size", needs: [scm] }
+  fixer: { type: agent, role: fix_ci, model: "profile:standard", needs: [scm] }
+  scribe: { type: agent, role: release_notes, model: "profile:cheap", needs: [scm] }
+  sentinel: { type: agent, role: verify_prod, model: "profile:standard", needs: [cd] }
   maintainer: { type: human, group: maintainers, sla_hours: 8 }
   captain: { type: human, group: release-captains, sla_hours: 4 }
   ci: { type: system }
@@ -98,6 +98,7 @@ transitions:
     from: addressing_review
     to: verifying
     by: responder
+    repairs: changes_requested
     inputs: [spec_markdown]
     on_fail: { to: addressing_review, max_attempts: 3, escalate_to: needs_human }
   # The release notes are written BEFORE the PR: they go into its body. A `merged → merged`
@@ -124,6 +125,7 @@ transitions:
     from: fixing_ci
     to: pr_open
     by: fixer
+    repairs: ci_failed
     inputs: [spec_markdown]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   # Held to the merge (ADR 0171): the merge names the commit its own gates judged, so what the

@@ -4,24 +4,21 @@ Each folder is a trial: a question asked of the platform, the scripts that playe
 `RESULTS.md` that says what was observed, what it proves and what it does not. The results are
 recorded as they were found; a trial is not re-run when a page is edited.
 
+The ontology trials (`trials/ontology/`, elements 1 to 6, and `trials/dev-platform/`, the same on the
+dev tenant) were removed with the ontology package (ADR 0181, O4-1); they are in the history of the
+repository.
+
 - [`trials/python/`](python/RESULTS.md) - which Python for the monorepo? The low-code engine taken
   over from graal needs 3.13 and Choregos was pinned to 3.12; both suites were run on both versions,
   and the answer is a single version, 3.13.
-- [`trials/ontology/`](ontology/RESULTS.md) - can the core carry the ontology and the action engine
-  of the future foundation through its seams, without a fork? Elements 1 to 6 on the IT4IT slice:
-  a validated package, synchronised findings, generated MCP tools, a proposed action, a
-  re-authenticated approval, and a proof by the collector's re-run.
 - [`trials/lakehouse/`](lakehouse/RESULTS.md) - element 7: an Iceberg REST catalog (Lakekeeper) on S3
   storage, written by PyIceberg and read by DuckDB with credentials limited to one table (STS), then
   RustFS in place of MinIO.
 - [`trials/no-secret/`](no-secret/RESULTS.md) - element 8: a run that receives its token and secrets
   with no Kubernetes Secret, through a single-use bootstrap code and a static binary, on kind.
 - [`trials/local-start/`](local-start/RESULTS.md) - element 9: the integrated stack started by
-  `docker compose up`, its start-up time and memory, and the IT4IT scenario played against the running
-  stack.
-- [`trials/dev-platform/`](dev-platform/README.md) - the foundation trial on the dev tenant: a real
-  agent, a real PR and a re-authenticated human decision. It has a README and no results page of its
-  own.
+  `docker compose up`, its start-up time and memory, and the IT4IT scenario as it was played against
+  the running stack.
 - [`trials/claude-integration/`](claude-integration/RESULTS.md) - S15-07: a real Claude Code connects
   to the dev tenant's MCP door, lists the tools and opens a work item, checked over REST.
 - [`trials/hr/`](hr/RESULTS.md) - S20-07: the `joiners-leavers` template on the dev tenant, with the

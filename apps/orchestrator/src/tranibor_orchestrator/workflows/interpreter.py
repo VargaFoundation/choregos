@@ -21,6 +21,7 @@ from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from tranibor_contracts import Workflow
+    from tranibor_contracts.open_lists import STORED
     from tranibor_core import WorkflowEngine
     from tranibor_core.domain import TRIAL_STATE
     from tranibor_core.dsl import UnknownStateError
@@ -32,6 +33,9 @@ with workflow.unsafe.imports_passed_through():
         message_of,
         record_workflow_failure,
     )
+
+#: How the interpreter reads a definition the platform stored (`tranibor_contracts.open_lists.STORED`).
+STORED_DOCUMENT = {STORED: True}
 
 #: `migrate` receives the target definition in the signal, records it and no longer kills the ticket
 #: (ADR 0031, S16-05). Histories from before this marker replay the old path.
@@ -68,6 +72,10 @@ IDENTICAL_FAILURE_ESCALATES = "identical-failure-escalates"
 #: A system transition can open one child work item per element of a list and wait until every child
 #: is settled (S38-12, ADR 0057). No history before this marker holds a `spawn:`.
 FAN_OUT = "fan-out-and-join"
+#: A transition declares the outcome it repairs (`repairs: ci_failed`, ADR 0181 C1), and the interpreter
+#: takes it on that outcome instead of guessing a repair from the agent's role. Asked only for a
+#: workflow that declares one; no history before this marker holds such a workflow.
+REPAIRS_DECLARED = "repairs-declared"
 
 #: `prepare_stage` mints a run's key at what is left, and refuses to start a stage below the floor
 #: (S27-02, ADR 0047): the stage is then sent to a person without a run. Before this marker,
@@ -413,7 +421,9 @@ class WorkflowInterpreter(
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=DEFAULT_RETRY,
         )
-        engine = WorkflowEngine(Workflow.model_validate(context["workflow"]))
+        # A stored definition: a plugin's step effect it names is read even once the plugin is gone
+        # (ADR 0181), and refused only when it is reached.
+        engine = WorkflowEngine(Workflow.model_validate(context["workflow"], context=STORED_DOCUMENT))
         self._start_from(params, engine, context)
         self._restore_attempts(context)
         self.ceilings = dict(context.get("attempts_ceilings") or {})
@@ -431,7 +441,12 @@ class WorkflowInterpreter(
                     engine = self._migrate(engine)
                 continue
 
-            transition = engine.select_transition(self.state, self.last_outcome, self.last_outputs)
+            # The condition first, `patched` next: a workflow that declares no `repairs:` asks nothing,
+            # so no history of one gains a marker (ADR 0181 C1).
+            repairs = engine.declares_repairs and workflow.patched(REPAIRS_DECLARED)
+            transition = engine.select_transition(
+                self.state, self.last_outcome, self.last_outputs, repairs=repairs
+            )
             self.last_outcome = None
             await self._note_transition_taken(params, transition)
             if transition is None:

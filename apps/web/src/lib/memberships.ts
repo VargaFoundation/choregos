@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import type { Role } from "@/components/members";
+import { neutralRole, type Role } from "@/lib/roles";
 import type { Edition, Membership } from "@/lib/types";
 
 /** One line of "your roles": a scope and the role held there. */
@@ -44,11 +44,11 @@ export function membershipGroups(
     const own = memberships.filter((m) => m.org === org);
     const orgLines = own
       .filter((m) => !m.project_slug)
-      .map((m): MembershipLine => ({ scope: orgLabel, role: m.role as Role }));
+      .map((m): MembershipLine => ({ scope: orgLabel, role: neutralRole(m.role) }));
     const projectLines = own
       .filter((m) => m.project_slug)
       .sort((a, b) => (a.project_slug as string).localeCompare(b.project_slug as string))
-      .map((m): MembershipLine => ({ scope: `project/${m.project_slug}`, role: m.role as Role }));
+      .map((m): MembershipLine => ({ scope: `project/${m.project_slug}`, role: neutralRole(m.role) }));
     return { org: multiOrg ? org : null, lines: [...orgLines, ...projectLines] };
   });
   return groups.filter((group) => group.lines.length > 0);
