@@ -45,7 +45,8 @@ test("a write waiting for me shows what the source says it would change", async 
 
 test("refusing a proposed write asks why, and the reason reaches the API (ADR 0154 §7)", async ({ page, request }) => {
   await page.goto("/conversations/c1");
-  const card = page.locator("div").filter({ hasText: "Cancel order O-9" }).filter({ has: page.getByRole("button", { name: "Refuse" }) }).last();
+  // A card is a <section>: a <div> filter would climb to the list holding both waiting writes.
+  const card = page.locator("section").filter({ hasText: "Cancel order O-9" });
   await card.getByRole("button", { name: "Refuse" }).click();
 
   // Nothing can be refused without a reason: the button that runs it is dead until one is typed.
