@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 import respx
 from httpx import Response
+from textual.binding import Binding
 from typer.testing import CliRunner
 
 API = "http://api.test"
@@ -1479,6 +1480,9 @@ def test_the_workspace_snapshot(
     async def settled(pilot: Any) -> None:
         await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         await until(pilot, lambda: bool(app.pending), "the decisions")
+        # The header's counts and amount come from their own reads: a loaded CI runner draws them late.
+        await until(pilot, lambda: bool(app.board.in_flight), "what runs")
+        await until(pilot, lambda: app.today.usd is not None or app.today.eur is not None, "today's spend")
         await show(pilot, view)
         if view == "live":
             await until(pilot, lambda: drawn(app) and flow(app).connection == "live", "the live flow")
@@ -1515,6 +1519,295 @@ def test_the_projects_tab_snapshot_at_each_depth(
         for level in range(1, depth + 1):
             await pilot.press("enter")
             await until(pilot, lambda key=shown[level]: key in screen_text(app), f"depth {level}")
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
+
+
+# ─────────────────────────────── the palette (S67-24) ───────────────────────────────
+
+
+async def _palette(pilot: Any, query: str = "") -> None:
+    """Ctrl-K, then the query typed: leaves the palette open on what it narrowed to."""
+    await pilot.press("ctrl+k")
+    await until(pilot, lambda: "Enter chooses · Up and Down move" in screen_text(pilot.app), "the palette")
+    if query:
+        await pilot.press(*query)
+        await pilot.pause()
+
+
+def _palette_lines(app: Any) -> list[str]:
+    return [
+        line
+        for line in screen_text(app).splitlines()
+        if re.search(r"\b(tab|command|project|item|assistant|organisation)\b", line)
+    ]
+
+
+async def test_ctrl_k_opens_the_palette_from_every_tab_and_escape_closes_it(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        for name in ("conversation", "activity", "projects", "decisions", "artefacts", "live"):
+            await show(pilot, name)
+            await _palette(pilot)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert "Up and Down move" not in screen_text(app), name
+            assert app.current_view == name
+
+
+async def test_ctrl_k_in_the_composer_does_not_delete_what_is_typed(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await pilot.press(*"hello")
+        await pilot.press("home", "ctrl+k")
+        await until(pilot, lambda: "Up and Down move" in screen_text(app), "the palette")
+        await pilot.press("escape")
+        await pilot.pause()
+        assert app.query_one("#prompt").value == "hello"
+
+
+async def test_the_palette_lists_every_kind_with_the_key_that_also_reaches_it(platform: Platform) -> None:
+    platform.assistants(
+        [
+            {"org": "acme", "slug": "finance", "name": "Finance", "status": "ready"},
+            {"org": "acme", "slug": "legal", "name": "Legal", "status": "ready"},
+        ]
+    )
+    platform.currency("EUR")
+    platform.router.get(f"{V1}/orgs").mock(
+        return_value=Response(200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex"}])
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 50)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.projects is not None and "globex" in app.organisations, "the lists")
+        entries = app.palette_entries()
+        kinds = {e.kind for e in entries}
+        assert kinds == {"tab", "command", "project", "item", "assistant", "organisation"}
+        labels = {e.label for e in entries}
+        assert {"Billing API", "Docs site", "FIN-12", "finance Finance", "legal Legal", "globex"} <= labels
+        assert "acme" not in labels  # the organisation the person is in is not a place to go to
+        assert all(e.reach for e in entries)
+        # Nothing is only in the palette: a command's key is bound, a tab's digit is bound.
+        bound = {b.key for b in type(app).BINDINGS if isinstance(b, Binding)}
+        for entry in entries:
+            if entry.kind == "tab":
+                assert entry.reach.removeprefix("key ") in bound, entry
+            elif entry.kind == "command" and entry.reach != "x":
+                assert entry.reach.lower().replace("esc", "escape").replace("-", "+") in bound, entry
+            elif entry.kind == "assistant":
+                assert "ctrl+a" in bound
+        assert "ctrl+k" in bound
+        await _palette(pilot)
+        shown = screen_text(app)
+        assert "F2" in shown and "Ctrl-N" in shown and "key 3" in shown
+
+
+async def test_a_tab_is_reached_by_name_with_a_few_letters(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "artf")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "artefacts"
+        assert "Up and Down move" not in screen_text(app)
+
+
+async def test_a_project_is_opened_by_name_then_an_item_by_its_key(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.projects is not None, "the projects")
+        await _palette(pilot, "billing")
+        await pilot.press("enter")
+        await until(pilot, lambda: "FIN-9" in screen_text(app), "the project's items")
+        assert app.current_view == "projects" and app.depth == 1
+        await _palette(pilot, "fin9")
+        await pilot.press("enter")
+        await until(pilot, lambda: app.depth == 2 and "backend" in screen_text(app), "the item's runs")
+        assert app.item is not None and app.item["tracker_key"] == "FIN-9"
+
+
+async def test_an_item_on_the_board_is_reached_from_another_tab(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.projects is not None, "the projects")
+        await show(pilot, "decisions")
+        await _palette(pilot, "fin12")
+        await pilot.press("enter")
+        await until(pilot, lambda: app.depth == 2 and app.item_runs is not None, "the item's runs")
+        assert app.current_view == "projects" and app.item is not None
+        assert app.item["tracker_key"] == "FIN-12"
+
+
+async def test_an_assistant_is_chosen_by_name(platform: Platform) -> None:
+    platform.assistants(
+        [
+            {"org": "acme", "slug": "finance", "name": "Finance", "status": "ready"},
+            {"org": "acme", "slug": "legal", "name": "Legal", "status": "ready"},
+        ]
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        assert app.assistant is None
+        await _palette(pilot, "legal")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.assistant == "legal"
+        assert "legal" in screen_text(app)
+
+
+async def test_another_organisation_is_chosen_by_name_and_read_again(platform: Platform) -> None:
+    platform.router.get(f"{V1}/orgs").mock(
+        return_value=Response(
+            200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}]
+        )
+    )
+    platform.router.get(f"{V1}/orgs/globex/activity").mock(
+        return_value=Response(200, json=platform.contract("ActivityList", {"in_flight": [], "finished": []}))
+    )
+    platform.router.get(f"{V1}/orgs/globex/activity/stream").mock(return_value=Response(200, text=""))
+    platform.router.get(f"{V1}/orgs/globex/projects").mock(
+        return_value=Response(200, json={"items": [], "meta": {"has_more": False}})
+    )
+    platform.router.get(f"{V1}/orgs/globex/costs").mock(return_value=Response(403, json={"detail": "no"}))
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: "globex" in app.organisations, "the organisations")
+        assert "acme" in screen_text(app)
+        await _palette(pilot, "globex")
+        await pilot.press("enter")
+        await until(pilot, lambda: app.organisation == "globex" and app.projects == [], "globex read")
+        assert "globex" in screen_text(app) and "acme" not in screen_text(app)
+        assert app.board.in_flight == {}
+        assert app.currency == "USD"
+
+
+async def test_the_stop_command_asks_for_a_reason_like_the_key(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await show(pilot, "decisions")
+        await _palette(pilot, "stop")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "activity"
+        assert "Stop run run-a1b2c3d4" in screen_text(app)
+        await pilot.press(*"wrong branch", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the stop")
+    assert platform.stops == [(f"/api/v1/runs/{RUN}/cancel", {"reason": "wrong branch"})]
+
+
+async def test_the_new_conversation_command_starts_one(platform: Platform) -> None:
+    app = make_app(conversation=CID)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: app.conversation is not None, "the conversation")
+        await show(pilot, "activity")
+        await _palette(pilot, "new conv")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.conversation is None and app.conversation_id is None
+        assert app.current_view == "conversation"
+
+
+async def test_the_decide_command_says_when_nothing_waits(platform: Platform) -> None:
+    platform.pending([])
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "decide")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "nothing waits for you" in [n.message for n in app._notifications]
+
+
+async def test_a_query_nothing_is_called_like_says_so_and_enter_does_nothing(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "zzzq")
+        assert "nothing is called like that" in screen_text(app)
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "Up and Down move" in screen_text(app)  # still open
+        assert app.current_view == "conversation"
+
+
+async def test_up_and_down_move_the_choice_and_the_best_match_is_first(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await _palette(pilot, "act")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "activity"  # "Activity" before "Cancel the turn", "Stop the run…"
+        await _palette(pilot, "act")
+        await pilot.press("down", "enter")
+        await pilot.pause()
+        assert app.current_view != "activity" or "Up and Down move" not in screen_text(app)
+
+
+async def test_the_palette_key_does_nothing_over_a_dialog(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("x")
+        await pilot.pause()
+        assert "Stop run" in screen_text(app)
+        await pilot.press("ctrl+k")
+        await pilot.pause()
+        assert "Up and Down move" not in screen_text(app) and "Stop run" in screen_text(app)
+
+
+async def test_the_footer_keeps_every_key_and_shows_the_palette(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        footer = screen_text(app).splitlines()[-1]
+        assert "Palette" in footer and "Decide" in footer and "New" in footer and "Quit" in footer
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
+@pytest.mark.parametrize("query", ["", "fin"], ids=["empty", "typed"])
+def test_the_palette_snapshot(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    colour: str,
+    columns: str,
+    query: str,
+) -> None:
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    _showcase(platform)
+    platform.assistants(
+        [
+            {"org": "acme", "slug": "finance", "name": "Finance", "status": "ready"},
+            {"org": "acme", "slug": "legal", "name": "Legal", "status": "ready"},
+        ]
+    )
+    platform.router.get(f"{V1}/orgs").mock(
+        return_value=Response(
+            200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}]
+        )
+    )
+    app = make_app(conversation=CID)
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and app.projects is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending) and "globex" in app.organisations, "the lists")
+        await _palette(pilot, query)
         await pilot.pause(0.3)
 
     assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)

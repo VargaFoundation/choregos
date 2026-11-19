@@ -18,6 +18,10 @@ One screen of tabs, from routes that exist on `main` (ADR 0154 §4), under a one
 - **5 Artefacts**: `/me/inbox`, what was delivered to the person.
 - **6 Live**: the live flow of ADR 0187 §4 (S67-28).
 
+`Ctrl-K` opens the palette (S67-24): a fuzzy search by name over the tabs, the projects, the work items, the
+assistants, the organisations and the workspace's commands. Nothing is only there: each entry names the key or
+the tab that reaches it too.
+
 A **context pane** on the right follows the selection and folds below `CONTEXT_MIN` columns. There is no
 frame: one thin rule under the tabs and one before the context pane; titles are words.
 
@@ -30,7 +34,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any, ClassVar
 
 import httpx
@@ -50,7 +57,7 @@ from textual.widgets import ContentSwitcher, Footer, Input, OptionList, Static, 
 from textual.widgets.option_list import Option
 from textual.widgets.tree import TreeNode
 
-from . import activity, decide, money, run_activity, theme
+from . import activity, decide, fuzzy, money, run_activity, theme
 from .client import ApiError, AsyncClient, Profile
 from .live import _workflow as default_workflow  # the command's own pick: same rule, same words
 from .live_app import LiveFlowPane
@@ -334,6 +341,87 @@ class PickScreen(ModalScreen[str | None]):
         self.dismiss(event.option.id)
 
 
+@dataclass(frozen=True)
+class Entry:
+    """One line of the palette: what it is, what it is called, the key or tab that also reaches it, and what
+    choosing it does."""
+
+    kind: str
+    label: str
+    reach: str
+    run: Callable[[], None]
+
+
+class PaletteScreen(ModalScreen[Entry | None]):
+    """`Ctrl-K`: type to narrow every entry by fuzzy match, Up and Down to move, Enter to choose."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("escape", "dismiss(None)", "Close"),
+        Binding("down", "move(1)", "Next", show=False),
+        Binding("up", "move(-1)", "Previous", show=False),
+    ]
+    KIND_WIDTH = 13
+
+    def __init__(self, entries: list[Entry]) -> None:
+        super().__init__()
+        self.entries = entries
+        self.shown: list[Entry] = []
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="palette"):
+            yield Input(placeholder="Search by name", id="find")
+            yield OptionList(id="found")
+            yield Static("Enter chooses · Up and Down move · Esc closes", id="palette-hint")
+
+    def on_mount(self) -> None:
+        self.query_one("#find", Input).focus()
+        self.narrow("")
+
+    def narrow(self, query: str) -> None:
+        listing = self.query_one("#found", OptionList)
+        ranked = fuzzy.rank(query, self.entries, lambda e: e.label)
+        self.shown = [entry for entry, _positions in ranked]
+        listing.clear_options()
+        if not ranked:
+            listing.add_option(
+                Option(Text(f"{DASH} nothing is called like that", style="dim"), disabled=True)
+            )
+            return
+        for n, (entry, positions) in enumerate(ranked):
+            line = Text(entry.kind.ljust(self.KIND_WIDTH), style="dim")
+            label = Text(entry.label)
+            for at in positions:
+                label.stylize("bold underline", at, at + 1)
+            line.append_text(label)
+            line.append(f"   {entry.reach}", style="dim")
+            line.no_wrap = True
+            line.overflow = "ellipsis"
+            listing.add_option(Option(line, id=str(n)))
+        listing.highlighted = 0
+
+    @on(Input.Changed, "#find")
+    def typed(self, event: Input.Changed) -> None:
+        self.narrow(event.value)
+
+    @on(Input.Submitted, "#find")
+    def submitted(self, event: Input.Submitted) -> None:
+        highlighted = self.query_one("#found", OptionList).highlighted
+        if self.shown and highlighted is not None:
+            self.dismiss(self.shown[highlighted])
+
+    @on(OptionList.OptionSelected, "#found")
+    def chosen(self, event: OptionList.OptionSelected) -> None:
+        if event.option.id is not None:
+            self.dismiss(self.shown[int(event.option.id)])
+
+    def action_move(self, step: int) -> None:
+        listing = self.query_one("#found", OptionList)
+        if step > 0:
+            listing.action_cursor_down()
+        else:
+            listing.action_cursor_up()
+
+
 # ───────────────────────────────────── the app ─────────────────────────────────────
 
 
@@ -388,11 +476,23 @@ class Workspace(App[None]):
     #projects-list > .option-list--option-disabled { color: ansi_bright_black; }
     #projects-run { height: 1fr; padding: 1 2 0 2; }
     .placeholder { padding: 2 3; color: ansi_bright_black; }
-    StopScreen, PickScreen, TextScreen, DecisionScreen { align: center middle; }
+    StopScreen, PickScreen, TextScreen, DecisionScreen, PaletteScreen { align: center middle; }
     #decision { width: 90%; height: 80%; border: round ansi_yellow; padding: 1 2; }
     #decision-body { height: 1fr; }
     #dialog { width: 70%; max-width: 90; height: auto; border: round ansi_default; padding: 1 2; }
     #choices { height: auto; max-height: 14; }
+    #palette {
+        width: 80%; max-width: 100; height: auto; max-height: 80%; border: round ansi_default; padding: 1 2;
+    }
+    #find, #find:focus {
+        border: none; padding: 0; height: 1; background: ansi_default; color: ansi_default;
+    }
+    #find > .input--placeholder { color: ansi_bright_black; text-style: none; }
+    #found { height: auto; max-height: 14; margin: 1 0; border: none; background: ansi_default; }
+    #found > .option-list--option-highlighted, #found:focus > .option-list--option-highlighted {
+        text-style: reverse bold; background: ansi_default; color: ansi_default;
+    }
+    #palette-hint { color: ansi_bright_black; }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "cancel_turn", "Cancel the turn"),
@@ -409,6 +509,8 @@ class Workspace(App[None]):
         # The composer binds Ctrl+A to "start of line" (`home` does that): choosing the assistant is first.
         Binding("ctrl+a", "assistants", "Assistant", priority=True),
         Binding("f2", "decide", "Decide"),
+        # The composer binds Ctrl+K to "delete to the end of the line": the palette comes first.
+        Binding("ctrl+k", "palette", "Palette", priority=True),
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
@@ -433,6 +535,8 @@ class Workspace(App[None]):
         self.currency: str | None = None
         self.rate: float | None = None
         self.assistants: list[dict[str, Any]] = []
+        #: The organisations the person may switch to (`GET /orgs`), by slug.
+        self.organisations: list[str] = []
         self.conversations: list[dict[str, Any]] = []
         self.pending: list[dict[str, Any]] | None = None
         #: What the last decision said (the API's own words on a refusal): the person's, and the tests'.
@@ -535,7 +639,7 @@ class Workspace(App[None]):
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """The tab keys belong to the workspace, not to a dialog over it."""
-        ours = action in ("show_view", "next_view", "previous_view", "assistants", "conversations")
+        ours = action in ("show_view", "next_view", "previous_view", "assistants", "conversations", "palette")
         return not (ours and isinstance(self.screen, ModalScreen))
 
     def action_show_view(self, name: str) -> None:
@@ -731,6 +835,7 @@ class Workspace(App[None]):
             listed = await self.api.get("/orgs")
         except (ApiError, httpx.TransportError):
             return None
+        self.organisations = [str(o["slug"]) for o in listed or [] if o.get("slug")]
         for org in listed or []:
             if self.organisation == org.get("slug") or self.organisation in (org.get("aliases") or []):
                 value = org.get("currency") or "EUR"  # the setting's default (S29-03)
@@ -1759,16 +1864,153 @@ class Workspace(App[None]):
             label.append(f"  {found.get('display_name') or found.get('name') or ''}")
             options.append((str(found["slug"]), label))
 
-        def chosen(slug: str | None) -> None:
-            if slug and slug != self.assistant:
-                self.assistant = slug
-                if self.conversation and self.conversation.get("assistant") != slug:
-                    self.action_new_conversation()
-                self.show_welcome() if not self.conversation_id else self.draw_header()
-
         self.push_screen(
-            PickScreen("Assistants ready for you", options, "no assistant is ready for you"), chosen
+            PickScreen("Assistants ready for you", options, "no assistant is ready for you"),
+            self.choose_assistant,
         )
+
+    def choose_assistant(self, slug: str | None) -> None:
+        if slug and slug != self.assistant:
+            self.assistant = slug
+            if self.conversation and self.conversation.get("assistant") != slug:
+                self.action_new_conversation()
+            self.show_welcome() if not self.conversation_id else self.draw_header()
+
+    # ───────────────────────────── the palette (S67-24) ─────────────────────────────
+
+    def action_palette(self) -> None:
+        self.push_screen(PaletteScreen(self.palette_entries()), self._palette_chose)
+
+    @staticmethod
+    def _palette_chose(entry: Entry | None) -> None:
+        if entry is not None:
+            entry.run()
+
+    def palette_entries(self) -> list[Entry]:
+        """Everything the person can reach by name, each with the key or tab that reaches it too."""
+        entries = [
+            Entry("tab", f"{label}", f"key {n}", partial(self.action_show_view, name))
+            for n, (name, label) in enumerate(TABS, start=1)
+        ]
+        entries += [
+            Entry("command", "Decide what waits for me", "F2", self.action_decide),
+            Entry("command", "Stop the selected run or item", "x", self._stop_from_palette),
+            Entry("command", "New conversation", "Ctrl-N", self.action_new_conversation),
+            Entry("command", "Open a conversation", "Ctrl-O", self.action_conversations),
+            Entry("command", "Choose the assistant", "Ctrl-A", self.action_assistants),
+            Entry("command", "Cancel the turn", "Esc", self.action_cancel_turn),
+            Entry("command", "Quit", "Ctrl-Q", self.action_quit_workspace),
+        ]
+        for project in self.projects or []:
+            entries.append(
+                Entry(
+                    "project",
+                    str(project["name"]),
+                    "tab 3",
+                    partial(self.open_in_projects, project, None),
+                )
+            )
+        seen: set[str] = set()
+        for found in self._known_items():
+            if found["id"] in seen:
+                continue
+            seen.add(found["id"])
+            entries.append(
+                Entry(
+                    "item",
+                    found["label"],
+                    "tab 3",
+                    partial(self.open_in_projects, found["project"], found["id"]),
+                )
+            )
+        for found in self.assistants:
+            if found.get("status") == "ready":
+                name = str(found.get("display_name") or found.get("name") or "")
+                slug = str(found["slug"])
+                entries.append(
+                    Entry(
+                        "assistant",
+                        f"{slug} {name}".strip(),
+                        "Ctrl-A",
+                        partial(self.choose_assistant, slug),
+                    )
+                )
+        for slug in self.organisations:
+            if slug != self.organisation:
+                entries.append(Entry("organisation", slug, "--org", partial(self.switch_organisation, slug)))
+        return entries
+
+    def _known_items(self) -> list[dict[str, Any]]:
+        """The work items seen: those of the open project and those on the activity board."""
+        by_slug = {str(p["slug"]): p for p in self.projects or []}
+        found: list[dict[str, Any]] = []
+        for item in self.items or []:
+            if self.project:
+                title = decide.clean(str(item["title"])).splitlines()[0] if item.get("title") else ""
+                label = f"{item['tracker_key']} {title}".strip()
+                found.append({"id": str(item["id"]), "label": label, "project": self.project})
+        for entry in [*self.board.in_flight.values(), *self.board.finished.values()]:
+            project = by_slug.get(str(entry.get("project_slug")))
+            if project and entry.get("work_item_id"):
+                found.append(
+                    {
+                        "id": str(entry["work_item_id"]),
+                        "label": str(entry.get("work_item_key") or entry["work_item_id"]),
+                        "project": project,
+                    }
+                )
+        return found
+
+    def open_in_projects(self, project: dict[str, Any], item_id: str | None) -> None:
+        """Show a project (and, given one, a work item's runs) in the Projects tab, from anywhere."""
+        for worker in list(self.workers):
+            if worker.group in ("projects-run", "projects-read"):
+                worker.cancel()
+        self.project, self.item, self.run_summary = project, None, None
+        self.depth, self.items, self.item_runs = 1, None, None
+        self._project_shape = None
+        self.action_show_view("projects")
+        self.run_worker(self.read_then_open(item_id), group="projects-read", exit_on_error=False)
+
+    async def read_then_open(self, item_id: str | None) -> None:
+        await self.read_items()
+        if item_id is None:
+            return
+        self.item = next((i for i in self.items or [] if str(i["id"]) == item_id), None)
+        if self.item is None:
+            self.notify("that work item is not in this project's list", severity="warning")
+            return
+        self.depth, self.item_runs = 2, None
+        await self.read_item_runs()
+
+    def _stop_from_palette(self) -> None:
+        self.action_show_view("activity")
+        self.action_stop_selected()
+
+    def action_quit_workspace(self) -> None:
+        self.exit()
+
+    def switch_organisation(self, slug: str) -> None:
+        """Another organisation: everything read for the first is dropped and read again for the second."""
+        if self._turn_running:
+            self.notify("a turn is running: Esc cancels it", severity="warning")
+            return
+        for worker in list(self.workers):
+            worker.cancel()
+        self.organisation, self.assistant = slug, None
+        self.conversation_id, self.conversation = None, None
+        self.board, self.live = activity.Board(), False
+        self.today, self.currency, self.rate = money.Amount(), None, None
+        self.assistants, self.conversations, self.inbox, self.projects = [], [], [], None
+        self.depth, self.project, self.item, self.run_summary = 0, None, None, None
+        self.items = self.item_runs = None
+        self._project_shape = None
+        self._open_runs, self._details = set(), {}
+        self.action_show_view("conversation")
+        self.show_welcome()
+        self.redraw()
+        self.run_worker(self.load(), group="load", exit_on_error=False)
+        self.run_worker(self.follow_activity(), group="activity", exit_on_error=False)
 
     # ───────────────────────────── deciding (ADR 0154 §7) ─────────────────────────────
 
