@@ -17,6 +17,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_adapters.storage import ObjectStoreError
 from tranibor_contracts import (
     ARTIFACT_TYPES,
@@ -311,6 +312,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
     run.result = payload
     run.status = "succeeded" if body.status == "done" else "failed"
     run.ended_at = utcnow()
+    _tell_who_started_it(session, run, item, project)
     if body.artifacts.transcript_url:
         run.transcript_url = body.artifacts.transcript_url
     if body.artifacts.pr_url:
@@ -1587,3 +1589,27 @@ async def _injection_guard(
 
 # The former private name of `_extension_tools`: a patch on it (a test, an edition package) is seen by
 # `get_tools` and `call_tool` (S45-16).
+
+
+def _tell_who_started_it(session: AsyncSession, run: Run, item: WorkItem, project: Project) -> None:
+    """The person who started the run hears that it ended (ADR 0194 §3); a trigger, a tracker or a
+    machine started it for nobody. Only identifiers travel: the run, the item's key, the outcome."""
+    kind, _, subject = (run.initiated_by or "").partition(":")
+    if kind not in ("person", "mcp", "a2a") or not subject:
+        return
+    from ..push.delivery import Notice, tell
+
+    tell(
+        session,
+        Notice(
+            kind="run.ended",
+            org_id=project.org_id,
+            project_id=project.id,
+            title=f"Run {run.status}",
+            body=f"{project.slug} {item.tracker_key}: {run.stage_role} {run.status}",
+            ref_type="run",
+            ref_id=run.id,
+            path="/orgs/{org}/runs/" + run.id,
+            candidate_emails=frozenset({subject}),
+        ),
+    )

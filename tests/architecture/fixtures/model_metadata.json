@@ -11130,6 +11130,128 @@
    ]
   ]
  },
+ "push_subscriptions": {
+  "columns": [
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "endpoint",
+    "type": "String(length=2048)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "p256dh",
+    "type": "String(length=128)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "auth",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "device_name",
+    "type": "String(length=80)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "kinds",
+    "type": "Json()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "last_delivered_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "last_failure_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "failing_since",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_push_subscriptions_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_push_subscriptions_endpoint",
+    [
+     "endpoint"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_push_subscriptions_user_id",
+    [
+     "push_subscriptions.user_id"
+    ],
+    false
+   ]
+  ]
+ },
  "received_events": {
   "checks": [],
   "columns": [

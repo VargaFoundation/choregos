@@ -97,6 +97,7 @@ from .offered_knowledge import KnowledgeSeedTombstone
 from .outposts import Outpost, OutpostCall, OutpostEnrolment, OutpostInstance
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
 from .projects import Connector, ModelProfileRow, OrgWorkflow, PolicyDef, Project, Template, WorkflowDef
+from .push import PushSubscription
 from .releases import Deployment, Release
 from .runs import (
     A2aPushConfig,
@@ -291,6 +292,7 @@ __all__ = [
     "Project",
     "ProjectAgent",
     "ProjectOperationPolicy",
+    "PushSubscription",
     "ReceivedEvent",
     "Release",
     "RemoteCredential",

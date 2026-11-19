@@ -436,6 +436,16 @@ class Settings(BaseSettings):
     #: `control_plane` in the policy file, what an enrolment token is returned with, and what the door
     #: compares a signature's `htu` with. Empty: the deployment declares none.
     outposts_door_url: str = ""
+    #: Web Push (ADR 0194). The installation's VAPID key (`CHOREGOS_PUSH_VAPID_PRIVATE_KEY`): a PEM
+    #: private key or the 32 bytes of the scalar in base64url, a SECRET of the installation. Empty: the
+    #: feature is off (the public-key route answers 404 `push_not_configured`).
+    push_vapid_private_key: str = ""
+    #: Who a push service may contact about this sender (`CHOREGOS_PUSH_VAPID_SUBJECT`): `mailto:` or
+    #: `https:`. Required with the key.
+    push_vapid_subject: str = ""
+    #: `CHOREGOS_PUSH_ALLOW_PRIVATE_ENDPOINTS`: call a device endpoint on a private address (a push
+    #: gateway inside the network). Off: only a public `https` host (ADR 0194 §7).
+    push_allow_private_endpoints: bool = False
     #: The Ed25519 key the door signs every call it hands over with (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`,
     #: ADR 0148 §13): a PEM private key (PKCS#8), a secret of the installation. Its public half is the
     #: first of the `door_keys` an operator pins. Empty: the door can sign nothing, and no enrolment

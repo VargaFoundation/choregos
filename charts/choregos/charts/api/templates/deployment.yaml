@@ -346,6 +346,21 @@ spec:
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: session-secret-previous, optional: true } }
             - name: CHOREGOS_RUN_TOKEN_PRIVATE_KEY
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-private-key } }
+            {{- /* Web Push (S81-03, ADR 0194): off unless a Secret holds the VAPID key. */}}
+            {{- $vapid := (.Values.push | default dict).vapid | default dict }}
+            {{- if $vapid.existingSecret }}
+            {{- if not $vapid.subject }}
+            {{- fail "choregos-api.push.vapid.subject is required with push.vapid.existingSecret: a mailto: or https: contact a push service may use. The API refuses to send without it." }}
+            {{- end }}
+            - name: CHOREGOS_PUSH_VAPID_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: {{ $vapid.existingSecret | quote }}, key: {{ $vapid.key | default "vapid-private-key" | quote }} } }
+            - name: CHOREGOS_PUSH_VAPID_SUBJECT
+              value: {{ $vapid.subject | quote }}
+            {{- end }}
+            {{- if (.Values.push | default dict).allowPrivateEndpoints }}
+            - name: CHOREGOS_PUSH_ALLOW_PRIVATE_ENDPOINTS
+              value: "true"
+            {{- end }}
             - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY
               # Optional: it is DERIVED from the private one (`public_from_private`).
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-public-key, optional: true } }

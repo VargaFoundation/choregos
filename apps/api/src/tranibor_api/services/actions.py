@@ -144,7 +144,42 @@ async def propose(
         title=body.title,
         proposed_by=proposed_by,
     )
+    _tell_the_approvers(session, project, action, body.approval.model_dump(mode="json"))
     return action
+
+
+def _tell_the_approvers(
+    session: AsyncSession, project: Project, action: Action, approval: dict[str, Any]
+) -> None:
+    """Phones of the people who may decide are told once the proposal is committed (ADR 0194 §3-§4).
+
+    Only a rule that is a RANK can be resolved from the platform's own tables: one that names an
+    identity-provider group is not (the groups are as of each person's last sign-in), so it sends no
+    push rather than a push to people who could not decide. Whoever proposes is not told."""
+    approvers = approval.get("approvers") or [{"role": "project_owner", "min": 1}]
+    by_rank = [RANKS.get(str(a.get("role") or "project_owner"), 3) for a in approvers if not a.get("group")]
+    if not by_rank:
+        return
+    proposer = action.proposed_by or {}
+    who = str(proposer.get("id", "")) if proposer.get("kind") == "user" else ""
+    from ..push.delivery import Notice, tell
+
+    tell(
+        session,
+        Notice(
+            kind="decision.awaiting",
+            org_id=project.org_id,
+            project_id=project.id,
+            title="Decision awaiting",
+            body=f"{project.slug}: {action.kind}",
+            ref_type="action",
+            ref_id=action.id,
+            path="/orgs/{org}/actions",
+            min_rank=min(by_rank),
+            exclude_emails=frozenset({who}) if who else frozenset(),
+            action_id=action.id,
+        ),
+    )
 
 
 async def propose_for_transition(
