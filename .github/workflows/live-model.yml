@@ -1,0 +1,120 @@
+# Every night, the gateway's guarantees against a REAL model (S80-13): the chart's LiteLLM
+# (`tests/live/model/compose.yaml`) with its aliases on Claude Haiku 5.5, and
+# `tests/live/test_litellm_live.py` through it: a virtual key is minted, scoped to its models, billed
+# at the gateway, stopped by its budget and dead once revoked, and the Anthropic format answers on the
+# same alias. No fake proves any of it.
+#
+# The key is the repository secret ANTHROPIC_API_KEY, from a dedicated Anthropic workspace with a
+# monthly spend cap. It is in the environment of one step only, the one that starts LiteLLM: the
+# tests hold the gateway's master key, a local placeholder, never the provider key. The cost is
+# bounded inside the run too: the cheapest current model, a 1,024-token cap on any call that sets
+# none, no retry, and the eight tests' at most eleven calls; a night costs under one cent.
+#
+# Never on a pull request: a pull request from a fork must not reach the key, and one from a branch
+# must not spend it. Only on the repository itself, from main.
+name: live model
+
+on:
+  schedule:
+    # After the nightly (02:00) and the single-node proof (02:30).
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+# Two runs never spend at once.
+concurrency:
+  group: live-model
+  cancel-in-progress: false
+
+jobs:
+  gateway:
+    name: the gateway in front of a real model
+    if: github.repository == 'graalsystems/tranibor' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # A missing gateway variable fails the job instead of skipping (tests/live/conftest.py).
+      CHOREGOS_LIVE_REQUIRED: litellm
+      # The stack's own address and master key: local placeholders, not secrets.
+      CHOREGOS_LIVE_LITELLM_URL: http://127.0.0.1:14420
+      CHOREGOS_LIVE_LITELLM_KEY: sk-local-live-model-only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: the gateway (the chart's LiteLLM, PostgreSQL), the only holder of the Anthropic key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::the ANTHROPIC_API_KEY secret is not set: the night proves nothing without it"
+            exit 1
+          fi
+          # The key is checked before the gateway starts, so a key Anthropic refuses is named as
+          # such rather than as five failed tests: two free calls (no token is spent) say whether it
+          # is accepted and whether it reaches the model. The key goes to curl on stdin, never on a
+          # command line; what is printed is a hint about its shape, never any part of it.
+          case "$ANTHROPIC_API_KEY" in
+            *[[:space:]]*) hint="it contains whitespace (set the secret again without it)" ;;
+            sk-ant-admin*) hint="it is an Admin API key; the Messages API needs a workspace API key" ;;
+            sk-ant-api*) hint="it is shaped like a workspace API key: revoked, or of another workspace?" ;;
+            *) hint="it is not shaped like an Anthropic API key (sk-ant-api...)" ;;
+          esac
+          for path in models models/claude-haiku-5-5; do
+            status=$(printf 'x-api-key: %s\n' "$ANTHROPIC_API_KEY" | curl -sS -o "$RUNNER_TEMP/anthropic.json" \
+              -w '%{http_code}' -H @- -H 'anthropic-version: 2023-06-01' "https://api.anthropic.com/v1/$path")
+            if [ "$status" != 200 ]; then
+              if [ "$status" = 404 ] && [ "$path" != models ]; then
+                hint="the key is accepted, but its workspace does not serve ${path#models/}"
+              fi
+              echo "::error::Anthropic answers $status to GET /v1/$path with the ANTHROPIC_API_KEY secret; $hint"
+              head -c 300 "$RUNNER_TEMP/anthropic.json"; echo
+              exit 1
+            fi
+          done
+          docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
+      - name: keys, scope, budget, cost and the Anthropic format, on Claude Haiku 5.5
+        run: |
+          uv run pytest tests/live/test_litellm_live.py -m live -rs 2>&1 | tee pytest.out
+          test "${PIPESTATUS[0]}" -eq 0
+          ! grep -qi skipped pytest.out
+      - name: what the gateway said, on failure
+        if: failure()
+        run: docker compose -p livemodel -f tests/live/model/compose.yaml logs --no-color --tail 200
+
+  alert:
+    # A failed NIGHT opens (or comments on) the `nightly` issue, as the nightly workflow and the
+    # single-node proof do; a dispatched run is watched by whoever started it.
+    needs: [gateway]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const title = `live model failed — ${new Date().toISOString().slice(0, 10)}`;
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: "open", labels: "nightly",
+            });
+            const body = `The nightly real-model proof failed: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            if (existing.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ["nightly", "needs-triage"],
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.data[0].number, body,
+              });
+            }

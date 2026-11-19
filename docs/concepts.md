@@ -451,3 +451,16 @@ before its cap (`max_attempts`, lowered by the policy's `attempts.by_role`), so 
 run and escalates again if it fails.
 An answer to a question that parked the work item resumes the stage the same way: one more
 attempt, not a new allowance.
+
+## Core, plugins and editions
+
+The core names no trade (ADR 0029, [ADR 0181](adr/0181-the-contracts-speak-no-trade.md)). What one
+trade needs comes in a **plugin**, the one unit a trade ships: its content (agents, assistants, skills,
+templates, procedures, MCP servers; [Writing a plugin](plugins.md)) and, when the trade needs code inside
+the platform (a connector type, gates and the facts they read, effects, event types), its **extension**,
+a Python distribution on the `choregos.plugins` entry point that calls the core's **extension seams**. A
+**first-party plugin** (`software-delivery`, `servicenow`) is published by GRAAL.SYSTEMS through the same
+formats and seams. An **edition** (community or enterprise, ADR 0024) changes what the platform allows,
+never what work it does; the enterprise edition is an extension and no plugin. The public page
+[Plugins, extensions and editions](site/build/plugins-and-trades.md) has the table and one example per
+trade.

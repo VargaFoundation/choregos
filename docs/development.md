@@ -133,6 +133,35 @@ docker run -d --name litellm -p 4000:4000 -v $(pwd)/dev/litellm.yaml:/app/config
 **The database is mandatory**: without it LiteLLM cannot mint virtual keys, so no run
 starts.
 
+#### Every night, against a real model
+
+`.github/workflows/live-model.yml` runs `tests/live/test_litellm_live.py` every night at 03:30 UTC
+(and on `gh workflow run live-model.yml`) against the chart's LiteLLM in front of a **real
+model**: `tests/live/model/compose.yaml` starts it with PostgreSQL, the chart's guard and span
+callback, and both aliases the suite calls (`platform/standard`, `platform/cheap`) routed to
+**Claude Haiku 5.5** (`anthropic/claude-haiku-5-5`), the cheapest current Claude model. It proves
+what no fake can: a virtual key is minted, scoped to its models, billed at the gateway from the
+provider's real usage, refused once its budget is spent and dead once revoked, and the Anthropic
+format (`/v1/messages`) answers on the same alias.
+
+The key is the repository secret `ANTHROPIC_API_KEY`, from a dedicated Anthropic workspace with a
+monthly spend cap; it is in the environment of the one step that starts LiteLLM, never in the
+tests' (they hold the gateway's local master key). The run bounds its own spend: Haiku, a
+1,024-token cap on any call that sets none, no retry, at most eleven calls to the model; a night
+costs well under one cent. It never runs on a pull request, only on `graalsystems/tranibor` from
+`main`, and a failed night opens the `nightly` issue. `tests/ci/test_live_model_job.py` holds
+these properties. The same stack by hand:
+
+```bash
+ANTHROPIC_API_KEY=… docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
+CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:14420 CHOREGOS_LIVE_LITELLM_KEY=sk-local-live-model-only \
+  uv run pytest tests/live/test_litellm_live.py -m live
+docker compose -p livemodel -f tests/live/model/compose.yaml down -v
+```
+
+The other live tests (GitLab, Jira, Ecphoria, ACA, Rovo, the realtime model) run in the `live` job
+of `nightly.yml`, each skipped until its secrets exist.
+
 ### Row-level security on a real PostgreSQL
 
 `apps/api/tests/test_rls_postgres.py` and `test_events_postgres.py` only run against
@@ -253,7 +282,8 @@ knowing before designing around it.
 A package installed next to Tranibor can register its own connectors — no fork, no patch to the
 core. Declare an entry point in the `choregos.plugins` group. A package loaded that way is an
 **extension**; "plugin" means the package of [ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), see
-[plugins.md](plugins.md):
+[plugins.md](plugins.md). An extension that brings a trade's code is that trade's plugin's code half, with
+the plugin's name ([Plugins, extensions and editions](site/build/plugins-and-trades.md)):
 
 ```toml
 # pyproject.toml of your package
