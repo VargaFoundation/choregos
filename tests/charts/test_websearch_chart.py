@@ -1,4 +1,4 @@
-"""The optional `choregos-websearch` subchart (S80-16, ADR 0195): SearXNG, a search-only Firecrawl and
+"""The optional `choregos-websearch` subchart (S80-17, ADR 0195): SearXNG, a search-only Firecrawl and
 its Redis, and the egress relay when asked. Off by default; names adoptable; secrets never inline."""
 
 from __future__ import annotations
