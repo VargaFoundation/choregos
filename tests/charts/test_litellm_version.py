@@ -20,6 +20,10 @@ CHART_VALUES = ROOT / "charts" / "choregos" / "charts" / "litellm" / "values.yam
 REPOSITORY = "ghcr.io/berriai/litellm-database"
 # The first release out of GHSA-7hp6-4w63-5g45 on the main line (also fixed: 1.101.3, 1.102.2, 1.103.1).
 FIRST_FIXED = (1, 100, 4)
+# The first release checked to ship filelock >= 4.2.1 (S40-16j): 1.108.12, the LTS line, ships 4.2.4.
+# Up to 1.106.x LiteLLM requires `filelock<4.0`, so 3.32.7 (CVE-2026-112940, High, and its two
+# siblings) stays in the image whatever the scan says.
+FILELOCK_FIXED = (1, 108, 12)
 
 
 def _version(tag: str) -> tuple[int, ...]:
@@ -48,6 +52,10 @@ def test_the_local_install_runs_a_litellm_out_of_the_critical_advisory() -> None
 
 def test_the_chart_runs_a_litellm_out_of_the_critical_advisory() -> None:
     assert _version(_chart_tag()) >= FIRST_FIXED, "GHSA-7hp6-4w63-5g45: LiteLLM >= 1.100.4"
+
+
+def test_the_chart_runs_a_litellm_whose_filelock_is_out_of_cve_2026_112940() -> None:
+    assert _version(_chart_tag()) >= FILELOCK_FIXED, "CVE-2026-112940: filelock >= 4.2.1, LiteLLM >= 1.108.12"
 
 
 def test_the_local_install_and_the_chart_run_the_same_litellm() -> None:
