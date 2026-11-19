@@ -1,0 +1,49 @@
+# The gateway in front of a REAL model, on one machine (S80-13): LiteLLM at the chart's version with
+# the chart's guard and span callback, every `platform/*` alias routed to Claude Haiku 5.5. The
+# Anthropic key is read from the environment of `docker compose up` and reaches only LiteLLM, as in
+# the chart; the tests hold the master key, a local placeholder. Every port is bound to 127.0.0.1.
+#
+#   ANTHROPIC_API_KEY=… docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
+#   CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:14420 CHOREGOS_LIVE_LITELLM_KEY=sk-local-live-model-only \
+#     uv run pytest tests/live/test_litellm_live.py -m live
+#   docker compose -p livemodel -f tests/live/model/compose.yaml down -v
+#
+# `.github/workflows/live-model.yml` runs it every night with the repository's capped key.
+name: livemodel
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: local-dev-only
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "litellm"]
+      interval: 2s
+      retries: 30
+
+  litellm:
+    # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
+    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    user: "1000:1000"
+    environment:
+      LITELLM_MASTER_KEY: sk-local-live-model-only
+      DATABASE_URL: postgresql://litellm:local-dev-only@postgres:5432/litellm
+      # Only LiteLLM holds the provider key. Empty, every call to the model fails: the night is red.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Reads the price list in its own package rather than from GitHub at start-up.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+    volumes:
+      - ./litellm.yaml:/etc/litellm/config.yaml:ro
+      # The chart's copies, the files the embedded gateway loads.
+      - ../../../charts/choregos/charts/litellm/files/choregos_guardrail.py:/etc/litellm/choregos_guardrail.py:ro
+      - ../../../charts/choregos/charts/litellm/files/choregos_llm_spans.py:/etc/litellm/choregos_llm_spans.py:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness')"]
+      interval: 5s
+      retries: 40
+    ports:
+      - "127.0.0.1:14420:4000"
