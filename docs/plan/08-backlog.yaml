@@ -5426,6 +5426,14 @@ stories:
     size: M
     depends_on: [S72-01]
     notes: "Asked by the project lead on 2026-11-18: external knowledge bases that a data platform feeds, built generically (ADR 0079). Source kind `mcp` on an mcp/mcp or mcp/mcp-gateway connector, its service identity; resources/list complete, resources/read per item, lastModified as version, OKF header kept. Contract first (kind enum), then the implementation. The platform's own MCP door publishes its documentation as resources, the real server the source is proved against. The push of an OKF bundle is a rejected alternative, kept for later."
+  - id: S72-06
+    title: "feat(adapters,api): an MCP knowledge source proved against a third-party server and the gateway (ADR 0191)"
+    stream: S72
+    sprint: 3
+    priority: 3
+    size: S
+    depends_on: [S72-05]
+    notes: "Finishes what S72-05 left unproved. The protocol's reference server (`@modelcontextprotocol/server-everything` 2.2.1) answers a collection resource with five contents: a resource with several contents is now one document (JSON parts as an array, text parts joined, binary parts skipped). `resources/list` pages up to 1000 (a catalogue pages ten by ten), a repeated cursor is a loop. The gateway route relays resources/* signed as the source. A large unversioned catalogue is read only up to the base's limit."
   - id: S73-01
     title: "chore(publishing): the publication moves to graalsystems (owner, registry, source repository; ADR 0156 amendment)"
     stream: S73
