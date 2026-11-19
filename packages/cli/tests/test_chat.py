@@ -315,6 +315,8 @@ class Platform:
         router.post(f"{V1}/runs/{RUN}/cancel").mock(side_effect=self._stop)
         # What an expanded run node reads (S67-14): its journal, its context and its sub-agents.
         self.journal: list[dict[str, Any]] = _journal()
+        #: A run's own journal, when it has one; the others get `journal`.
+        self.journals: dict[str, list[dict[str, Any]]] = {}
         self.breakdown: dict[str, Any] | None = None
         self.agent_nodes: list[dict[str, Any]] = [_agent_node(RUN, None, "agent")]
         self.asked: list[tuple[str, str]] = []  # (route, after_seq or "")
@@ -504,7 +506,9 @@ class Platform:
         self.asked.append(("events", str(after)))
         if self.journal_status != 200:
             return Response(self.journal_status, json={"title": "Forbidden", "detail": "no"})
-        return Response(200, json=[e for e in self.journal if e["seq"] > after])
+        run_id = request.url.path.split("/")[-2]
+        journal = self.journals.get(run_id, self.journal)
+        return Response(200, json=[e for e in journal if e["seq"] > after])
 
     def _context(self, request: Any) -> Response:
         self.asked.append(("context", ""))
@@ -1312,6 +1316,94 @@ async def test_a_run_stays_open_when_it_moves_to_the_ended_part(platform: Platfo
         app.redraw()
         await pilot.pause(0.2)
         assert "Steps  3 tool calls" in screen_text(app)
+
+
+def _several_runs(platform: Platform, count: int) -> list[str]:
+    """`count` runs in flight, each on its own work item and with a journal of its own."""
+    ids = [f"run-{n:02d}" for n in range(1, count + 1)]
+    platform.in_flight = [
+        _entry(run_id, work_item_id=f"wi-{n}", work_item_key=f"FIN-{100 + n}", stage_role=f"stage{n:02d}")
+        for n, run_id in enumerate(ids, start=1)
+    ]
+    for n, run_id in enumerate(ids, start=1):
+        platform.journals[run_id] = [
+            _event(1, _call(f"{run_id}-a", f"Read file{n:02d}.py", "read", "completed"), 20),
+            _event(2, _call(f"{run_id}-b", f"Edit file{n:02d}.py", "edit", "in_progress"), 10),
+        ]
+    return ids
+
+
+async def test_several_open_runs_each_show_their_own_journal(platform: Platform) -> None:
+    ids = _several_runs(platform, 3)
+    app = make_app()
+    async with app.run_test(size=(160, 80)) as pilot:
+        await ready(pilot)
+        for n in (1, 2, 3):
+            await expand_run(pilot, f"stage{n:02d}")
+        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        await until(pilot, lambda: "Edit file03.py" in screen_text(app), "the third journal")
+        text = screen_text(app)
+    for n in (1, 2, 3):
+        assert f"Read file{n:02d}.py" in text and f"Edit file{n:02d}.py" in text, text
+    # Each node holds its own calls: three runs, six calls, none counted twice or under another run.
+    assert text.count("Steps  2 tool calls · 1 finished") == 3, text
+    assert text.index("stage01") < text.index("file01.py") < text.index("stage02") < text.index("file02.py")
+
+
+async def test_many_open_runs_are_read_a_few_at_a_time_and_all_of_them_are_read(
+    platform: Platform, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Twenty runs open must not leave sixty requests together: at most `RUN_READERS` rounds are in flight,
+    and every run is still read."""
+    import asyncio
+
+    from tranibor_cli import workspace
+
+    ids = _several_runs(platform, 10)
+    in_flight = peak = 0
+    real = workspace.Workspace.read_run
+
+    async def slow(self: Any, run_id: str, detail: Any) -> None:
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        try:
+            await asyncio.sleep(0.15)
+            await real(self, run_id, detail)
+        finally:
+            in_flight -= 1
+
+    monkeypatch.setattr(workspace.Workspace, "read_run", slow)
+    app = make_app()
+    async with app.run_test(size=(160, 80)) as pilot:
+        await ready(pilot)
+        for n in range(1, 11):
+            await expand_run(pilot, f"stage{n:02d}")
+        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+    assert peak == workspace.RUN_READERS, f"{peak} rounds at once"
+
+
+async def test_a_very_long_journal_shows_the_latest_calls_and_is_read_in_full_once(
+    platform: Platform,
+) -> None:
+    from tranibor_cli.run_activity import STEPS_SHOWN
+
+    calls = 3000
+    platform.journal = [
+        _event(n, _call(f"toolu_{n}", f"Read part{n:04d}.py", "read", "completed"), 30)
+        for n in range(1, calls + 1)
+    ]
+    app = make_app()
+    async with app.run_test(size=(160, 80)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: f"Steps  {calls} tool calls" in screen_text(app), "the whole journal")
+        text = screen_text(app)
+        await pilot.pause(0.3)
+    assert f"… {calls - STEPS_SHOWN} earlier" in text
+    assert f"part{calls:04d}.py" in text and "part0001.py" not in text
+    assert platform.asked_events()[0] == "0"
+    assert platform.asked_events().count("0") == 1, "the journal is read from the start only once"
 
 
 async def test_an_unreadable_journal_is_said_on_the_node_and_the_workspace_goes_on(

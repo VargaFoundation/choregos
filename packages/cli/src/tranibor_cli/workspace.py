@@ -70,6 +70,9 @@ RECONNECT_S = 3.0
 CONVERSATIONS_SHOWN = 50
 #: How often an expanded run that is still in flight is asked for what is new (its journal, by `after_seq`).
 RUN_POLL_S = 2.0
+#: How many open runs are read at once. Each open run asks three routes every `RUN_POLL_S`: with twenty,
+#: sixty requests would leave together. A reader waits its turn: a run is read a little later, never skipped.
+RUN_READERS = 4
 #: Under this many columns the context pane folds away.
 CONTEXT_MIN = 120
 #: The tabs, in the order of their keys (ADR 0187 §1): `(name, label)`.
@@ -563,6 +566,8 @@ class Workspace(App[None]):
         self._turn_running = False
         #: The runs whose node the person has expanded, by run id: they are read while they are open.
         self._open_runs: set[str] = set()
+        #: At most `RUN_READERS` rounds of reads are in flight, whatever the number of open runs.
+        self._readers = asyncio.Semaphore(RUN_READERS)
         self._details: dict[str, RunDetail] = {}
         #: What the decisions and artefacts lists show now, to redraw only what changed.
         self._decision_shape: list[Any] = []
@@ -1075,7 +1080,8 @@ class Workspace(App[None]):
         every `RUN_POLL_S` while it is in flight, once when it is over."""
         detail = self._details.setdefault(run_id, RunDetail())
         while True:
-            await self.read_run(run_id, detail)
+            async with self._readers:
+                await self.read_run(run_id, detail)
             self.draw_tree()
             if run_id not in self.board.in_flight:
                 return
