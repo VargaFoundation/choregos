@@ -108,5 +108,6 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | [S75](status/S75.md) | The core is named Tranibor: visible name, packages, images and charts, environment variables (ADR 0176) |
 | [S76](status/S76.md) | The corpus's own structure is a retrieval key: outlines, section reading, PDF bookmarks (ADR 0051) |
 | [S80](status/S80.md) | From engine to product: the plan of 2026-11-16 |
+| [S81](status/S81.md) | The phone is a surface of the platform: an Android app for agents, assistants and voice (ADRs 0192-0194) |
 | [owner review](status/owner-review.md) | The owner review of 2026-11-03 |
 | [—](status/outside-backlog.md) | Rows that are not backlog stories, named by their pull request |
