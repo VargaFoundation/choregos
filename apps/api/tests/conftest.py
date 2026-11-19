@@ -34,6 +34,13 @@ os.environ.setdefault("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 
 os.environ.setdefault("CHOREGOS_COURTIER_ATTENTE_ECRITURE_S", "0.3")
 
 
+@pytest.fixture(autouse=True)
+def _plugin_files_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
+    # Stored plugin files are materialised on disk (#1777): a test never writes a directory the machine
+    # shares with other accounts.
+    monkeypatch.setenv("CHOREGOS_PLUGIN_FILES_DIR", str(tmp_path / "plugin-files"))
+
+
 #: `CHOREGOS_TEST_SUITE_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`): the WHOLE API suite runs on
 #: PostgreSQL, migrated schema, non-superuser role, so under RLS. On SQLite there is no RLS: webhooks
 #: delivered nothing in production without a single test seeing it (#143).

@@ -191,8 +191,10 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
 - `tranibor-quant` is dropped from point 4's list: no such image exists, `quant` is a command of the
   runner image (#1847).
 - **Not done in (b)**: the native CLI files keep their `choregos-<platform>` names (the install scripts
-  and the self-update must accept both first); the images `main` pushes for each commit keep the former
-  name only; the chart's per-component `repository` defaults (`choregos-api`, …) carry no registry, so
+  and the self-update must accept both first: the manifest names one file per platform, and an installed
+  CLI picks it by platform, so a second name needs a contract for the manifest first); the images `main`
+  pushes for each commit were pushed under the former name only, and are now pushed and signed under both
+  (`ci.yml`, S75-03); the chart's per-component `repository` defaults (`choregos-api`, …) carry no registry, so
   the rewrite does not see them, and they switch by hand with the deployments (step (c)), not by the
   identity.
 
