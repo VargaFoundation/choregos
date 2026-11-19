@@ -48,6 +48,7 @@ from ..gates import (
     RUN_SCOPED_GATES,
     judged_on_a_run,
     known_gates,
+    unavailable,
 )
 from .dates import field_of
 from .groups import is_per_project, placeholder_error
@@ -630,10 +631,14 @@ def _check_transition_references(
     if t.by is not None and t.by not in wf.actors:
         report.error("actor.unknown", f"unknown actor: {t.by}", [*path, "by"], source)
     for g_index, g in enumerate(t.gates):
-        if g.name not in gates:
+        # A gate this deployment cannot judge is refused now, naming the plugin to install, rather
+        # than when a work item reaches it (ADR 0181): one nobody registered, or one whose context
+        # provider no installed extension declares.
+        why = unavailable(g.name)
+        if why is not None:
             report.error(
-                "gate.unknown",
-                f"unknown gate: {g.name} (known: {', '.join(sorted(gates))})",
+                "gate.unknown" if g.name not in gates else "gate.provider_missing",
+                why,
                 [*path, "gates", g_index],
                 source,
             )
