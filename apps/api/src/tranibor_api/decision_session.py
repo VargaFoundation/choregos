@@ -10,7 +10,7 @@ account's token included), a run token and an outpost. The MCP door still decide
 Two routes accepted a token before this rule: `postDecision` and the conversation actions; four more, which
 widen what a run or the platform may do (egress, plugin installs, skill versions, assistant knowledge
 updates), joined them by the amendment of 2026-11-19 (#1926). A deployment may keep each accepting a token
-for one minor version (`CHOREGOS_LEGACY_DECISION_ROUTES`, see `docs/deployment.md`); the other gestures have
+for one minor version (`TRANIBOR_LEGACY_DECISION_ROUTES`, see `docs/deployment.md`); the other gestures have
 no such setting.
 """
 

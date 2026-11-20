@@ -2443,7 +2443,7 @@ egress request (`approveOrgEgressRequest`, `refuseOrgEgressRequest`), approving 
 knowledge update (`decideAssistantKnowledgeUpdate`) are refused with `403` and `decision_requires_session` for
 an API token, a machine account, a run token and an outpost. The console already uses its cookie and the
 `choregos` CLI calls none of them, so only a script that decided with a token is affected. Device requests and
-pending memory are unchanged. **For one minor version only**, `CHOREGOS_LEGACY_DECISION_ROUTES` also takes
+pending memory are unchanged. **For one minor version only**, `TRANIBOR_LEGACY_DECISION_ROUTES` also takes
 `egress_requests`, `plugin_installs`, `skill_versions` and `assistant_knowledge_updates` (a comma-separated
 list with the two names above; anything else is refused at start). Before upgrading, look in the audit log for
 egress, plugin-install, skill-version and knowledge-update decisions made by a machine account.
