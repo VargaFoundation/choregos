@@ -23,6 +23,7 @@ from .base import (
     notification_target,
     project_bundle,
     send_courtesy,
+    tracker_for,
     tracker_owns_items,
 )
 
@@ -98,7 +99,8 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
                         else None
                     )
                     evidence = WITHHELD if is_marked(origin) or is_marked(source) else row.evidence
-                    await bundle.adapters.tracker.comment(
+                    # A fan-out's child is not in an external tracker: its comment goes nowhere (ADR 0199).
+                    await tracker_for(bundle, origin).comment(
                         origin.tracker_key,
                         f"<!-- choregos:finding-duplicate -->\nOne more occurrence "
                         f"({candidate.occurrences}) reported by an agent: {evidence}",
@@ -167,7 +169,8 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
         await session.commit()
 
         linked: bool | None = None
-        if origin is not None:
+        # A fan-out's child is not in an external tracker: nothing to link or comment there (ADR 0199).
+        if origin is not None and tracker_for(bundle, origin) is bundle.adapters.tracker:
             # After the commit, a raise would only lose these: a retry no longer reaches them.
             try:
                 await bundle.adapters.tracker.link(key, origin.tracker_key, "origin")

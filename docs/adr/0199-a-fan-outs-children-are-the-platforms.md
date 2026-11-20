@@ -22,7 +22,7 @@ refused, so the fan-out could never pass. The documentation said "children need 
    is the platform's whatever the project's tracker.
 2. **Its tracker writes go nowhere** when the project's tracker keeps its items elsewhere
    (`owns_items`): the state mirror, the status comment and fields, a human request's comment, the
-   closing comment and close (`tracker_for`). The tracker never heard of the child. With the internal
+   closing comment and close, a finding's link and comment on its origin (`tracker_for`). The tracker never heard of the child. With the internal
    tracker, nothing changes.
 3. **The parent stays the tracker's item.** What the children concluded reaches it through the join
    (`documents.children`) and its own mirrors.
@@ -32,7 +32,8 @@ refused, so the fan-out could never pass. The documentation said "children need 
 - A fan-out works on every project, and its replay guarantee holds on external trackers too.
 - On a Jira or GitHub project, the children are no longer issues there: people follow them in the
   console. A workflow that wants an issue per element files it with an action (`work_item.file`, ADR 0197).
-- Finding comments on a child's origin (`findings.py`) still go to the tracker; a later story.
+- A finding raised from a child is filed as before; nothing is linked to or commented on the child in an
+  external tracker (`findings.py` goes through `tracker_for` too).
 
 ## Alternatives discarded
 
