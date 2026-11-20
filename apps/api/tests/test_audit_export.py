@@ -391,9 +391,17 @@ async def test_a_network_error_is_a_failure(orgs: dict[str, str]) -> None:
 
 
 async def test_a_redirect_is_not_followed_with_the_token(orgs: dict[str, str]) -> None:
-    sink = HttpJsonSink("https://siem.example/in", token="tok", transport=Receiver(status=307).transport())
+    seen: list[httpx.Request] = []
+
+    def redirect(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(307, headers={"Location": "https://elsewhere.example/steal"})
+
+    sink = HttpJsonSink("https://siem.example/in", token="tok", transport=httpx.MockTransport(redirect))
     with pytest.raises(SinkError, match="307"):
         await sink.send(await batch_of(orgs, 1))
+    # The Location is real: a client that followed it would have sent the token to the other host.
+    assert [request.url.host for request in seen] == ["siem.example"]
 
 
 # ───────────────────────────── the syslog sink, over a real TLS socket ─────────────────────────────
