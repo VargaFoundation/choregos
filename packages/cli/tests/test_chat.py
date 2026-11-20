@@ -577,8 +577,8 @@ def screen_text(app: Any) -> str:
     return "\n".join(strip.text for strip in app.screen._compositor.render_strips())
 
 
-async def until(pilot: Any, condition: Callable[[], bool], what: str) -> None:
-    for _ in range(100):
+async def until(pilot: Any, condition: Callable[[], bool], what: str, *, tries: int = 100) -> None:
+    for _ in range(tries):
         if condition():
             await pilot.pause()
             return
@@ -1515,7 +1515,9 @@ async def test_several_open_runs_each_show_their_own_journal(platform: Platform)
         await ready(pilot)
         for n in (1, 2, 3):
             await expand_run(pilot, f"stage{n:02d}")
-        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        # Several runs read a few at a time: on a loaded CI runner the default 5 s was not enough.
+        loaded = lambda: all(app._details.get(r) and app._details[r].loaded for r in ids)  # noqa: E731
+        await until(pilot, loaded, "reads", tries=400)
         await until(pilot, lambda: "Edit file03.py" in screen_text(app), "the third journal")
         text = screen_text(app)
     for n in (1, 2, 3):
@@ -1550,7 +1552,9 @@ async def test_several_open_runs_each_show_their_own_recorded_journal(platform: 
         for n in (1, 2, 3):
             await expand_run(pilot, f"stage{n:02d}")
         ids = [run["run_id"] for run in runs]
-        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        # Several runs read a few at a time: on a loaded CI runner the default 5 s was not enough.
+        loaded = lambda: all(app._details.get(r) and app._details[r].loaded for r in ids)  # noqa: E731
+        await until(pilot, loaded, "reads", tries=400)
         await pilot.pause(0.3)
         text = screen_text(app)
     for count in expected:
@@ -1586,7 +1590,9 @@ async def test_many_open_runs_are_read_a_few_at_a_time_and_all_of_them_are_read(
         await ready(pilot)
         for n in range(1, 11):
             await expand_run(pilot, f"stage{n:02d}")
-        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        # Several runs read a few at a time: on a loaded CI runner the default 5 s was not enough.
+        loaded = lambda: all(app._details.get(r) and app._details[r].loaded for r in ids)  # noqa: E731
+        await until(pilot, loaded, "reads", tries=400)
     assert peak == workspace.RUN_READERS, f"{peak} rounds at once"
 
 
