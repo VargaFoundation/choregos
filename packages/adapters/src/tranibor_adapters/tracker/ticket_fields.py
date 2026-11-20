@@ -42,7 +42,8 @@ def person(raw: Any) -> Person:
     """A tracker account as `{account_id, display_name, email}`; each `None` when the tracker is silent."""
     found = raw if isinstance(raw, Mapping) else {}
     return {
-        "account_id": _text_or_none(found.get("accountId")),
+        # Jira Data Center has no accountId: a user is its `key` (stable) or its `name` (login).
+        "account_id": _text_or_none(found.get("accountId") or found.get("key") or found.get("name")),
         "display_name": _text_or_none(found.get("displayName")),
         "email": _text_or_none(found.get("emailAddress")),
     }

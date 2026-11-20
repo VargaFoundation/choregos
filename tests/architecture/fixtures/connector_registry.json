@@ -412,7 +412,11 @@
           "type": "string"
         },
         "base_url": {
-          "description": "the site, https://<site>.atlassian.net, even with a scoped token",
+          "description": "Cloud: the site, https://<site>.atlassian.net, even with a scoped token. Data Center: its base URL, with the context path if any (https://jira.example.org/jira)",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "Data Center only: the PEM file of the internal CA that signed the site's certificate",
           "type": "string"
         },
         "candidates_jql": {
@@ -424,7 +428,7 @@
           "type": "string"
         },
         "email": {
-          "description": "the account the API token belongs to",
+          "description": "Cloud only: the account the API token belongs to",
           "type": "string"
         },
         "field_names": {
@@ -432,6 +436,15 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "flavor": {
+          "default": "cloud",
+          "description": "`datacenter` for Jira Data Center / Server 9.x or 10.x: REST API v2, wiki-markup bodies, `api_token` is a personal access token sent as Bearer",
+          "enum": [
+            "cloud",
+            "datacenter"
+          ],
+          "type": "string"
         },
         "match_labels": {
           "description": "when several projects share this Jira project, the labels that send an issue here; a project without them takes the issues no other claims",
@@ -446,15 +459,14 @@
       },
       "required": [
         "base_url",
-        "email",
         "project_key"
       ],
       "type": "object"
     },
     "deprecated": false,
     "dev_only": false,
-    "display": "Jira Cloud",
-    "has_check_config": false,
+    "display": "Jira (Cloud, Data Center / Server)",
+    "has_check_config": true,
     "has_egress": true,
     "has_factory": true,
     "kind": "tracker",
@@ -582,6 +594,11 @@
       "properties": {
         "base_url": {
           "default": "https://gitlab.com",
+          "description": "self-managed: its URL, with the path prefix if any (https://tools.example.org/gitlab); GitLab 15.0 or later",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "self-managed only: the PEM file of the internal CA that signed the instance's certificate (verification is never switched off)",
           "type": "string"
         },
         "project": {
@@ -658,6 +675,11 @@
       "properties": {
         "base_url": {
           "default": "https://gitlab.com",
+          "description": "self-managed: its URL, with the path prefix if any (https://tools.example.org/gitlab); GitLab 15.0 or later",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "self-managed only: the PEM file of the internal CA that signed the instance's certificate (verification is never switched off)",
           "type": "string"
         },
         "default_branch": {
@@ -880,6 +902,11 @@
       "properties": {
         "base_url": {
           "default": "https://gitlab.com",
+          "description": "self-managed: its URL, with the path prefix if any (https://tools.example.org/gitlab); GitLab 15.0 or later",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "self-managed only: the PEM file of the internal CA that signed the instance's certificate (verification is never switched off)",
           "type": "string"
         },
         "project": {
