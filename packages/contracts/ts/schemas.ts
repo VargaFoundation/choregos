@@ -1218,6 +1218,8 @@ export type Project = {
   } | {
     states: unknown;
   }>;
+  /** The projects of the organisation whose workflows may file work items here, by slug (the `work_item.file` effect, ADR 0197). Empty: none may. */
+  accepts_items_from?: Array<string>;
   /** What the A2A door takes for this project's skills (ADR 0078 §6). */
   a2a?: {
     /** The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most. */

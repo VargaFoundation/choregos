@@ -3416,7 +3416,7 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   **Acknowledge** button appears only to those who may (`can_acknowledge` on each alert), the
   others read who can.
 
-The core ships two effects. `connector.call` is an operation of a connector of the organisation,
+The core ships three effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP
 tool returns **structured** (`structuredContent`) is its result, so a later effect cites
 `effects[0].serial` as it would for a typed connector. An `approval` operation runs here — the
@@ -3427,6 +3427,14 @@ outside: a condition, rendered with the earlier effects' results, that must be t
 action fails, named by its `reason` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
 `verifier` (with `motif`) is the name it had before S39-11: it stays registered as an alias, so a
 workflow or an action written with it keeps running; write `check` and `reason` from now on.
+`work_item.file` ([ADR 0197](adr/0197-a-workflow-files-a-work-item-in-another-project.md)) files
+a work item in **another project** of the organisation, through that project's tracker — internal,
+Jira, GitHub, GitLab or a plugin's — as a person's request is filed there: `{project: <slug>, title,
+body, labels}`; it answers `{project, key, url, work_item_id}`, so a later effect cites
+`effects[0].key`. The target project must list the source in its config's `accepts_items_from`; the
+work item is filed, not started (the target's people or start rules start it), labelled
+`from:<source>`, its body saying which work item filed it. Played again under the same key, it files
+nothing twice. It is `approval`: a person decides.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its
 title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the
