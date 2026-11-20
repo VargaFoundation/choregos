@@ -425,7 +425,8 @@ through the A2A door), and amends ADR 0031 (`metadata.inputs` stays fields only)
    from); a knowledge base per work item (a corpus is curated, an attachment is evidence).
 
 **Acceptance.**
-- [ ] The record is `accepted`, indexed, and `uv run pytest -q tests/docs/test_adr_index.py tests/docs/test_links.py` is green.
+- [ ] The record is indexed (`proposed` until the owner merges it, `accepted` then), and
+      `uv run pytest -q tests/docs/test_adr_index.py tests/docs/test_links.py` is green.
 - [ ] It names no trade.
 
 ### S84-02 · docs(adr): 0198, procurement is a plugin whose code half is a job image
@@ -444,7 +445,8 @@ of untrusted and confidential documents, and what is left out.
   per trade"; `tests/docs/test_plugins_and_trades_page.py` reads that page).
 
 **Acceptance.**
-- [ ] The record is `accepted` and indexed; the docs tests are green.
+- [ ] The record is indexed (`proposed` until the owner merges it, `accepted` then); the docs tests
+      are green.
 - [ ] It states the three limits a reader must know: no OCR, no injection detector, no write to a
       third-party system in lot 1.
 
