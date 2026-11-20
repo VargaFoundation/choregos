@@ -19,7 +19,7 @@ services:
       retries: 30
 
   tempo:
-    image: grafana/tempo:2.6.1@sha256:ef4384fce6e8ad22b95b243d8fc165628cda655376fd50e7850536ad89d71d50
+    image: grafana/tempo:3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
       - ./tempo.yaml:/etc/tempo/tempo.yaml:ro
@@ -32,7 +32,7 @@ services:
 
   collector:
     # The chart 0.111.0's appVersion, the image `infra/bootstrap/otel-collector.yaml` runs.
-    image: otel/opentelemetry-collector-contrib:0.115.1@sha256:d2da12c4336a79758826700be9e21ecf4a9f7d945b7f8a58ba55ee3fa45427c8
+    image: otel/opentelemetry-collector-contrib:0.165.0@sha256:e40d61f10c9a617cca1ffd1be4d7e2b3a4b0f0001798ff07e58cabe82e618cea
     command: ["--config=/etc/otelcol/relay.yaml"]
     environment:
       MY_POD_IP: 0.0.0.0
@@ -45,7 +45,7 @@ services:
 
   litellm:
     # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
-    image: ghcr.io/berriai/litellm-database:v1.108.12@sha256:1a5e629eee10f0a38a4eb276afea812411ed6c27031b826525134730c57f05ce
+    image: ghcr.io/berriai/litellm-database:1.110.2@sha256:3b239acc68e601c436e5feeec7ca0f01a41cd5dffe50975142b7fa7155c1b2ff
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     user: "1000:1000"
     environment:
