@@ -107,7 +107,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
   );
 
   const badgeDemo = demo && (
-    <span className="whitespace-nowrap rounded-full border border-waiting-line bg-waiting-soft px-2 py-0.5 text-[11px] font-medium text-waiting-ink">
+    <span className="whitespace-nowrap rounded-pill border border-waiting-line bg-waiting-soft px-2 py-0.5 text-[11px] font-medium text-waiting-ink">
       Demo · fixtures
     </span>
   );

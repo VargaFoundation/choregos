@@ -351,7 +351,7 @@ export function LiveIndicator({
       data-testid="live-indicator"
       data-state={connection}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1 font-medium tracking-wide",
+        "inline-flex items-center gap-2 rounded-pill border px-3 py-1 font-medium tracking-wide",
         wall ? "text-base" : "text-xs",
         live
           ? "border-succeeded-line bg-succeeded-soft text-succeeded-ink"

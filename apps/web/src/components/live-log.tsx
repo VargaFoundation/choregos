@@ -86,7 +86,7 @@ export function LiveLog({ events, height = 480 }: { events: RunEventDto[]; heigh
                 <span className="flex w-52 shrink-0 items-center gap-1.5">
                   <span className="truncate">{event.type}</span>
                   {denied && (
-                    <span className="shrink-0 rounded-full border border-failed-line bg-failed-soft px-1.5 text-[11px] leading-4 font-medium text-failed-ink">
+                    <span className="shrink-0 rounded-pill border border-failed-line bg-failed-soft px-1.5 text-[11px] leading-4 font-medium text-failed-ink">
                       Denied
                     </span>
                   )}

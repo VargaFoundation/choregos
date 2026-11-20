@@ -466,7 +466,7 @@ function RunOutcomeChip({ run }: { run: Parameters<typeof runOutcome>[0] }) {
         ? "border-danger text-danger"
         : "border-line text-ink-muted";
   return (
-    <span className={`inline-block rounded-full border px-2 py-0.5 ${colour}`} data-testid="run-outcome">
+    <span className={`inline-block rounded-pill border px-2 py-0.5 ${colour}`} data-testid="run-outcome">
       {label}
     </span>
   );

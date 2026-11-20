@@ -55,6 +55,25 @@ def test_radii_are_bounded() -> None:
     assert _refused(sample(radius={"control": 9}))
     assert _refused(sample(radius={"surface": 13}))
     assert _refused(sample(radius={"control": -1}))
+    assert _refused(sample(radius={"pill": 1000}))
+    assert _refused(sample(radius={"pill": -1}))
+    assert _refused(sample(radius={"pill": 2.5}))
+
+
+def test_a_pill_radius_of_zero_is_a_valid_square_and_none_leaves_it_round() -> None:
+    assert validate_theme(sample(radius={"pill": 0})) == []
+    assert validate_theme(sample(radius={"pill": 999})) == []
+    assert validate_theme(sample(radius={"control": 2})) == []  # pill absent: unchanged
+
+
+def test_the_python_model_and_the_openapi_agree_on_the_radii() -> None:
+    from tranibor_api.theme import ThemeRadius
+
+    props = contracts.load_openapi()["components"]["schemas"]["Theme"]["properties"]["radius"]["properties"]
+    assert set(props) == set(ThemeRadius.model_fields)
+    for name, field in ThemeRadius.model_fields.items():
+        bounds = {type(m).__name__: m for m in field.metadata}
+        assert props[name]["maximum"] == bounds["Le"].le and props[name]["minimum"] == bounds["Ge"].ge
 
 
 def test_unknown_fields_and_a_missing_mode_are_refused() -> None:

@@ -699,7 +699,9 @@ enterprise feature: an extension calls `tranibor_api.extensions.declare_theme_pr
 `fn(session, org) -> dict | None` and the core validates what it returns (schema, then the
 console's contrast budget on the effective colours). An invalid theme is replaced by the default
 (`X-Choregos-Theme: fallback`, with the violations in the API log); an extension can check a theme
-itself with `tranibor_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
+itself with `tranibor_api.theme.validate_theme`. The radii a theme may set are `radius.control` (0 to 8 px),
+`radius.surface` (0 to 12 px) and `radius.pill` (0 to 999 px, on badges, chips, counters and bars; absent
+keeps them round, 0 makes them square; dots and avatars always stay round, S39-03d, ADR 0199). A theme cannot change the mono font, the layout or
 the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
 CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes` (S39-03c).
 The console reads the instance theme on the server before drawing anything (`TRANIBOR_API_URL`,

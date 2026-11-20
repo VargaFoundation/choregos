@@ -423,7 +423,7 @@ export function Count({ n, className }: { n: number; className?: string }) {
   return (
     <span
       className={cn(
-        "ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 font-mono text-[11px] tabular-nums text-accent-ink",
+        "ml-1.5 inline-flex min-w-5 items-center justify-center rounded-pill bg-accent px-1.5 font-mono text-[11px] tabular-nums text-accent-ink",
         className,
       )}
     >

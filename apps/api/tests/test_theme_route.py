@@ -49,6 +49,7 @@ async def test_a_provider_theme_is_served_and_matches_the_contract(client: Async
     response = await client.get("/api/v1/theme")
     assert response.status_code == 200
     assert response.json() == SAMPLE_THEME
+    assert response.json()["radius"]["pill"] == 0  # the square-corner brand reaches the console
     assert response.headers["x-choregos-theme"] == "provided"
     jsonschema.validate(response.json(), _schema())
     assert seen[0][0] is not None and seen[0][1] is None

@@ -162,7 +162,7 @@ export function FlowScreen({
                 <li key={id}>
                   <Link
                     href={`/p/${slug}/items/${id}`}
-                    className="rounded-full border border-line px-2.5 py-0.5 font-mono text-xs no-underline hover:bg-surface-muted"
+                    className="rounded-pill border border-line px-2.5 py-0.5 font-mono text-xs no-underline hover:bg-surface-muted"
                   >
                     {card.key} <span className="font-sans text-ink-muted">{card.title}</span>
                   </Link>
