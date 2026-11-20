@@ -180,7 +180,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $name }}
+  name: {{ include "choregos.gatewayServiceName" . }}
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   selector:
