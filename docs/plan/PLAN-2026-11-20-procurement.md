@@ -1460,3 +1460,23 @@ plays every mapped operation of the profile, writes and compensations included; 
 
 The enterprise edition needs no change for this plan. The offer, the pricing and the approach of the
 first organisations are not in this repository.
+
+## 9. Execution notes
+
+Kept by the supervising session; dated. What the code taught the plan is written here, not hidden in a
+rewritten story.
+
+- **2026-11-20, waves 0 to 4.** One branch per repository (`claude/zen-pasteur-bfi7o2`), one commit per
+  story, each worker in its own worktree, no pull request opened. Corrections found on the way:
+  `markdown_sections` reads a diff and cannot judge an output (S84-15 added `output_sections`, PA-02
+  moved to wave 4); the structured offers carry a currency per supplier; the chart maps no job image by
+  default, so S84-09 changed the documentation, not the chart; hand-written PDF fixtures are binary to
+  git (`plugins/procurement/tests/fixtures/.gitattributes`); a memo writes amounts in decimal-point
+  notation in every language, since `numbers_measured` reads no other.
+- **The agents repository's branch holds both lots.** Its commit `cef106e` is the content of
+  `procurement` 0.1.0 (PA-01 to PA-03); the stories of lot 2 that follow raise the version to 0.2.0 on
+  the same branch. PA-04 publishes 0.1.0 by merging up to that commit after release R1, PA-11 the rest
+  after R2. Its CI pins the core's branch commit that carries S84-03 to S84-15, until PA-04.
+- **Lot 2 started before R1** on the stories that need no published archive: S84-12, PA-05, then PA-06
+  to PA-10. S84-10, S84-11, S84-13 and S84-14 wait for a signed, published archive. PA-06 takes the
+  plan's default backend, Odoo, until the owner names another.
