@@ -31,6 +31,8 @@ from .conftest import FakeInternalClient, agent_script, valid_result
 
 TOKEN = "rt-runner-5e1d2c3b4a59687766554433"
 HEADING = "## Calling tools from a script"
+
+
 def _accepted_model(backend: str) -> str:
     """A model of the family the backend is held to: Claude for claude-code, Gemini for gemini-cli
     (#1990); the others take either."""

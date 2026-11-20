@@ -314,6 +314,9 @@ MCP, #1882), so the cluster proof carries **S65-04o**.
 - **Accepted when**: the default values render the two-container template and Job;
   `tests/docs/test_upgrade_notes.py` names the setting; a run under `process` journals
   `agent.isolation` with that word.
+- **Done** (2026-11-20, STATUS S65-04m): the chart's default from 0.28; the code's default, read when nothing sets
+  the variable (Compose, the demo, a runner its executor says nothing to), stays `process`. The upgrade note is
+  under "Upgrading to 0.28" and its test is `tests/docs/test_upgrade_notes_agent_isolation.py`.
 
 ### S65-04n · build(docker): a runner image without the harnesses
 
