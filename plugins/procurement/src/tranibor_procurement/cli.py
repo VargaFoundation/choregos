@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`tranibor-procurement extract|compare|tier`, job steps (ADR 0198).
+"""`tranibor-procurement extract|compare|tier|supplier-check|renewals`, job steps (ADR 0198).
 
 Exit codes: 0 the contract is kept (files may be unreadable: see the facts), 2 it is broken.
 """
@@ -7,6 +7,7 @@ Exit codes: 0 the contract is kept (files may be unreadable: see the facts), 2 i
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import sys
 from decimal import Decimal
 
@@ -15,6 +16,9 @@ from tranibor_procurement.compare import compare
 from tranibor_procurement.convert import DEFAULT_TIMEOUT_S
 from tranibor_procurement.extract import DEFAULT_MAX_CHARS, OUTPUT_NAME, extract
 from tranibor_procurement.numbers import NUMBER_FORMATS
+from tranibor_procurement.relay import HttpRelay, Relay
+from tranibor_procurement.renewals import MAX_CEILING, renewals
+from tranibor_procurement.supplier_check import parse_as_of, supplier_check
 from tranibor_procurement.tier import parse_threshold, tier
 
 
@@ -28,6 +32,13 @@ def _positive(text: str) -> float:
 def _threshold(text: str) -> Decimal:
     try:
         return parse_threshold(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
+
+
+def _as_of(text: str) -> dt.date:
+    try:
+        return parse_as_of(text)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(str(exc)) from None
 
@@ -49,10 +60,27 @@ def _parser() -> argparse.ArgumentParser:
         metavar="AMOUNT",
         help="the highest total from which the committee decides",
     )
+    c = sub.add_parser("supplier-check", help="the measured facts of a supplier's onboarding file")
+    c.add_argument(
+        "--required",
+        nargs="+",
+        action="extend",
+        required=True,
+        metavar="KIND",
+        help="a kind of document the file must hold",
+    )
+    c.add_argument("--as-of", type=_as_of, required=True, metavar="DATE", help="an ISO date, or `today`")
+    c.add_argument("--duplicates", action="store_true", help="look for the supplier in the purchasing system")
+    r = sub.add_parser("renewals", help="the contracts that end soon, for a renewal campaign")
+    r.add_argument(
+        "--within-days", type=int, required=True, metavar="N", help="contracts ending within N days"
+    )
+    r.add_argument("--max", type=int, default=50, help=f"the most contracts listed (at most {MAX_CEILING})")
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, relay: Relay | None = None) -> int:
+    """`relay` is for tests; a job step reaches the purchasing connector through the run's API."""
     args = _parser().parse_args(argv)
     try:
         root = job.workspace()
@@ -62,6 +90,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "tier":
             summary, facts, outputs = tier(root, args.committee_from)
+            job.publish(root, summary=summary, facts=facts, outputs=outputs)
+            return 0
+        if args.command == "supplier-check":
+            summary, facts, outputs = supplier_check(
+                root, args.required, args.as_of, relay=(relay or HttpRelay()) if args.duplicates else None
+            )
+            job.publish(root, summary=summary, facts=facts, outputs=outputs)
+            return 0
+        if args.command == "renewals":
+            summary, facts, outputs = renewals(relay or HttpRelay(), args.within_days, args.max)
             job.publish(root, summary=summary, facts=facts, outputs=outputs)
             return 0
         inputs = job.inputs_dir(root)

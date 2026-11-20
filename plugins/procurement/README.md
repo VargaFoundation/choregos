@@ -79,3 +79,42 @@ tranibor-procurement tier --committee-from AMOUNT
 Reads `.choregos/inputs/award_basis.json`. Output `approval_tier` is `committee` when `highest_total` is
 at least the amount, else `standard`; output `highest_total`; fact `approval_tier_threshold`. A missing or
 non-numeric `--committee-from` exits non-zero and writes nothing: no threshold never means the lighter tier.
+
+## `tranibor-procurement supplier-check`
+
+```
+tranibor-procurement supplier-check --required KIND [KIND ...] --as-of DATE|today [--duplicates]
+```
+
+Reads `.choregos/inputs/supplier_file.json` (the shape of `src/tranibor_procurement/schemas/supplier_file.schema.json`:
+`identity` and `documents`, `kind` an open string, dates ISO or null) and the fields `legal_name` and
+`registration_number` of `.choregos/fields.json` (and `country`, for the duplicate search). The kinds to
+require are arguments the workflow writes: there is no default. No bank detail is read, and a document's
+`identifier` is not copied out.
+
+- **Facts**: `documents_missing` (a required kind no document has), `documents_expired` (every document of a
+  required kind expired before `--as-of`; one that expires on the day is valid, a null `expires_on` never
+  expires), `identity_mismatch` (the legal name and the registration number of the file against the fields,
+  compared after case, spaces and punctuation are dropped, so one digit is a mismatch), and with
+  `--duplicates` `duplicates_found`.
+- **Output `supplier_check`**: `{as_of, required, missing, expired, identity_mismatch, duplicates?}`, each finding listed.
+- **Duplicates**: `purchasing.search_suppliers` through the relay (below), by name, registration number and country.
+  A relay that fails exits 2 and writes nothing: it is never `duplicates_found: 0`.
+
+## `tranibor-procurement renewals`
+
+```
+tranibor-procurement renewals --within-days N [--max 50]
+```
+
+Calls `purchasing.list_contracts` (`ending_before` today plus N days) through the relay. Output `contracts` =
+`{expiring: [id], by_id: {id: summary}, left_out: [id]}`, ordered by end date (`end_date` of the summary)
+then id; `--max` (1 to 100, the spawn ceiling of ADR 0057) children are listed, the rest are `left_out`.
+Facts: `contracts_expiring`, `contracts_left_out`. No contract is `contracts_expiring: 0` and exit 0.
+
+### The relay
+
+`POST {TRANIBOR_API_URL}/runs/{TRANIBOR_RUN_ID}/tools/purchasing__{operation}` with `Bearer $TRANIBOR_RUN_TOKEN`
+(standard library, 60 s timeout). The actor's `tools: [{connector: purchasing, tools: [...]}]` in the workflow
+must name the operation, or the API answers 404. Pages are asked with `limit` and `cursor` and followed
+through `next_cursor`.
