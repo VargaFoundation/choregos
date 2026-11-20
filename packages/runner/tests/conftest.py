@@ -35,15 +35,6 @@ from tranibor_tools_mcp.client import Relayed
 FAKE_AGENT = Path(__file__).parent / "fixtures" / "fake_agent.py"
 
 
-@pytest.fixture(autouse=True)
-def _runner_git_dirs(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """The runner keeps its git directory outside the tree (S65-04c): in a test, outside the
-    machine's `/var/tmp` too, so that no run leaves a repository there."""
-    root = tmp_path_factory.mktemp("git-dirs")
-    monkeypatch.setenv("TRANIBOR_RUNNER_GIT_DIR_ROOT", str(root))
-    return root
-
-
 def git(*args: str, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
 
