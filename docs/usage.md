@@ -3517,11 +3517,11 @@ so a webhook delivered twice starts nothing twice. If a webhook is lost, a recon
 pass every 60 seconds catches up.
 
 You can also file a work item yourself. On a project's board, **New work item** opens a drawer: the workflow, the inputs that workflow declares, a title, a description, a size and an optional budget (which only tightens the workflow's). MCP does the same with `create_work_item`. With
-an internal tracker (or none) the platform mints the key. With GitHub, Jira or GitLab it creates
-the issue there first, labelled `source:choregos` and never `agent-ready`, and records the work
+an internal tracker (or none) the platform mints the key. With GitHub, Jira, Azure Boards or GitLab it creates
+the issue there first (Azure Boards: a work item, tagged), labelled `source:choregos` and never `agent-ready`, and records the work
 item under the issue's key, with its creation inputs, workflow and budget (ADR 0059). The tracker's
 credentials need the right to create issues (GitHub App: *Issues: read and write*; Jira: create
-issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
+issue on the project; Azure Boards: *Create work items* on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
 
 A `/choregos approve`, `reject`, `answer` or `scope` comment on a routed ticket does nothing to the
 workflow: a decision stays in the console, after a fresh sign-in. Tranibor replies on the ticket with a
@@ -3532,7 +3532,7 @@ verified by its HMAC (`TRANIBOR_GITHUB_WEBHOOK_SECRET` is set), by a github.com 
 of the project's organisation. The command runs with that member's own rights (a developer or
 above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
 and Tranibor confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
-Jira and GitLab comments, and any delivery that carries only the shared secret, are never honoured: a
+Jira, Azure Boards and GitLab comments, and any delivery that carries only the shared secret, are never honoured: a
 display name or a username is not a stable identity. Anyone else gets the console link, with a note on
 how to link their account. A reply that cannot be posted never fails the webhook.
 
