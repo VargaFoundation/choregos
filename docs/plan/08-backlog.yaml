@@ -6234,3 +6234,15 @@ stories:
       - "The nightly job starts the service itself and fails, not skips, when it does not start"
       - "Every mapped operation of the profile is played, writes and compensations included"
     notes: "The backend is the owner's decision before wave 7; Odoo is the plan's default."
+  - id: S84-15
+    title: "feat(core): output_sections, a guarantee on the sections of a Markdown output"
+    stream: S84
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S84-05]
+    acceptance:
+      - "A named Markdown output must carry every listed section as a heading, optionally in order; an absent or non-text output fails, naming it"
+      - "The validator refuses an output the transition does not declare and an empty outputs map"
+      - "The gate needs no connector, and docs/concepts.md names it"
+    notes: "Found by PA-02 on 2026-11-20: markdown_sections reads the documents a diff adds and needs scm, so a workflow without a repository can never satisfy it."

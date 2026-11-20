@@ -132,7 +132,7 @@ awaiting_* ─t-award (person, attested)─► awarded      (also: sent back wit
 | `t-extract` | job `extract` | `attachments` | `offers_text` (json) | `outputs_present`; `evidence_facts` measured only: `files_read` ≥ 2, `files_unreadable` = 0, `files_truncated` = 0 |
 | `t-read` | agent `offer-reader` | `offers_text` | `offers_structured` (json) | `output_schema`; `numbers_measured` with `sources: [offers_text]` |
 | `t-compute` | job `compare` | `offers_structured`, fields | `comparison`, `award_basis` (json) | `outputs_present`; `evidence_facts` measured only: `suppliers_count` ≥ 2, `files_unassigned` = 0, `currencies` ≤ 1 |
-| `t-memo` | agent `sourcing-analyst` | `comparison`, `award_basis`, `offers_text`, `human_feedback` | `comparison_memo_markdown` | `markdown_sections`; `numbers_measured` with `sources: [comparison, offers_text]`, `must_quote: [award_basis]` |
+| `t-memo` | agent `sourcing-analyst` | `comparison`, `award_basis`, `offers_text`, `human_feedback` | `comparison_memo_markdown` | `output_sections` (S84-15); `numbers_measured` with `sources: [comparison, offers_text]`, `must_quote: [award_basis]` |
 | `t-tier` | job `tier` | `award_basis` | `approval_tier`, `highest_total` | `outputs_in` on `approval_tier` |
 | `t-award` | a person | the memo | fields `awarded_supplier`, `rationale` | an attested task |
 
@@ -293,6 +293,7 @@ Core — `graalsystems/tranibor`, stream S84 (in `docs/plan/08-backlog.yaml`):
 | S84-07 | `feat(procurement)`: the distribution and `extract` | sonnet | L | 02 |
 | S84-08 | `feat(procurement)`: `compare` and `tier` | sonnet | M | 07 |
 | S84-09 | `build(procurement)`: the job image, CI, release, chart, compose | sonnet | M | 08 |
+| S84-15 | `feat(core)`: `output_sections`, the sections of a Markdown output | sonnet | S | 05 |
 | S84-10 | `feat(plugins)`: the core ships `procurement` offline and plays its template end to end | sonnet | L | 09, PA-04 |
 | S84-11 | `feat(dev)`: a procurement project with sample offers in the local install; the trade's page | sonnet | M | 10 |
 | S84-12 | `feat(procurement)`: `supplier-check` and `renewals` | sonnet | M | 10 |
@@ -305,7 +306,7 @@ core story that ships their archive, S84-10 then S84-13):
 | Story | Title | Size | Depends on |
 |:--|:--|:--|:--|
 | PA-01 | Plugin `procurement`: two agents, two skills, their evals | M | S84-02 |
-| PA-02 | Template `procurement-sourcing`: the workflow `offer-comparison` | L | PA-01, S84-05, S84-08 |
+| PA-02 | Template `procurement-sourcing`: the workflow `offer-comparison` | L | PA-01, S84-05, S84-08, S84-15 |
 | PA-03 | The template's eval cases and its structure tests, in CI | M | PA-02 |
 | PA-04 | `procurement` 0.1.0 reaches `main` and is published | S | PA-03, release R1 |
 | PA-05 | Server `purchasing`: the profile, the fake backend, the descriptor | L | PA-04 |
@@ -322,8 +323,8 @@ core story that ships their archive, S84-10 then S84-13):
 Wave 0 (one at a time)   S84-00 ─► S84-01 ─► S84-02 ─► S84-03
 Wave 1 (parallel)        S84-04 │ S84-07 │ PA-01
 Wave 2 (parallel)        S84-05 │ S84-06 │ S84-08
-Wave 3 (parallel)        S84-09 │ PA-02
-Wave 4                   PA-03
+Wave 3 (parallel)        S84-09 │ S84-15
+Wave 4                   PA-02 ─► PA-03
 ── R1: the owner releases the core (S84-01 to S84-09) ──
 Wave 5                   PA-04 ─► S84-10
 Wave 6                   S84-11 │ S84-12 │ PA-05
@@ -831,6 +832,53 @@ platforms; an operator maps it under the job image name `procurement`.
 
 **Out of scope.** Publishing an image by hand; the release itself is the owner's (R1).
 
+### S84-15 · feat(core): `output_sections`, the sections of a Markdown output
+
+**Wave** 3 · **Worker** sonnet · **Size** S · **Depends on** `S84-05` · **Contract change** no
+
+**PR title:** `feat(core): output_sections, a guarantee on the sections of a Markdown output (S84-15)`
+
+**Goal.** A workflow without a repository can require that an agent's Markdown output carries its
+sections, as `markdown_sections` requires it of the documents a branch adds.
+
+**Context.** Found by PA-02 (2026-11-20): `markdown_sections` is registered with `needs=("scm",)`
+and reads `ctx.added_text`, the documents a pull request's diff adds; with no diff it fails. A
+workflow whose memo is an output, not a file, can never satisfy it, and the validator says nothing.
+The model is `_markdown_sections` and its `_headings` helper in
+`packages/core/src/tranibor_core/gates/__init__.py`; `outputs_present` and `numbers_measured` show how
+a gate reads `ctx.result.outputs` and `ctx.expected_outputs`; the validator's per-gate parameter
+checks are in `packages/core/src/tranibor_core/dsl/validator.py` (search `markdown_sections`).
+
+**Files.**
+- Modify: `packages/core/src/tranibor_core/gates/__init__.py`, `packages/core/src/tranibor_core/dsl/validator.py`,
+  `docs/concepts.md` (the "Gates shipped today" list, `tests/docs/test_guarantee_list.py` reads it),
+  the workflow reference page that lists gates and their parameters (`docs/site/reference/workflow-yaml.md`
+  if it lists them).
+- Create: `packages/core/tests/test_output_sections_gate.py`.
+
+**Steps.**
+1. `@gate("output_sections")`, no `needs`: parameters `{outputs: {<output name>: [<section>, ...]},
+   patterns: {<output name>: [<regex>, ...]}, ordered: false}`. For each named output: absent from
+   the stage result, or not a string, is a failure naming it; each section must be a heading of the
+   text (same reading as `markdown_sections`: case-insensitive, any heading level); with
+   `ordered: true` the sections must appear in the given order. The detail names every section
+   missing, per output.
+2. Validator: `outputs:` required and not empty; each name must be an output the transition
+   declares (`outputs:`), else an error naming it; `patterns` must compile.
+3. Validator, a warning and no more: a gate that needs `scm` (`gate_needs`) on a transition of a
+   workflow whose project may have no repository cannot be decided at validation time, so this story
+   does not add one; it is a `finding` for the core (§7).
+
+**Tests.** Every section present passes; one missing fails and names it; a heading at level 3 counts;
+`ordered: true` refuses the right sections in the wrong order; an absent output fails; a JSON output
+fails; the validator refuses an undeclared output name and an empty `outputs:`; the gate needs no
+connector (`gate_needs("output_sections") == frozenset()`).
+
+**Acceptance.**
+- [ ] The tests are green; removing the section check turns two red.
+- [ ] `tests/docs/test_guarantee_list.py` is green with the gate named in `docs/concepts.md`.
+- [ ] `make ci` is green; the trade guards are untouched.
+
 ### PA-01 · feat(procurement): the plugin, its two agents, two skills and their evals
 
 **Repository** `graalsystems/tranibor-agents`, branch `feat/procurement` · **Wave** 1 · **Worker**
@@ -891,8 +939,8 @@ each must and must not do checked by evals.
 
 ### PA-02 · feat(procurement): the template `procurement-sourcing` and its workflow `offer-comparison`
 
-**Repository** `graalsystems/tranibor-agents`, branch `feat/procurement` · **Wave** 3 · **Worker**
-sonnet · **Size** L · **Depends on** `PA-01`, `S84-05`, `S84-08`
+**Repository** `graalsystems/tranibor-agents`, branch `feat/procurement` · **Wave** 4 · **Worker**
+sonnet · **Size** L · **Depends on** `PA-01`, `S84-05`, `S84-08`, `S84-15`
 
 **PR title:** `feat(procurement): the procurement-sourcing template and its offer-comparison workflow (PA-02)`
 
@@ -1405,6 +1453,7 @@ plays every mapped operation of the profile, writes and compensations included; 
 | A second backend | The profile on one of the large purchasing suites | An organisation that runs it, with a sandbox |
 | Orders and invoices | Purchase orders, receipt, three-way matching | After the first backend has run in production |
 | Human escalation | `escalate_to` on a human actor is executed | A `finding` is filed by PA-02; it is a core story of its own |
+| A diff gate where no diff can exist | The validator says when a gate that needs `scm` (`markdown_sections`, `scope_respected` …) is used by a workflow that has no repository | Found by PA-02 on 2026-11-20; a `finding` for the core |
 | A workflow gallery entry | The trade in the gallery of roadmap workstream A5 | A4 has certified the purchasing server |
 
 ## 8. Outside these repositories
