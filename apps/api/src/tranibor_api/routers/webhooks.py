@@ -857,8 +857,7 @@ async def azure_boards_webhook(
     if not verify_shared_secret(get_settings().generic_webhook_secret, provided):
         raise unauthorized("invalid shared secret")
     payload = json.loads(body or b"{}")
-    # The hook's own id is the delivery id; a redelivery carries the same one.
-    delivery = str(payload.get("notificationId") or payload.get("id") or "") or body_digest(body)
+    delivery = _azure_delivery_id(payload, body)
     if await _already_seen(session, "azure-boards", delivery, "azure-boards", body):
         return WebhookAck(accepted=True, duplicate=True)
 
@@ -993,8 +992,7 @@ async def azure_devops_webhook(
     if not verify_shared_secret(get_settings().generic_webhook_secret, provided):
         raise unauthorized("invalid shared secret")
     payload = json.loads(body or b"{}")
-    # The hook's own id is the delivery id; a redelivery carries the same one.
-    delivery = str(payload.get("notificationId") or payload.get("id") or "") or body_digest(body)
+    delivery = _azure_delivery_id(payload, body)
     if await _already_seen(session, "azure-devops", delivery, "azure-devops", body):
         return WebhookAck(accepted=True, duplicate=True)
 
@@ -1004,6 +1002,21 @@ async def azure_devops_webhook(
         return WebhookAck(accepted=True, events=0)
     delivered = await _dispatch(session, events, project_of=project)
     return WebhookAck(accepted=True, events=delivered)
+
+
+def _azure_delivery_id(payload: dict[str, Any], body: bytes) -> str:
+    """The id a redelivery shares with its first delivery, and no other delivery does.
+
+    The event's own GUID (`id`) is unique. `notificationId` is a counter per subscription: two
+    subscriptions (projects, organisations) reuse the same values, so it only identifies a delivery
+    together with its `subscriptionId`. Without either, the body's digest."""
+    event = str(payload.get("id") or "")
+    if event:
+        return event
+    subscription, notification = str(payload.get("subscriptionId") or ""), str(payload.get("notificationId") or "")
+    if subscription and notification:
+        return f"{subscription}:{notification}"
+    return body_digest(body)
 
 
 async def _azure_devops_project_for(session: Any, payload: dict[str, Any]) -> tuple[Project | None, bool]:

@@ -203,3 +203,22 @@ async def test_an_event_the_platform_does_not_read_is_accepted_and_ignored(
 ) -> None:
     ack = await _deliver(client, {"notificationId": "x", "eventType": "git.push", "resource": {}})
     assert ack == {"accepted": True, "duplicate": False, "events": 0}
+
+
+async def test_two_subscriptions_reusing_one_notification_id_are_both_delivered(
+    client: AsyncClient, admin: str
+) -> None:
+    """`notificationId` counts per subscription: another subscription's first delivery is not a redelivery."""
+    project = await _project(client, "yyy")
+    await _connector(client, project, "scm", "Billing", repository="billing-api")
+    first = {**pull_request("Billing", notification="1"), "subscriptionId": "sub-a"}
+    other = {**pull_request("Billing", notification="1"), "subscriptionId": "sub-b"}
+
+    assert (await _deliver(client, first))["duplicate"] is False
+    assert (await _deliver(client, other))["duplicate"] is False
+    assert (await _deliver(client, first))["duplicate"] is True, "a true redelivery is still dropped"
+
+    guid_a = {**first, "id": "guid-1"}
+    guid_b = {**first, "id": "guid-2"}
+    assert (await _deliver(client, guid_a))["duplicate"] is False
+    assert (await _deliver(client, guid_b))["duplicate"] is False, "the event GUID is preferred"
