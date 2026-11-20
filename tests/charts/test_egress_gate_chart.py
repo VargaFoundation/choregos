@@ -91,8 +91,9 @@ def test_the_chart_and_the_executor_build_the_same_gate() -> None:
 def test_the_gate_can_be_turned_off_and_then_leaves_no_trace() -> None:
     pod = _template_pod("--set", "choregos-orchestrator.runner.egressGate.enabled=false")
 
-    assert "initContainers" not in pod
-    assert "volumes" not in pod
+    # The agent's own container (the default since S65-04m) stays; nothing of the gate does.
+    assert [c["name"] for c in pod["initContainers"]] == ["agent"]
+    assert "egress-gate" not in {v["name"] for v in pod["volumes"]}
     runner = next(c for c in pod["containers"] if c["name"] == "runner")
     assert REPORT_ENV not in {e["name"] for e in runner.get("env", [])}
     assert (

@@ -141,10 +141,14 @@ def test_a_warm_sandbox_holds_no_credential() -> None:
         assert forbidden not in text, f"a warm sandbox would carry `{forbidden}` before any assignment"
     runner = pod["containers"][0]
     assert runner["args"][0] == "await-assignment"
-    # The egress gate's report path (S80-07f) is a plain value too, and names no secret.
+    # The egress gate's report path (S80-07f) and where the agent is (ADR 0146, the default since
+    # S65-04m) are plain values too, and name no secret.
     assert {e["name"]: e["value"] for e in runner["env"]} == {
         "LOG_FORMAT": "json",
         "CHOREGOS_EGRESS_GATE_REPORT": "/egress-gate/report.json",
+        "CHOREGOS_RUNNER_AGENT_ISOLATION": "container",
+        "CHOREGOS_RUNNER_LAUNCHER_PORT": "8766",
+        "TMPDIR": "/exchange",
     }
 
 
@@ -292,10 +296,26 @@ def _agent(pod: dict[str, Any]) -> dict[str, Any]:
 
 
 @needs_helm
-def test_by_default_the_agent_shares_the_runners_container() -> None:
-    """The rollback: `process` (the default) renders the pod this chart rendered before ADR 0146,
-    with only the egress gate (S80-07f) before the runner."""
-    pod = _pod()
+def test_by_default_the_agent_has_a_container_of_its_own() -> None:
+    """S65-04m: `container` is the default. The values say nothing and the warm pool's pod gets the agent's
+    sidecar after the egress gate, and the API and the workers (which render `k8s_job`'s Job from it) are
+    told `container`."""
+    objects = _objects()
+    pod = objects["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["spec"]
+    assert [c["name"] for c in pod["initContainers"]] == ["egress-gate", "agent"]
+    runner_env = {e["name"]: e["value"] for e in pod["containers"][0]["env"]}
+    assert runner_env["CHOREGOS_RUNNER_AGENT_ISOLATION"] == "container"
+    for name in ("Deployment/choregos-api", "Deployment/choregos-orchestrator-executor"):
+        (container, *_) = objects[name]["spec"]["template"]["spec"]["containers"]
+        env = {e["name"]: e.get("value") for e in container["env"]}
+        assert env["CHOREGOS_RUNNER_AGENT_ISOLATION"] == "container", name
+
+
+@needs_helm
+def test_process_renders_the_pod_of_before_the_agents_container() -> None:
+    """The rollback: `process`, now a choice the values make, renders the pod this chart rendered before
+    ADR 0146, with only the egress gate (S80-07f) before the runner."""
+    pod = _pod("global.runner.agentIsolation=process")
     assert [c["name"] for c in pod["initContainers"]] == ["egress-gate"]
     assert [c["name"] for c in pod["containers"]] == ["runner"]
     assert [v["name"] for v in pod["volumes"]] == ["egress-gate"]
@@ -399,7 +419,10 @@ def test_the_runner_container_requests_its_own_beside_the_agent() -> None:
         "requests": {"cpu": "250m", "memory": "512Mi"},
         "limits": {"cpu": "1", "memory": "2Gi"},
     }
-    assert _pod()["containers"][0]["resources"]["requests"] == {"cpu": "500m", "memory": "1Gi"}
+    assert _pod("global.runner.agentIsolation=process")["containers"][0]["resources"]["requests"] == {
+        "cpu": "500m",
+        "memory": "1Gi",
+    }
 
 
 @needs_helm
