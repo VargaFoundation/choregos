@@ -23,9 +23,10 @@ so a workflow written for one tracker is useless to the next organisation.
    filed. A workflow does not write into a project that did not agree to it.
 3. **A person decides.** Its policy is `approval`, like an extension effect: the action waits for a
    person, whoever wrote the workflow.
-4. **Filed, not started.** The work item is born in the target project's routing, labelled
-   `from:<source>`, its body naming the work item that filed it; the target's people or start rules
-   start it. The source's workflow does not decide what another project runs.
+4. **Filed, not started.** The work item is born in the target project's routing, its body naming the
+   work item that filed it; its labels, with `from:<source>`, choose its workflow there and reach an
+   external tracker (an internal tracker keeps no labels). The target's people or start rules start it.
+   The source's workflow does not decide what another project runs.
 5. **Idempotent under the effect's key** (ADR 0008): the work item's id is derived from it, so an effect
    played again finds what it filed. An external tracker's issue is created before that row, as for a
    person's request: an activity that dies between the two files the issue again when replayed.

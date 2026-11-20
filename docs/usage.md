@@ -3432,8 +3432,9 @@ a work item in **another project** of the organisation, through that project's t
 Jira, GitHub, GitLab or a plugin's — as a person's request is filed there: `{project: <slug>, title,
 body, labels}`; it answers `{project, key, url, work_item_id}`, so a later effect cites
 `effects[0].key`. The target project must list the source in its config's `accepts_items_from`; the
-work item is filed, not started (the target's people or start rules start it), labelled
-`from:<source>`, its body saying which work item filed it. Played again under the same key, it files
+work item is filed, not started (the target's people or start rules start it), its body saying which
+work item filed it; its labels, with `from:<source>`, choose its workflow in the target's routing and
+reach an external tracker (an internal one keeps none). Played again under the same key, it files
 nothing twice. It is `approval`: a person decides.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its

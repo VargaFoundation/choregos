@@ -427,7 +427,9 @@ async def _file_work_item(ctx: EffectContext, params: dict[str, Any]) -> dict[st
     Idempotent under the effect's key: the work item's id is derived from it, so an effect played again
     finds the one it filed. An external tracker's issue is created before that row: an activity that
     dies between the two files the issue again when it is played again (the window a person's request
-    has too). The work item is not started: the target project's people or its start rules start it."""
+    has too). The work item is not started: the target project's people or its start rules start it. Its
+    labels, with `from:<source>`, route it at birth and reach an external tracker; its body says which work
+    item filed it."""
     from tranibor_contracts import ActionStatus
 
     from .db.models import WorkItem
