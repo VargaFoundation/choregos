@@ -145,7 +145,7 @@ The mechanism is the smallest that does not stop the project's single maintainer
 
 The project lead, who decided this record, asked on 2026-11-18 for a cleaner and more complete terminal
 workspace and for a live view of a workflow processing its items, on the web and in the terminal
-([ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md)). Those stories (S67-18 to S67-29) are
+([ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md)). Those stories (S67-18 to S67-30) are
 added to S67, a stream this record lets finish; no stream is opened, and the row of S67 above names them.
 
 ## Amendment, 2026-11-19: the freeze is lifted

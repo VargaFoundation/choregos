@@ -176,6 +176,7 @@ activity` prints the same words.
 | 1 to 6 | Goes to a tab (when you are not typing in the composer), as does a click on its name |
 | Enter, in the tree | Expands a project, a work item or a run (plan, tool calls, context, sub-agents) |
 | `x`, in the tree | Stops the run or work item under the cursor, **after asking why** |
+| `r`, in the tree | Relaunches the failed, cancelled or timed-out run (or the work item whose last run ended so) under the cursor: replays its stage, **after asking why** |
 | Esc | Cancels the turn being answered; the platform books what it spent |
 | Ctrl-O, Ctrl-N, Ctrl-A | Switches conversation, starts a new one, switches assistant |
 | F2, or Enter or `d` on a decision | Opens a decision (see [Decide](#decide)) |
@@ -184,7 +185,9 @@ activity` prints the same words.
 
 A stop always needs a reason: an empty one is not sent. The reason is audited and shown on the work item.
 `x` says so when you may not stop what is under the cursor. The footer lists the keys that apply to
-what you are on.
+what you are on: `r` is there only on something that can be relaunched. A relaunch is the work item's
+`rerun_stage` action (`choregos items action <id> rerun_stage`): when the work item's budget is spent the
+platform refuses it and says so; grant a top-up with the command's `--top-up`.
 
 ### The palette
 
@@ -199,7 +202,7 @@ letters are underlined. Up and Down move, Enter chooses, Esc closes. It lists:
 - the **other organisations** you may read: choosing one reads everything again for it (the same as
   starting `choregos chat --org <slug>`);
 - the **commands**: decide what waits for you, stop the selected run or work item (`x` in Activity; it still
-  asks why), new conversation, open a conversation, choose the assistant, cancel the turn, quit.
+  asks why), relaunch the selected failed run or work item (`r` in Activity; it asks why too), new conversation, open a conversation, choose the assistant, cancel the turn, quit.
 
 Nothing is only in the palette: each line says on its right the key or the tab that reaches it too, and the
 footer keeps every key. The palette does not open over a dialog.
