@@ -9,8 +9,8 @@ from temporalio.exceptions import ApplicationError
 from tranibor_core.images import named_image as lookup
 
 _SOURCES = {
-    "job": ("job_images", "CHOREGOS_JOB_IMAGES"),
-    "agent": ("agent_images", "CHOREGOS_AGENT_IMAGES"),
+    "job": ("job_images", "TRANIBOR_JOB_IMAGES"),
+    "agent": ("agent_images", "TRANIBOR_AGENT_IMAGES"),
 }
 
 

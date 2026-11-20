@@ -62,14 +62,14 @@ JOB_IMAGE = "registry.example/tranibor-investment-research@sha256:" + "b" * 64
 
 async def _replayed(handle: Any, archive: str) -> None:
     """The campaign's history replays against the current code, and is archived for the next ones
-    (`CHOREGOS_RECORD_HISTORY=1`): a change to the interpreter that would decide differently
+    (`TRANIBOR_RECORD_HISTORY=1`): a change to the interpreter that would decide differently
     on a job step fails `tests/replay`."""
     from temporalio.worker import Replayer
     from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_RECORD_HISTORY"):
+    if os.environ.get("TRANIBOR_RECORD_HISTORY"):
         target = HISTORIES / archive
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -164,8 +164,8 @@ def market(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     # The template is the `investment-research` plugin's (S83-07): installed from the archive the core ships
     # offline, its job steps name the plugin's job image, which the operator maps. The bench runs the
     # command in a subprocess, whatever the image; the API and the worker still check the name.
-    monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(OFFLINE))
-    monkeypatch.setenv("CHOREGOS_JOB_IMAGES", json.dumps({"investment-research": JOB_IMAGE}))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(OFFLINE))
+    monkeypatch.setenv("TRANIBOR_JOB_IMAGES", json.dumps({"investment-research": JOB_IMAGE}))
     _settings_changed()
     yield fake
 
@@ -195,8 +195,8 @@ async def api_url(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> AsyncI
         await asyncio.sleep(0.02)
     port = server.servers[0].sockets[0].getsockname()[1]
     url = f"http://127.0.0.1:{port}"
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_URL", url)
-    monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_URL", url)
+    monkeypatch.setenv("TRANIBOR_HEARTBEAT_SECONDS", "1")
     reset_settings_cache()
     yield url
     server.should_exit = True

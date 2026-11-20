@@ -1,7 +1,7 @@
 """A plugin's server on its fake for the live eval matrix: its eval instance, bound by the matrix (#1372).
 
 A server that declares its `fake` is run, where the deployment serves eval fakes
-(`CHOREGOS_EVAL_FAKE_SCENES`), as a second instance: its image with the fake's variables and the
+(`TRANIBOR_EVAL_FAKE_SCENES`), as a second instance: its image with the fake's variables and the
 platform's token, nothing of the configuration, no egress. The server's own instance keeps serving the
 organisation. A connector reaches the eval instance only when the matrix's seeding bound it
 (`fake_scene` in its configuration): no edit may write the field, whoever asks, and without the switch

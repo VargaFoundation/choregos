@@ -26,8 +26,8 @@ pytestmark = pytest.mark.asyncio
 #: A job as a backtest would be: reads the campaign from the fields, writes a file and its facts.
 JOB = r"""
 import json, os, pathlib, sys
-print("calling with " + os.environ["CHOREGOS_RUN_TOKEN"], file=sys.stderr)
-ws = pathlib.Path(os.environ["CHOREGOS_WORKSPACE"])
+print("calling with " + os.environ["TRANIBOR_RUN_TOKEN"], file=sys.stderr)
+ws = pathlib.Path(os.environ["TRANIBOR_WORKSPACE"])
 fields = json.loads((ws / ".choregos" / "fields.json").read_text())
 out = ws / ".choregos" / "outputs"
 out.mkdir(parents=True, exist_ok=True)
@@ -37,8 +37,8 @@ out.mkdir(parents=True, exist_ok=True)
     "facts": {
         "relevant_count": 2,
         "best_oos_dsr": 0.97,
-        "token_seen": os.environ.get("CHOREGOS_RUN_TOKEN") == "tok",
-        "run_id": os.environ.get("CHOREGOS_RUN_ID"),
+        "token_seen": os.environ.get("TRANIBOR_RUN_TOKEN") == "tok",
+        "run_id": os.environ.get("TRANIBOR_RUN_ID"),
     },
     "outputs": {"decision": "relevant"},
 }))
@@ -137,7 +137,7 @@ async def test_a_fact_that_is_not_a_simple_value_is_refused(
 ) -> None:
     code = (
         "import json, os, pathlib\n"
-        "ws = pathlib.Path(os.environ['CHOREGOS_WORKSPACE'])\n"
+        "ws = pathlib.Path(os.environ['TRANIBOR_WORKSPACE'])\n"
         "(ws / '.choregos' / 'job.json').write_text(json.dumps({'facts': {'trades': [1, 2]}}))\n"
     )
     job = _job(stage_input, tmp_path, code=code, outputs=[], output_types={})
@@ -156,7 +156,7 @@ async def test_an_output_the_contract_refuses_fails_the_step_instead_of_crashing
     never a runner that dies without posting a result."""
     code = (
         "import json, os, pathlib\n"
-        "ws = pathlib.Path(os.environ['CHOREGOS_WORKSPACE'])\n"
+        "ws = pathlib.Path(os.environ['TRANIBOR_WORKSPACE'])\n"
         "(ws / '.choregos' / 'job.json').write_text(json.dumps({'outputs': {'verdict': 'relevant'}}))\n"
     )
     job = _job(stage_input, tmp_path, code=code, outputs=["verdict"], output_types={})
@@ -213,7 +213,7 @@ async def test_fields_are_written_sorted(tmp_path: Path) -> None:
 #: A job that changes the repository: one real file, beside every file the runner gave it.
 REPO_JOB = r"""
 import json, os, pathlib
-ws = pathlib.Path(os.environ["CHOREGOS_WORKSPACE"])
+ws = pathlib.Path(os.environ["TRANIBOR_WORKSPACE"])
 (ws / "src" / "report.py").write_text("ROWS = 2\n")
 (ws / ".choregos" / "job.json").write_text(json.dumps({"summary": "report written"}))
 """

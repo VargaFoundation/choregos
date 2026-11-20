@@ -134,7 +134,7 @@ def test_the_replay_repairs_what_the_three_migrations_left_on_sqlite(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "left.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     try:
@@ -183,7 +183,7 @@ def test_the_replay_sees_the_rows_as_the_application_role_under_forced_rls(
 
     asyncio.run(_prepare_postgres())
     url = _app_url(PG_URL)
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", url)
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", url)
     get_settings.cache_clear()
 
     async def as_the_application(work: Any) -> Any:

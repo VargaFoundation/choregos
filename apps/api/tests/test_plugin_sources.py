@@ -317,7 +317,7 @@ async def test_fetches_go_through_the_egress_guard(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
     seen: list[str] = []
     index = _index(
@@ -375,8 +375,8 @@ async def test_a_member_lists_the_sources(
             }
         )
     )
-    monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
-    monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(offline))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_CONFIG", str(path))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(offline))
     reset_settings_cache()
     response = await client.get("/api/v1/orgs/northwind/plugin-sources")
     assert response.status_code == 200, response.text
@@ -416,7 +416,7 @@ async def test_an_invalid_configuration_is_reported(
 
     path = tmp_path / "plugins.yaml"
     path.write_text(yaml.safe_dump({"sources": [{"name": "acme", "index": "oci://x/i:1"}]}))
-    monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_CONFIG", str(path))
     reset_settings_cache()
     response = await client.get("/api/v1/orgs/northwind/plugin-sources")
     assert response.status_code == 500 and "trust" in response.json()["detail"]

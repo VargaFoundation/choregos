@@ -3,7 +3,7 @@
 
 A link the platform builds FOR AN ORGANISATION uses that organisation's verified host when it has one
 (`tenant_host.org_base_url`); what the platform stores, registers or emits for the INSTANCE keeps the
-canonical `CHOREGOS_PUBLIC_URL`. A new read of `public_url` in the API or the orchestrator fails here until
+canonical `TRANIBOR_PUBLIC_URL`. A new read of `public_url` in the API or the orchestrator fails here until
 it is placed in one of the three classes below, with its reason: the choice is made on purpose, in review,
 not by default. (Lines that merely hold the settings field's name count: the figure is per file.)
 """

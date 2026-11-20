@@ -36,7 +36,7 @@ so on its first request (`GET …/api/v1/internal/runs/<id>/input`), and the exi
 | :-- | :-- | :-- |
 | a name that does not resolve, a refused or timed-out connection | the callback address (`global.internalApiUrl`) is not reachable from where the run executes | from that place, resolve and call the address; a runner namespace of its own needs the Service's full name |
 | `404` | the API's guard refused the request: the run called back under a public hostname while `choregos-api.internalApiGuard` is `enforce` | below |
-| `401`, `403` | the token: the workers and the API do not hold the same run-token key | compare `CHOREGOS_RUN_TOKEN_PRIVATE_KEY` in both |
+| `401`, `403` | the token: the workers and the API do not hold the same run-token key | compare `TRANIBOR_RUN_TOKEN_PRIVATE_KEY` in both |
 
 For the `404`, the API's log names what it refused:
 

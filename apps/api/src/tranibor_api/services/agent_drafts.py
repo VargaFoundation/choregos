@@ -8,7 +8,7 @@ PROPOSAL: the platform drops every skill, knowledge base or connector that does 
 usable, clamps the limits, checks that the instructions render in the sandbox, and says in `notes`
 what it changed. Nothing is saved; a person reviews the draft in the builder and creates the agent.
 
-Under `CHOREGOS_FAKES` the drafter is deterministic.
+Under `TRANIBOR_FAKES` the drafter is deterministic.
 """
 
 from __future__ import annotations

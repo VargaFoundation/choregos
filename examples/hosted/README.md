@@ -10,7 +10,7 @@ answers `{"status": "done", "summary": ...}`, written on one framework and run a
   SIGTERM. Every example of a language carries an identical copy of its server and imports no
   shared library (ADR 0063); a test refuses a copy that differs;
 - reads the model from `OPENAI_BASE_URL` / `OPENAI_API_KEY` (`ANTHROPIC_*` for Claude) and the
-  MCP servers from `CHOREGOS_MCP_SERVERS` and `CHOREGOS_MCP_URL<name>`. The platform points these
+  MCP servers from `TRANIBOR_MCP_SERVERS` and `TRANIBOR_MCP_URL<name>`. The platform points these
   variables at the runner's loopback proxies, so the container never holds a secret;
 - writes one function, `answer(text)`, in `agent.py` (`agent.mjs`, or `Agent.Answer` in `Agent.cs`).
 
@@ -70,5 +70,5 @@ the platform writes) and runs the suite against it, nightly and on demand, witho
 the frameworks are heavy and stay out of the repository's lock file. The blocking CI job
 `hosted-images` (S41-23) builds and runs all eleven examples too, one matrix leg each, with Docker
 (`tests/conformance/hosted_real/test_images.py`; the .NET one is compiled in the SDK image of the platform's
-template). To run one: `CHOREGOS_TEST_HOSTED_DOCKER=1 CHOREGOS_TEST_HOSTED_REGISTRY=localhost:5055
-CHOREGOS_TEST_HOSTED_EXAMPLES=copilot-sdk pytest tests/conformance/hosted_real/test_images.py`.
+template). To run one: `TRANIBOR_TEST_HOSTED_DOCKER=1 TRANIBOR_TEST_HOSTED_REGISTRY=localhost:5055
+TRANIBOR_TEST_HOSTED_EXAMPLES=copilot-sdk pytest tests/conformance/hosted_real/test_images.py`.

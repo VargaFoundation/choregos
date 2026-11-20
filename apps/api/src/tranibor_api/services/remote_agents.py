@@ -21,7 +21,7 @@ from ..db.models import RemoteCredential
 from ..errors import unprocessable
 from ..schemas import A2aPinnedCard, A2aRuntime, AgentSpec
 
-#: Tests (and `CHOREGOS_FAKES` demos) route every outbound A2A/OAuth call through one transport.
+#: Tests (and `TRANIBOR_FAKES` demos) route every outbound A2A/OAuth call through one transport.
 _TRANSPORT: list[httpx.AsyncBaseTransport] = []
 
 

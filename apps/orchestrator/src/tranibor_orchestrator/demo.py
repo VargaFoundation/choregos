@@ -184,10 +184,10 @@ async def main_async() -> int:
 
 
 def main() -> None:
-    os.environ.setdefault("CHOREGOS_FAKES", "1")
-    if "CHOREGOS_DATABASE_URL" not in os.environ:
+    os.environ.setdefault("TRANIBOR_FAKES", "1")
+    if "TRANIBOR_DATABASE_URL" not in os.environ:
         path = Path(tempfile.mkdtemp(prefix="choregos-demo-")) / "demo.db"
-        os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{path}"
+        os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{path}"
     raise SystemExit(asyncio.run(main_async()))
 
 

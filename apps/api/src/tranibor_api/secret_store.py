@@ -5,13 +5,13 @@ Three layers:
 
 - `seal` / `unseal`: envelope encryption. A value is encrypted with a random data key (AES-256-GCM);
   the data key is wrapped under a key-encryption key (KEK) that the DEPLOYMENT holds
-  (`CHOREGOS_SECRETS_KEKS="k2:<b64 32 bytes>,k1:<b64 32 bytes>"`, the first is active). The
+  (`TRANIBOR_SECRETS_KEKS="k2:<b64 32 bytes>,k1:<b64 32 bytes>"`, the first is active). The
   additional authenticated data (`org_id|name|version`) binds a row to its place: a ciphertext
   copied to another organisation or name does not open.
 - `KeyWrapper`: wraps the data keys. `EnvKeyWrapper` (the keyring above) is the default; an
   extension can supply a KMS or Vault-transit wrapper (ADR 0103).
 - `SecretStore`: the seam. `SealedDbSecretStore` (the table `org_secrets`) is the default;
-  `FakeSecretStore` serves `CHOREGOS_FAKES` when no key is configured.
+  `FakeSecretStore` serves `TRANIBOR_FAKES` when no key is configured.
 - `resolved_configuration`: what every call site that builds an adapter uses. It reads the
   `store:` references with the organisation's context, then hands the rest to the sync core.
 
@@ -45,7 +45,7 @@ from tranibor_core.secrets import (
 from .db.models import OrgSecret
 from .schemas import ConnectorSecretState
 
-ENV_KEKS = "CHOREGOS_SECRETS_KEKS"
+ENV_KEKS = "TRANIBOR_SECRETS_KEKS"
 ALGORITHM = "A256GCM"
 NO_KEY_MESSAGE = f"no secrets key configured ({ENV_KEKS}): use a reference, or ask the operator"
 
@@ -137,7 +137,7 @@ class KeyWrapper(Protocol):
 
 
 class EnvKeyWrapper:
-    """The default wrapper: AES-256-GCM under the keyring of `CHOREGOS_SECRETS_KEKS`."""
+    """The default wrapper: AES-256-GCM under the keyring of `TRANIBOR_SECRETS_KEKS`."""
 
     def __init__(self, keyring: Keyring) -> None:
         self._keyring = keyring
@@ -357,7 +357,7 @@ def _meta(row: OrgSecret) -> SecretMeta:
 
 
 class FakeSecretStore:
-    """In memory, scriptable: `CHOREGOS_FAKES` without a key, and the tests of the seam."""
+    """In memory, scriptable: `TRANIBOR_FAKES` without a key, and the tests of the seam."""
 
     def __init__(self, available: bool = True) -> None:
         self._available = available
@@ -408,11 +408,11 @@ def set_secret_store(store: SecretStore | None) -> None:
 
 
 def get_secret_store() -> SecretStore:
-    """The sealed database store; under `CHOREGOS_FAKES` and without a key, the in-memory fake."""
+    """The sealed database store; under `TRANIBOR_FAKES` and without a key, the in-memory fake."""
     if _OVERRIDE:
         return _OVERRIDE[0]
     store = SealedDbSecretStore()
-    if not store.available() and os.environ.get("CHOREGOS_FAKES", "") in {"1", "true", "yes"}:
+    if not store.available() and os.environ.get("TRANIBOR_FAKES", "") in {"1", "true", "yes"}:
         return _FAKE
     return store
 

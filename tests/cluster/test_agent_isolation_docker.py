@@ -53,7 +53,7 @@ ENTRYPOINT ["python", "/cfg/entry.py"]
 
 @pytest.fixture(scope="module")
 def image(tmp_path_factory: pytest.TempPathFactory) -> str:
-    if not os.environ.get("CHOREGOS_CLUSTER_CONTEXT"):
+    if not os.environ.get("TRANIBOR_CLUSTER_CONTEXT"):
         pytest.skip("run with the cluster tests (`make test-cluster`)")
     docker = shutil.which("docker")
     if docker is None or subprocess.run([docker, "info"], check=False, capture_output=True).returncode:

@@ -95,8 +95,8 @@ async def test_the_photo_is_read_by_a_shared_organisation_only(
     # The development sign-in lands a new person in every organisation unless a default one is set.
     async with session_scope() as session:
         session.add(Organization(slug="other", name="Other"))
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "other")
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "eve@other.dev")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", "other")
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "eve@other.dev")
     reset_settings_cache()
     await login(client, "eve@other.dev")
     assert (await client.get(url)).status_code == 404, "another organisation's administrator does not"

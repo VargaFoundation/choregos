@@ -85,7 +85,7 @@ jobs:
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
           rm "$RUNNER_TEMP/certificate.p12"
           # Nuitka signs the onefile binary with it (build.py, `--macos-sign-identity`).
-          echo "CHOREGOS_MACOS_SIGN_IDENTITY=$MACOS_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "TRANIBOR_MACOS_SIGN_IDENTITY=$MACOS_SIGNING_IDENTITY" >> "$GITHUB_ENV"
       - name: build
         env:
           PYTHON: ${{ steps.python.outputs.python-path }}

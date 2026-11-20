@@ -2,7 +2,7 @@
 """The ontology's tables are dropped with its package (ADR 0181, O4-1)
 
 The ontology was a trial plugin with its own Alembic branch (`onto0001` to `onto0003`), applied only
-where `CHOREGOS_ONTOLOGY_TRIAL` was set. The package is gone; an installation that enabled the trial
+where `TRANIBOR_ONTOLOGY_TRIAL` was set. The package is gone; an installation that enabled the trial
 still holds `ontology_versions` and `managed_objects` (and `action_proposals`, if it stopped at
 `onto0002`). They are dropped when they exist, `action_proposals` first since it refers to
 `ontology_versions`; their RLS policies and indexes go with them. An installation that never enabled the

@@ -6,7 +6,7 @@ An empty database has neither organisation nor member. `POST /orgs/{org}/project
 nothing to attach a role to. Before 2026-09-24 only `dev/scripts/seed.py` and `demo/seed.py` built
 an organisation: an installation through the chart was unusable without touching the database.
 
-This module reads `CHOREGOS_BOOTSTRAP_ORG` and `CHOREGOS_BOOTSTRAP_ADMINS` when the API starts. It
+This module reads `TRANIBOR_BOOTSTRAP_ORG` and `TRANIBOR_BOOTSTRAP_ADMINS` when the API starts. It
 creates what is missing and does not modify what exists: an administrator removed by hand does not
 come back at the next restart.
 """

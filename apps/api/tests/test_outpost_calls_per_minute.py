@@ -8,7 +8,7 @@ placements: every replica reads the same number, and no replica's memory is aske
 from the moment it is placed, for sixty seconds, whatever becomes of it; a call that is refused was
 never written and counts for nothing.
 
-They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level
+They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level
 security. What two placements do at once is in `test_broker_via_outpost_postgres.py`.
 """
 
@@ -202,7 +202,7 @@ def test_a_cap_per_minute_is_at_least_one(monkeypatch: pytest.MonkeyPatch, name:
     from pydantic import ValidationError
     from tranibor_api.config import Settings
 
-    monkeypatch.setenv(f"CHOREGOS_{name.upper()}", "0")
+    monkeypatch.setenv(f"TRANIBOR_{name.upper()}", "0")
     with pytest.raises(ValidationError):
         Settings()
 

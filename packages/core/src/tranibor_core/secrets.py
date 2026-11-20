@@ -37,11 +37,11 @@ class RefusedVariable(InvalidReference):
 #: role and resolved by the API or the orchestrator, whose environment also holds the platform's own
 #: secrets (session key, gateway master key, database password): a name outside this pattern is
 #: refused at write and again at resolution. A deployment widens it with this variable.
-PATTERN_ENV = "CHOREGOS_SECRET_ENV_PATTERN"
+PATTERN_ENV = "TRANIBOR_SECRET_ENV_PATTERN"
 DEFAULT_PATTERN = r"^CONNECTOR_[A-Z0-9_]+$"
 
 #: Never readable through a reference, whatever the pattern says: the platform's own variables.
-_ALWAYS_REFUSED = re.compile(r"^(CHOREGOS_|DATABASE_|PG|AWS_|KUBERNETES_|TEMPORAL_)")
+_ALWAYS_REFUSED = re.compile(r"^(TRANIBOR_|DATABASE_|PG|AWS_|KUBERNETES_|TEMPORAL_)")
 
 
 def _pattern() -> str:

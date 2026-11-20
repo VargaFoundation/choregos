@@ -158,8 +158,8 @@ export function extrait(
         where: "a terminal",
         language: "bash",
         code: [
-          `export CHOREGOS_TOKEN=${token}`,
-          `claude mcp add --transport http choregos ${url} --header "Authorization: Bearer $CHOREGOS_TOKEN"`,
+          `export TRANIBOR_TOKEN=${token}`,
+          `claude mcp add --transport http choregos ${url} --header "Authorization: Bearer $TRANIBOR_TOKEN"`,
         ].join("\n"),
       };
     case "claude-desktop":
@@ -182,10 +182,10 @@ export function extrait(
       };
     case "cursor":
       return {
-        where: "~/.cursor/mcp.json — then export CHOREGOS_TOKEN in your shell",
+        where: "~/.cursor/mcp.json — then export TRANIBOR_TOKEN in your shell",
         language: "json",
         code: JSON.stringify(
-          { mcpServers: { choregos: { url, headers: { Authorization: "Bearer ${env:CHOREGOS_TOKEN}" } } } },
+          { mcpServers: { choregos: { url, headers: { Authorization: "Bearer ${env:TRANIBOR_TOKEN}" } } } },
           null,
           2,
         ),

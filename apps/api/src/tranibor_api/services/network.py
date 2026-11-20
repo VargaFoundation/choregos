@@ -31,7 +31,7 @@ from .events import persist_event
 
 
 def instance_deny() -> list[str]:
-    """The hosts this deployment refuses to every run (`CHOREGOS_NETWORK_INSTANCE_DENY`)."""
+    """The hosts this deployment refuses to every run (`TRANIBOR_NETWORK_INSTANCE_DENY`)."""
     return [p.strip() for p in get_settings().network_instance_deny.split(",") if p.strip()]
 
 

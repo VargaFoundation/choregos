@@ -11,6 +11,8 @@ COPY apps/web ./
 # Read by `next build`, not by `next start`: the `/api/v1` rewrite and `NEXT_PUBLIC_*` are baked into
 # the build. The defaults are what the code assumes when they are unset; the local install
 # (`compose.yaml`) passes the API's address on its network and turns development sign-in on.
+# TRANIBOR_API_URL is read first by next.config.mjs; the former name stays for a build that still passes it (ADR 0176 R4).
+ARG TRANIBOR_API_URL=http://localhost:8000
 ARG CHOREGOS_API_URL=http://localhost:8000
 ARG NEXT_PUBLIC_DEV_LOGIN=false
 ARG NEXT_PUBLIC_DEV_LOGIN_EMAIL=

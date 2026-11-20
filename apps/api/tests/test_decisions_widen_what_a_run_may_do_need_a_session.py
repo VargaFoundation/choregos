@@ -3,7 +3,7 @@
 Egress requests, plugin installs, skill versions and assistant knowledge updates were open to a pasted API
 token: a machine account could open a host to a run, install a plugin or let a skill run. Each is now refused
 (403, `decision_requires_session`) without a console cookie, a frame token or a surface session; a deployment
-may keep each open for one minor version (`CHOREGOS_LEGACY_DECISION_ROUTES`). Device requests and pending
+may keep each open for one minor version (`TRANIBOR_LEGACY_DECISION_ROUTES`). Device requests and pending
 memory stay as they were (the product owner's decision, ADR 0154 amendment of 2026-11-19).
 """
 

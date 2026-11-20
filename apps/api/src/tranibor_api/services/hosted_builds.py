@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 
-#: Tests and `CHOREGOS_FAKES` put their builder here.
+#: Tests and `TRANIBOR_FAKES` put their builder here.
 _OVERRIDES: dict[str, Any] = {}
 
 

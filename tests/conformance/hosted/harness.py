@@ -573,14 +573,14 @@ def container_command(image: str, env: dict[str, str], name: str, *, network: st
 
 #: Forwards a loopback port of the agent's namespace to the same port on the harness's host.
 RELAY_IMAGE = "alpine/socat:1.8.0.3"
-NETWORK_ENV = "CHOREGOS_CONFORMANCE_DOCKER_NETWORK"
+NETWORK_ENV = "TRANIBOR_CONFORMANCE_DOCKER_NETWORK"
 
 
 def needs_relay() -> bool:
     """Whether `--network=host` is not the harness's own loopback.
 
     Under Docker Desktop the daemon runs in a VM: its "host" network is the VM's, so an agent
-    started on it never reaches the listeners of the harness (S41-23). `CHOREGOS_CONFORMANCE_DOCKER_NETWORK`
+    started on it never reaches the listeners of the harness (S41-23). `TRANIBOR_CONFORMANCE_DOCKER_NETWORK`
     (`host` or `relay`) forces the answer; otherwise Docker Desktop is told from `docker info`."""
     forced = os.environ.get(NETWORK_ENV, "")
     if forced:
@@ -628,7 +628,7 @@ class AgentProcess:
             self.relay = f"{self.name}-net"
             listeners = [
                 int(self.env[k].rsplit(":", 1)[1].split("/")[0])
-                for k in ("OPENAI_BASE_URL", "CHOREGOS_MCP_URL", "HTTPS_PROXY")
+                for k in ("OPENAI_BASE_URL", "TRANIBOR_MCP_URL", "HTTPS_PROXY")
             ]
             for _ in range(2):  # the published port can be taken between its choice and the start
                 subprocess.run(["docker", "rm", "-f", self.relay], capture_output=True, check=False)
@@ -738,7 +738,7 @@ async def _one_run(stage_input: StageInput, agent: AgentProcess, timeout_s: floa
     guards = GuardRails(stage_input.permissions, list(stage_input.allowed_paths), workspace=str(ROOT))
     ports = tuple(
         int(agent.env[k].rsplit(":", 1)[1].split("/")[0])
-        for k in ("OPENAI_BASE_URL", "CHOREGOS_MCP_URL", "HTTPS_PROXY")
+        for k in ("OPENAI_BASE_URL", "TRANIBOR_MCP_URL", "HTTPS_PROXY")
     )
     model = ModelProxy(stage_input, record)
     mcp = McpProxy(stage_input, record, guards)

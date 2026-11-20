@@ -10,7 +10,7 @@ account's token included), a run token and an outpost. The MCP door still decide
 Two routes accepted a token before this rule: `postDecision` and the conversation actions; four more, which
 widen what a run or the platform may do (egress, plugin installs, skill versions, assistant knowledge
 updates), joined them by the amendment of 2026-11-19 (#1926). A deployment may keep each accepting a token
-for one minor version (`CHOREGOS_LEGACY_DECISION_ROUTES`, see `docs/deployment.md`); the other gestures have
+for one minor version (`TRANIBOR_LEGACY_DECISION_ROUTES`, see `docs/deployment.md`); the other gestures have
 no such setting.
 """
 
@@ -55,7 +55,7 @@ def require_person_session(
     principal: Principal, gesture: str, *, settings: Settings | None = None, legacy: str | None = None
 ) -> None:
     """Refuse a principal that is not the person in a session. `legacy` names the route's entry in
-    `CHOREGOS_LEGACY_DECISION_ROUTES`: when the deployment lists it, a token still passes there."""
+    `TRANIBOR_LEGACY_DECISION_ROUTES`: when the deployment lists it, a token still passes there."""
     if holds_a_person_session(principal):
         return
     if legacy is not None and settings is not None and legacy in settings.legacy_decision_route_set():

@@ -3,7 +3,7 @@
 # Laya has no network at all: it proves that the image needs none. Every port is bound to 127.0.0.1.
 #
 #   docker compose -p s5202 -f tests/live/decisions/compose.yaml up -d --build --wait
-#   CHOREGOS_LIVE_DECISIONS=1 uv run pytest tests/live/test_decisions_live.py -m live
+#   TRANIBOR_LIVE_DECISIONS=1 uv run pytest tests/live/test_decisions_live.py -m live
 #   docker compose -p s5202 -f tests/live/decisions/compose.yaml down -v
 name: s5202
 services:

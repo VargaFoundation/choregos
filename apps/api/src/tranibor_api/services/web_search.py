@@ -18,7 +18,7 @@ The router writes the ledger row (`search:<backend>`) and the event, which carri
 fingerprint and length, never its text (ADR 0015).
 
 A connector the live eval matrix declared on a case's fake web (`fake_scene: web`, #1378) is served by that
-scene, where the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`): its results are the case's,
+scene, where the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`): its results are the case's,
 and `eval_web_scene` is what `web_fetch` reads the case's pages from for the projects it is turned on for.
 The API refuses `fake_scene` on every declaration and edit; nothing else changes — the ceiling, the
 policy, the data handling, the guard and the ledger hold as for any backend.
@@ -292,7 +292,7 @@ async def search(
 
 async def eval_web_scene(session: AsyncSession, project: Project) -> WebScene | None:
     """The case's fake web the live eval matrix bound this project's web tools to (#1378), built anew, or
-    `None`: always where the deployment does not serve eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`), and for
+    `None`: always where the deployment does not serve eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`), and for
     any project no such connector is turned on for — the API refuses `fake_scene` on every declaration
     and edit, so only the matrix's seeding writes one, for its case's eval project."""
     from tranibor_adapters.fakes.scenes import bound_web_scene, eval_fake_scenes_allowed

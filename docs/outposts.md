@@ -107,7 +107,7 @@ The platform's operator does this once for the deployment.
 [Deployment](deployment.md#outposts-adrs-0147-0149) holds every setting and every value of the
 chart; what there is to arrange:
 
-- **The switch**, `CHOREGOS_OUTPOSTS` (the chart's `global.outposts.enabled`), off by default. Off,
+- **The switch**, `TRANIBOR_OUTPOSTS` (the chart's `global.outposts.enabled`), off by default. Off,
   the door is not served and creating an outpost is refused. It is also the one switch that stops
   every outpost at once.
 - **A hostname of the door's own**, with its DNS record and its certificate: the one name an
@@ -128,7 +128,7 @@ Outposts** or with `choregos outposts`. [Usage](usage.md#4-write-the-policy) des
 the commands, under "Outposts"; the [CLI reference](cli.md) has each command.
 
 Before anyone tries, the page and `choregos outposts list` say whether the deployment would refuse:
-outposts switched off (`CHOREGOS_OUTPOSTS`), so that nothing is created and no token issued, or a door
+outposts switched off (`TRANIBOR_OUTPOSTS`), so that nothing is created and no token issued, or a door
 without a signing key, so that no token is issued. Both come from the list of outposts (`enabled`,
 `door_signing_key`), not from a refusal.
 

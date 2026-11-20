@@ -22,7 +22,7 @@ def registry(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[FakeRegistryClie
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_images import set_image_services
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_REGISTRIES", json.dumps(["ghcr.io/acme"]))
+    monkeypatch.setenv("TRANIBOR_HOSTED_REGISTRIES", json.dumps(["ghcr.io/acme"]))
     reset_settings_cache()
     client, verifier = FakeRegistryClient(strict=True), FakeImageVerifier()
     set_image_services(client, verifier)
@@ -34,7 +34,7 @@ def registry(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[FakeRegistryClie
 def _cosign(monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN", mode)
+    monkeypatch.setenv("TRANIBOR_HOSTED_COSIGN", mode)
     reset_settings_cache()
 
 
@@ -239,9 +239,9 @@ async def test_the_deployment_names_the_signer_and_a_wrong_name_trusts_nothing(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_images import image_verifier, set_image_services
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
     for name, value in env.items():
-        monkeypatch.setenv(f"CHOREGOS_HOSTED_COSIGN_{name}", value)
+        monkeypatch.setenv(f"TRANIBOR_HOSTED_COSIGN_{name}", value)
     reset_settings_cache()
     set_image_services(None)
     try:
@@ -264,9 +264,9 @@ def test_the_deployment_decides_whether_the_transparency_log_is_checked(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_images import image_verifier, set_image_services
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN_KEY", "/etc/choregos/cosign/cosign.pub")
-    monkeypatch.setenv("CHOREGOS_HOSTED_COSIGN_TLOG", tlog)
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_HOSTED_COSIGN_KEY", "/etc/choregos/cosign/cosign.pub")
+    monkeypatch.setenv("TRANIBOR_HOSTED_COSIGN_TLOG", tlog)
     reset_settings_cache()
     set_image_services(None)
     try:
@@ -281,7 +281,7 @@ def test_the_deployment_decides_whether_the_transparency_log_is_checked(
 def _cluster(monkeypatch: pytest.MonkeyPatch, version: str) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_CLUSTER_VERSION", version)
+    monkeypatch.setenv("TRANIBOR_CLUSTER_VERSION", version)
     reset_settings_cache()
 
 

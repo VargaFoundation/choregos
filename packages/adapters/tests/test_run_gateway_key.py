@@ -3,7 +3,7 @@
 The key used to reach the runner through `GET /internal/runs/{id}/input`, i.e. from `runs.stage_input`
 — so it sat in the database for the run's lifetime. Now `StageJobSpec.gateway_key` goes to the run's
 Secret (k8s_job, tekton, agent_sandbox), a job secret (aca) or the container's environment
-(local_docker), and the runner reads `CHOREGOS_RUN_GATEWAY_KEY`. Proved here without a cluster.
+(local_docker), and the runner reads `TRANIBOR_RUN_GATEWAY_KEY`. Proved here without a cluster.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@
 Exit codes: 0 ok, 2 invalid input, 3 snapshot with too many missing symbols.
 
 Without `--campaign`, the command runs as a Tranibor job step (ADR 0056): every path comes from
-`CHOREGOS_WORKSPACE` and the results are published in `.choregos/job.json` (see `job.py`).
+`TRANIBOR_WORKSPACE` and the results are published in `.choregos/job.json` (see `job.py`).
 """
 
 from __future__ import annotations

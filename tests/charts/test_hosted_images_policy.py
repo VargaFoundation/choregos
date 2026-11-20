@@ -26,7 +26,7 @@ from tranibor_core.publishing import PUBLISHING
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 DIGEST = "sha256:" + "a" * 64
-REGISTRY = os.environ.get("CHOREGOS_COSIGN_REAL_REGISTRY", "")
+REGISTRY = os.environ.get("TRANIBOR_COSIGN_REAL_REGISTRY", "")
 POLICY = "templates/hosted-images-policy.yaml"
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
@@ -298,7 +298,7 @@ def _run(*argv: str, cwd: pathlib.Path | None = None) -> str:
 @needs_kyverno
 @pytest.mark.skipif(
     not REGISTRY or shutil.which("cosign") is None or shutil.which("crane") is None,
-    reason="no registry (CHOREGOS_COSIGN_REAL_REGISTRY), or no cosign or crane on the path",
+    reason="no registry (TRANIBOR_COSIGN_REAL_REGISTRY), or no cosign or crane on the path",
 )
 @pytest.mark.parametrize("signature_format", ["bundle", "legacy"])
 def test_kyverno_admits_a_hosted_image_only_signed_by_the_key(

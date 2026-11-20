@@ -80,13 +80,13 @@ def _on(host: str, **more: str) -> dict[str, str]:
 
 @pytest.fixture
 async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/hosts.db")
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", INSTANCE_IDP)
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", CONSOLE)
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_GUARD", "enforce")
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_URL", "http://choregos-api:8000")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/hosts.db")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", INSTANCE_IDP)
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", CONSOLE)
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_GUARD", "enforce")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_URL", "http://choregos-api:8000")
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
     from tranibor_api.db.session import create_all
@@ -109,7 +109,7 @@ async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Asy
         forget_discovery()
         tenant_host.reset()
         reset_settings_cache()
-        os.environ.pop("CHOREGOS_DATABASE_URL", None)
+        os.environ.pop("TRANIBOR_DATABASE_URL", None)
 
 
 def _query(response: Any) -> dict[str, list[str]]:

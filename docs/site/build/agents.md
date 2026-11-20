@@ -47,7 +47,7 @@ agent's page (sections **Skills**, **Tools (MCP servers)**, **Knowledge**).
 **By API**, the same agent in one call:
 
 ```shell
-curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/agents" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -s "$TRANIBOR_API_URL/api/v1/orgs/acme/agents" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/json' -d '{
   "slug": "release-notes",
   "display_name": "Release notes writer",
@@ -175,8 +175,8 @@ agent's page and publish it with a message, or by API, giving the version you re
 concurrent change is not overwritten:
 
 ```shell
-curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/agents/release-notes/versions/publish" \
-  -H "Authorization: Bearer $CHOREGOS_TOKEN" -H 'Content-Type: application/json' -d '{
+curl -s "$TRANIBOR_API_URL/api/v1/orgs/acme/agents/release-notes/versions/publish" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' -d '{
   "message": "Breaking changes first",
   "base_version": 1,
   "spec": {

@@ -92,7 +92,7 @@ def own_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def settings(runner_settings: RunnerSettings, monkeypatch: pytest.MonkeyPatch) -> RunnerSettings:
-    monkeypatch.setenv("CHOREGOS_RUN_TOKEN", TOKEN)
+    monkeypatch.setenv("TRANIBOR_RUN_TOKEN", TOKEN)
     runner_settings.run_token = TOKEN
     return runner_settings
 
@@ -178,8 +178,8 @@ async def test_the_agent_gets_the_client_its_environment_and_the_instructions(
 
     directory = own_tmp / "choregos" / "tools"
     assert ran["env"] == {
-        "CHOREGOS_TOOLS_DIR": str(directory),
-        "CHOREGOS_TOOLS_BRIDGE": tool_scripts.bridge_url(settings.tools_url),
+        "TRANIBOR_TOOLS_DIR": str(directory),
+        "TRANIBOR_TOOLS_BRIDGE": tool_scripts.bridge_url(settings.tools_url),
         "PYTHONPATH": os.pathsep.join([str(directory), "/opt/agent-own"]),
         "TMPDIR": str(own_tmp),
     }
@@ -206,7 +206,7 @@ async def test_the_first_prompt_carries_the_scripts_section_when_the_run_is_offe
 
     first = ran["prompts"][0]
     if not offered:
-        assert HEADING not in first and "choregos_tools" not in first and "CHOREGOS_TOOLS" not in first
+        assert HEADING not in first and "choregos_tools" not in first and "TRANIBOR_TOOLS" not in first
         assert _events(client, "tools.instructions") == []
         return
     section = tool_scripts.instructions(tool_scripts.ToolClient(Path(), "", tool_scripts.plan(RUN_TOOLS)))
@@ -230,8 +230,8 @@ async def test_without_scripts_the_agent_gets_nothing_new(
     client, ran = await _run(stage_input, settings, "print('hello')\n")
 
     assert ran["env"] == {
-        "CHOREGOS_TOOLS_DIR": None,
-        "CHOREGOS_TOOLS_BRIDGE": None,
+        "TRANIBOR_TOOLS_DIR": None,
+        "TRANIBOR_TOOLS_BRIDGE": None,
         "PYTHONPATH": "/opt/agent-own",
         "TMPDIR": str(own_tmp),
     }
@@ -250,6 +250,6 @@ async def test_a_client_that_cannot_be_written_leaves_the_run_without_it(
 
     [event] = _events(client, "tools.client")
     assert event["written"] is False and event["error"]
-    assert ran["env"]["CHOREGOS_TOOLS_DIR"] is None
+    assert ran["env"]["TRANIBOR_TOOLS_DIR"] is None
     assert HEADING not in (settings.workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
     assert HEADING not in ran["prompts"][0] and _events(client, "tools.instructions") == []

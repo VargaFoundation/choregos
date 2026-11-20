@@ -5,7 +5,7 @@ the one comparison that refuses a run an executor cannot isolate.
 `process`: the agent is a child of the runner, in the runner's container (the historical shape).
 `container`: the agent runs in a container of its own in the run's pod, started there by the launcher,
 and holds none of the run's credentials. One setting for the whole deployment,
-`CHOREGOS_RUNNER_AGENT_ISOLATION` (the chart's `global.runner.agentIsolation`): the API reads it for
+`TRANIBOR_RUNNER_AGENT_ISOLATION` (the chart's `global.runner.agentIsolation`): the API reads it for
 `/readiness`, the workers for every run they start, the warm pool's template for its pods.
 
 An executor that can start the agent's container declares `separate_agent` among its capabilities. Under
@@ -22,7 +22,7 @@ from typing import Literal
 AgentIsolation = Literal["process", "container"]
 
 #: The deployment's setting, read by the API, the workers and the runner alike.
-AGENT_ISOLATION_ENV = "CHOREGOS_RUNNER_AGENT_ISOLATION"
+AGENT_ISOLATION_ENV = "TRANIBOR_RUNNER_AGENT_ISOLATION"
 #: The values it takes; the first is the default.
 AGENT_ISOLATION_MODES: tuple[AgentIsolation, ...] = ("process", "container")
 #: The capability of an executor that starts the agent in a container of its own (ADR 0146 §9).

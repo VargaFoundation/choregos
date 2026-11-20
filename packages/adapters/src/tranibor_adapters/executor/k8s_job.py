@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from tranibor_contracts import ExecutorKind
+from tranibor_contracts.env import with_legacy_entries
 from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import (
     RUN_GATEWAY_KEY_ENV,
@@ -300,30 +301,36 @@ class KubernetesJobExecutor:
                     "name": "runner",
                     "image": spec.runner_image,
                     "args": list(spec.runner_command),
-                    "env": [
-                        {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
-                        {"name": "CHOREGOS_API_URL", "value": spec.api_url},
-                        {
-                            "name": "CHOREGOS_RUN_TOKEN",
-                            "valueFrom": {"secretKeyRef": {"name": name, "key": "token"}},
-                        },
-                        # The run's gateway key, from the same Secret (#523). Optional: a run
-                        # without a key (none minted) still starts.
-                        {
-                            "name": RUN_GATEWAY_KEY_ENV,
-                            "valueFrom": {
-                                "secretKeyRef": {"name": name, "key": GATEWAY_KEY_FIELD, "optional": True}
+                    "env": with_legacy_entries(
+                        [
+                            {"name": "TRANIBOR_RUN_ID", "value": spec.run_id},
+                            {"name": "TRANIBOR_API_URL", "value": spec.api_url},
+                            {
+                                "name": "TRANIBOR_RUN_TOKEN",
+                                "valueFrom": {"secretKeyRef": {"name": name, "key": "token"}},
                             },
-                        },
-                        # The access token of a remote agent (ADR 0062), same Secret, same rule.
-                        {
-                            "name": RUN_REMOTE_TOKEN_ENV,
-                            "valueFrom": {
-                                "secretKeyRef": {"name": name, "key": REMOTE_TOKEN_FIELD, "optional": True}
+                            # The run's gateway key, from the same Secret (#523). Optional: a run
+                            # without a key (none minted) still starts.
+                            {
+                                "name": RUN_GATEWAY_KEY_ENV,
+                                "valueFrom": {
+                                    "secretKeyRef": {"name": name, "key": GATEWAY_KEY_FIELD, "optional": True}
+                                },
                             },
-                        },
-                        *[{"name": key, "value": value} for key, value in spec.env.items()],
-                    ],
+                            # The access token of a remote agent (ADR 0062), same Secret, same rule.
+                            {
+                                "name": RUN_REMOTE_TOKEN_ENV,
+                                "valueFrom": {
+                                    "secretKeyRef": {
+                                        "name": name,
+                                        "key": REMOTE_TOKEN_FIELD,
+                                        "optional": True,
+                                    }
+                                },
+                            },
+                            *[{"name": key, "value": value} for key, value in spec.env.items()],
+                        ]
+                    ),
                     "resources": {
                         "requests": {"cpu": spec.cpu, "memory": spec.memory},
                         "limits": {"cpu": self.cpu_limit, "memory": self.memory_limit},

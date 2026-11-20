@@ -1,6 +1,6 @@
 """An installed plugin and its files are an organisation's, under forced RLS (S43-04, ADR 0093).
 
-Runs only against a real PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`), migrated by Alembic and seen by the
+Runs only against a real PostgreSQL (`TRANIBOR_TEST_DATABASE_URL`), migrated by Alembic and seen by the
 non-superuser application role: the migration's policies are what is under test.
 """
 

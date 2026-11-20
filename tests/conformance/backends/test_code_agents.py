@@ -15,7 +15,7 @@ observable is a deliverable the SDK writes through the guard.
 | max_turns | the agent's first turn made no more calls (tool and model calls) than `max_turns` |
 | cost_at_gateway | the run's key is in the agent's environment; the gateway saw no other key |
 
-The agents under test come from `CHOREGOS_CONFORMANCE_CODE_AGENTS`, JSON `{name: argv}` or
+The agents under test come from `TRANIBOR_CONFORMANCE_CODE_AGENTS`, JSON `{name: argv}` or
 `{name: {"image": ref, "command": argv}}` (the agent then runs in that image, through `docker run -i`);
 without it, the plain example runs. `make conformance-agent IMAGE=<ref>` sets it for one image.
 """
@@ -57,7 +57,7 @@ DEFAULT_AGENTS: dict[str, Any] = {
 
 
 def configured_agents() -> dict[str, Any]:
-    raw = os.environ.get("CHOREGOS_CONFORMANCE_CODE_AGENTS")
+    raw = os.environ.get("TRANIBOR_CONFORMANCE_CODE_AGENTS")
     return json.loads(raw) if raw else DEFAULT_AGENTS
 
 

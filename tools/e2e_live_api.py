@@ -3,7 +3,7 @@
 
 The console's Playwright journeys (`apps/web/e2e/`) run on its mock; a live journey drives the real
 API instead, so what the console sends and reads is what the API accepts and answers. This launcher
-starts it on fakes (`CHOREGOS_FAKES=1`) with a throwaway SQLite database and one fake MCP server
+starts it on fakes (`TRANIBOR_FAKES=1`) with a throwaway SQLite database and one fake MCP server
 whose tools an organisation connector discovers as operations. Usage:
 `uv run python tools/e2e_live_api.py <port> <console URL>`.
 """
@@ -35,18 +35,18 @@ def main(argv: list[str]) -> None:
     port = int(argv[1]) if len(argv) > 1 else 8765
     console = argv[2] if len(argv) > 2 else "http://127.0.0.1:3100"
     # Where a sign-in lands once done: the console under test, not the default `localhost:3000`.
-    os.environ["CHOREGOS_PUBLIC_URL"] = console
+    os.environ["TRANIBOR_PUBLIC_URL"] = console
     database = Path(tempfile.mkdtemp(prefix="choregos-e2e-live-")) / "choregos.db"
-    os.environ["CHOREGOS_ENV"] = "test"
-    os.environ["CHOREGOS_FAKES"] = "1"
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{database}"
+    os.environ["TRANIBOR_ENV"] = "test"
+    os.environ["TRANIBOR_FAKES"] = "1"
+    os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{database}"
     # `?as=<email>` signs in without an identity provider; refused outside dev and test.
-    os.environ["CHOREGOS_DEV_LOGIN_ENABLED"] = "true"
-    os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    os.environ["TRANIBOR_DEV_LOGIN_ENABLED"] = "true"
+    os.environ.setdefault("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     # The organisation a fresh install creates at its first start, and its administrator.
-    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG", "northwind")
-    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ORG_NAME", "Northwind")
-    os.environ.setdefault("CHOREGOS_BOOTSTRAP_ADMINS", "admin@northwind.dev")
+    os.environ.setdefault("TRANIBOR_BOOTSTRAP_ORG", "northwind")
+    os.environ.setdefault("TRANIBOR_BOOTSTRAP_ORG_NAME", "Northwind")
+    os.environ.setdefault("TRANIBOR_BOOTSTRAP_ADMINS", "admin@northwind.dev")
 
     import tranibor_adapters
     import uvicorn

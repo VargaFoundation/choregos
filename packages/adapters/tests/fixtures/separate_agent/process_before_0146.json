@@ -26,9 +26,17 @@
    "--security-opt",
    "no-new-privileges",
    "--env",
+   "TRANIBOR_RUN_ID=r-1",
+   "--env",
+   "TRANIBOR_API_URL=http://choregos-api:8000",
+   "--env",
    "CHOREGOS_RUN_ID=r-1",
    "--env",
    "CHOREGOS_API_URL=http://choregos-api:8000",
+   "--env",
+   "TRANIBOR_RUN_TOKEN",
+   "--env",
+   "TRANIBOR_RUN_GATEWAY_KEY",
    "--env",
    "CHOREGOS_RUN_TOKEN",
    "--env",
@@ -39,6 +47,8 @@
    "choregos.project=demo",
    "--env",
    "HTTP_PROXY=http://egress:3128",
+   "--env",
+   "TRANIBOR_ENV=dev",
    "--env",
    "CHOREGOS_ENV=dev",
    "registry.example/choregos-runner:1.0",
@@ -70,9 +80,17 @@
    "--security-opt",
    "no-new-privileges",
    "--env",
+   "TRANIBOR_RUN_ID=r-2",
+   "--env",
+   "TRANIBOR_API_URL=http://choregos-api:8000",
+   "--env",
    "CHOREGOS_RUN_ID=r-2",
    "--env",
    "CHOREGOS_API_URL=http://choregos-api:8000",
+   "--env",
+   "TRANIBOR_RUN_TOKEN",
+   "--env",
+   "TRANIBOR_RUN_GATEWAY_KEY",
    "--env",
    "CHOREGOS_RUN_TOKEN",
    "--env",
@@ -83,6 +101,8 @@
    "choregos.project=demo",
    "--env",
    "HTTP_PROXY=http://egress:3128",
+   "--env",
+   "TRANIBOR_ENV=dev",
    "--env",
    "CHOREGOS_ENV=dev",
    "--volume",
@@ -146,12 +166,29 @@
        ],
        "env": [
         {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
          "name": "CHOREGOS_RUN_ID",
          "value": "r-1"
         },
         {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
          "name": "CHOREGOS_API_URL",
          "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
         },
         {
          "name": "CHOREGOS_RUN_TOKEN",
@@ -163,10 +200,30 @@
          }
         },
         {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
          "name": "CHOREGOS_RUN_GATEWAY_KEY",
          "valueFrom": {
           "secretKeyRef": {
            "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
            "name": "run-r-1",
            "optional": true
           }
@@ -185,6 +242,10 @@
         {
          "name": "HTTP_PROXY",
          "value": "http://egress:3128"
+        },
+        {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
         },
         {
          "name": "CHOREGOS_ENV",
@@ -290,12 +351,29 @@
        ],
        "env": [
         {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
          "name": "CHOREGOS_RUN_ID",
          "value": "r-1"
         },
         {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
          "name": "CHOREGOS_API_URL",
          "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
         },
         {
          "name": "CHOREGOS_RUN_TOKEN",
@@ -307,10 +385,30 @@
          }
         },
         {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
          "name": "CHOREGOS_RUN_GATEWAY_KEY",
          "valueFrom": {
           "secretKeyRef": {
            "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
            "name": "run-r-1",
            "optional": true
           }
@@ -331,8 +429,16 @@
          "value": "http://egress:3128"
         },
         {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
+        },
+        {
          "name": "CHOREGOS_ENV",
          "value": "dev"
+        },
+        {
+         "name": "TRANIBOR_EGRESS_GATE_REPORT",
+         "value": "/egress-gate/report.json"
         },
         {
          "name": "CHOREGOS_EGRESS_GATE_REPORT",
@@ -501,12 +607,29 @@
        ],
        "env": [
         {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
          "name": "CHOREGOS_RUN_ID",
          "value": "r-1"
         },
         {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
          "name": "CHOREGOS_API_URL",
          "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
         },
         {
          "name": "CHOREGOS_RUN_TOKEN",
@@ -518,10 +641,30 @@
          }
         },
         {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
          "name": "CHOREGOS_RUN_GATEWAY_KEY",
          "valueFrom": {
           "secretKeyRef": {
            "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
            "name": "run-r-1",
            "optional": true
           }
@@ -540,6 +683,10 @@
         {
          "name": "HTTP_PROXY",
          "value": "http://egress:3128"
+        },
+        {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
         },
         {
          "name": "CHOREGOS_ENV",
@@ -705,12 +852,29 @@
        ],
        "env": [
         {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
          "name": "CHOREGOS_RUN_ID",
          "value": "r-1"
         },
         {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
          "name": "CHOREGOS_API_URL",
          "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
         },
         {
          "name": "CHOREGOS_RUN_TOKEN",
@@ -722,10 +886,30 @@
          }
         },
         {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
          "name": "CHOREGOS_RUN_GATEWAY_KEY",
          "valueFrom": {
           "secretKeyRef": {
            "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
            "name": "run-r-1",
            "optional": true
           }
@@ -746,8 +930,16 @@
          "value": "http://egress:3128"
         },
         {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
+        },
+        {
          "name": "CHOREGOS_ENV",
          "value": "dev"
+        },
+        {
+         "name": "TRANIBOR_EGRESS_GATE_REPORT",
+         "value": "/egress-gate/report.json"
         },
         {
          "name": "CHOREGOS_EGRESS_GATE_REPORT",

@@ -23,7 +23,7 @@ TOOLS = [{"name": "order_status", "inputSchema": {"type": "object"}}]
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 
@@ -117,13 +117,13 @@ async def test_a_git_import_outside_the_deployment_ceiling_is_a_422_that_names_e
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
+    monkeypatch.setenv("TRANIBOR_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     reset_settings_cache()
     refused = await client.post(f"{ORG}/skills/import-git", json=_import_body(allow_egress=True))
     assert refused.status_code == 422, refused.text
     assert "codeload.github.com" in refused.text and "egress refused" in refused.text
     assert [r.url.host for r in github] == [], "the tarball host was refused before any request"
-    monkeypatch.delenv("CHOREGOS_EGRESS_CEILING")
+    monkeypatch.delenv("TRANIBOR_EGRESS_CEILING")
     reset_settings_cache()
     assert await rules_in_db() == [], "the refused import took its rules with it: one transaction"
     done = await client.post(f"{ORG}/skills/import-git", json=_import_body(allow_egress=True))
@@ -213,7 +213,7 @@ async def test_a_remote_agents_card_fetch_outside_the_ceiling_is_refused_and_nev
         # the guard refuses before the card is requested
         from tranibor_api.config import reset_settings_cache
 
-        monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
+        monkeypatch.setenv("TRANIBOR_EGRESS_CEILING", '{"api": ["elsewhere.example.test"]}')
         reset_settings_cache()
         refused = await client.post(f"{ORG}/agents/discover", json=discover)
         assert refused.status_code == 422 and "egress refused" in refused.text, refused.text

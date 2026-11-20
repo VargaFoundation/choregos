@@ -199,7 +199,7 @@ def test_the_agent_cannot_read_the_runner_s_environment(tmp_path: Path) -> None:
     agent = wrap([sys.executable, "-c", code], Confinement("enforce", (str(tmp_path),)))
     runner = subprocess.Popen(
         [sys.executable, "-c", f"import subprocess, sys; sys.exit(subprocess.run({agent!r}).returncode)"],
-        env={**os.environ, "CHOREGOS_SECRET_FOR_TEST": "s3cret"},
+        env={**os.environ, "TRANIBOR_SECRET_FOR_TEST": "s3cret"},
     )
     assert runner.wait(timeout=60) == 3
 

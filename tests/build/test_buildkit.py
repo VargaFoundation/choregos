@@ -5,10 +5,10 @@ The unit tests (`packages/adapters/tests/test_image_builders.py`) prove the argv
 the argv does what it says on a real daemon and a real registry. It runs in the `hosted-build` CI
 job, against the rootless image the chart deploys, and skips without:
 
-- `CHOREGOS_TEST_BUILDKIT_ADDRESS`: the daemon, as `buildctl --addr` takes it;
-- `CHOREGOS_TEST_BUILD_REPOSITORY`: where to push, `localhost:5000/choregos-builds/reference`.
+- `TRANIBOR_TEST_BUILDKIT_ADDRESS`: the daemon, as `buildctl --addr` takes it;
+- `TRANIBOR_TEST_BUILD_REPOSITORY`: where to push, `localhost:5000/choregos-builds/reference`.
 
-`CHOREGOS_TEST_BUILT_IMAGE_FILE`, when set, receives the built `repository@sha256:…`: the job then
+`TRANIBOR_TEST_BUILT_IMAGE_FILE`, when set, receives the built `repository@sha256:…`: the job then
 runs it through the hosted conformance suite, so the image proved stable is also an image that works.
 """
 
@@ -28,16 +28,16 @@ from tranibor_api.services.hosted_sources import build_key, dockerfile, read_sou
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REFERENCE = ROOT / "examples" / "hosted" / "reference"
-ADDRESS = os.environ.get("CHOREGOS_TEST_BUILDKIT_ADDRESS", "")
-REPOSITORY = os.environ.get("CHOREGOS_TEST_BUILD_REPOSITORY", "")
-BUILDCTL = os.environ.get("CHOREGOS_TEST_BUILDCTL", "buildctl")
+ADDRESS = os.environ.get("TRANIBOR_TEST_BUILDKIT_ADDRESS", "")
+REPOSITORY = os.environ.get("TRANIBOR_TEST_BUILD_REPOSITORY", "")
+BUILDCTL = os.environ.get("TRANIBOR_TEST_BUILDCTL", "buildctl")
 
 pytestmark = [
     pytest.mark.buildkit,
     pytest.mark.asyncio,
     pytest.mark.skipif(
         not (ADDRESS and REPOSITORY) or shutil.which(BUILDCTL) is None,
-        reason="no buildkitd: set CHOREGOS_TEST_BUILDKIT_ADDRESS and CHOREGOS_TEST_BUILD_REPOSITORY",
+        reason="no buildkitd: set TRANIBOR_TEST_BUILDKIT_ADDRESS and TRANIBOR_TEST_BUILD_REPOSITORY",
     ),
 ]
 
@@ -92,5 +92,5 @@ async def test_the_reference_zip_is_built_once_and_rebuilt_from_nothing_to_the_s
         "would only mean `built once on this daemon`"
     )
 
-    if target := os.environ.get("CHOREGOS_TEST_BUILT_IMAGE_FILE"):
+    if target := os.environ.get("TRANIBOR_TEST_BUILT_IMAGE_FILE"):
         pathlib.Path(target).write_text(first.image + "\n", encoding="utf-8")

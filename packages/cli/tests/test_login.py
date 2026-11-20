@@ -18,7 +18,7 @@ SECRET = "chs_the-session-credential"
 @pytest.fixture
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
-    monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
+    monkeypatch.setenv("TRANIBOR_CONFIG", str(path))
     import tranibor_cli.client as client_module
     import tranibor_cli.device_login as device_login
 

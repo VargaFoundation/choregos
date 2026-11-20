@@ -22,7 +22,7 @@ API = "http://api.test"
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
-    monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
+    monkeypatch.setenv("TRANIBOR_CONFIG", str(path))
     import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
@@ -122,15 +122,15 @@ def test_an_api_error_reads_clearly(profile: Path) -> None:
 
 
 def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A profile without an organisation and no CHOREGOS_ORG: a clear error, not `northwind`."""
+    """A profile without an organisation and no TRANIBOR_ORG: a clear error, not `northwind`."""
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x"}))
     monkeypatch.setattr("tranibor_cli.client.CONFIG_PATH", path)
-    monkeypatch.delenv("CHOREGOS_ORG", raising=False)
+    monkeypatch.delenv("TRANIBOR_ORG", raising=False)
     with respx.mock:
         result = _run("projects", "list")
     assert result.exit_code != 0
-    assert "--org" in result.output and "CHOREGOS_ORG" in result.output
+    assert "--org" in result.output and "TRANIBOR_ORG" in result.output
     assert "northwind" not in result.output
     assert not respx.calls
 
@@ -138,8 +138,8 @@ def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest
 @respx.mock
 def test_the_environment_names_the_organisation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("tranibor_cli.client.CONFIG_PATH", tmp_path / "absent.json")
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_ORG", "globex")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_ORG", "globex")
     route = respx.get(f"{API}/api/v1/orgs/globex/projects").mock(
         return_value=Response(200, json={"items": []})
     )

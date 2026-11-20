@@ -38,7 +38,7 @@ def _plan(setup: Fixture, image: str | None = None) -> dict[str, Any]:
 def images(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_JOB_IMAGES", json.dumps({"quant": QUANT}))
+    monkeypatch.setenv("TRANIBOR_JOB_IMAGES", json.dumps({"quant": QUANT}))
     reset_settings_cache()
 
 

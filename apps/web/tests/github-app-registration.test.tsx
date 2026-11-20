@@ -82,7 +82,7 @@ describe("the instance's GitHub App, created from a manifest (S70-21)", () => {
       source: "deployment",
       app_id: "777",
       usable: true,
-      blocked_by: "the deployment's settings define the GitHub App (CHOREGOS_GITHUB_APP_ID)",
+      blocked_by: "the deployment's settings define the GitHub App (TRANIBOR_GITHUB_APP_ID)",
     });
     wrap(<GitHubAppRegistration />);
     expect(await screen.findByText(/the deployment's settings define the GitHub App/)).toBeInTheDocument();

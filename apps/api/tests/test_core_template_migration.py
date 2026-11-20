@@ -42,7 +42,7 @@ def test_untouched_copies_are_upgraded_and_modified_ones_kept(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
     database = tmp_path / "migrated.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     try:

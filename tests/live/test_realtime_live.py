@@ -6,8 +6,8 @@ the gateway lists the audio prices a voice session is measured at, and that a vi
 gateway's realtime socket. The gateway's own count is printed beside the relay's, never asserted
 equal: it is the figure S41-15 stopped booking.
 
-    CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:4000 CHOREGOS_LIVE_LITELLM_KEY=sk-… \
-    CHOREGOS_LIVE_REALTIME_MODEL=openai/gpt-realtime \
+    TRANIBOR_LIVE_LITELLM_URL=http://127.0.0.1:4000 TRANIBOR_LIVE_LITELLM_KEY=sk-… \
+    TRANIBOR_LIVE_REALTIME_MODEL=openai/gpt-realtime \
     uv run pytest tests/live/test_realtime_live.py -m live -s
 """
 
@@ -34,9 +34,9 @@ RUN = uuid4().hex[:8]
 
 @pytest.fixture
 async def gateway() -> AsyncIterator[LiteLlmGateway]:
-    env = require("CHOREGOS_LIVE_LITELLM_URL", "CHOREGOS_LIVE_LITELLM_KEY", "CHOREGOS_LIVE_REALTIME_MODEL")
+    env = require("TRANIBOR_LIVE_LITELLM_URL", "TRANIBOR_LIVE_LITELLM_KEY", "TRANIBOR_LIVE_REALTIME_MODEL")
     adapter = LiteLlmGateway(
-        base_url=env["CHOREGOS_LIVE_LITELLM_URL"], master_key=env["CHOREGOS_LIVE_LITELLM_KEY"]
+        base_url=env["TRANIBOR_LIVE_LITELLM_URL"], master_key=env["TRANIBOR_LIVE_LITELLM_KEY"]
     )
     try:
         yield adapter
@@ -54,8 +54,8 @@ async def _until(link: Any, type_: str, timeout_s: float = 60) -> dict[str, Any]
 
 
 async def test_a_real_realtime_response_is_priced_by_the_relay(gateway: LiteLlmGateway) -> None:
-    env = require("CHOREGOS_LIVE_LITELLM_URL", "CHOREGOS_LIVE_REALTIME_MODEL")
-    name = env["CHOREGOS_LIVE_REALTIME_MODEL"]
+    env = require("TRANIBOR_LIVE_LITELLM_URL", "TRANIBOR_LIVE_REALTIME_MODEL")
+    name = env["TRANIBOR_LIVE_REALTIME_MODEL"]
     (model,) = [m for m in await gateway.list_models() if name in (m.model_name, m.litellm_model)]
     prices = realtime_prices(model, None)
     assert prices is not None, f"the gateway gives `{name}` no audio price: a voice session would not open"
@@ -64,7 +64,7 @@ async def test_a_real_realtime_response_is_priced_by_the_relay(gateway: LiteLlmG
         {"session_id": f"live-{RUN}", "agent": "live-voice"}, budget_usd=0.25, ttl_s=600, models=[name]
     )
     link = await WebsocketsConnector().connect(
-        realtime_url(env["CHOREGOS_LIVE_LITELLM_URL"], name), {"Authorization": f"Bearer {key.key}"}
+        realtime_url(env["TRANIBOR_LIVE_LITELLM_URL"], name), {"Authorization": f"Bearer {key.key}"}
     )
     try:
         await link.send(

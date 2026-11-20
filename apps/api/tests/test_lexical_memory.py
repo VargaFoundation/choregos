@@ -19,8 +19,8 @@ from .conftest import login, without_postgres
 
 @pytest.fixture(autouse=True)
 def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`CHOREGOS_FAKES=1` would replace the fallback with the in-memory fake: here we want the database."""
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    """`TRANIBOR_FAKES=1` would replace the fallback with the in-memory fake: here we want the database."""
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
 
 async def _project(client: AsyncClient, org: str, slug: str) -> str:
@@ -154,12 +154,12 @@ def test_both_names_build_the_same_fallback() -> None:
     from tranibor_adapters import build
     from tranibor_adapters.memory.lexical import LexicalMemory
 
-    os.environ["CHOREGOS_FAKES"] = "0"
+    os.environ["TRANIBOR_FAKES"] = "0"
     try:
         for name in ("lexical", "pgvector"):
             assert isinstance(build("memory", name, {"org": "*"}), LexicalMemory), name
     finally:
-        os.environ["CHOREGOS_FAKES"] = "1"
+        os.environ["TRANIBOR_FAKES"] = "1"
 
 
 async def test_the_interface_catalogue_no_longer_offers_the_old_name(client: AsyncClient) -> None:

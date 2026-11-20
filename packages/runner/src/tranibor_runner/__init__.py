@@ -7,6 +7,8 @@ The runner is disposable: it keeps nothing. Everything it produces leaves throug
 
 from __future__ import annotations
 
+import tranibor_contracts  # noqa: F401 - adopts the former environment variable names, first (ADR 0176 R4)
+
 from .client import InternalApiError, InternalClient
 from .config import RunnerSettings, get_settings
 from .exits import Exit

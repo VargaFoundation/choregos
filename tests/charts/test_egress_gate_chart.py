@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 import yaml
 from tranibor_adapters.executor import egress_gate
+from tranibor_contracts.env import adopted
 from tranibor_core.egress_gate import GATE_CONTAINER, REPORT_ENV, EgressGate, gate_from_env
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
@@ -84,7 +85,11 @@ def test_the_chart_and_the_executor_build_the_same_gate() -> None:
         assert rendered[key] == built[key], key
     runner = next(c for c in pod["containers"] if c["name"] == "runner")
     assert egress_gate.runner_mount() in runner["volumeMounts"]
-    assert egress_gate.runner_env() in runner["env"]
+    # The chart still names the former variable (R4); the executor emits both.
+    assert {
+        **egress_gate.runner_env(),
+        "name": "CHOREGOS_" + egress_gate.runner_env()["name"].removeprefix("TRANIBOR_"),
+    } in runner["env"]  # compat-ok
     assert egress_gate.volume() in pod["volumes"]
 
 
@@ -110,7 +115,7 @@ def test_the_executor_is_told_to_gate_its_pods_by_default() -> None:
     assert env["CHOREGOS_RUNNER_EGRESS_GATE"] == "true"
     assert env["CHOREGOS_RUNNER_EGRESS_GATE_TARGET"] == "1.1.1.1:443"
     assert env["CHOREGOS_RUNNER_EGRESS_GATE_DEADLINE"] == "30"
-    assert gate_from_env(env) == EgressGate()
+    assert gate_from_env(adopted(env)) == EgressGate()
 
 
 def test_the_single_node_profile_gates_its_agent_pods() -> None:

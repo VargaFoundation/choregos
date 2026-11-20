@@ -53,7 +53,7 @@ def origin_of(url: str) -> str:
 
 
 def allowed_origins(settings: Settings) -> set[str]:
-    """The console's, the API's and every `CHOREGOS_CORS_ORIGINS` origin."""
+    """The console's, the API's and every `TRANIBOR_CORS_ORIGINS` origin."""
     return {origin_of(settings.public_url), origin_of(settings.api_url), *map(origin_of, settings.cors_list)}
 
 
@@ -82,7 +82,7 @@ async def tenant_origin_allowed(origin: str, request: Request, settings: Setting
 def check_cors_origins(settings: Settings) -> None:
     if "*" in settings.cors_list:
         raise RuntimeError(
-            "CHOREGOS_CORS_ORIGINS lists `*`: with credentials, any origin would be reflected; "
+            "TRANIBOR_CORS_ORIGINS lists `*`: with credentials, any origin would be reflected; "
             "list the console origin(s)"
         )
 

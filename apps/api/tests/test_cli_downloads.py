@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """S62-08: the instance serves its own CLI, and the install scripts install it from there.
 
-The binaries are S62-07's; here a temporary `CHOREGOS_CLI_DIR` holds fake ones, with the manifest the
+The binaries are S62-07's; here a temporary `TRANIBOR_CLI_DIR` holds fake ones, with the manifest the
 shared contract fixes. The install script is run for real, by `/bin/sh`, against a local server.
 """
 
@@ -66,8 +66,8 @@ def bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str
 
     directory = tmp_path / "cli"
     manifest = make_bundle(directory)
-    monkeypatch.setenv("CHOREGOS_CLI_DIR", str(directory))
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "https://choregos.example.org/")
+    monkeypatch.setenv("TRANIBOR_CLI_DIR", str(directory))
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "https://choregos.example.org/")
     reset_settings_cache()
     yield {"dir": directory, "manifest": manifest}
     reset_settings_cache()
@@ -150,7 +150,7 @@ async def test_without_a_bundle_the_answer_is_a_clear_404_naming_the_release(
     from tranibor_api import __version__
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_CLI_DIR", str(tmp_path / "absent"))
+    monkeypatch.setenv("TRANIBOR_CLI_DIR", str(tmp_path / "absent"))
     reset_settings_cache()
     for path in ("/downloads/cli/manifest.json", "/downloads/cli/choregos-linux-x86_64"):
         response = await client.get(path)
@@ -212,7 +212,7 @@ async def test_a_public_url_that_is_not_plain_writes_no_script(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "https://x.example/'; rm -rf ~; '")
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "https://x.example/'; rm -rf ~; '")
     reset_settings_cache()
     response = await client.get("/cli/install.sh")
     assert response.status_code == 503
@@ -253,7 +253,7 @@ async def test_the_downloads_have_a_rate_limit_of_their_own(
     from tranibor_api.routers.cli_downloads import router
 
     make_bundle(tmp_path / "cli")
-    monkeypatch.setenv("CHOREGOS_CLI_DIR", str(tmp_path / "cli"))
+    monkeypatch.setenv("TRANIBOR_CLI_DIR", str(tmp_path / "cli"))
     reset_settings_cache()
     app = FastAPI()
     install_error_handlers(app)
@@ -308,8 +308,8 @@ def live_instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[d
     url = f"http://127.0.0.1:{port}"
     directory = tmp_path / "cli"
     make_bundle(directory)
-    monkeypatch.setenv("CHOREGOS_CLI_DIR", str(directory))
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", url)
+    monkeypatch.setenv("TRANIBOR_CLI_DIR", str(directory))
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", url)
     reset_settings_cache()
     app = FastAPI()
     install_error_handlers(app)

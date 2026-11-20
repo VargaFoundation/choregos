@@ -3,7 +3,7 @@
 # no provider key, no cost. Every port is bound to 127.0.0.1.
 #
 #   docker compose -p s4020b -f tests/live/otel/compose.yaml up -d --wait
-#   CHOREGOS_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
+#   TRANIBOR_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
 #   docker compose -p s4020b -f tests/live/otel/compose.yaml down -v
 name: s4020b
 services:

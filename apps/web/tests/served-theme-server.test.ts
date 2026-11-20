@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe("the instance theme, read on the server (S39-03b)", () => {
   it("fetches /api/v1/theme with a timeout and keeps it for a minute", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     const fetcher = vi.fn(async () => new Response(JSON.stringify(SAMPLE_THEME)));
     vi.stubGlobal("fetch", fetcher);
     const { instanceTheme } = await import("@/lib/served-theme-server");
@@ -46,7 +46,7 @@ describe("the instance theme, read on the server (S39-03b)", () => {
   });
 
   it("asks for the remembered organisation's theme, and keeps one memo per organisation (S42-13)", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     const fetcher = vi.fn(async (url: string, _init?: RequestInit) =>
       new Response(JSON.stringify(url.endsWith("?org=acme-labs") ? { ...SAMPLE_THEME, id: "acme-labs", product_name: "Acme Labs" } : SAMPLE_THEME)),
     );
@@ -67,7 +67,7 @@ describe("the instance theme, read on the server (S39-03b)", () => {
   it.each(["../admin", "Acme", "a b", "acme?x=1", "-acme", "a".repeat(64), "acme/../x"])(
     "never sends a cookie value that is not a slug (%s)",
     async (value) => {
-      vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+      vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
       const fetcher = vi.fn(async () => new Response(JSON.stringify(SAMPLE_THEME)));
       vi.stubGlobal("fetch", fetcher);
       const { instanceTheme } = await import("@/lib/served-theme-server");
@@ -78,7 +78,7 @@ describe("the instance theme, read on the server (S39-03b)", () => {
   );
 
   it("bounds the memo: invented cookie values cannot grow it without limit", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     const fetcher = vi.fn(async () => new Response(JSON.stringify(SAMPLE_THEME)));
     vi.stubGlobal("fetch", fetcher);
     const { instanceTheme } = await import("@/lib/served-theme-server");
@@ -118,7 +118,7 @@ describe("a host an organisation owns lands on that organisation, theme first (A
   }
 
   it("forwards the visitor's host to the API and draws the host's organisation, with its name", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     const fetcher = api();
     vi.stubGlobal("fetch", fetcher);
     incoming = { "x-forwarded-host": "Agentic.Client.com:443", host: "web.svc:3000" };
@@ -131,7 +131,7 @@ describe("a host an organisation owns lands on that organisation, theme first (A
   });
 
   it("prefers the host's organisation over the remembered one, and keys the memo by host", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     const fetcher = api();
     vi.stubGlobal("fetch", fetcher);
     incoming = { host: "agentic.client.com" };
@@ -146,7 +146,7 @@ describe("a host an organisation owns lands on that organisation, theme first (A
   });
 
   it("never serves a tenant host's look to another host, nor the instance's look to the tenant host", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     vi.stubGlobal("fetch", api());
     const { servedLook } = await import("@/lib/served-theme-server");
     incoming = { host: "agentic.client.com" };
@@ -162,7 +162,7 @@ describe("a host an organisation owns lands on that organisation, theme first (A
   it.each(["10.0.0.1", "localhost:3000", "a b.example.com", "x/../y.example.com"])(
     "forwards nothing that is not a DNS name (%s)",
     async (host) => {
-      vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+      vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
       const fetcher = api();
       vi.stubGlobal("fetch", fetcher);
       incoming = { host };
@@ -174,7 +174,7 @@ describe("a host an organisation owns lands on that organisation, theme first (A
   );
 
   it("takes the organisation from the header only when it is a slug", async () => {
-    vi.stubEnv("CHOREGOS_API_URL", "http://api.test");
+    vi.stubEnv("TRANIBOR_API_URL", "http://api.test");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(JSON.stringify(SAMPLE_THEME), { headers: { "x-choregos-host-org": "../Admin" } })),

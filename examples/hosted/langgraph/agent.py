@@ -2,7 +2,7 @@
 """The ticket triager as a LangGraph ReAct graph, as a hosted agent (ADR 0080).
 
 `ChatOpenAI` is pointed at the platform's model (`OPENAI_BASE_URL`, the loopback key) and
-`langchain-mcp-adapters` at the step's MCP servers (`CHOREGOS_MCP_URL<name>`), streamable HTTP.
+`langchain-mcp-adapters` at the step's MCP servers (`TRANIBOR_MCP_URL<name>`), streamable HTTP.
 """
 
 from __future__ import annotations
@@ -20,16 +20,16 @@ INSTRUCTIONS = (
 
 
 async def answer(text: str) -> str:
-    names = [name for name in os.environ.get("CHOREGOS_MCP_SERVERS", "").split(",") if name]
+    names = [name for name in os.environ.get("TRANIBOR_MCP_SERVERS", "").split(",") if name]
     client = MultiServerMCPClient(
         {
-            name: {"url": os.environ["CHOREGOS_MCP_URL"] + name, "transport": "streamable_http"}
+            name: {"url": os.environ["TRANIBOR_MCP_URL"] + name, "transport": "streamable_http"}
             for name in names
         }
     )
     tools = await client.get_tools()
     model = ChatOpenAI(
-        model=os.environ.get("CHOREGOS_MODEL", "default"),
+        model=os.environ.get("TRANIBOR_MODEL", "default"),
         base_url=os.environ["OPENAI_BASE_URL"],
         api_key=os.environ["OPENAI_API_KEY"],
     )

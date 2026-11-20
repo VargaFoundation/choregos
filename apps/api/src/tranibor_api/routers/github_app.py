@@ -190,7 +190,7 @@ async def create_github_install_link(
     if app is None:
         raise conflict(
             "this deployment has no GitHub App: a platform administrator creates one (Administration, "
-            "GitHub App), or the deployment sets CHOREGOS_GITHUB_APP_ID and its private key"
+            "GitHub App), or the deployment sets TRANIBOR_GITHUB_APP_ID and its private key"
         )
     try:
         info = await app.app_info()

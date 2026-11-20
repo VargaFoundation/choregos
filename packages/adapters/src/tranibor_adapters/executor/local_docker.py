@@ -12,6 +12,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from tranibor_contracts import ExecutorKind, StageResult
+from tranibor_contracts.env import with_legacy
 from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 from tranibor_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER
@@ -90,12 +91,13 @@ class LocalDockerExecutor:
         if code == 0:
             return ExecRef(kind=self.kind, name=name, run_id=spec.run_id)
         await self._prune_finished()
-        secrets = {"CHOREGOS_RUN_TOKEN": spec.run_token}
+        secrets = {"TRANIBOR_RUN_TOKEN": spec.run_token}
         # The run's gateway key next to its token (#523), never read from the run's input.
         if spec.gateway_key:
             secrets[RUN_GATEWAY_KEY_ENV] = spec.gateway_key
         if spec.remote_token:
             secrets[RUN_REMOTE_TOKEN_ENV] = spec.remote_token
+        secrets = with_legacy(secrets)  # the job's image may still read the former names (ADR 0176 R4)
         args = [
             "run",
             "--detach",
@@ -109,9 +111,13 @@ class LocalDockerExecutor:
             "--security-opt",
             "no-new-privileges",
             "--env",
-            f"CHOREGOS_RUN_ID={spec.run_id}",
+            f"TRANIBOR_RUN_ID={spec.run_id}",
             "--env",
-            f"CHOREGOS_API_URL={spec.api_url}",
+            f"TRANIBOR_API_URL={spec.api_url}",
+            "--env",
+            f"CHOREGOS_RUN_ID={spec.run_id}",  # compat-ok
+            "--env",
+            f"CHOREGOS_API_URL={spec.api_url}",  # compat-ok
             # The secrets are named here and their values travel in docker's own environment
             # (#439): a value on the command line is readable by anyone on the host (`ps`).
             *(arg for key in secrets for arg in ("--env", key)),
@@ -122,7 +128,7 @@ class LocalDockerExecutor:
         ]
         separate = spec.agent_isolation == "container"
         told = separate_agent.runner_env() if separate else {}
-        for key, value in spec.env.items():
+        for key, value in with_legacy(spec.env).items():
             if key not in told:
                 args += ["--env", f"{key}={value}"]
         if separate:

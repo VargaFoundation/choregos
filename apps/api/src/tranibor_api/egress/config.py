@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The proxy's settings (`CHOREGOS_EGRESS_*`)."""
+"""The proxy's settings (`TRANIBOR_EGRESS_*`)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class EgressSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHOREGOS_EGRESS_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="TRANIBOR_EGRESS_", env_file=".env", extra="ignore")
 
     #: The API's internal base URL, as the pod reaches it.
     api_url: str = "http://choregos-api:8000/api/v1"
@@ -28,6 +28,6 @@ class EgressSettings(BaseSettings):
     #: Seconds a client has to send its request head.
     head_timeout_s: float = Field(default=30, gt=0)
     connect_timeout_s: float = Field(default=10, gt=0)
-    #: The proxy's own key, sent with every report (ADR 0145, `CHOREGOS_EGRESS_REPORT_KEY`): the
+    #: The proxy's own key, sent with every report (ADR 0145, `TRANIBOR_EGRESS_REPORT_KEY`): the
     #: API's copy of it, never a run's pod.
     report_key: str = ""

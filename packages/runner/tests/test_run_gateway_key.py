@@ -1,6 +1,6 @@
 """The runner reads its gateway key from the run's Secret, not from its input (#523).
 
-The executor puts the key in the run's Secret, next to the token, as `CHOREGOS_RUN_GATEWAY_KEY`;
+The executor puts the key in the run's Secret, next to the token, as `TRANIBOR_RUN_GATEWAY_KEY`;
 the orchestrator no longer stores it with the input. A runner started by an orchestrator older than
 #523 has no such variable: it falls back on the key its input carries — kept for one release.
 """
@@ -34,7 +34,7 @@ async def _key_given_to_the_agent(settings: RunnerSettings, stage_input: StageIn
 async def test_the_key_comes_from_the_run_secret_when_the_input_has_none(
     stage_input: StageInput, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_RUN_GATEWAY_KEY", "sk-from-the-secret")
+    monkeypatch.setenv("TRANIBOR_RUN_GATEWAY_KEY", "sk-from-the-secret")
     settings = RunnerSettings()
     assert settings.gateway_key == "sk-from-the-secret"
 
@@ -45,7 +45,7 @@ async def test_the_key_comes_from_the_run_secret_when_the_input_has_none(
 async def test_the_secret_wins_over_a_key_left_in_the_input(
     stage_input: StageInput, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_RUN_GATEWAY_KEY", "sk-from-the-secret")
+    monkeypatch.setenv("TRANIBOR_RUN_GATEWAY_KEY", "sk-from-the-secret")
     old = stage_input.model_copy(update={"gateway_key": "sk-from-the-row"})
     assert await _key_given_to_the_agent(RunnerSettings(), old) == "sk-from-the-secret"
 
@@ -54,7 +54,7 @@ async def test_without_the_variable_the_input_key_is_used_as_before(
     stage_input: StageInput, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An orchestrator older than #523: its runner still works, with the key of its input."""
-    monkeypatch.delenv("CHOREGOS_RUN_GATEWAY_KEY", raising=False)
+    monkeypatch.delenv("TRANIBOR_RUN_GATEWAY_KEY", raising=False)
     settings = RunnerSettings()
     assert settings.gateway_key == ""
     old = stage_input.model_copy(update={"gateway_key": "sk-from-the-row"})

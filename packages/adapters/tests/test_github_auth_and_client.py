@@ -226,8 +226,8 @@ async def test_list_installations_paginates(private_key: tuple[str, str]) -> Non
 def test_the_connector_factory_pins_the_injected_installation(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_adapters import _github_client
 
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "pem")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "1")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_PRIVATE_KEY", "pem")
     pinned = _github_client({"repo": "northwind/billing", "installation_id": 5})
     assert (pinned.auth.pinned_installation, pinned.auth.pinned_account) == (5, "northwind")
     discovered = _github_client({"repo": "northwind/billing"})

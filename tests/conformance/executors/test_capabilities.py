@@ -83,7 +83,7 @@ def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: p
     re-read those three records before adding a name.
     """
     # The real executors, not the fakes another test may have switched on.
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     with_snapshot = [
         name
         for name in _executors()
@@ -106,7 +106,7 @@ async def test_tekton_and_aca_refuse_the_agents_own_container_saying_why(
     from tranibor_core.agent_isolation import SEPARATE_AGENT, WHY_NOT_SEPARATE, agent_isolation_refusal
     from tranibor_core.domain import StageJobSpec
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     executor = build("runtime", name, CONFIGS[name])
     assert SEPARATE_AGENT not in executor.capabilities
 

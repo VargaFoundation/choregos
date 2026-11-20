@@ -62,7 +62,7 @@ jobs:
           kind load docker-image choregos-api:dev choregos-outpost:dev --name choregos
       - name: egress, restore, manifests, platform, canary, node loss
         env:
-          CHOREGOS_CLUSTER_CONTEXT: kind-choregos
+          TRANIBOR_CLUSTER_CONTEXT: kind-choregos
         run: uv run pytest tests/cluster -m cluster -q
       - name: cluster state on failure
         if: failure()
@@ -111,7 +111,7 @@ jobs:
 
   live:
     # The adapters against the REAL services (LiteLLM, GitLab, Jira, Ecphoria, ACA, Rovo). A
-    # service named in CHOREGOS_LIVE_REQUIRED FAILS the job when one of its secrets is missing
+    # service named in TRANIBOR_LIVE_REQUIRED FAILS the job when one of its secrets is missing
     # (tests/live/conftest.py): a vanished secret must not leave the night green. The other
     # services, and the optional companions of a required one (the realtime model), are
     # skipped when their secret is missing — and say so — rather than an empty green dot.
@@ -123,33 +123,33 @@ jobs:
       # example `litellm,gitlab,jira`). The owner adds a service once its secrets are set, never
       # before: a service listed without its secrets turns every night red. Unset, every service
       # skips and says so, as before.
-      CHOREGOS_LIVE_REQUIRED: ${{ vars.CHOREGOS_LIVE_REQUIRED }}
-      CHOREGOS_LIVE_LITELLM_URL: ${{ secrets.CHOREGOS_LIVE_LITELLM_URL }}
-      CHOREGOS_LIVE_LITELLM_KEY: ${{ secrets.CHOREGOS_LIVE_LITELLM_KEY }}
-      CHOREGOS_LIVE_GITLAB_TOKEN: ${{ secrets.CHOREGOS_LIVE_GITLAB_TOKEN }}
-      CHOREGOS_LIVE_GITLAB_PROJECT: ${{ secrets.CHOREGOS_LIVE_GITLAB_PROJECT }}
-      CHOREGOS_LIVE_JIRA_URL: ${{ secrets.CHOREGOS_LIVE_JIRA_URL }}
-      CHOREGOS_LIVE_JIRA_EMAIL: ${{ secrets.CHOREGOS_LIVE_JIRA_EMAIL }}
-      CHOREGOS_LIVE_JIRA_TOKEN: ${{ secrets.CHOREGOS_LIVE_JIRA_TOKEN }}
-      CHOREGOS_LIVE_JIRA_PROJECT: ${{ secrets.CHOREGOS_LIVE_JIRA_PROJECT }}
+      TRANIBOR_LIVE_REQUIRED: ${{ vars.TRANIBOR_LIVE_REQUIRED }}
+      TRANIBOR_LIVE_LITELLM_URL: ${{ secrets.TRANIBOR_LIVE_LITELLM_URL }}
+      TRANIBOR_LIVE_LITELLM_KEY: ${{ secrets.TRANIBOR_LIVE_LITELLM_KEY }}
+      TRANIBOR_LIVE_GITLAB_TOKEN: ${{ secrets.TRANIBOR_LIVE_GITLAB_TOKEN }}
+      TRANIBOR_LIVE_GITLAB_PROJECT: ${{ secrets.TRANIBOR_LIVE_GITLAB_PROJECT }}
+      TRANIBOR_LIVE_JIRA_URL: ${{ secrets.TRANIBOR_LIVE_JIRA_URL }}
+      TRANIBOR_LIVE_JIRA_EMAIL: ${{ secrets.TRANIBOR_LIVE_JIRA_EMAIL }}
+      TRANIBOR_LIVE_JIRA_TOKEN: ${{ secrets.TRANIBOR_LIVE_JIRA_TOKEN }}
+      TRANIBOR_LIVE_JIRA_PROJECT: ${{ secrets.TRANIBOR_LIVE_JIRA_PROJECT }}
       # Not required: these tests skip, saying so, until the secrets exist.
-      CHOREGOS_LIVE_AZURE_TOKEN: ${{ secrets.CHOREGOS_LIVE_AZURE_TOKEN }}
-      CHOREGOS_LIVE_AZURE_SUBSCRIPTION: ${{ secrets.CHOREGOS_LIVE_AZURE_SUBSCRIPTION }}
-      CHOREGOS_LIVE_AZURE_RG: ${{ secrets.CHOREGOS_LIVE_AZURE_RG }}
-      CHOREGOS_LIVE_AZURE_ENV_ID: ${{ secrets.CHOREGOS_LIVE_AZURE_ENV_ID }}
-      CHOREGOS_LIVE_ECPHORIA_URL: ${{ secrets.CHOREGOS_LIVE_ECPHORIA_URL }}
-      CHOREGOS_LIVE_ECPHORIA_TOKEN: ${{ secrets.CHOREGOS_LIVE_ECPHORIA_TOKEN }}
-      CHOREGOS_LIVE_ECPHORIA_TENANT: ${{ secrets.CHOREGOS_LIVE_ECPHORIA_TENANT }}
-      CHOREGOS_LIVE_ROVO_ACCESS_TOKEN: ${{ secrets.CHOREGOS_LIVE_ROVO_ACCESS_TOKEN }}
-      CHOREGOS_LIVE_REALTIME_MODEL: ${{ secrets.CHOREGOS_LIVE_REALTIME_MODEL }}
-      # An organisation's MCP gateway (ADR 0105). Not in CHOREGOS_LIVE_REQUIRED: an unset URL skips,
+      TRANIBOR_LIVE_AZURE_TOKEN: ${{ secrets.TRANIBOR_LIVE_AZURE_TOKEN }}
+      TRANIBOR_LIVE_AZURE_SUBSCRIPTION: ${{ secrets.TRANIBOR_LIVE_AZURE_SUBSCRIPTION }}
+      TRANIBOR_LIVE_AZURE_RG: ${{ secrets.TRANIBOR_LIVE_AZURE_RG }}
+      TRANIBOR_LIVE_AZURE_ENV_ID: ${{ secrets.TRANIBOR_LIVE_AZURE_ENV_ID }}
+      TRANIBOR_LIVE_ECPHORIA_URL: ${{ secrets.TRANIBOR_LIVE_ECPHORIA_URL }}
+      TRANIBOR_LIVE_ECPHORIA_TOKEN: ${{ secrets.TRANIBOR_LIVE_ECPHORIA_TOKEN }}
+      TRANIBOR_LIVE_ECPHORIA_TENANT: ${{ secrets.TRANIBOR_LIVE_ECPHORIA_TENANT }}
+      TRANIBOR_LIVE_ROVO_ACCESS_TOKEN: ${{ secrets.TRANIBOR_LIVE_ROVO_ACCESS_TOKEN }}
+      TRANIBOR_LIVE_REALTIME_MODEL: ${{ secrets.TRANIBOR_LIVE_REALTIME_MODEL }}
+      # An organisation's MCP gateway (ADR 0105). Not in TRANIBOR_LIVE_REQUIRED: an unset URL skips,
       # but a URL that is set and unreachable (or without its server or token) fails.
-      CHOREGOS_LIVE_MCP_GATEWAY_URL: ${{ secrets.CHOREGOS_LIVE_MCP_GATEWAY_URL }}
-      CHOREGOS_LIVE_MCP_GATEWAY_SERVER: ${{ secrets.CHOREGOS_LIVE_MCP_GATEWAY_SERVER }}
-      CHOREGOS_LIVE_MCP_GATEWAY_TOKEN: ${{ secrets.CHOREGOS_LIVE_MCP_GATEWAY_TOKEN }}
-      CHOREGOS_LIVE_MCP_GATEWAY_ROUTING: ${{ secrets.CHOREGOS_LIVE_MCP_GATEWAY_ROUTING }}
-      CHOREGOS_LIVE_MCP_GATEWAY_SERVER_HEADER: ${{ secrets.CHOREGOS_LIVE_MCP_GATEWAY_SERVER_HEADER }}
-      CHOREGOS_LIVE_MCP_GATEWAY_AUTH_HEADER: ${{ secrets.CHOREGOS_LIVE_MCP_GATEWAY_AUTH_HEADER }}
+      TRANIBOR_LIVE_MCP_GATEWAY_URL: ${{ secrets.TRANIBOR_LIVE_MCP_GATEWAY_URL }}
+      TRANIBOR_LIVE_MCP_GATEWAY_SERVER: ${{ secrets.TRANIBOR_LIVE_MCP_GATEWAY_SERVER }}
+      TRANIBOR_LIVE_MCP_GATEWAY_TOKEN: ${{ secrets.TRANIBOR_LIVE_MCP_GATEWAY_TOKEN }}
+      TRANIBOR_LIVE_MCP_GATEWAY_ROUTING: ${{ secrets.TRANIBOR_LIVE_MCP_GATEWAY_ROUTING }}
+      TRANIBOR_LIVE_MCP_GATEWAY_SERVER_HEADER: ${{ secrets.TRANIBOR_LIVE_MCP_GATEWAY_SERVER_HEADER }}
+      TRANIBOR_LIVE_MCP_GATEWAY_AUTH_HEADER: ${{ secrets.TRANIBOR_LIVE_MCP_GATEWAY_AUTH_HEADER }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0

@@ -82,7 +82,7 @@ def test_a_stored_configuration_that_sets_them_is_not_built(
     monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]
 ) -> None:
     """A row stored before the declaration refused it: refused before any adapter is built."""
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     with pytest.raises(ConfigurationError, match="the deployment's to set"):
         AdapterSet.from_connectors({"runtime": {"type": "k8s_job", "config": config}})
 
@@ -91,7 +91,7 @@ def test_the_code_that_builds_an_executor_may_still_name_the_api_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The seam the conformance suite and the cluster tests use: `build`, not a declaration."""
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     executor = build("runtime", "k8s_job", KUBE)
     assert executor.client.base_url == "https://k8s.test"
     assert executor.client.token == "t"
@@ -102,9 +102,9 @@ def test_the_factories_take_the_pod_s_secrets_from_the_deployment_alone(
     monkeypatch: pytest.MonkeyPatch, type_name: str
 ) -> None:
     """Even handed to `build`, a configuration does not choose them: the deployment's list is used."""
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-    monkeypatch.setenv("CHOREGOS_RUNNER_ENV_SECRETS", "agent-credentials, ")
-    monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "registry-pull")
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
+    monkeypatch.setenv("TRANIBOR_RUNNER_ENV_SECRETS", "agent-credentials, ")
+    monkeypatch.setenv("TRANIBOR_RUNNER_IMAGE_PULL_SECRETS", "registry-pull")
     asked = {**KUBE, "env_from_secrets": ["x"], "image_pull_secrets": ["y"], "service_account": "z"}
     executor = build("runtime", type_name, asked)
     assert executor.env_from_secrets == ["agent-credentials"]
@@ -114,6 +114,6 @@ def test_the_factories_take_the_pod_s_secrets_from_the_deployment_alone(
 
 
 def test_the_tekton_executor_runs_as_the_runner_s_account(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     executor = build("runtime", "tekton", {**KUBE, "service_account": "z"})
     assert executor.service_account == "choregos-runner"

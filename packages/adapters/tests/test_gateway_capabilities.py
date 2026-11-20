@@ -19,7 +19,7 @@ def test_the_protocol_is_documented_under_a_vendor_neutral_name() -> None:
 def test_every_registered_gateway_declares_a_subset_of_the_known_capabilities(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     config = {"kubernetes": {}, "base_url": "https://gw.example/v1"}
     for type_name in available("gateway"):
         gateway = build("gateway", type_name, config)

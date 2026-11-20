@@ -132,7 +132,7 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
         **plan.env,
         **backend.model_env(stage_input.model, stage_input.gateway_key),
         "FAKE_AGENT_SCRIPT": json.dumps(script),
-        "CHOREGOS_WORKSPACE_PATH": str(workspace),
+        "TRANIBOR_WORKSPACE_PATH": str(workspace),
     }
     denials: list[str] = []
 

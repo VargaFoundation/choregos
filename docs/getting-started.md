@@ -81,8 +81,8 @@ docker compose --profile temporal-ui up   # adds the Temporal UI on http://local
 docker compose down -v                    # stops everything and deletes the data
 ```
 
-Ports taken on your machine? `CHOREGOS_PORT_WEB`, `CHOREGOS_PORT_API` and
-`CHOREGOS_PORT_TEMPORAL_UI` in `.env`. PostgreSQL runs without `fsync` here, for start-up time:
+Ports taken on your machine? `TRANIBOR_PORT_WEB`, `TRANIBOR_PORT_API` and
+`TRANIBOR_PORT_TEMPORAL_UI` in `.env`. PostgreSQL runs without `fsync` here, for start-up time:
 keep nothing in this install that you cannot recreate.
 
 ## 2. Other ways to look
@@ -157,7 +157,7 @@ irm https://choregos.example.com/cli/install.ps1 | iex          # Windows, in Po
 ```
 
 `choregos self update` keeps it in step after an upgrade of the instance; the CLI says so on stderr,
-once a day, when the two versions differ (`CHOREGOS_NO_VERSION_CHECK=1` silences it). See
+once a day, when the two versions differ (`TRANIBOR_NO_VERSION_CHECK=1` silences it). See
 [cli.md](cli.md#install-from-your-instance).
 
 ### Create the project

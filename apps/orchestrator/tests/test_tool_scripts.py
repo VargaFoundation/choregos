@@ -25,11 +25,11 @@ NO_DEFAULT: dict[str, Any] = {"ceiling": None, "agent_default": None}
 
 @pytest.fixture
 def switch_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """The deployment lets the policy decide (`CHOREGOS_TOOL_SCRIPTS=on`); off is its default."""
-    monkeypatch.setenv("CHOREGOS_TOOL_SCRIPTS", "on")
+    """The deployment lets the policy decide (`TRANIBOR_TOOL_SCRIPTS=on`); off is its default."""
+    monkeypatch.setenv("TRANIBOR_TOOL_SCRIPTS", "on")
     reset_settings_cache()
     yield
-    monkeypatch.delenv("CHOREGOS_TOOL_SCRIPTS")
+    monkeypatch.delenv("TRANIBOR_TOOL_SCRIPTS")
     reset_settings_cache()
 
 
@@ -205,10 +205,10 @@ async def _fresh_tools_of(setup: Fixture, role: str) -> dict[str, Any]:
 
 @pytest.fixture
 def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    """Sets the deployment's default (`CHOREGOS_TOOL_SCRIPTS`) and brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`)."""
+    """Sets the deployment's default (`TRANIBOR_TOOL_SCRIPTS`) and brake (`TRANIBOR_TOOL_SCRIPTS_ALLOWED`)."""
 
     def _set(*, default: bool | None = None, allowed: bool | None = None) -> None:
-        for name, value in (("CHOREGOS_TOOL_SCRIPTS", default), ("CHOREGOS_TOOL_SCRIPTS_ALLOWED", allowed)):
+        for name, value in (("TRANIBOR_TOOL_SCRIPTS", default), ("TRANIBOR_TOOL_SCRIPTS_ALLOWED", allowed)):
             if value is None:
                 monkeypatch.delenv(name, raising=False)
             else:
@@ -216,8 +216,8 @@ def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
         reset_settings_cache()
 
     yield _set
-    monkeypatch.delenv("CHOREGOS_TOOL_SCRIPTS", raising=False)
-    monkeypatch.delenv("CHOREGOS_TOOL_SCRIPTS_ALLOWED", raising=False)
+    monkeypatch.delenv("TRANIBOR_TOOL_SCRIPTS", raising=False)
+    monkeypatch.delenv("TRANIBOR_TOOL_SCRIPTS_ALLOWED", raising=False)
     reset_settings_cache()
 
 
@@ -258,11 +258,11 @@ def test_the_organisation_decides_the_default_follows_and_the_brake_wins(
     refusal = tool_scripts_refusal(choice, deployment_default=default, deployment_allowed=allowed)
     assert (refusal is None) is on
     if not allowed:
-        assert refusal is not None and "CHOREGOS_TOOL_SCRIPTS_ALLOWED" in refusal
+        assert refusal is not None and "TRANIBOR_TOOL_SCRIPTS_ALLOWED" in refusal
     elif choice == "disabled":
         assert refusal is not None and "organisation has tool scripts disabled" in refusal
     elif not on:
-        assert refusal is not None and "CHOREGOS_TOOL_SCRIPTS)" in refusal
+        assert refusal is not None and "TRANIBOR_TOOL_SCRIPTS)" in refusal
 
 
 def test_a_stored_value_outside_the_two_choices_turns_nothing_on() -> None:
@@ -361,7 +361,7 @@ async def test_the_eval_organisation_enables_them_through_its_setting(
     deployment()
     await _eval_project(setup)
     refused = await evals.seed_eval_ticket(_scripts_cell())
-    assert refused["skipped"] and "CHOREGOS_TOOL_SCRIPTS)" in refused["reason"]
+    assert refused["skipped"] and "TRANIBOR_TOOL_SCRIPTS)" in refused["reason"]
     await _set_org_choice(setup.project_id, "enabled")
     seeded = await evals.seed_eval_ticket(_scripts_cell())
     assert not seeded["skipped"], seeded["reason"]
@@ -385,7 +385,7 @@ async def test_a_scripts_cell_is_skipped_naming_the_switch_that_refuses_it(
     await _set_org_choice(setup.project_id, "enabled")
     deployment(default=True, allowed=False)
     braked = await evals.seed_eval_ticket(_scripts_cell())
-    assert braked["skipped"] and "CHOREGOS_TOOL_SCRIPTS_ALLOWED" in braked["reason"]
+    assert braked["skipped"] and "TRANIBOR_TOOL_SCRIPTS_ALLOWED" in braked["reason"]
 
 
 # ───────────────────────── the agent's measured default (S57-15, ADR 0122 §9) ─────────────────────────

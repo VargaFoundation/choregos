@@ -194,7 +194,7 @@ class AcpRuntime(Dto):
 class CodeRuntime(Dto):
     """An agent written in code (ADR 0063): an ACP agent in an image the operator named.
 
-    `image` is a NAME in the operator's `CHOREGOS_AGENT_IMAGES`, never a reference: whoever writes
+    `image` is a NAME in the operator's `TRANIBOR_AGENT_IMAGES`, never a reference: whoever writes
     an agent does not choose what the platform pulls. `command` is the argv the runner starts in
     that image; it speaks ACP on stdio (the `tranibor-agent-sdk` does it for a Python agent).
     """
@@ -342,7 +342,7 @@ class HostedSourceDto(Dto):
 #: The runner's loopback listeners (model, MCP, egress): a hosted container cannot take them.
 LOOPBACK_PORTS = frozenset({4001, 4002, 4003})
 #: What a version's `env` cannot set: the platform's, the model SDKs' and the proxy variables.
-RESERVED_ENV_PREFIXES = ("CHOREGOS_", "FOUNDRY_", "OPENAI_", "ANTHROPIC_", "AZURE_")
+RESERVED_ENV_PREFIXES = ("TRANIBOR_", "CHOREGOS_", "FOUNDRY_", "OPENAI_", "ANTHROPIC_", "AZURE_")  # compat-ok
 #: The managed-identity variables too (S41-19): with `IDENTITY_SERVER_THUMBPRINT` beside the
 #: platform's `IDENTITY_*`, azure-identity speaks Service Fabric's protocol instead of App Service's;
 #: `IMDS_ENDPOINT` (Arc) and `MSI_*` (the older App Service) name other ones. `AZURE_*`, which
@@ -1497,7 +1497,7 @@ class BuiltinAgent(Dto):
 
     role: str
     playbook: str
-    #: `package` when the platform's own prompt, `deployment` when `CHOREGOS_PLAYBOOKS_DIR` supplies it.
+    #: `package` when the platform's own prompt, `deployment` when `TRANIBOR_PLAYBOOKS_DIR` supplies it.
     playbook_origin: str | None = None
     #: The prompt a run receives, with what only a run knows shown as `<placeholders>`.
     instructions: str | None = None

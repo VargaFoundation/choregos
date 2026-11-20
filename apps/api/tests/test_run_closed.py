@@ -271,9 +271,9 @@ def github_app(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """A GitHub App set up, its token minting intercepted: what it was asked for is kept."""
     from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
-        "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
+        "TRANIBOR_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
     from tranibor_api.config import reset_settings_cache

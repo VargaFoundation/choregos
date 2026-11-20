@@ -87,7 +87,7 @@ def test_test_modules_import_only_english_sources() -> None:
 
 def test_postgres_switch_reads_the_english_variable() -> None:
     env = {k: v for k, v in os.environ.items() if "SUITE" not in k}
-    env["CHOREGOS_TEST_SUITE_ON_POSTGRES"] = "1"
+    env["TRANIBOR_TEST_SUITE_ON_POSTGRES"] = "1"
     # Whatever the directory pytest runs from, the package this module is imported as must resolve.
     package_root = TESTS
     for _ in (__package__ or "").split("."):

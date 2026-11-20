@@ -137,11 +137,11 @@ def test_the_direct_hosts_come_from_the_platforms_urls() -> None:
 
 
 def test_the_pod_asks_the_proxy_for_credentials_only_if_the_deployment_requires_it() -> None:
-    """ADR 0070: `CHOREGOS_EGRESS_AUTH=run` tells the runner to present its run id and token."""
+    """ADR 0070: `TRANIBOR_EGRESS_AUTH=run` tells the runner to present its run id and token."""
     proxy = "http://choregos-egress.{namespace}.svc:3128"
     base = {"runner_env": {"TZ": "UTC"}, "runner_egress_proxy": proxy}
     with_auth = runner_environment(SimpleNamespace(**base, runner_egress_auth="run"), "choregos")
-    assert with_auth["CHOREGOS_EGRESS_AUTH"] == "run"
+    assert with_auth["TRANIBOR_EGRESS_AUTH"] == "run"
     assert with_auth["HTTPS_PROXY"] == "http://choregos-egress.choregos.svc:3128", "no credentials here"
     for settings in (SimpleNamespace(**base, runner_egress_auth=""), SimpleNamespace(**base)):
-        assert "CHOREGOS_EGRESS_AUTH" not in runner_environment(settings, "choregos")
+        assert "TRANIBOR_EGRESS_AUTH" not in runner_environment(settings, "choregos")

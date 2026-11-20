@@ -10,7 +10,7 @@ What is not real: the other leg, the API that numbers and keeps the frames (`Fak
 the fake-container tests), and the shared network namespace of a pod (the container is reached at
 the loopback through a published port instead of sharing the runner's namespace).
 
-Marked `hosted_docker`: skipped unless `CHOREGOS_TEST_HOSTED_DOCKER=1` and a Docker daemon;
+Marked `hosted_docker`: skipped unless `TRANIBOR_TEST_HOSTED_DOCKER=1` and a Docker daemon;
 the `hosted-docker` CI job fails on a skip.
 """
 
@@ -60,8 +60,8 @@ def docker(*args: str, check: bool = True, stdin: str | None = None) -> subproce
 
 @pytest.fixture(scope="module")
 def image() -> str:
-    if os.environ.get("CHOREGOS_TEST_HOSTED_DOCKER") != "1":
-        pytest.skip("CHOREGOS_TEST_HOSTED_DOCKER=1 is not set: this test starts containers")
+    if os.environ.get("TRANIBOR_TEST_HOSTED_DOCKER") != "1":
+        pytest.skip("TRANIBOR_TEST_HOSTED_DOCKER=1 is not set: this test starts containers")
     if shutil.which("docker") is None or docker("version", check=False).returncode != 0:
         pytest.skip("no reachable Docker daemon")
     # The Dockerfile comes on stdin, the agent from the fixtures folder as the build context.

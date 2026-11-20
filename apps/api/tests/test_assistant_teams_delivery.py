@@ -49,7 +49,7 @@ def _enforce(monkeypatch: pytest.MonkeyPatch) -> None:
     """Egress enforced from now on (after the installation's own connectors were opened)."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 

@@ -12,7 +12,7 @@ signature of a thinking block the guard masked must not reach the agent.
 
 Docker and Helm, and an opt-in — it pulls images and takes a minute:
 
-    CHOREGOS_LIVE_LLM_GUARD=1 uv run pytest tests/live/test_llm_guard_live.py -m live
+    TRANIBOR_LIVE_LLM_GUARD=1 uv run pytest tests/live/test_llm_guard_live.py -m live
 """
 
 from __future__ import annotations
@@ -171,7 +171,7 @@ StreamGuard.feed = _fails
 
 def _files(tmp_path_factory: pytest.TempPathFactory, sabotage: str = "") -> tuple[pathlib.Path, str]:
     """The chart's LiteLLM files and the fake provider in a directory; returns it and the image."""
-    require("CHOREGOS_LIVE_LLM_GUARD")
+    require("TRANIBOR_LIVE_LLM_GUARD")
     for tool in ("docker", "helm"):
         if shutil.which(tool) is None:
             pytest.skip(f"live test skipped — `{tool}` absent")

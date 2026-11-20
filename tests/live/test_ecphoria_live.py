@@ -3,7 +3,7 @@
 What the fakes cannot prove: that Ecphoria accepts our requests and returns what the context
 pack promises. The test writes into its own tenant and never leaves it.
 
-    CHOREGOS_LIVE_ECPHORIA_URL=http://127.0.0.1:8432 CHOREGOS_LIVE_ECPHORIA_TOKEN=… \
+    TRANIBOR_LIVE_ECPHORIA_URL=http://127.0.0.1:8432 TRANIBOR_LIVE_ECPHORIA_TOKEN=… \
     uv run pytest tests/live -m live
 """
 
@@ -31,11 +31,11 @@ RUN = uuid4().hex[:8]
 async def memory() -> AsyncIterator[EcphoriaMemory]:
     import os
 
-    env = require("CHOREGOS_LIVE_ECPHORIA_URL", "CHOREGOS_LIVE_ECPHORIA_TOKEN")
+    env = require("TRANIBOR_LIVE_ECPHORIA_URL", "TRANIBOR_LIVE_ECPHORIA_TOKEN")
     adapter = EcphoriaMemory(
-        env["CHOREGOS_LIVE_ECPHORIA_URL"],
-        token=env["CHOREGOS_LIVE_ECPHORIA_TOKEN"],
-        tenant=os.environ.get("CHOREGOS_LIVE_ECPHORIA_TENANT", TENANT),
+        env["TRANIBOR_LIVE_ECPHORIA_URL"],
+        token=env["TRANIBOR_LIVE_ECPHORIA_TOKEN"],
+        tenant=os.environ.get("TRANIBOR_LIVE_ECPHORIA_TENANT", TENANT),
         # A local server answers fast, but the short timeout is still the real behaviour: it is
         # relaxed just enough not to measure the machine's latency.
         read_timeout_ms=2000,

@@ -56,10 +56,10 @@ def test_tls_files_reach_the_tls_config(tmp_path: Path) -> None:
     (tmp_path / "tls.key").write_bytes(b"KEY")
     security = TemporalSecurity.from_env(
         {
-            "CHOREGOS_TEMPORAL_TLS_CA_FILE": str(tmp_path / "ca.crt"),
-            "CHOREGOS_TEMPORAL_TLS_CERT_FILE": str(tmp_path / "tls.crt"),
-            "CHOREGOS_TEMPORAL_TLS_KEY_FILE": str(tmp_path / "tls.key"),
-            "CHOREGOS_TEMPORAL_TLS_SERVER_NAME": "frontend.temporal",
+            "TRANIBOR_TEMPORAL_TLS_CA_FILE": str(tmp_path / "ca.crt"),
+            "TRANIBOR_TEMPORAL_TLS_CERT_FILE": str(tmp_path / "tls.crt"),
+            "TRANIBOR_TEMPORAL_TLS_KEY_FILE": str(tmp_path / "tls.key"),
+            "TRANIBOR_TEMPORAL_TLS_SERVER_NAME": "frontend.temporal",
         }
     )
     config = tls_config(security)
@@ -69,19 +69,19 @@ def test_tls_files_reach_the_tls_config(tmp_path: Path) -> None:
 
 
 def test_the_switch_alone_turns_tls_on_with_the_system_roots() -> None:
-    assert tls_config(TemporalSecurity.from_env({"CHOREGOS_TEMPORAL_TLS": "true"})) == TLSConfig()
-    assert tls_config(TemporalSecurity.from_env({"CHOREGOS_TEMPORAL_TLS": "false"})) is False
+    assert tls_config(TemporalSecurity.from_env({"TRANIBOR_TEMPORAL_TLS": "true"})) == TLSConfig()
+    assert tls_config(TemporalSecurity.from_env({"TRANIBOR_TEMPORAL_TLS": "false"})) is False
 
 
 @pytest.mark.parametrize(
     ("env", "named"),
     [
-        ({"CHOREGOS_TEMPORAL_TLS_CERT_FILE": "/c"}, "go together"),
-        ({"CHOREGOS_TEMPORAL_TLS_CA_FILE": "/does/not/exist"}, "CHOREGOS_TEMPORAL_TLS_CA_FILE"),
-        ({"CHOREGOS_TEMPORAL_CODEC_KEYS": "k1:abc", "CHOREGOS_TEMPORAL_CODEC_KEYS_FILE": "/k"}, "not both"),
-        ({"CHOREGOS_TEMPORAL_CODEC_KEYS": "k1"}, "expected `id:base64`"),
-        ({"CHOREGOS_TEMPORAL_CODEC_KEYS": "k1:%%%"}, "not valid base64"),
-        ({"CHOREGOS_TEMPORAL_CODEC_KEYS": "k1:" + base64.b64encode(b"short").decode()}, "32 bytes"),
+        ({"TRANIBOR_TEMPORAL_TLS_CERT_FILE": "/c"}, "go together"),
+        ({"TRANIBOR_TEMPORAL_TLS_CA_FILE": "/does/not/exist"}, "TRANIBOR_TEMPORAL_TLS_CA_FILE"),
+        ({"TRANIBOR_TEMPORAL_CODEC_KEYS": "k1:abc", "TRANIBOR_TEMPORAL_CODEC_KEYS_FILE": "/k"}, "not both"),
+        ({"TRANIBOR_TEMPORAL_CODEC_KEYS": "k1"}, "expected `id:base64`"),
+        ({"TRANIBOR_TEMPORAL_CODEC_KEYS": "k1:%%%"}, "not valid base64"),
+        ({"TRANIBOR_TEMPORAL_CODEC_KEYS": "k1:" + base64.b64encode(b"short").decode()}, "32 bytes"),
     ],
 )
 def test_a_configuration_that_cannot_work_is_refused(env: dict[str, str], named: str) -> None:
@@ -98,7 +98,7 @@ def test_a_key_id_listed_twice_is_refused() -> None:
 def test_the_keys_come_from_a_mounted_file(tmp_path: Path) -> None:
     keys = tmp_path / "keys"
     keys.write_text(f"k2:{_key()},k1:{_key()}\n")
-    security = TemporalSecurity.from_env({"CHOREGOS_TEMPORAL_CODEC_KEYS_FILE": str(keys)})
+    security = TemporalSecurity.from_env({"TRANIBOR_TEMPORAL_CODEC_KEYS_FILE": str(keys)})
     assert [key_id for key_id, _ in security.codec_keys] == ["k2", "k1"]
     converter = data_converter(security)
     assert isinstance(converter.payload_codec, AesGcmCodec) and converter.payload_codec.key_id == "k2"

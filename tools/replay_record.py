@@ -47,7 +47,7 @@ async def main() -> int:
     security = TemporalSecurity.from_env()
     if security.encrypts:
         parser.error(
-            "the payload codec is configured (CHOREGOS_TEMPORAL_CODEC_KEYS*): archive demonstration "
+            "the payload codec is configured (TRANIBOR_TEMPORAL_CODEC_KEYS*): archive demonstration "
             "histories from a deployment without it"
         )
     client = await connect_temporal(args.address, args.namespace, security=security)

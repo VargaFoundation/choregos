@@ -7,9 +7,9 @@ meets its row, and the table refuses a second row for the id whoever writes it. 
 of an operation's rule are columns of the migrated schema, with the defaults the migration gives
 the rows that were there.
 
-Runs only with `CHOREGOS_TEST_DATABASE_URL`: the schema is the migration's, the role is not a
+Runs only with `TRANIBOR_TEST_DATABASE_URL`: the schema is the migration's, the role is not a
 superuser, and no session has a scope it did not ask for (`pg_app`). The rest of the story's proofs
-run here too when the whole suite does (`CHOREGOS_TEST_SUITE_ON_POSTGRES`).
+run here too when the whole suite does (`TRANIBOR_TEST_SUITE_ON_POSTGRES`).
 """
 
 from __future__ import annotations
@@ -47,8 +47,8 @@ async def client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     from tranibor_api.db.models import Organization
     from tranibor_api.db.session import session_scope
 
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", outposts_kit.ORG)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", outposts_kit.ORG)
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     async with session_scope(orgs="*") as session:
         session.add(Organization(slug=outposts_kit.ORG, name="Northwind"))

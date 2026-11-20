@@ -59,7 +59,7 @@ NOT_DEPLOYED = (
 
 def extra_templates_dirs() -> list[Path]:
     """Templates brought by the DEPLOYMENT, separated by `:` in
-    `CHOREGOS_WORKFLOW_TEMPLATES_DIR`.
+    `TRANIBOR_WORKFLOW_TEMPLATES_DIR`.
 
     The same seam as the playbooks, for the same reason: a trade has its own chains of states,
     and they have no place in this package. Until 2026-09-26 the list was frozen at three names
@@ -70,7 +70,7 @@ def extra_templates_dirs() -> list[Path]:
     A deployment template wins over the package one: this is how a house adapts
     `default-simple` without rewriting the platform.
     """
-    raw = os.environ.get("CHOREGOS_WORKFLOW_TEMPLATES_DIR", "")
+    raw = os.environ.get("TRANIBOR_WORKFLOW_TEMPLATES_DIR", "")
     return [Path(p) for p in raw.split(":") if p.strip()]
 
 

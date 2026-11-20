@@ -67,7 +67,7 @@ async def catalogue(
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(file))
     catalogue_service.clear_cache()
     async with session_scope() as session:
         row = await session.get(Project, project["id"])

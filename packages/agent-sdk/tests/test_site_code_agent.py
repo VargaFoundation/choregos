@@ -40,7 +40,7 @@ async def test_the_page_s_agent_runs_through_the_runner_s_client(
         "OPENAI_BASE_URL": gateway.url,
         "OPENAI_API_KEY": RUN_KEY,
         "OPENAI_MODEL": "platform/standard",
-        "CHOREGOS_MAX_TURNS": "10",
+        "TRANIBOR_MAX_TURNS": "10",
     }
     asked: list[str] = []
 

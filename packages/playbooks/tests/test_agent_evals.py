@@ -34,8 +34,8 @@ def test_the_catalogue_netops_instructions_pass_and_emptied_ones_fail() -> None:
 
 
 def test_without_a_model_the_answer_is_not_run_never_passed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_GATEWAY_URL", raising=False)
-    monkeypatch.delenv("CHOREGOS_GATEWAY_KEY", raising=False)
+    monkeypatch.delenv("TRANIBOR_GATEWAY_URL", raising=False)
+    monkeypatch.delenv("TRANIBOR_GATEWAY_KEY", raising=False)
     result = evaluate_agent_case(CASE, live=True)
     assert result.answer == "not run" and result.answer_score is None
     assert "no gateway" in result.reason
@@ -85,8 +85,8 @@ def test_a_live_answer_is_asked_with_the_instructions_and_the_evidence(
         content = {"choices": [{"message": {"content": case["reference_answer"]}}]}
         return httpx.Response(200, json=content, request=httpx.Request("POST", url))
 
-    monkeypatch.setenv("CHOREGOS_GATEWAY_URL", "https://gateway.test")
-    monkeypatch.setenv("CHOREGOS_GATEWAY_KEY", "k")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_URL", "https://gateway.test")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_KEY", "k")
     monkeypatch.setattr(httpx, "post", answer)
     result = evaluate_agent_case(CASE, live=True)
     assert result.answer == "passed"

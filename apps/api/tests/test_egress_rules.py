@@ -14,7 +14,7 @@ from .egress_support import ORG, add_member, as_person, audit_actions, rules_in_
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 
@@ -126,7 +126,7 @@ async def test_check_derives_the_hosts_and_reports_both_layers(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
+    monkeypatch.setenv("TRANIBOR_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     reset_settings_cache()
     await add_member("root@northwind.dev", "org_admin")
     assert (await _create(client)).status_code == 201

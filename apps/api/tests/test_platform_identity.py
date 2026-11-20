@@ -24,11 +24,11 @@ def _by_key(body: dict[str, Any]) -> dict[str, dict[str, str]]:
 def _oidc(monkeypatch: pytest.MonkeyPatch, **extra: str) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
-    monkeypatch.setenv("CHOREGOS_OIDC_CLIENT_ID", "choregos-web")
-    monkeypatch.setenv("CHOREGOS_API_URL", "https://api.example.test")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_OIDC_CLIENT_ID", "choregos-web")
+    monkeypatch.setenv("TRANIBOR_API_URL", "https://api.example.test")
     for k, v in extra.items():
-        monkeypatch.setenv(f"CHOREGOS_{k}", v)
+        monkeypatch.setenv(f"TRANIBOR_{k}", v)
     reset_settings_cache()
 
 

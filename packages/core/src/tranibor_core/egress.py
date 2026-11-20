@@ -6,7 +6,7 @@ Three layers decide whether the platform may call a host for a tenant:
    list (with the instance's) and allowed set. A deny always wins, over an opened host too, in
    every mode: the mode below governs the list, not the bounds;
 1. the **organisation's list** (`org_egress_rules`, decided in the app by its administrator);
-2. the **deployment ceiling** (`CHOREGOS_EGRESS_CEILING`, what the operator says the cluster's
+2. the **deployment ceiling** (`TRANIBOR_EGRESS_CEILING`, what the operator says the cluster's
    network lets through, per pod family) — an `outside` host is refused before it is sent, with
    a message naming the platform change, instead of a silent timeout;
 3. the cluster's own network policy, which this module cannot see.
@@ -250,12 +250,12 @@ def _log_would_refuse(verdict: Verdict, origin: str, reason: str, org: str) -> N
 
 
 def default_mode(explicit: str | None = None) -> Mode:
-    """`CHOREGOS_EGRESS_MODE`, else `enforce` — and `warn` under `CHOREGOS_FAKES=1`, so the fakes
+    """`TRANIBOR_EGRESS_MODE`, else `enforce` — and `warn` under `TRANIBOR_FAKES=1`, so the fakes
     suites need no rules."""
-    value = (explicit or os.environ.get("CHOREGOS_EGRESS_MODE", "")).strip().lower()
+    value = (explicit or os.environ.get("TRANIBOR_EGRESS_MODE", "")).strip().lower()
     if value in MODES:
         return value  # type: ignore[return-value]
-    return "warn" if os.environ.get("CHOREGOS_FAKES", "").strip() in ("1", "true", "yes") else "enforce"
+    return "warn" if os.environ.get("TRANIBOR_FAKES", "").strip() in ("1", "true", "yes") else "enforce"
 
 
 @dataclass(frozen=True, slots=True)

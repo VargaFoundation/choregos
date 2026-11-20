@@ -57,7 +57,7 @@ _OAUTH_FIELDS = ("token_url", "client_id", "scope", "audience")
 
 def _check_token_url(url: Any) -> None:
     """The token endpoint receives the client secret: an https address with a host, no user-info and no
-    fragment (plain http only under CHOREGOS_FAKES, as for every other token endpoint the platform calls)."""
+    fragment (plain http only under TRANIBOR_FAKES, as for every other token endpoint the platform calls)."""
     from urllib.parse import urlsplit
 
     from .registry import fakes_enabled

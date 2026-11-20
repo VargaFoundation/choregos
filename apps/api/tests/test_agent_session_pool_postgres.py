@@ -11,7 +11,7 @@ never reaches the model and `/readyz` waits out the pool; with it, the three wai
 holding nothing, `pg_stat_activity` shows no session of the application role idle in transaction,
 and each response is booked once the model answers, under RLS.
 
-Runs only against a real PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`), as the application role (not a
+Runs only against a real PostgreSQL (`TRANIBOR_TEST_DATABASE_URL`), as the application role (not a
 superuser, so RLS applies); the CI starts one, locally `docs/development.md` says how.
 """
 
@@ -73,9 +73,9 @@ async def _small_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
 
-    monkeypatch.setenv("CHOREGOS_DB_POOL_SIZE", str(POOL_SIZE))
-    monkeypatch.setenv("CHOREGOS_DB_MAX_OVERFLOW", "0")
-    monkeypatch.setenv("CHOREGOS_DB_POOL_TIMEOUT_S", str(POOL_TIMEOUT_S))
+    monkeypatch.setenv("TRANIBOR_DB_POOL_SIZE", str(POOL_SIZE))
+    monkeypatch.setenv("TRANIBOR_DB_MAX_OVERFLOW", "0")
+    monkeypatch.setenv("TRANIBOR_DB_POOL_TIMEOUT_S", str(POOL_TIMEOUT_S))
     reset_settings_cache()
     await db_session.dispose_engine()
 

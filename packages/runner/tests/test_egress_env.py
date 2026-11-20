@@ -19,7 +19,7 @@ def _token() -> str:
 
 def _env(**extra: str) -> dict[str, str]:
     return {
-        "CHOREGOS_EGRESS_AUTH": "run",
+        "TRANIBOR_EGRESS_AUTH": "run",
         "HTTP_PROXY": PROXY,
         "HTTPS_PROXY": PROXY,
         "http_proxy": PROXY,
@@ -44,9 +44,9 @@ def test_credentials_are_added_to_the_four_variables_and_the_token_is_quoted() -
 def test_nothing_changes_unless_the_deployment_asks_for_run_credentials(auth: str | None) -> None:
     env = _env()
     if auth is None:
-        del env["CHOREGOS_EGRESS_AUTH"]
+        del env["TRANIBOR_EGRESS_AUTH"]
     else:
-        env["CHOREGOS_EGRESS_AUTH"] = auth
+        env["TRANIBOR_EGRESS_AUTH"] = auth
     assert authenticate_proxy_env(env, RUN, _token()) == {}
 
 
@@ -62,7 +62,7 @@ def test_a_proxy_that_already_carries_credentials_is_left_alone() -> None:
 
 
 def test_unset_variables_are_not_invented() -> None:
-    changes = authenticate_proxy_env({"CHOREGOS_EGRESS_AUTH": "run", "HTTPS_PROXY": PROXY}, RUN, _token())
+    changes = authenticate_proxy_env({"TRANIBOR_EGRESS_AUTH": "run", "HTTPS_PROXY": PROXY}, RUN, _token())
     assert set(changes) == {"HTTPS_PROXY"}
 
 
@@ -144,7 +144,7 @@ async def test_an_api_without_egress_tokens_keeps_the_run_token(
 async def test_without_proxy_authentication_no_egress_token_is_asked(
     monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_EGRESS_AUTH", "")
+    monkeypatch.setenv("TRANIBOR_EGRESS_AUTH", "")
     from tranibor_runner.runner import Runner
 
     from .conftest import FakeInternalClient, agent_script, valid_result

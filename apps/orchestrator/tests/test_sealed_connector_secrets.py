@@ -27,8 +27,8 @@ def probes(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, dict[str, Any]
     spec = ConnectorTypeSpec("probe", KINDS, {"type": "object", "properties": {}}, ("api_token",))
     for kind in KINDS:
         register(kind, "probe", spec)(lambda cfg, k=kind: received.__setitem__(k, cfg) or object())
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
     try:
         yield received
     finally:

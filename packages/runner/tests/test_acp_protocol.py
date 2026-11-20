@@ -59,7 +59,7 @@ async def _client(tmp_path: Path, script: dict[str, Any], **kwargs: Any) -> AcpC
     return AcpClient(
         [sys.executable, str(FAKE_AGENT)],
         cwd=str(tmp_path),
-        env={"FAKE_AGENT_SCRIPT": json.dumps(script), "CHOREGOS_WORKSPACE_PATH": str(tmp_path)},
+        env={"FAKE_AGENT_SCRIPT": json.dumps(script), "TRANIBOR_WORKSPACE_PATH": str(tmp_path)},
         **kwargs,
     )
 

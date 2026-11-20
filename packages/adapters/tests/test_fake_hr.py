@@ -127,9 +127,9 @@ def test_the_families_are_connector_types_and_demo_is_refused_in_production(
             "badge_status": "allowed",
         },
     }
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    monkeypatch.setenv("CHOREGOS_ENV", "prod")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_ENV", "prod")
     with pytest.raises(ConfigurationError, match="`mdm: demo` refused in prod"):
         build("mdm", "demo", {})
-    monkeypatch.setenv("CHOREGOS_ENV", "dev")
+    monkeypatch.setenv("TRANIBOR_ENV", "dev")
     assert type(build("mdm", "demo", {}).fake).__name__ == "FakeMdm"

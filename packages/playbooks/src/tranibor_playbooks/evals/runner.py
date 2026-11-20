@@ -90,10 +90,10 @@ def judge_case(path: Path, model: str) -> dict[str, Any]:
     import httpx
 
     case = yaml.safe_load(path.read_text(encoding="utf-8"))
-    base_url = os.environ.get("CHOREGOS_GATEWAY_URL", "")
-    key = os.environ.get("CHOREGOS_GATEWAY_KEY", "")
+    base_url = os.environ.get("TRANIBOR_GATEWAY_URL", "")
+    key = os.environ.get("TRANIBOR_GATEWAY_KEY", "")
     if not base_url or not key:
-        return {"skipped": "no gateway configured (CHOREGOS_GATEWAY_URL / CHOREGOS_GATEWAY_KEY)"}
+        return {"skipped": "no gateway configured (TRANIBOR_GATEWAY_URL / TRANIBOR_GATEWAY_KEY)"}
     rendered = render_playbook(case["role"], **SAMPLE_CONTEXT)
     rubric = "\n".join(f"- {item['criterion']} (weight {item['weight']})" for item in case.get("rubric", []))
     prompt = (

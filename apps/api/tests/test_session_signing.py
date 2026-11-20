@@ -42,12 +42,12 @@ def _fresh_settings() -> Iterator[None]:
 
 
 def _env(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
-    """A deployed-looking environment without a session secret, plus `env` (CHOREGOS_ names)."""
+    """A deployed-looking environment without a session secret, plus `env` (TRANIBOR_ names)."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.delenv("CHOREGOS_SESSION_SECRET", raising=False)
+    monkeypatch.delenv("TRANIBOR_SESSION_SECRET", raising=False)
     # The dev sign-in is refused in staging/prod: the suites turn it on, a prod app needs it off.
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
     for name, value in env.items():
         monkeypatch.setenv(name, value)
     reset_settings_cache()
@@ -56,9 +56,9 @@ def _env(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
 @pytest.mark.parametrize(
     "env",
     [
-        {"CHOREGOS_ENV": "prod"},
-        {"CHOREGOS_ENV": "prod", "CHOREGOS_SESSION_SECRET": "short"},
-        {"CHOREGOS_ENV": "dev", "CHOREGOS_PUBLIC_URL": "https://c.example"},
+        {"TRANIBOR_ENV": "prod"},
+        {"TRANIBOR_ENV": "prod", "TRANIBOR_SESSION_SECRET": "short"},
+        {"TRANIBOR_ENV": "dev", "TRANIBOR_PUBLIC_URL": "https://c.example"},
     ],
     ids=["prod-default-secret", "prod-short-secret", "dev-over-https-default-secret"],
 )
@@ -68,10 +68,10 @@ def test_the_api_refuses_the_published_secret_when_deployed(
     from tranibor_api.main import create_app
 
     _env(monkeypatch, **env)
-    with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_SESSION_SECRET"):
         create_app()
     # a 48-byte secret starts the same deployment
-    monkeypatch.setenv("CHOREGOS_SESSION_SECRET", LONG_SECRET)
+    monkeypatch.setenv("TRANIBOR_SESSION_SECRET", LONG_SECRET)
     from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
@@ -81,7 +81,7 @@ def test_the_api_refuses_the_published_secret_when_deployed(
 def test_the_error_says_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.main import create_app
 
-    _env(monkeypatch, CHOREGOS_ENV="staging", CHOREGOS_SESSION_SECRET="x" * 31)
+    _env(monkeypatch, TRANIBOR_ENV="staging", TRANIBOR_SESSION_SECRET="x" * 31)
     with pytest.raises(RuntimeError, match=r"32 bytes.*openssl rand -base64 48"):
         create_app()
 
@@ -93,11 +93,11 @@ def test_the_limit_is_32_bytes_not_32_characters(monkeypatch: pytest.MonkeyPatch
     _env(monkeypatch)
     deployed: dict[str, Any] = {"env": "prod", "dev_login_enabled": False}
     check_session_secret(Settings(session_secret="x" * 32, **deployed))
-    with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_SESSION_SECRET"):
         check_session_secret(Settings(session_secret="x" * 31, **deployed))
     # 16 characters, 32 bytes: counted in bytes
     check_session_secret(Settings(session_secret="é" * 16, **deployed))
-    with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_SESSION_SECRET"):
         check_session_secret(Settings(session_secret="é" * 15, **deployed))
 
 
@@ -122,9 +122,9 @@ def test_a_development_instance_over_http_keeps_starting(monkeypatch: pytest.Mon
     from tranibor_api.main import create_app
     from tranibor_api.security import check_session_secret
 
-    _env(monkeypatch, CHOREGOS_ENV="dev")
+    _env(monkeypatch, TRANIBOR_ENV="dev")
     assert create_app() is not None  # the published default, on a dev instance over http
-    monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "local-install-only-not-a-secret")
+    monkeypatch.setenv("TRANIBOR_SESSION_SECRET", "local-install-only-not-a-secret")
     from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
@@ -157,8 +157,8 @@ def test_an_empty_session_secret_stops_the_api_everywhere(
 ) -> None:
     from tranibor_api.main import create_app
 
-    _env(monkeypatch, CHOREGOS_ENV="test", CHOREGOS_SESSION_SECRET=empty)
-    with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET is empty"):
+    _env(monkeypatch, TRANIBOR_ENV="test", TRANIBOR_SESSION_SECRET=empty)
+    with pytest.raises(RuntimeError, match="TRANIBOR_SESSION_SECRET is empty"):
         create_app()
 
 
@@ -168,7 +168,7 @@ def test_a_short_previous_key_stops_a_deployed_api_only(monkeypatch: pytest.Monk
 
     _env(monkeypatch)
     settings: dict[str, Any] = {"session_secret": LONG_SECRET, "session_secret_previous": "old-and-short"}
-    with pytest.raises(RuntimeError, match="CHOREGOS_SESSION_SECRET_PREVIOUS"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_SESSION_SECRET_PREVIOUS"):
         check_session_secret(Settings(env="prod", dev_login_enabled=False, **settings))
     check_session_secret(Settings(env="prod", dev_login_enabled=False, session_secret=LONG_SECRET))
     check_session_secret(

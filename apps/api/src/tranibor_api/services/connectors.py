@@ -106,7 +106,7 @@ def check_runtime_allowed(type_name: str) -> None:
     """Refuse a `runtime` connector the deployment does not run (ADR 0072).
 
     A project could pick `tekton` on a cluster without Tekton, and its first run died. The
-    deployment declares what it runs (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`);
+    deployment declares what it runs (`TRANIBOR_EXECUTOR_KIND`, `TRANIBOR_EXECUTORS_ALLOWED`);
     when it declares nothing (a bare dev server) nothing is refused."""
     from tranibor_adapters.registry import allowed_executor_kinds, executors_declared
 

@@ -3,7 +3,7 @@
 
 The core's adapters ship no `marketdata` type; the distribution declares its `choregos.plugins` entry
 point under the plugin's name, and loading it is what registers the five types, their fake (so
-`CHOREGOS_FAKES=1` switches every `marketdata` connector, ADR 0005) and the eval scene. Drop the entry
+`TRANIBOR_FAKES=1` switches every `marketdata` connector, ADR 0005) and the eval scene. Drop the entry
 point, or a registration from `extension.register`, and a test here turns red.
 """
 
@@ -84,7 +84,7 @@ def test_an_extension_cannot_take_over_a_core_kinds_scenes() -> None:
 async def test_fakes_switch_every_marketdata_connector_to_the_shared_fake(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     scripted = fake_module.FakeMarketData()
     monkeypatch.setattr(fake_module, "FAKE", scripted)
     for type_name in ("stooq", "composite", "tiingo"):

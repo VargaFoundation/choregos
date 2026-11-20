@@ -2,8 +2,8 @@
 // The reference hosted agent on Node: a tool-calling loop over chat completions, no dependency.
 //
 // It reads what the platform gives every hosted container (ADR 0080) and nothing else: the model at
-// `OPENAI_BASE_URL` with `OPENAI_API_KEY`, the MCP servers at `CHOREGOS_MCP_URL<name>` for each name
-// of `CHOREGOS_MCP_SERVERS`. Node's `fetch` never goes through `HTTPS_PROXY`: the loopback is
+// `OPENAI_BASE_URL` with `OPENAI_API_KEY`, the MCP servers at `TRANIBOR_MCP_URL<name>` for each name
+// of `TRANIBOR_MCP_SERVERS`. Node's `fetch` never goes through `HTTPS_PROXY`: the loopback is
 // reached directly. The same image runs anywhere these variables point to a model and to
 // streamable-HTTP MCP servers.
 
@@ -68,12 +68,12 @@ class McpServer {
 export async function answer(text) {
   const base = process.env.OPENAI_BASE_URL.replace(/\/+$/, "");
   const headers = { authorization: `Bearer ${process.env.OPENAI_API_KEY}` };
-  const model = process.env.CHOREGOS_MODEL ?? "default";
-  const names = (process.env.CHOREGOS_MCP_SERVERS ?? "").split(",").filter(Boolean);
+  const model = process.env.TRANIBOR_MODEL ?? "default";
+  const names = (process.env.TRANIBOR_MCP_SERVERS ?? "").split(",").filter(Boolean);
   const owners = new Map();
   const tools = [];
   for (const name of names) {
-    const server = new McpServer(name, process.env.CHOREGOS_MCP_URL + name);
+    const server = new McpServer(name, process.env.TRANIBOR_MCP_URL + name);
     for (const tool of await server.tools()) {
       owners.set(tool.name, server);
       tools.push({

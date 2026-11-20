@@ -2,7 +2,7 @@
 
 The runner image puts `choregos-refuse` (`docker/shims/refuse.sh`) in the place of `kubectl`, `helm`
 and the other tools an agent has no reason to call. The shim used to post `shim.refused` with
-`$CHOREGOS_RUN_TOKEN`, which the agent no longer holds (ADR 0115, S57-02): the event was lost. The
+`$TRANIBOR_RUN_TOKEN`, which the agent no longer holds (ADR 0115, S57-02): the event was lost. The
 runner now reads the shim's line in the call's output, which it journals anyway, and journals
 `shim.refused` after it. Here the real shim runs from the fake agent's shell, under the runner.
 """
@@ -58,7 +58,7 @@ async def test_a_refused_tool_reaches_the_runs_journal(
 def test_the_shim_holds_no_credential_and_posts_nothing() -> None:
     """ADR 0115: nothing the agent runs uses the run token; the shim reaches no network either."""
     text = SHIM.read_text(encoding="utf-8")
-    for forbidden in ("CHOREGOS_RUN_", "curl", "wget", "/dev/tcp", "CHOREGOS_API_URL"):
+    for forbidden in ("TRANIBOR_RUN_", "curl", "wget", "/dev/tcp", "TRANIBOR_API_URL"):
         assert forbidden not in text, f"the shim names {forbidden}"
 
 

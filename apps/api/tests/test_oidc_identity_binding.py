@@ -37,8 +37,8 @@ def _id_token(**claims: Any) -> str:
 
 @pytest.fixture(autouse=True)
 def _provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
     forget_discovery()
     yield
@@ -82,7 +82,7 @@ async def test_a_failed_discovery_is_an_error_and_is_not_cached(client: AsyncCli
         first = await client.get("/api/v1/auth/login")
         second = await client.get("/api/v1/auth/login")
     assert first.status_code == 503
-    assert "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" in first.text
+    assert "TRANIBOR_OIDC_AUTHORIZATION_ENDPOINT" in first.text
     assert second.status_code == 307
     assert second.headers["location"].startswith(f"{ISSUER}/authorize?")
 
@@ -99,9 +99,9 @@ async def test_a_discovery_document_for_another_issuer_is_refused(client: AsyncC
 async def test_explicit_endpoints_skip_discovery(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT", "https://sso.example/auth")
-    monkeypatch.setenv("CHOREGOS_OIDC_TOKEN_ENDPOINT", "https://sso.example/token")
-    monkeypatch.setenv("CHOREGOS_OIDC_USERINFO_ENDPOINT", "https://sso.example/me")
+    monkeypatch.setenv("TRANIBOR_OIDC_AUTHORIZATION_ENDPOINT", "https://sso.example/auth")
+    monkeypatch.setenv("TRANIBOR_OIDC_TOKEN_ENDPOINT", "https://sso.example/token")
+    monkeypatch.setenv("TRANIBOR_OIDC_USERINFO_ENDPOINT", "https://sso.example/me")
     reset_settings_cache()
     with respx.mock(assert_all_called=False):
         response = await client.get("/api/v1/auth/login")
@@ -112,7 +112,7 @@ async def test_explicit_endpoints_skip_discovery(
 def test_explicit_endpoints_are_all_or_none(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import Settings
 
-    with pytest.raises(ValueError, match="CHOREGOS_OIDC_TOKEN_ENDPOINT"):
+    with pytest.raises(ValueError, match="TRANIBOR_OIDC_TOKEN_ENDPOINT"):
         Settings(oidc_authorization_endpoint="https://sso.example/auth")
 
 
@@ -230,7 +230,7 @@ async def test_the_instance_provider_cannot_issue_a_reserved_subject(
 async def test_an_unreachable_discovery_url_is_a_503_not_a_500(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", "https://idp.example:not-a-port/realm")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", "https://idp.example:not-a-port/realm")
     reset_settings_cache()
     response = await client.get("/api/v1/auth/login")
     assert response.status_code == 503, response.text

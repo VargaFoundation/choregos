@@ -721,7 +721,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- Argo CD, and a **GitOps repository** it watches. Tranibor never runs `kubectl apply`: a promotion is a\n  pull request on that repository, and Argo CD applies it.\n- The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the\n  writes go through it.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`)."
+        "markdown": "- Argo CD, and a **GitOps repository** it watches. Tranibor never runs `kubectl apply`: a promotion is a\n  pull request on that repository, and Argo CD applies it.\n- The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the\n  writes go through it.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`)."
       },
       {
         "key": "at",
@@ -837,7 +837,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+        "markdown": "- A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
       },
       {
         "key": "at",
@@ -906,7 +906,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A cluster where Tekton Pipelines is installed, and a namespace where the project's `PipelineRun`s run.\n- The platform reads the cluster with the API's own in-cluster service account: it must be allowed to\n  `get` and `list` `pipelineruns.tekton.dev` in that namespace. If you only use GitHub Actions, the\n  project needs no `ci` connector: checks are read through the `scm` connector.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`)."
+        "markdown": "- A cluster where Tekton Pipelines is installed, and a namespace where the project's `PipelineRun`s run.\n- The platform reads the cluster with the API's own in-cluster service account: it must be allowed to\n  `get` and `list` `pipelineruns.tekton.dev` in that namespace. If you only use GitHub Actions, the\n  project needs no `ci` connector: checks are read through the `scm` connector.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`)."
       },
       {
         "key": "at",
@@ -2547,7 +2547,7 @@
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "`CHOREGOS_CLUSTER_CONTEXT=<context> CHOREGOS_CLUSTER_ALLOW_SHARED=<context> make test-cluster` on a\ncluster that has the operator (it uses a namespace of its own and deletes it)."
+        "markdown": "`TRANIBOR_CLUSTER_CONTEXT=<context> TRANIBOR_CLUSTER_ALLOW_SHARED=<context> make test-cluster` on a\ncluster that has the operator (it uses a namespace of its own and deletes it)."
       },
       {
         "key": "fails",
@@ -2811,7 +2811,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A GitLab project the agents change. They work on a branch and open a merge request; nothing is pushed to\n  the default branch.\n- You are a **Maintainer** of that project: the connector creates a short-lived token for each run, and\n  only a Maintainer can create project access tokens.\n- **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the\n  connector cannot give a run its token. A self-managed GitLab has no such tier limit.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want merge request events."
+        "markdown": "- A GitLab project the agents change. They work on a branch and open a merge request; nothing is pushed to\n  the default branch.\n- You are a **Maintainer** of that project: the connector creates a short-lived token for each run, and\n  only a Maintainer can create project access tokens.\n- **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the\n  connector cannot give a run its token. A self-managed GitLab has no such tier limit.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want merge request events."
       },
       {
         "key": "at",
@@ -3010,7 +3010,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A GitLab project where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+        "markdown": "- A GitLab project where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
       },
       {
         "key": "at",
@@ -3124,7 +3124,7 @@
       {
         "key": "before",
         "title": "Before you start",
-        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Tranibor**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name. The best fit\n  is an Atlassian **service account** (no licence seat, no password, an organisation administrator\n  creates it); a regular account dedicated to Tranibor works too.\n- The project key.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
+        "markdown": "- A Jira Cloud site and an Atlassian account **dedicated to Tranibor**: its permissions are what the\n  platform may do in the project, and comments and transitions appear under its name. The best fit\n  is an Atlassian **service account** (no licence seat, no password, an organisation administrator\n  creates it); a regular account dedicated to Tranibor works too.\n- The project key.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor. Jira Cloud does not sign webhooks, so the platform accepts a delivery only if it carries this\n  secret in an `X-Choregos-Secret` header."
       },
       {
         "key": "at",

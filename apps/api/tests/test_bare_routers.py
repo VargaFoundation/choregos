@@ -844,7 +844,7 @@ async def test_tekton_webhook_accepts_token_and_no_longer_the_former_parameter(
     URL (`?token=`). The former parameter, removed in 0.24.0 (S45-49), authenticates nothing."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
+    monkeypatch.setenv("TRANIBOR_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
     reset_settings_cache()
     body = {"pipelineRun": {"metadata": {"name": "r", "labels": {"choregos/project": "billing-api"}}}}
     headers = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1"}
@@ -901,7 +901,7 @@ async def test_without_a_secret_the_tekton_webhook_is_refused_outside_developmen
         json={},
         headers={"ce-type": "dev.tekton.event.pipelinerun.started.v1", "ce-id": "p-1"},
     )
-    assert refusal.status_code == 401 and "CHOREGOS_GENERIC_WEBHOOK_SECRET" in refusal.text
+    assert refusal.status_code == 401 and "TRANIBOR_GENERIC_WEBHOOK_SECRET" in refusal.text
 
 
 async def test_a_transient_argocd_health_does_not_signal_a_degradation(

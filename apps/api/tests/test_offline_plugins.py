@@ -76,13 +76,13 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]
         path.write_text(
             yaml.safe_dump({"sources": [TRANIBOR], "defaultPlugins": defaults, "offline": str(offline)})
         )
-        monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
+        monkeypatch.setenv("TRANIBOR_PLUGINS_CONFIG", str(path))
         reset_settings_cache()
         return fake
 
     yield write
     plugin_sources.set_backend(None)
-    monkeypatch.delenv("CHOREGOS_PLUGINS_CONFIG", raising=False)
+    monkeypatch.delenv("TRANIBOR_PLUGINS_CONFIG", raising=False)
     reset_settings_cache()
 
 

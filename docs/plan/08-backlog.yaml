@@ -5701,7 +5701,7 @@ stories:
     priority: 3
     size: M
     depends_on: [S75-01]
-    notes: "One shared helper for the four env_prefix settings classes and the direct os.environ reads; one warning per variable naming the new one, never the value; the charts render TRANIBOR_*."
+    notes: "One shared helper for the four env_prefix settings classes and the direct os.environ reads; one warning per variable naming the new one, never the value; the charts render TRANIBOR_*. Done as an adoption at import (tranibor_contracts.env) plus both names on emission; the charts and the images ENV stay CHOREGOS_* until the chart step (ADR 0176 point 5)."
   - id: S80-10
     title: "chore: the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation (ADR 0186)"
     stream: S80

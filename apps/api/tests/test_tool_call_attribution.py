@@ -429,7 +429,7 @@ async def test_every_refusal_is_the_same_for_every_door(
     assert forbidden.status_code == 200, forbidden.text
     catalogue = tmp_path / "catalogue.yaml"
     catalogue.write_text(_WRITING_CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(catalogue))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(catalogue))
     catalogue_service.clear_cache()
     async with session_scope() as session:
         row = await session.get(Project, project["id"])

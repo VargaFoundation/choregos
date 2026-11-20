@@ -86,7 +86,7 @@ class OutpostDto(Dto):
 
 class OutpostList(Dto):
     items: list[OutpostDto]
-    #: The deployment keeps outposts switched on (`CHOREGOS_OUTPOSTS`): off, a creation and an
+    #: The deployment keeps outposts switched on (`TRANIBOR_OUTPOSTS`): off, a creation and an
     #: enrolment token are refused (409 `outposts_disabled`).
     enabled: bool
     #: The door has a signing key: without one, an enrolment token is refused (409 `door_key_missing`).

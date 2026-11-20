@@ -22,7 +22,7 @@ FIRST_REVISION = "a4c6e8b0d2f4"
 
 def test_a_migration_leaves_an_existing_logger_enabled(tmp_path: pathlib.Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     database = tmp_path / "migrated.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     bystander = logging.getLogger("a.library.that.logs")
     config = Config(str(API / "alembic.ini"))

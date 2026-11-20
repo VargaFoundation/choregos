@@ -27,7 +27,7 @@ until then, upgrading is the fix.
 - An agent producing bad code: that is what CI and review are for.
 - A model following an injected instruction **without that granting it any power**: the
   mechanisms (scope, absence of credentials, gates) apply just the same.
-- `CHOREGOS_FAKES=1`, which is not meant for production.
+- `TRANIBOR_FAKES=1`, which is not meant for production.
 
 ## What we do, and where to check it
 

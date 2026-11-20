@@ -33,7 +33,7 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)
     monkeypatch.setattr(a2a_module, "RECONNECT_PAUSE", 0.0)
-    monkeypatch.delenv("CHOREGOS_A2A_TOKEN", raising=False)
+    monkeypatch.delenv("TRANIBOR_A2A_TOKEN", raising=False)
     monkeypatch.setenv("COLUMNS", "200")
     return path
 
@@ -351,7 +351,7 @@ def test_a_star_token_is_refused_and_the_cli_says_which_token_opens_the_door() -
 def test_the_a2a_token_comes_from_the_option_then_the_environment() -> None:
     door = _door(**{"tasks/get": [lambda b: answer(b, task("working"))] * 2})
     assert _cli("get", "t-1", "--token", "chg_option").exit_code == 0
-    assert _cli("get", "t-1", env={"CHOREGOS_A2A_TOKEN": "chg_env"}).exit_code == 0
+    assert _cli("get", "t-1", env={"TRANIBOR_A2A_TOKEN": "chg_env"}).exit_code == 0
     assert [c["headers"]["authorization"] for c in door.calls] == ["Bearer chg_option", "Bearer chg_env"]
 
 

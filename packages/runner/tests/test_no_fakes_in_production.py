@@ -1,7 +1,7 @@
 """The runner does not start on the fakes in staging and prod (S80-03).
 
-Under `CHOREGOS_FAKES` the egress control only warns (`tranibor_core.egress.default_mode`). The runner
-learns its environment from its pod or from its assignment (the orchestrator puts `CHOREGOS_ENV` in
+Under `TRANIBOR_FAKES` the egress control only warns (`tranibor_core.egress.default_mode`). The runner
+learns its environment from its pod or from its assignment (the orchestrator puts `TRANIBOR_ENV` in
 both), and refuses either way, before it runs anything.
 """
 
@@ -24,7 +24,7 @@ from typer.testing import CliRunner
 @pytest.fixture
 def environ(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     """A copy of the process environment for the test to dirty, without either setting."""
-    copy = {k: v for k, v in os.environ.items() if k not in {"CHOREGOS_ENV", "CHOREGOS_FAKES"}}
+    copy = {k: v for k, v in os.environ.items() if k not in {"TRANIBOR_ENV", "TRANIBOR_FAKES"}}
     monkeypatch.setattr(os, "environ", copy)
     return copy
 
@@ -34,29 +34,29 @@ def environ(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 def test_no_command_starts_on_the_fakes_in_production(
     environ: dict[str, str], environment: str, command: list[str]
 ) -> None:
-    environ.update({"CHOREGOS_ENV": environment, "CHOREGOS_FAKES": "1"})
+    environ.update({"TRANIBOR_ENV": environment, "TRANIBOR_FAKES": "1"})
     result = CliRunner().invoke(cli.app, command)
     assert result.exit_code == int(Exit.FAKES_IN_PRODUCTION)
-    assert "CHOREGOS_FAKES" in result.output and f"CHOREGOS_ENV={environment}" in result.output
+    assert "TRANIBOR_FAKES" in result.output and f"TRANIBOR_ENV={environment}" in result.output
 
 
 @pytest.mark.parametrize("environment", ["dev", "test", ""])
 def test_a_bench_keeps_its_fakes(environ: dict[str, str], environment: str) -> None:
-    environ.update({"CHOREGOS_ENV": environment, "CHOREGOS_FAKES": "1"})
+    environ.update({"TRANIBOR_ENV": environment, "TRANIBOR_FAKES": "1"})
     result = CliRunner().invoke(cli.app, ["backends"])
     assert result.exit_code == 0, result.output
 
 
 def test_production_without_the_fakes_starts(environ: dict[str, str]) -> None:
-    environ.update({"CHOREGOS_ENV": "prod", "CHOREGOS_FAKES": "0"})
+    environ.update({"TRANIBOR_ENV": "prod", "TRANIBOR_FAKES": "0"})
     assert CliRunner().invoke(cli.app, ["backends"]).exit_code == 0
 
 
 async def test_a_warm_runner_refuses_an_assignment_that_says_prod_with_the_fakes_on(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], environ: dict[str, str]
 ) -> None:
-    """The warm pool's pod carries no `CHOREGOS_ENV`: the assignment does, and nothing runs."""
-    environ["CHOREGOS_FAKES"] = "true"
+    """The warm pool's pod carries no `TRANIBOR_ENV`: the assignment does, and nothing runs."""
+    environ["TRANIBOR_FAKES"] = "true"
     ran: list[str] = []
 
     class _Runner:
@@ -81,7 +81,7 @@ async def test_a_warm_runner_refuses_an_assignment_that_says_prod_with_the_fakes
     while not started:
         await asyncio.sleep(0.01)
     key = key_from_log(capsys.readouterr().out)
-    secret = {"api_url": "http://api/internal", "run_token": "tok-1", "env": {"CHOREGOS_ENV": "prod"}}
+    secret = {"api_url": "http://api/internal", "run_token": "tok-1", "env": {"TRANIBOR_ENV": "prod"}}
     async with httpx.AsyncClient() as http:
         body = {"run_id": "r-1", "sealed": seal(key, "r-1", secret)}
         assert (await http.post(f"http://127.0.0.1:{started[0].port}/assign", json=body)).status_code == 200

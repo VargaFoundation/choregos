@@ -54,7 +54,7 @@ async def test_start_runs_the_container_with_the_same_variables_as_in_a_cluster(
     run = next(a for a in docker.calls if a[0] == "run")
     assert "--network" in run and run[run.index("--network") + 1] == "choregos_net"
     envs = [run[i + 1] for i, a in enumerate(run) if a == "--env"]
-    assert "CHOREGOS_RUN_TOKEN" in envs and "HTTPS_PROXY=http://p:3128" in envs
+    assert "TRANIBOR_RUN_TOKEN" in envs and "HTTPS_PROXY=http://p:3128" in envs
     assert run[-2:] == ["runner:dev", "run"]
 
 
@@ -68,7 +68,7 @@ async def test_the_run_secrets_are_named_on_the_command_line_and_never_valued_th
     for value in ("jeton", "gw-secret", "remote-secret"):  # lang: fr-ok
         assert value not in argv
     env = docker.envs[index] or {}
-    assert env["CHOREGOS_RUN_TOKEN"] == "jeton"  # lang: fr-ok
+    assert env["TRANIBOR_RUN_TOKEN"] == "jeton"  # lang: fr-ok
     assert set(env.values()) == {"jeton", "gw-secret", "remote-secret"}  # lang: fr-ok
     named = [docker.calls[index][i + 1] for i, a in enumerate(docker.calls[index]) if a == "--env"]
     assert set(env) <= set(named)
@@ -77,8 +77,8 @@ async def test_the_run_secrets_are_named_on_the_command_line_and_never_valued_th
 async def test_docker_receives_the_environment_it_is_given_on_top_of_its_own() -> None:
     """The real subprocess call: without `env=`, `--env NAME` would hand the container nothing."""
     ex = LocalDockerExecutor(docker="sh")
-    script = 'echo "$CHOREGOS_RUN_TOKEN:${PATH:+path}"'
-    code, stdout, _ = await ex._run("-c", script, env={"CHOREGOS_RUN_TOKEN": "t"})
+    script = 'echo "$TRANIBOR_RUN_TOKEN:${PATH:+path}"'
+    code, stdout, _ = await ex._run("-c", script, env={"TRANIBOR_RUN_TOKEN": "t"})
     assert code == 0 and stdout.strip() == "t:path"
 
 
@@ -217,7 +217,7 @@ async def test_a_hosted_agent_shares_the_runners_network_and_none_of_its_secrets
     envs = [agent[i + 1] for i, a in enumerate(agent) if a == "--env"]
     assert sorted(envs) == ["OPENAI_API_KEY=choregos-loopback", "PORT=8088"]
     assert not any(
-        e.startswith(("CHOREGOS_RUN_TOKEN", "CHOREGOS_RUN_GATEWAY_KEY", "HTTPS_PROXY")) for e in envs
+        e.startswith(("TRANIBOR_RUN_TOKEN", "TRANIBOR_RUN_GATEWAY_KEY", "HTTPS_PROXY")) for e in envs
     )
     assert docker.envs[index] is None, "no secret travels in docker's environment for the agent"
 

@@ -230,7 +230,7 @@ class EgressProxy:
                 writer,
                 407,
                 "choregos-egress: proxy credentials are required (the run id and run token); the runner "
-                "adds them to HTTP_PROXY when CHOREGOS_EGRESS_AUTH=run",
+                "adds them to HTTP_PROXY when TRANIBOR_EGRESS_AUTH=run",
                 extra={"Proxy-Authenticate": 'Basic realm="choregos-egress"'},
             )
             return

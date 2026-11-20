@@ -3,8 +3,8 @@
 `tests/charts/test_hosted_images_policy.py` judges the rendered policy with the `kyverno` CLI. This
 test installs nothing itself: it needs a cluster with Kyverno running (the admission controller
 started with `--allowInsecureRegistry`, the registry here speaks HTTP) and a registry that the host
-reaches (`CHOREGOS_ADMISSION_REGISTRY_PUSH`, e.g. `localhost:5025`) and the cluster reaches under
-another name (`CHOREGOS_ADMISSION_REGISTRY_CLUSTER`, e.g. `s41-25-reg:5000`). Both name the same
+reaches (`TRANIBOR_ADMISSION_REGISTRY_PUSH`, e.g. `localhost:5025`) and the cluster reaches under
+another name (`TRANIBOR_ADMISSION_REGISTRY_CLUSTER`, e.g. `s41-25-reg:5000`). Both name the same
 registry; without them, or without `cosign`, `crane`, `helm` or `kubectl`, every test is skipped.
 
 It renders the chart's policy (`hostedCosign=enforce`, a key) once per `hostedCosignFormat`, applies
@@ -41,8 +41,8 @@ import yaml
 
 from .conftest import context
 
-PUSH = os.environ.get("CHOREGOS_ADMISSION_REGISTRY_PUSH", "")
-INCLUSTER = os.environ.get("CHOREGOS_ADMISSION_REGISTRY_CLUSTER", "")
+PUSH = os.environ.get("TRANIBOR_ADMISSION_REGISTRY_PUSH", "")
+INCLUSTER = os.environ.get("TRANIBOR_ADMISSION_REGISTRY_CLUSTER", "")
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 RELEASE_NAMESPACE = "choregos-admission"
 POD_NAMESPACE = "proj-admission"
@@ -54,7 +54,7 @@ pytestmark = [
         not PUSH
         or not INCLUSTER
         or any(shutil.which(tool) is None for tool in ("cosign", "crane", "helm", "kubectl")),
-        reason="no registry (CHOREGOS_ADMISSION_REGISTRY_PUSH and _CLUSTER), or a tool missing",
+        reason="no registry (TRANIBOR_ADMISSION_REGISTRY_PUSH and _CLUSTER), or a tool missing",
     ),
 ]
 

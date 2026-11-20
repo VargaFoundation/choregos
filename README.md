@@ -78,7 +78,7 @@ docker compose up                             # API, workers, Temporal, Postgres
 For front-end work only, on fakes (the API records the workflows it would start and runs none):
 
 ```bash
-make api                                      # API on :8000, CHOREGOS_FAKES=1
+make api                                      # API on :8000, TRANIBOR_FAKES=1
 pnpm -C apps/web dev                          # front on :3000
 ```
 
@@ -92,13 +92,13 @@ If a port is already taken — a Postgres on 5432, a Keycloak on 8080 — every 
 accepts an override rather than making you edit the compose file:
 
 ```bash
-CHOREGOS_PORT_POSTGRES=15432 CHOREGOS_PORT_KEYCLOAK=18080 \
+TRANIBOR_PORT_POSTGRES=15432 TRANIBOR_PORT_KEYCLOAK=18080 \
   docker compose -f dev/compose.yaml up -d
-CHOREGOS_PORT=8001 CHOREGOS_FAKES=1 uv run choregos-api
+TRANIBOR_PORT=8001 TRANIBOR_FAKES=1 uv run choregos-api
 ```
 
-`CHOREGOS_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
-for the stack, `CHOREGOS_PORT` for the API, `PORT` for the front end (`PORT=3001 pnpm -C apps/web dev`).
+`TRANIBOR_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
+for the stack, `TRANIBOR_PORT` for the API, `PORT` for the front end (`PORT=3001 pnpm -C apps/web dev`).
 
 The Ecphoria image lives on GHCR, `ghcr.io/graalsystems/ecphoria`: the image `compose.yaml` and the
 chart pin (its own repository, released apart from the platform). If the package is private, you need to authenticate once before the first `up`:

@@ -60,7 +60,7 @@ def now() -> datetime:
 
 
 def reduced_motion() -> bool:
-    return theme.MONOCHROME or "NO_COLOR" in os.environ or bool(os.environ.get("CHOREGOS_NO_MOTION"))
+    return theme.MONOCHROME or "NO_COLOR" in os.environ or bool(os.environ.get("TRANIBOR_NO_MOTION"))
 
 
 def day_start(moment: datetime) -> str:

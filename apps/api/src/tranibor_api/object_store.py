@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The platform's object store, built once from the settings (ADR 0049).
 
-`CHOREGOS_FAKES=1` or a `memory://` URL gives the in-memory fake (ADR 0005); an `s3://` URL gives
-the S3 adapter, with the endpoint and keys of `CHOREGOS_OBJECT_STORE_*`. Tests replace it with
+`TRANIBOR_FAKES=1` or a `memory://` URL gives the in-memory fake (ADR 0005); an `s3://` URL gives
+the S3 adapter, with the endpoint and keys of `TRANIBOR_OBJECT_STORE_*`. Tests replace it with
 `use_object_store`.
 """
 

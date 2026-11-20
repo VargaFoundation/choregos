@@ -6,7 +6,7 @@ hands the spans to Tempo, and that its span metrics carry every label the `trace
 The stack is `tests/live/otel/compose.yaml` (a mocked model, no provider key):
 
     docker compose -p s4020b -f tests/live/otel/compose.yaml up -d --wait
-    CHOREGOS_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
+    TRANIBOR_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
     docker compose -p s4020b -f tests/live/otel/compose.yaml down -v
 """
 
@@ -32,12 +32,12 @@ pytestmark = pytest.mark.live
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DASHBOARD = ROOT / "charts" / "choregos" / "dashboards" / "traces.json"
-GATEWAY = os.environ.get("CHOREGOS_LIVE_OTEL_GATEWAY_URL", "http://127.0.0.1:14400")
+GATEWAY = os.environ.get("TRANIBOR_LIVE_OTEL_GATEWAY_URL", "http://127.0.0.1:14400")
 # The compose file's master key, a local-only placeholder (assembled, not a literal key).
 MASTER_KEY = "-".join(("sk", "local", "otel", "only"))
-COLLECTOR = os.environ.get("CHOREGOS_LIVE_OTEL_COLLECTOR_URL", "http://127.0.0.1:14318")
-METRICS = os.environ.get("CHOREGOS_LIVE_OTEL_METRICS_URL", "http://127.0.0.1:18889/metrics")
-TEMPO = os.environ.get("CHOREGOS_LIVE_TEMPO_URL", "http://127.0.0.1:13200")
+COLLECTOR = os.environ.get("TRANIBOR_LIVE_OTEL_COLLECTOR_URL", "http://127.0.0.1:14318")
+METRICS = os.environ.get("TRANIBOR_LIVE_OTEL_METRICS_URL", "http://127.0.0.1:18889/metrics")
+TEMPO = os.environ.get("TRANIBOR_LIVE_TEMPO_URL", "http://127.0.0.1:13200")
 SENTINEL = "s4020b-prompt-sentinel"
 
 
@@ -120,7 +120,7 @@ def _chat(client: httpx.Client, key: str, model: str, **extra: Any) -> httpx.Res
 def test_a_runs_model_calls_land_in_its_trace_and_in_the_span_metrics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    require("CHOREGOS_LIVE_OTEL")
+    require("TRANIBOR_LIVE_OTEL")
     run_id = f"PROJ-1-dev-{uuid4().hex[:8]}"
     trace_id, stage_span_id = telemetry.run_trace_ids(run_id)
 

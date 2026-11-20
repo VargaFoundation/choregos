@@ -30,7 +30,7 @@ def _core_head() -> str:
 @pytest.fixture
 def database(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     file = tmp_path / "migrated.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()

@@ -43,7 +43,7 @@ async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatc
     from tranibor_adapters.fakes.hr import FakeSupplier, mcp_server
 
     monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", mcp_server(FakeSupplier()))
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(FIXTURES))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(FIXTURES))
     monkeypatch.setenv("CONNECTOR_RENAME_TEST_SECRET", "s3cret")
     for body in (
         {
@@ -88,7 +88,7 @@ async def tenant(client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatc
         f"/api/v1/projects/{pid}/operations/parc/wipe_device", json={"policy": "forbidden"}
     )
     assert narrowed.status_code == 200, narrowed.text
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(ROOT / "templates"))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(ROOT / "templates"))
     return tool.Tenant(client, "northwind", "https://console.test"), pid
 
 

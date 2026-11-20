@@ -6,7 +6,7 @@ The matrix's seeding declares, for the case's eval project, a `web_search` organ
 that project's `web_search` from the case's results and its `web_fetch` from the case's pages, every check
 of a fetch and the injection guard running on them. The guards of S57-11a's fake connectors hold: no
 declaration or edit may set the field; it is honoured only where the deployment serves eval fakes
-(`CHOREGOS_EVAL_FAKE_SCENES`); and only for the projects the connector is turned on for.
+(`TRANIBOR_EVAL_FAKE_SCENES`); and only for the projects the connector is turned on for.
 """
 
 from __future__ import annotations

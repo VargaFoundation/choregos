@@ -106,10 +106,10 @@ def test_the_deployment_turns_the_gate_on_for_k8s_job(monkeypatch: pytest.Monkey
     from tranibor_adapters.registry import _REGISTRY
 
     config = {"kubernetes": {"base_url": "https://k8s.example", "token": "t", "verify": False}}
-    monkeypatch.delenv("CHOREGOS_RUNNER_EGRESS_GATE", raising=False)
+    monkeypatch.delenv("TRANIBOR_RUNNER_EGRESS_GATE", raising=False)
     assert _REGISTRY[("runtime", "k8s_job")](config).egress_gate is None
-    monkeypatch.setenv("CHOREGOS_RUNNER_EGRESS_GATE", "true")
-    monkeypatch.setenv("CHOREGOS_RUNNER_EGRESS_GATE_DEADLINE", "20")
+    monkeypatch.setenv("TRANIBOR_RUNNER_EGRESS_GATE", "true")
+    monkeypatch.setenv("TRANIBOR_RUNNER_EGRESS_GATE_DEADLINE", "20")
     assert _REGISTRY[("runtime", "k8s_job")](config).egress_gate == EgressGate(deadline_s=20)
 
 

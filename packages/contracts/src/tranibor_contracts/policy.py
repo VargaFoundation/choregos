@@ -149,7 +149,7 @@ class ContextOverride(Strict):
 class ContextPolicy(Strict):
     """Fewer tokens per run (ADR 0055): rtk filters shell output, headroom compresses tool
     results. Everything is off unless the policy turns it on, and the deployment's kill switch
-    (`CHOREGOS_CONTEXT_REDUCTION=off`) wins over the policy."""
+    (`TRANIBOR_CONTEXT_REDUCTION=off`) wins over the policy."""
 
     shell_filter: ShellFilter = "none"
     compression: Compression = "none"
@@ -193,8 +193,8 @@ class ToolsPolicy(Strict):
     says for a role wins over the run's agent's default (its catalogue entry's `spec.tools.scripts`, ADR
     0122 §9, S57-15); a policy that says nothing leaves that default, else off. The organisation's ceiling
     can forbid them, and the organisation's switch wins over all (S57-05b: its `tool_scripts` setting, else
-    the deployment's default `CHOREGOS_TOOL_SCRIPTS`, off by default, never past the deployment's brake
-    `CHOREGOS_TOOL_SCRIPTS_ALLOWED`)."""
+    the deployment's default `TRANIBOR_TOOL_SCRIPTS`, off by default, never past the deployment's brake
+    `TRANIBOR_TOOL_SCRIPTS_ALLOWED`)."""
 
     #: `off`, `offer`, or `None`: the policy says nothing (S57-15). `None` is never written out, so a policy
     #: that does not write `scripts` stores none. One stored by 0.23.0 to 0.24.0 holds the `off` that was

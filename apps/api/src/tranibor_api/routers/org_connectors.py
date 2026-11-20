@@ -614,7 +614,7 @@ async def update_operation(
         if body.result_max_bytes is not None and body.result_max_bytes > ceiling:
             raise unprocessable(
                 f"{name}/{operation}: a result cap of {body.result_max_bytes} bytes is above the"
-                f" platform's ceiling ({ceiling} bytes, CHOREGOS_BROKER_RESULT_CEILING_BYTES)"
+                f" platform's ceiling ({ceiling} bytes, TRANIBOR_BROKER_RESULT_CEILING_BYTES)"
             )
         op_row.result_max_bytes = body.result_max_bytes
     if "arguments" in body.model_fields_set:

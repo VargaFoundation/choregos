@@ -2,7 +2,7 @@
 
 An API token with every scope (a machine account's, an MCP or A2A client's) proposes; it does not decide.
 The console cookie, a frame token and a developer surface's session (S67-05) decide. Two routes accepted a
-token before: a deployment may keep them for one minor version (`CHOREGOS_LEGACY_DECISION_ROUTES`).
+token before: a deployment may keep them for one minor version (`TRANIBOR_LEGACY_DECISION_ROUTES`).
 """
 
 from __future__ import annotations

@@ -16,7 +16,7 @@ over MCP with its bearer token (`PluginServerClient`), and what answers is the s
 - **Live** (`bound_plugin_fake`): the API runs, beside a server that declares its `fake` (the variables
   that switch it to its fake, the scenes it serves), an EVAL INSTANCE of it: the same image with those
   variables, no configuration and no egress, and only where the deployment serves eval fakes
-  (`CHOREGOS_EVAL_FAKE_SCENES`). A connector reaches it only when the matrix's seeding bound it
+  (`TRANIBOR_EVAL_FAKE_SCENES`). A connector reaches it only when the matrix's seeding bound it
   (`fake_scene: <scene>` in its configuration, refused on every declaration and edit, as for a scene,
   S57-11a); without the switch the field is ignored and the connector is the server's own instance.
 """
@@ -107,7 +107,7 @@ async def plugin_scene(kind: str, name: str, declaration: Mapping[str, Any] | No
     if declaration is None:
         raise AdapterError(
             f"no plugin read by this process ships the server {named[0]}/{named[1]}: the matrix finds a "
-            "plugin's server in the offline plugins (`CHOREGOS_PLUGINS_OFFLINE`)"
+            "plugin's server in the offline plugins (`TRANIBOR_PLUGINS_OFFLINE`)"
         )
     transport = fake_plugin_server(named[0], named[1], name)
     connector = PluginServerClient(

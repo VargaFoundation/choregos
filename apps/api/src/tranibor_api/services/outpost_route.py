@@ -98,7 +98,7 @@ class OutpostRoute:
 def _switched_off(connector: str, outpost: str) -> str:
     return (
         f"`{connector}` is reached through the outpost `{outpost}`, and outposts are switched off on this "
-        "deployment (`CHOREGOS_OUTPOSTS`): nothing is handed to one"
+        "deployment (`TRANIBOR_OUTPOSTS`): nothing is handed to one"
     )
 
 
@@ -231,7 +231,7 @@ def forgetting_write(connector: OrgConnector, write_key: str) -> Callable[[Async
 
     Everything it needs of the connector is read now: the session the connector was read in may be
     over, and rolled back, by the time the outcome is recorded. The in-memory rendezvous of
-    `CHOREGOS_FAKES` has no row to empty."""
+    `TRANIBOR_FAKES` has no row to empty."""
     outpost_id, call_id, in_memory = connector.outpost_id, write_call_id(connector, write_key), faked()
 
     async def forget(session: AsyncSession) -> None:
@@ -510,7 +510,7 @@ class DatabaseRendezvous:
 
 
 class _FakeRendezvous:
-    """The process's `FakeOutpost`, standing for the outpost a connector names (`CHOREGOS_FAKES=1`
+    """The process's `FakeOutpost`, standing for the outpost a connector names (`TRANIBOR_FAKES=1`
     on a deployment that has no key to seal a call under): in memory, no row, the same refusals. The
     platform still decides alone that a write carries its key."""
 
@@ -542,7 +542,7 @@ class _FakeRendezvous:
 
 def faked() -> bool:
     """Whether a connector at an outpost is served by the in-memory `FakeOutpost`: under
-    `CHOREGOS_FAKES` and without a secrets key, the rule of the secret store itself
+    `TRANIBOR_FAKES` and without a secrets key, the rule of the secret store itself
     (`get_secret_store`). With a key the rendezvous is the real one, fakes or not: a call's arguments
     can wait sealed, and whatever polls the door answers it."""
     return fakes_enabled() and active_key_wrapper() is None

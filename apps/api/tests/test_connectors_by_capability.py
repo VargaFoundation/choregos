@@ -66,7 +66,7 @@ async def test_only_what_the_deployment_provides_is_a_platform_default(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """S40-05: `cd` said "Platform default: argocd" and `ci` "tekton" with nothing behind them."""
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "k8s_job")
     pid = project["id"]
     items = {r["capability"]: r for r in (await client.get(f"/api/v1/projects/{pid}/requirements")).json()}
     assert {"scm", "cd", "runtime"} <= set(items)
@@ -141,7 +141,7 @@ async def test_the_tested_adapter_receives_the_resolved_secret_and_the_response_
         body = {"type": "probe", "config": {}, "secret_refs": {"api_token": "env:CONNECTOR_TEST_PROBE"}}
         assert (await client.put(f"/api/v1/projects/{pid}/connectors/tracker", json=body)).status_code == 200
         monkeypatch.setenv("CONNECTOR_TEST_PROBE", "v4lue")
-        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
         result = await client.post(f"/api/v1/projects/{pid}/connectors/tracker/test")
     finally:
         _REGISTRY.pop(("tracker", "probe"), None)
@@ -196,12 +196,12 @@ async def test_a_platform_secret_never_leaves_through_a_connector_test(
     from tranibor_api.db.models import Connector
     from tranibor_api.db.session import session_scope
 
-    monkeypatch.setenv("CHOREGOS_SESSION_SECRET", "platform-session-secret")
+    monkeypatch.setenv("TRANIBOR_SESSION_SECRET", "platform-session-secret")
     url = f"/api/v1/projects/{project['id']}/connectors/tracker"
     with respx.mock(assert_all_called=False) as mock:
         host = mock.route(host="evil.test").mock(return_value=httpx.Response(200, json={}))
         # Refused at write, for the administrator too.
-        refusaled = await client.put(url, json=_jira("evil.test", "env:CHOREGOS_SESSION_SECRET"))
+        refusaled = await client.put(url, json=_jira("evil.test", "env:TRANIBOR_SESSION_SECRET"))
         assert refusaled.status_code == 422, refusaled.text
         # A reference stored before the allowlist is never resolved: the connector is in error.
         await client.put(url, json=_jira("evil.test", "env:CONNECTOR_X"))
@@ -209,8 +209,8 @@ async def test_a_platform_secret_never_leaves_through_a_connector_test(
             row = (
                 await session.execute(select(Connector).where(Connector.project_id == project["id"]))
             ).scalar_one()
-            row.secret_refs = {"api_token": "env:CHOREGOS_SESSION_SECRET"}
-        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+            row.secret_refs = {"api_token": "env:TRANIBOR_SESSION_SECRET"}
+        monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
         tested = await client.post(f"{url}/test")
         assert "platform-session-secret" not in tested.text
         assert tested.json()["ok"] is False

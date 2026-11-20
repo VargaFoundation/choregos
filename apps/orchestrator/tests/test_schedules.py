@@ -206,7 +206,7 @@ async def test_each_pass_fires_the_schedules_before_it_reconciles(temporal_env: 
         await handle.result()
         history = await handle.fetch_history()
 
-    # Archived for `tests/replay` (`CHOREGOS_RECORD_HISTORY=1`): a loop recorded with the
+    # Archived for `tests/replay` (`TRANIBOR_RECORD_HISTORY=1`): a loop recorded with the
     # schedules must keep replaying, like the ones recorded before them (`workflow.patched`).
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():

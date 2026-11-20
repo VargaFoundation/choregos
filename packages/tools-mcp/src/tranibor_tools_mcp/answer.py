@@ -17,7 +17,7 @@ broker wraps it, `web_search`) is left out, the structure says it; a text that s
 (`web_fetch`'s page) stays — and as much of it as the platform lets through: the API bounds a result
 with its data counted the same way and says the bound in its answer (`result_max_bytes`: an
 operation's or a plugin tool's own cap, the platform's default for a page, #1383), and this JSON is
-cut only past that many characters — `RESULT_MAX_BYTES` (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default)
+cut only past that many characters — `RESULT_MAX_BYTES` (`TRANIBOR_BROKER_RESULT_MAX_BYTES`' default)
 when the answer names none —, the notices beside it and never cut. A provider's 4xx is an answer,
 not an outage: it is flagged as an error, its body handed back. `structuredContent` is the API's
 answer as it came, `status_code` included, plus the same `notices` for a client that hands the model

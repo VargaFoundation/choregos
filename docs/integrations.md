@@ -38,9 +38,9 @@ A tool you are not allowed to use is not announced, and calling it answers like 
 
 **The documentation, from the platform itself** ([ADR 0150](adr/0150-the-instance-serves-its-own-documentation-over-mcp.md)).
 The API image carries the Markdown of the user documentation (`docs/site/` in the repository) of its
-own version, at `/opt/choregos/docs` (`CHOREGOS_DOCS_DIR` overrides). `docs_search` and `docs_read`
+own version, at `/opt/choregos/docs` (`TRANIBOR_DOCS_DIR` overrides). `docs_search` and `docs_read`
 read it, so your assistant answers from the documentation of the version you run, behind your firewall,
-without internet. The links they give point to the public site, `CHOREGOS_DOCS_URL` (default
+without internet. The links they give point to the public site, `TRANIBOR_DOCS_URL` (default
 `https://graalsystems.github.io/tranibor`). Every token that opens the door may use them, bound to a
 project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
 documentation answers so, with the public URL. Ask *"how do gates work in Tranibor?"*: the client
@@ -81,7 +81,7 @@ prompts (`prompts/list`, `prompts/get`, `{argument}` substituted in the message)
 path answers `404`. A conversation opened here is one of your `/me/conversations`, in your personal space.
 
 An answer is `{conversation_id, status, text, citations, pending_actions, missing_accounts}`. A turn longer than
-`CHOREGOS_MCP_ASSISTANT_WAIT_S` (25 s) answers `status: working` and goes on in the background; call
+`TRANIBOR_MCP_ASSISTANT_WAIT_S` (25 s) answers `status: working` and goes on in the background; call
 `get_conversation` again until it is `completed` (or `failed`). The assistant never decides for you: a proposal
 is confirmed in the console. `citations` are the knowledge documents the turn's knowledge tools returned
 (`document_id`, `title`, `version`, `base`); `pending_actions` the writes it proposed and you have not decided;
@@ -161,7 +161,7 @@ short-lived, and revoke it (`choregos tokens revoke <id>`) when the client is go
 
 ```bash
 claude mcp add --transport http choregos https://<console-host>/mcp \
-  --header "Authorization: Bearer $CHOREGOS_TOKEN"
+  --header "Authorization: Bearer $TRANIBOR_TOKEN"
 ```
 
 Then ask Claude *"what is waiting for my decision in Tranibor?"*. Claude Code runs on your machine:
@@ -225,7 +225,7 @@ Add `--allow-http` to the arguments if the platform is served over plain HTTP.
   "mcpServers": {
     "choregos": {
       "url": "https://<console-host>/mcp",
-      "headers": { "Authorization": "Bearer ${env:CHOREGOS_TOKEN}" }
+      "headers": { "Authorization": "Bearer ${env:TRANIBOR_TOKEN}" }
     }
   }
 }
@@ -256,10 +256,10 @@ an OAuth resource server (RFC 9728) once the platform runs with:
 
 | Chart value (`global.mcp.oauth.…`) | Setting | Value |
 | :-- | :-- | :-- |
-| `enabled` | `CHOREGOS_MCP_OAUTH_ENABLED` | `true` |
-| `audience` | `CHOREGOS_MCP_OAUTH_AUDIENCE` | the audience your IdP puts in the door's tokens — default `choregos-mcp` |
-| `issuer` | `CHOREGOS_MCP_OAUTH_ISSUER` | empty: the console's own OIDC issuer; set it only for another IdP |
-| `clients` | `CHOREGOS_MCP_OAUTH_CLIENTS` | the clients your IdP registered, per client of the Integrations page — `{claude-code: {clientId, callbackPort}, claude-ai: {clientId}}` in the chart, `{"claude-code": {"client_id": …, "callback_port": …}}` as JSON; a name the page does not know stops the API at startup |
+| `enabled` | `TRANIBOR_MCP_OAUTH_ENABLED` | `true` |
+| `audience` | `TRANIBOR_MCP_OAUTH_AUDIENCE` | the audience your IdP puts in the door's tokens — default `choregos-mcp` |
+| `issuer` | `TRANIBOR_MCP_OAUTH_ISSUER` | empty: the console's own OIDC issuer; set it only for another IdP |
+| `clients` | `TRANIBOR_MCP_OAUTH_CLIENTS` | the clients your IdP registered, per client of the Integrations page — `{claude-code: {clientId, callbackPort}, claude-ai: {clientId}}` in the chart, `{"claude-code": {"client_id": …, "callback_port": …}}` as JSON; a name the page does not know stops the API at startup |
 
 With `clients`, the Integrations page shows each registered client's exact setup: the
 `claude mcp add --client-id` command for Claude Code, and for claude.ai the URL and client ID to
@@ -298,7 +298,7 @@ The `choregos` CLI is installed from the instance itself (S62-08): **Integration
 one-line install for the browser's system (`curl -fsSL <instance>/cli/install.sh | sh`, or
 `irm <instance>/cli/install.ps1 | iex` on Windows), the version, every file with its sha256, and the
 first commands (`choregos login --api-url <instance> --token <full-access token> --org <org>`, or the
-`CHOREGOS_API_URL` / `CHOREGOS_TOKEN` / `CHOREGOS_ORG` variables). `choregos self update` replaces the
+`TRANIBOR_API_URL` / `TRANIBOR_TOKEN` / `TRANIBOR_ORG` variables). `choregos self update` replaces the
 binary with the instance's current one. A build that bundles no CLI says so there and links the GitHub
 release of the version it runs. The routes and why they are public: [deployment.md](deployment.md#the-cli-served-by-the-instance-s62-08).
 
@@ -467,7 +467,7 @@ curl -X POST $API/orgs/acme/connectors -d '{"kind": "mcp", "name": "data", "type
 
 | Field | Meaning |
 | :-- | :-- |
-| `token_url` | The token endpoint, `https` (plain `http` only under `CHOREGOS_FAKES`): it receives the client secret. No user-info, no fragment. |
+| `token_url` | The token endpoint, `https` (plain `http` only under `TRANIBOR_FAKES`): it receives the client secret. No user-info, no fragment. |
 | `client_id` | The OAuth client's identifier. It is what the run page shows as the account the connector calls as. |
 | `client_secret` | A secret field: typed once in `secret_values` (sealed, ADR 0058) or referenced in `secret_refs` by a platform administrator. Never in `config`. |
 | `scope`, `audience` | Sent with the token request only when filled in: the scopes the server expects, and the audience some providers require. |

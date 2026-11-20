@@ -27,7 +27,7 @@ GitLab for a git release) and the deployment's ceiling and mode still bound them
 an artifact on another host reaches it only when the operator listed that host.
 
 The network sits behind `PluginBackend`; `FakePluginSource` serves scripted indexes, artifacts,
-tarballs and signatures to the tests and to `CHOREGOS_FAKES=1` (ADR 0005).
+tarballs and signatures to the tests and to `TRANIBOR_FAKES=1` (ADR 0005).
 """
 
 from __future__ import annotations
@@ -279,14 +279,14 @@ def set_backend(backend: PluginBackend | None) -> None:
 
 
 def get_backend() -> PluginBackend:
-    """The backend set, else `FakePluginSource` under `CHOREGOS_FAKES=1`, else the network."""
+    """The backend set, else `FakePluginSource` under `TRANIBOR_FAKES=1`, else the network."""
     if "current" not in _BACKEND:
         _BACKEND["current"] = FakePluginSource() if fakes_enabled() else HttpPluginBackend()
     return _BACKEND["current"]
 
 
 def plugins_config() -> PluginsConfig:
-    """`CHOREGOS_PLUGINS_CONFIG` and `CHOREGOS_PLUGINS_OFFLINE` read; `SourceError("config")` when invalid."""
+    """`TRANIBOR_PLUGINS_CONFIG` and `TRANIBOR_PLUGINS_OFFLINE` read; `SourceError("config")` when invalid."""
     settings = get_settings()
     return load_config(settings.plugins_config or None, settings.plugins_offline or None)
 

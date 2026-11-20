@@ -74,9 +74,9 @@ def test_other_providers_get_no_cache_field(model: str) -> None:
 
 
 def test_a_gateway_alias_is_cached_only_when_the_deployment_names_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_PROMPT_CACHE_MODELS", raising=False)
+    monkeypatch.delenv("TRANIBOR_PROMPT_CACHE_MODELS", raising=False)
     assert "cache_control" not in json.dumps(with_prompt_cache(_body("platform/standard", "q")))
-    monkeypatch.setenv("CHOREGOS_PROMPT_CACHE_MODELS", "platform/strong, platform/standard")
+    monkeypatch.setenv("TRANIBOR_PROMPT_CACHE_MODELS", "platform/strong, platform/standard")
     assert "cache_control" in json.dumps(with_prompt_cache(_body("platform/standard", "q")))
     assert anthropic_family("platform/standard", aliases=[]) is False
 

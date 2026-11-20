@@ -7,4 +7,6 @@ runs it. All the decision logic comes from `tranibor_core`.
 
 from __future__ import annotations
 
+import tranibor_contracts  # noqa: F401 - adopts the former environment variable names, first (ADR 0176 R4)
+
 __version__ = "0.1.0"

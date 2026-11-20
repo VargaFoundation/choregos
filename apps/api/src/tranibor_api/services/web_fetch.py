@@ -25,8 +25,8 @@ makes the request:
 - what comes back is third-party text: it goes through the injection guard like a connector's answer.
 
 The network is behind `WebClient`; `FakeWebClient` serves scripted pages to the tests and to
-`CHOREGOS_FAKES=1` (ADR 0005). A project the live eval matrix bound to a case's fake web
-(`web_search.eval_web_scene`, honoured only under `CHOREGOS_EVAL_FAKE_SCENES`, #1378) reads the case's
+`TRANIBOR_FAKES=1` (ADR 0005). A project the live eval matrix bound to a case's fake web
+(`web_search.eval_web_scene`, honoured only under `TRANIBOR_EVAL_FAKE_SCENES`, #1378) reads the case's
 pages instead: a `FakeWebClient` holding them and a resolver that answers their hosts alone. Every check
 above still runs on them, and what comes back goes through the same guard.
 """

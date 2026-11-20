@@ -18,5 +18,5 @@ def test_the_templates_directory_is_configurable(monkeypatch) -> None:  # type: 
     from tranibor_orchestrator.activities.provisioning import templates_dir
 
     assert (templates_dir() / "github-tekton-argo-k8s" / "manifest.yaml").exists()
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", "/app/templates")
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", "/app/templates")
     assert templates_dir() == pathlib.Path("/app/templates")

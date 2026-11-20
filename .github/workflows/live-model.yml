@@ -40,10 +40,10 @@ jobs:
     timeout-minutes: 20
     env:
       # A missing gateway variable fails the job instead of skipping (tests/live/conftest.py).
-      CHOREGOS_LIVE_REQUIRED: litellm
+      TRANIBOR_LIVE_REQUIRED: litellm
       # The stack's own address and master key: local placeholders, not secrets.
-      CHOREGOS_LIVE_LITELLM_URL: http://127.0.0.1:14420
-      CHOREGOS_LIVE_LITELLM_KEY: sk-local-live-model-only
+      TRANIBOR_LIVE_LITELLM_URL: http://127.0.0.1:14420
+      TRANIBOR_LIVE_LITELLM_KEY: sk-local-live-model-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0

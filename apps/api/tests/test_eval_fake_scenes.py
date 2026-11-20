@@ -4,7 +4,7 @@ The matrix's seeding declares, in its eval projects, organisation connectors who
 `fake_scene: <scene>`, and the API serves them from that scene (`plugin_servers.connector_client`). Two
 guards keep any other connector away from a fake: no declaration or edit may set the field, whoever asks
 and whatever the deployment allows; and the field is honoured only where the deployment serves eval fakes
-(`CHOREGOS_EVAL_FAKE_SCENES`), ignored everywhere else.
+(`TRANIBOR_EVAL_FAKE_SCENES`), ignored everywhere else.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ async def test_the_scene_serves_the_matrix_s_connector_where_the_deployment_allo
 async def test_the_field_is_ignored_where_the_deployment_does_not_allow_eval_fakes(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Built as its type says instead: here the suite's process-wide fake (`CHOREGOS_FAKES=1`), never the
+    """Built as its type says instead: here the suite's process-wide fake (`TRANIBOR_FAKES=1`), never the
     scene; on a real deployment, a pfSense client with no address, which reaches nothing."""
     monkeypatch.delenv(EVAL_FAKE_SCENES_ENV, raising=False)
     connector = await _client_of_a_bound_row()

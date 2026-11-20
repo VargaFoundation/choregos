@@ -101,13 +101,13 @@ def test_the_manifest_lists_matrix_cases_as_paths(plugin: Path) -> None:
 def test_a_server_declares_its_fake_with_variables_no_administrator_reaches(plugin: Path) -> None:
     server = plugin / "servers/servicenow.yaml"
     assert fake_scenes(load_directory(plugin).servers["servicenow"]) == ("default",)
-    _edit(server, {"fake": {"env": {"SERVICENOW_BASE_URL": "https://fake", "CHOREGOS_SERVER_TOKEN": "x"}}})
+    _edit(server, {"fake": {"env": {"SERVICENOW_BASE_URL": "https://fake", "TRANIBOR_SERVER_TOKEN": "x"}}})
     problems = _problems(plugin)
     assert any(
         "fake variable `SERVICENOW_BASE_URL` is what the configuration field `base_url` reaches" in p
         for p in problems
     ), problems
-    assert any("fake variable `CHOREGOS_SERVER_TOKEN` is the platform's" in p for p in problems)
+    assert any("fake variable `TRANIBOR_SERVER_TOKEN` is the platform's" in p for p in problems)
     _edit(server, {"fake": {"scenes": ["default"]}})
     assert any("servers/servicenow.yaml:fake: 'env' is a required property" in p for p in _problems(plugin))
 

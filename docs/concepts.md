@@ -412,7 +412,7 @@ month budget (`monthly_org_usd` in its policy ceiling), each minus what the cost
 spent (models and tools) and minus the keys still open at that scope (an agent's open keys count
 against its day and month). Stages that reserve from the same scope are serialized (a PostgreSQL
 advisory lock), so two stages preparing at once cannot both take the same remainder. Below
-`CHOREGOS_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
+`TRANIBOR_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
 the work item goes to a person the same way.
 
 What a work item has spent is read from the cost ledger, models and tools alike, not kept in the

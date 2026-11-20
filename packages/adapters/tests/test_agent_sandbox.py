@@ -523,8 +523,8 @@ async def test_a_run_with_an_image_the_pool_was_not_made_from_is_refused() -> No
 def test_the_factory_reads_the_pool_image_from_the_runner_image_env(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_adapters import build
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-    monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE", "harbor.example/choregos-runner:0.17.12")
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
+    monkeypatch.setenv("TRANIBOR_RUNNER_IMAGE", "harbor.example/choregos-runner:0.17.12")
     executor = build(
         "runtime",
         "agent_sandbox",
@@ -539,10 +539,10 @@ async def test_a_finished_sandbox_gives_its_volume_back_in_minutes(monkeypatch: 
     from tranibor_adapters.registry import build
 
     kubernetes = {"kubernetes": {"token": "t", "verify": False}}
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # the real executor, not its fake
-    monkeypatch.delenv("CHOREGOS_SANDBOX_TTL_SECONDS", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)  # the real executor, not its fake
+    monkeypatch.delenv("TRANIBOR_SANDBOX_TTL_SECONDS", raising=False)
     assert build("runtime", "agent_sandbox", kubernetes).ttl_seconds <= 600
-    monkeypatch.setenv("CHOREGOS_SANDBOX_TTL_SECONDS", "120")
+    monkeypatch.setenv("TRANIBOR_SANDBOX_TTL_SECONDS", "120")
     executor = build("runtime", "agent_sandbox", kubernetes)
     assert executor.ttl_seconds == 120
 

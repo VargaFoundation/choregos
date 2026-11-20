@@ -2,11 +2,11 @@
 """A hosted agent's image at publication (ADR 0080 §8): allowlisted, pinned, and signed if required.
 
 A person names an image by a reference; the operator names the registries such a reference may come
-from (`CHOREGOS_HOSTED_REGISTRIES`). Publication resolves the reference to the digest the registry
+from (`TRANIBOR_HOSTED_REGISTRIES`). Publication resolves the reference to the digest the registry
 serves at that moment and writes it in the version, so every run pulls the same bytes even after the
-tag moves. With `CHOREGOS_HOSTED_COSIGN=enforce` an image without a trusted signature is refused;
+tag moves. With `TRANIBOR_HOSTED_COSIGN=enforce` an image without a trusted signature is refused;
 `warn` publishes it and logs `hosted.signature_unverified`; `off` does not ask. The signature is
-cosign's, by the operator's key or keyless identity (`CHOREGOS_HOSTED_COSIGN_KEY`, `_IDENTITY`,
+cosign's, by the operator's key or keyless identity (`TRANIBOR_HOSTED_COSIGN_KEY`, `_IDENTITY`,
 `_ISSUER`), on the pinned digest.
 """
 
@@ -36,7 +36,7 @@ from ..schemas import AgentSpec, HostedImageSource, HostedRuntime, VoiceRuntime
 log = get_logger(__name__)
 
 _LOC = ["runtime", "source", "ref"]
-#: Tests and `CHOREGOS_FAKES` put their registry and verifier here.
+#: Tests and `TRANIBOR_FAKES` put their registry and verifier here.
 _OVERRIDES: dict[str, Any] = {}
 
 
@@ -100,7 +100,7 @@ def allowlisted_ref(source: HostedImageSource) -> ImageRef:
             [
                 {
                     "loc": _LOC,
-                    "msg": f"`{ref.name}` is under no allowed prefix (CHOREGOS_HOSTED_REGISTRIES: {known})",
+                    "msg": f"`{ref.name}` is under no allowed prefix (TRANIBOR_HOSTED_REGISTRIES: {known})",
                 }
             ],
         )

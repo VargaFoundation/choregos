@@ -32,6 +32,7 @@ from tranibor_contracts import (
     StageStatus,
     is_inert_binary_path,
 )
+from tranibor_contracts.env import with_legacy
 from tranibor_core import telemetry
 from tranibor_core.context_breakdown import PARTS_EVENT, Hints, register
 from tranibor_core.egress_gate import REPORT_EVENT as EGRESS_GATE_EVENT
@@ -184,7 +185,7 @@ def with_gateway_key(stage_input: StageInput, gateway_key: str) -> StageInput:
     """The input with the run's gateway key from the run's Secret (#523).
 
     The orchestrator no longer stores the key with the input: it travels in the run's Secret, as
-    `CHOREGOS_RUN_GATEWAY_KEY`. Without that variable (an orchestrator older than #523), the key
+    `TRANIBOR_RUN_GATEWAY_KEY`. Without that variable (an orchestrator older than #523), the key
     the input carries is used, as before; this fallback is kept for one release.
     """
     if not gateway_key:
@@ -755,16 +756,18 @@ class Runner:
         token = self.settings.run_token or (
             "" if stage_input.callbacks.run_token == REDACTED else stage_input.callbacks.run_token
         )
-        env = {
-            **workspace_env(stage_input),
-            # The run token is the run's, scoped to it and short-lived: what a job uses to call a
-            # connector through the internal API (`POST /runs/{id}/tools/{name}`), never a provider key.
-            # Named here on purpose: no command inherits it from the runner (ADR 0115).
-            "CHOREGOS_RUN_ID": stage_input.run_id,
-            "CHOREGOS_API_URL": stage_input.callbacks.api_url,
-            "CHOREGOS_RUN_TOKEN": token,
-            "CHOREGOS_WORKSPACE": str(workspace.path),
-        }
+        env = with_legacy(
+            {
+                **workspace_env(stage_input),
+                # The run token is the run's, scoped to it and short-lived: what a job uses to call a
+                # connector through the internal API (`POST /runs/{id}/tools/{name}`), never a provider key.
+                # Named here on purpose: no command inherits it from the runner (ADR 0115).
+                "TRANIBOR_RUN_ID": stage_input.run_id,
+                "TRANIBOR_API_URL": stage_input.callbacks.api_url,
+                "TRANIBOR_RUN_TOKEN": token,
+                "TRANIBOR_WORKSPACE": str(workspace.path),
+            }
+        )
         ran = await run_job(stage_input, workspace.path, env)
         await journal.record(
             "job.finished",

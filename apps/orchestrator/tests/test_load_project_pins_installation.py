@@ -26,7 +26,7 @@ def probes(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, dict[str, Any]
         monkeypatch.setitem(
             _REGISTRY, (kind, type_name), lambda cfg, k=kind: received.__setitem__(k, cfg) or object()
         )
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     try:
         yield received
     finally:
@@ -101,8 +101,8 @@ async def test_a_multi_org_instance_without_a_claim_refuses_to_build(
     from tranibor_api.db.session import session_scope
     from tranibor_orchestrator.activities.base import load_project
 
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "pem")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "1")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_PRIVATE_KEY", "pem")
     reset_settings_cache()
     try:
         await _declare(setup, second_org=True, claimed=False)

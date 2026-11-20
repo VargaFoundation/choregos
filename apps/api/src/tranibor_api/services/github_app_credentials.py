@@ -3,8 +3,8 @@
 
 Two sources, in this order:
 
-1. **The deployment's settings** (`CHOREGOS_GITHUB_APP_ID`, `_PRIVATE_KEY`, `_CLIENT_ID`,
-   `_CLIENT_SECRET`, `CHOREGOS_GITHUB_WEBHOOK_SECRET`): when they name an App, it is the App, and an
+1. **The deployment's settings** (`TRANIBOR_GITHUB_APP_ID`, `_PRIVATE_KEY`, `_CLIENT_ID`,
+   `_CLIENT_SECRET`, `TRANIBOR_GITHUB_WEBHOOK_SECRET`): when they name an App, it is the App, and an
    App registered from a manifest is ignored. An operator's explicit configuration always wins.
 2. **The App a platform administrator registered from a manifest** (`github_app_registrations`): its
    private key, webhook secret and client secret are one envelope sealed under the deployment's key

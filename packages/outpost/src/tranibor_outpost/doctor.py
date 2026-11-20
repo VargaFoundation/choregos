@@ -251,7 +251,7 @@ async def tls_check(control_plane: str, proxy: str | None, context: ssl.SSLConte
             f"the certificate {host} presents does not verify ({error.verify_message}); "
             f"it is issued by {issuer}",
             "if an outbound proxy of the organisation inspects TLS, or the door's authority is private, give "
-            "that authority's certificate with `--ca-file` (CHOREGOS_OUTPOST_CA_FILE)",
+            "that authority's certificate with `--ca-file` (TRANIBOR_OUTPOST_CA_FILE)",
         )
     except (OSError, TimeoutError, _TunnelRefusedError, asyncio.IncompleteReadError) as error:
         reason = getattr(error, "strerror", None) or str(error) or type(error).__name__

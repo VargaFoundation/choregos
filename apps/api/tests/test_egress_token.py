@@ -99,7 +99,7 @@ KEY = "the-proxys-own-key"
 def report_key(app: Any, monkeypatch: pytest.MonkeyPatch) -> str:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_REPORT_KEY", KEY)
+    monkeypatch.setenv("TRANIBOR_EGRESS_REPORT_KEY", KEY)
     reset_settings_cache()
     return KEY
 

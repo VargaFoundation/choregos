@@ -87,9 +87,9 @@ def idp(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.mcp.oauth import KEYS
 
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_AUDIENCE", AUDIENCE)
     reset_settings_cache()
     KEYS.clear()
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

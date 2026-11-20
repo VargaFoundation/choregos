@@ -1,7 +1,7 @@
 """Changing the instance's identity provider: a time-boxed re-link window and its plan (S70-20, ADR 0164).
 
 A new provider gives every person a new subject. While the deployment's window is open
-(`CHOREGOS_OIDC_RELINK_UNTIL`), a person's first sign-in through it moves their account, the same row with
+(`TRANIBOR_OIDC_RELINK_UNTIL`), a person's first sign-in through it moves their account, the same row with
 its id, memberships and history, to the new subject: only when the provider asserts the address with
 `email_verified: true`, only for the ONE account bound to another issuer's subject with that address
 (letter case aside), and never twice. The plan (`GET /platform/identity/relink`) says beforehand what the
@@ -40,11 +40,11 @@ def _id_token(issuer: str, **claims: Any) -> str:
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, issuer: str, until: datetime | None = None) -> None:
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", issuer)
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", issuer)
     if until is None:
-        monkeypatch.delenv("CHOREGOS_OIDC_RELINK_UNTIL", raising=False)
+        monkeypatch.delenv("TRANIBOR_OIDC_RELINK_UNTIL", raising=False)
     else:
-        monkeypatch.setenv("CHOREGOS_OIDC_RELINK_UNTIL", until.isoformat())
+        monkeypatch.setenv("TRANIBOR_OIDC_RELINK_UNTIL", until.isoformat())
     reset_settings_cache()
     forget_discovery()
 
@@ -107,7 +107,7 @@ async def _relinks() -> list[AuditLog]:
 
 
 def test_the_former_switch_refuses_to_start_naming_the_window() -> None:
-    with pytest.raises(ValueError, match="CHOREGOS_OIDC_RELINK_UNTIL"):
+    with pytest.raises(ValueError, match="TRANIBOR_OIDC_RELINK_UNTIL"):
         Settings(oidc_relink_verified_email=True)
 
 

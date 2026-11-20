@@ -16,10 +16,10 @@ BASE = f"{API}/api/v1/projects/acme:billing-api/machine-accounts"
 
 @pytest.fixture(autouse=True)
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_CONFIG", str(tmp_path / "config.json"))
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_CONFIG", str(tmp_path / "config.json"))
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_test")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.setenv("COLUMNS", "200")
 
 

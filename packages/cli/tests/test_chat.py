@@ -42,9 +42,9 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(activity, "clock", lambda: NOW)
     monkeypatch.setattr(workspace, "RECONNECT_S", 3600)
     monkeypatch.setattr(workspace, "RUN_POLL_S", 0.05)
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_test")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
 
@@ -1794,7 +1794,7 @@ def test_the_workspace_snapshot(
     if colour == "no-color":
         monkeypatch.setenv("NO_COLOR", "1")
     # The Live tab is drawn against pinned clocks and without motion: a snapshot is one instant.
-    monkeypatch.setenv("CHOREGOS_NO_MOTION", "1")
+    monkeypatch.setenv("TRANIBOR_NO_MOTION", "1")
     monkeypatch.setattr(live_app, "now", lambda: NOW)
     monkeypatch.setattr(live_app, "mono", lambda: 1000.0)
     _showcase(platform)

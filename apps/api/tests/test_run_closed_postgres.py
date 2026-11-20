@@ -8,7 +8,7 @@ result's pull request and outputs. The route now reads the row again under the l
 (`FOR NO KEY UPDATE`) before it decides: it waits for the close, then sees it.
 
 SQLite has one writer and no row lock: only a real PostgreSQL shows this
-(`CHOREGOS_TEST_DATABASE_URL`), as the application role, so under RLS.
+(`TRANIBOR_TEST_DATABASE_URL`), as the application role, so under RLS.
 """
 
 from __future__ import annotations

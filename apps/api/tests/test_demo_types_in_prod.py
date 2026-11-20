@@ -19,13 +19,13 @@ DEMOS = {("mdm", "demo"), ("shipping", "demo"), ("access_control", "demo"), ("cd
 def prod(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_ENV", "prod")
+    monkeypatch.setenv("TRANIBOR_ENV", "prod")
     # the development login is refused in prod: the cookie already set is enough
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
     reset_settings_cache()
     yield
-    monkeypatch.delenv("CHOREGOS_ENV", raising=False)
-    monkeypatch.delenv("CHOREGOS_DEV_LOGIN_ENABLED", raising=False)
+    monkeypatch.delenv("TRANIBOR_ENV", raising=False)
+    monkeypatch.delenv("TRANIBOR_DEV_LOGIN_ENABLED", raising=False)
     reset_settings_cache()
 
 

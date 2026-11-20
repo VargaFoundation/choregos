@@ -100,9 +100,9 @@ it when the client is gone (`choregos tokens list`, then `choregos tokens revoke
 ### Claude Code
 
 ```shell
-export CHOREGOS_TOKEN=chg_...
+export TRANIBOR_TOKEN=chg_...
 claude mcp add --transport http choregos https://choregos.example.com/mcp \
-  --header "Authorization: Bearer $CHOREGOS_TOKEN"
+  --header "Authorization: Bearer $TRANIBOR_TOKEN"
 ```
 
 Claude Code runs on your machine, so it reaches an instance behind your VPN.
@@ -148,14 +148,14 @@ Add `"--allow-http"` to `args` if the instance is served over plain HTTP. Restar
 
 ### Cursor
 
-`~/.cursor/mcp.json`, then `export CHOREGOS_TOKEN=chg_...` in the shell that starts Cursor:
+`~/.cursor/mcp.json`, then `export TRANIBOR_TOKEN=chg_...` in the shell that starts Cursor:
 
 ```json
 {
   "mcpServers": {
     "choregos": {
       "url": "https://choregos.example.com/mcp",
-      "headers": { "Authorization": "Bearer ${env:CHOREGOS_TOKEN}" }
+      "headers": { "Authorization": "Bearer ${env:TRANIBOR_TOKEN}" }
     }
   }
 }

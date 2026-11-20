@@ -62,7 +62,7 @@ a copy of a token you could reuse elsewhere.
   `choregos logout` ends it from the terminal and removes the credential from the profile.
 
 ```bash
-choregos login --api-url https://choregos.example.com --token "$CHOREGOS_TOKEN" --org acme
+choregos login --api-url https://choregos.example.com --token "$TRANIBOR_TOKEN" --org acme
 choregos login --fresh
 choregos logout
 ```
@@ -228,7 +228,7 @@ events scroll at the bottom.
 - **Narrow terminals.** Below what the stations need, each shows its counts instead of its tokens and the
   selected token is named; below that, the view scrolls sideways.
 - **No colour, no motion.** `NO_COLOR` draws without colour and without animation (shape still tells the
-  state: a failed station is double-ruled, a running one heavy). `--no-motion` (or `CHOREGOS_NO_MOTION`)
+  state: a failed station is double-ruled, a running one heavy). `--no-motion` (or `TRANIBOR_NO_MOTION`)
   keeps the colours but stops the spinner and the travel. A terminal that cannot draw Unicode gets plain
   ASCII.
 - **It only reads.** Nothing is written, and it needs a terminal; in a script use `choregos activity`.
@@ -261,7 +261,7 @@ The rules are the same here as in the workspace:
   command says so.
 
 **Why a pasted token is refused.** A decision has to be yours, so it needs a session of yours: a token
-saved with `--token`, or one pasted into `CHOREGOS_TOKEN`, may read but cannot decide. The platform
+saved with `--token`, or one pasted into `TRANIBOR_TOKEN`, may read but cannot decide. The platform
 answers `decision_requires_session`, and the command tells you to run `choregos login` and repeat it.
 
 **When your sign-in is too old.** Some decisions need a recent sign-in. The command then says so: run
@@ -331,4 +331,4 @@ FORCE_COLOR=1 choregos activity
 | A decision says `decision_requires_session` | You signed in with `--token`, or pasted a token | Run `choregos login`, then repeat the decision |
 | A decision says your sign-in is too old | The decision needs a recent sign-in | Run `choregos login --fresh`, then repeat it |
 | `choregos chat` says it needs a terminal | Its input or output is a pipe | Use `choregos ask` or `choregos activity` in scripts |
-| `no organisation` | Neither `--org`, the profile nor `CHOREGOS_ORG` names one | Pass `--org SLUG`, or sign in with `--org` |
+| `no organisation` | Neither `--org`, the profile nor `TRANIBOR_ORG` names one | Pass `--org SLUG`, or sign in with `--org` |

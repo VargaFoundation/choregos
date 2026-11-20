@@ -2,7 +2,7 @@
 """The plugins a deployment installs by default (ADR 0093 §5, plan Decision 5, S43-05).
 
 The chart's `plugins.defaultPlugins` (source, name, version range) reach the API through
-`CHOREGOS_PLUGINS_CONFIG`. The reconcile installs each one in every organisation:
+`TRANIBOR_PLUGINS_CONFIG`. The reconcile installs each one in every organisation:
 
 - **idempotent**: a plugin the organisation has (at any version) is left alone, and so is one already
   waiting for its second approval; running it twice changes nothing. Upgrading stays an administrator's
@@ -76,13 +76,13 @@ class PluginsConfigurationError(RuntimeError):
 
 
 def check_configuration(settings: Settings | None = None) -> PluginsConfig:
-    """Reads `CHOREGOS_PLUGINS_CONFIG` and `CHOREGOS_PLUGINS_OFFLINE` once, at start-up."""
+    """Reads `TRANIBOR_PLUGINS_CONFIG` and `TRANIBOR_PLUGINS_OFFLINE` once, at start-up."""
     settings = settings or get_settings()
     try:
         config = plugins_config()
     except SourceError as exc:
         raise PluginsConfigurationError(
-            f"CHOREGOS_PLUGINS_CONFIG ({settings.plugins_config or 'unset'}) is invalid: {exc.message}. "
+            f"TRANIBOR_PLUGINS_CONFIG ({settings.plugins_config or 'unset'}) is invalid: {exc.message}. "
             "Fix the chart's `global.plugins` values; the API does not start with a configuration it "
             "would refuse at every install."
         ) from exc
@@ -97,13 +97,13 @@ def check_configuration(settings: Settings | None = None) -> PluginsConfig:
             declared = None
         if declared and Path(str(declared)) != Path(settings.plugins_offline):
             raise PluginsConfigurationError(
-                f"two offline plugin directories: CHOREGOS_PLUGINS_OFFLINE={settings.plugins_offline} and "
+                f"two offline plugin directories: TRANIBOR_PLUGINS_OFFLINE={settings.plugins_offline} and "
                 f"`offline: {declared}` in {settings.plugins_config}. Set one of them."
             )
     if config.offline is not None and not config.offline.is_dir():
         raise PluginsConfigurationError(
             f"the offline plugin directory {config.offline} does not exist in this image "
-            "(`global.plugins.offline` or CHOREGOS_PLUGINS_OFFLINE)"
+            "(`global.plugins.offline` or TRANIBOR_PLUGINS_OFFLINE)"
         )
     return config
 

@@ -341,7 +341,7 @@ def test_the_options_table_is_the_daemon_s_declaration() -> None:
         f"{sorted(listed - _declared())}"
     )
     variables = {variable for _option, variable in _declared() if variable}
-    named = set(re.findall(r"\bCHOREGOS_OUTPOST_[A-Z_]+\b", _text(GUIDE)))
+    named = set(re.findall(r"\bTRANIBOR_OUTPOST_[A-Z_]+\b", _text(GUIDE)))
     assert named == variables, f"variables the daemon does not read: {sorted(named - variables)}"
 
 
@@ -468,7 +468,7 @@ def test_the_page_repeats_no_table_of_settings() -> None:
     """The settings and the chart's values are `docs/deployment.md`'s: one place to keep true."""
     text = _prose(_text(PLATFORM))
     assert not [line for line in text.splitlines() if line.lstrip().startswith("|")]
-    assert set(re.findall(r"\bCHOREGOS_[A-Z_]+\b", text)) <= {"CHOREGOS_OUTPOSTS"}
+    assert set(re.findall(r"\bCHOREGOS_[A-Z_]+\b", text)) <= {"TRANIBOR_OUTPOSTS"}
     assert not _blocks(_text(PLATFORM), "yaml", "bash")
 
 

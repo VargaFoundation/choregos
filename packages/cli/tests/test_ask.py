@@ -30,9 +30,9 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_test")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.setenv("COLUMNS", "200")
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
