@@ -824,6 +824,87 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.ci.azure-pipelines",
+    "title": "Read and queue runs of Azure Pipelines",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/azure-pipelines"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure DevOps team project with at least one pipeline, and an account **dedicated to Tranibor**.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want build events. A service hook does not sign its deliveries."
+      },
+      {
+        "key": "at",
+        "title": "At Azure DevOps",
+        "markdown": "1. **The credential.** A personal access token of the dedicated account, scopes **Build: Read & execute**\n   and **Project and Team: Read**. Or, on the Services only, a Microsoft Entra service principal added to\n   the organisation and to the project.\n2. **The pipeline.** Note its name or its id (the number in its address). The account needs **View builds**\n   and **Queue builds** on it.\n3. **Service hooks** (optional). **Project settings**, **Service hooks**, **Create subscription**, **Web\n   Hooks**: **Build completed** (and **Run state changed** if you use it). URL:\n   `<api_url>/api/v1/webhooks/azure-devops`; basic authentication password: the platform's shared webhook\n   secret. This path has not been exercised against a live organisation from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "**How a result is read.** For a commit, the platform reads the latest build of each pipeline that built it.\n`succeeded` is green, `failed` is red, `canceled` is an error, and anything not finished is pending. A\nbuild that **partially succeeded** (a task set to continue on error failed) is **red** unless you set\n`partially_succeeded: neutral`. Only the 100 most recent builds are searched, so a commit older than them\nreads as unknown.\n\n**Queueing.** A run is queued on a branch or at a commit, with the pipeline's runtime parameters and plain\nvariables. A run id is a build id: its logs are fetched step by step and joined."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **CI**, type **Azure Pipelines**.\n2. `base_url`, `project`; `repository` and `pipeline` to narrow what is read. `auth`: `pat` (the default) or\n   `entra`, with `tenant_id` and `client_id`.\n3. `pat` (or `client_secret`) in the password field (sealed, shown once).\n4. A work item on an Azure Repos repository reads its checks through the **SCM** connector of type **Azure\n   DevOps Repos**; this connector is what queues runs and reads their state and logs."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector lists the project's pipelines and answers `ok`. Then queue a run of a\npipeline and read its state."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or a sign-in page (`203`): a wrong, expired or revoked token, or a service principal that is not a\n  member of the organisation.\n- `403`: the account lacks **View builds** or **Queue builds**, or the token lacks **Build: Read &\n  execute**.\n- `no pipeline named ...`: the name differs from the pipeline's (a folder is not part of it); use its id.\n- A run queued but never started: the project has no free agent, or the pipeline waits for an approval.\n- A timeout: the egress allowlist must open `dev.azure.com` (or your Server) and, for a service principal,\n  `login.microsoftonline.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:azure-devops": "https://choregos.example.com/api/v1/webhooks/azure-devops"
+    },
+    "egress": [
+      "dev.azure.com, or your Azure DevOps Server host",
+      "login.microsoftonline.com (service principal)"
+    ],
+    "fields": {
+      "base_url": "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)",
+      "project": "the Azure DevOps team project",
+      "repository": "optional: only the builds of this Azure Repos repository, by name or id",
+      "pipeline": "optional: the pipeline, by name or id, whose builds are read and which is queued when none is named",
+      "auth": "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only",
+      "tenant_id": "`entra` only: the Entra tenant (directory) id",
+      "client_id": "`entra` only: the service principal's application (client) id",
+      "partially_succeeded": "how a build that partially succeeded counts for the gates: `failure` (the default) or `neutral`",
+      "pat": "the personal access token, typed once (`auth: pat`)",
+      "client_secret": "the service principal's client secret, typed once (`auth: entra`)"
+    },
+    "vendor_docs": [
+      {
+        "title": "Pipelines runs REST API",
+        "url": "https://learn.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs"
+      },
+      {
+        "title": "Builds REST API",
+        "url": "https://learn.microsoft.com/en-us/rest/api/azure/devops/build/builds"
+      },
+      {
+        "title": "Use personal access tokens",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+      },
+      {
+        "title": "Service hooks events (build completed, run state changed)",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.ci.gitlab",
     "title": "Read pipeline status from GitLab CI",
     "version": 1,
@@ -2720,6 +2801,91 @@
       {
         "title": "Tekton Pipelines",
         "url": "https://tekton.dev/docs/pipelines/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.scm.azure-repos",
+    "title": "Use Azure DevOps Repos for branches and pull requests",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "scm/azure-repos"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure DevOps organisation (Azure DevOps Services) or an Azure DevOps Server 2022 collection, a Git\n  repository the agents change, and an account **dedicated to Tranibor**.\n- **Two credentials, not one.** The connector's own (`pat`, or a service principal) reads and writes pull\n  requests and stays on the platform. Azure DevOps cannot make a short-lived, repository-scoped credential,\n  so the platform makes none: **a run is given `run_token`, or nothing**. Create a second personal access\n  token, for a second account if you can, scoped to **Code: Read & write** only. Without `run_token`, runs\n  cannot clone or push, and the connector says why.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want pull request events. A service hook does not sign its deliveries."
+      },
+      {
+        "key": "at",
+        "title": "At Azure DevOps",
+        "markdown": "1. **The credential.** A personal access token of the dedicated account (works on the Services and on\n   Server), scopes **Code: Read & write**, **Code: Status**, **Build: Read** and **Project and Team: Read**.\n   Or, on the Services only, a Microsoft Entra service principal added to the organisation and to the\n   project's Contributors.\n2. **The run token.** A second personal access token, scope **Code: Read & write** only.\n3. **Branch policies on the target branch** (Repos, Branches, the branch's **Branch policies**): add a\n   **Build validation** policy for your pipeline. This is where the pull request's checks come from: the\n   platform reads the Build and Status policies of the pull request, and Azure refuses to complete it while\n   they are not met. Tranibor never bypasses a policy and never sets auto-complete.\n4. **Service hooks** (optional). **Project settings**, **Service hooks**, **Create subscription**, **Web\n   Hooks**: one each for **Pull request created** and **Pull request updated**. URL:\n   `<api_url>/api/v1/webhooks/azure-devops`; basic authentication password: the platform's shared webhook\n   secret. This path has not been exercised against a live organisation from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "On the repository, for the dedicated account: **Read**, **Contribute**, **Create branch**, **Contribute to\npull requests**. **Bypass policies when completing pull requests** must be left denied. A reviewer is\nasked by sign-in name or e-mail, resolved through the organisation's identities.\n\n**What a merge means here.** The platform completes the pull request at the commit its guarantees judged\n(`lastMergeSourceCommit`): if someone pushed meanwhile, nothing is completed and the work item is judged\nagain. Completion is asynchronous on Azure's side; the platform waits a few seconds and, if it is still\nqueued, a replay finds it done."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **SCM**, type **Azure DevOps Repos**.\n2. `base_url`, `project`, `repository`, `default_branch`, and `merge_strategy` if your repository forbids\n   squash. `auth`: `pat` (the default) or `entra`, with `tenant_id` and `client_id`.\n3. `pat` (or `client_secret`) and `run_token`: in the password fields (sealed, shown once).\n4. The pull request's CI is read from its Build policy and from the builds of its branch; add a **CI**\n   connector of type **Azure Pipelines** on the same team project to queue runs and read their logs."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the repository and answers `ok` with its default branch. Then start a\nrun: a branch is pushed with the run token, a pull request opens, and its checks appear once the Build\npolicy has queued the pipeline."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or a sign-in page (`203`): a wrong, expired or revoked token, or a service principal that is not a\n  member of the organisation.\n- `403` on the pull request: the account lacks **Contribute to pull requests**; on a push, **Contribute**.\n- `404` on the repository: wrong `project` or `repository`, or the account is not in the project.\n- `scm/azure-repos mints no token`: set `run_token` on the connector.\n- Completion refused with a policy message: a branch policy is not met yet (a required build, a minimum\n  number of reviewers). The platform does not bypass it; the gates wait or fail as for any other forge.\n- A build with warnings (`partiallySucceeded`) holds the gates back: that is the default. Set\n  `partially_succeeded: neutral` only if your pipelines use warnings for things that are not failures.\n- A timeout: the egress allowlist must open `dev.azure.com` (or your Server), `vssps.dev.azure.com` and, for\n  a service principal, `login.microsoftonline.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:azure-devops": "https://choregos.example.com/api/v1/webhooks/azure-devops"
+    },
+    "egress": [
+      "dev.azure.com, or your Azure DevOps Server host",
+      "vssps.dev.azure.com (reviewers are looked up there)",
+      "login.microsoftonline.com (service principal)"
+    ],
+    "fields": {
+      "base_url": "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)",
+      "project": "the Azure DevOps team project",
+      "repository": "the Azure Repos Git repository, by name or id",
+      "default_branch": "the branch pull requests target (default `main`)",
+      "merge_strategy": "how a pull request is completed: `squash` (the default), `noFastForward`, `rebase` or `rebaseMerge`",
+      "delete_source_branch": "delete the work branch when the pull request is completed (default off)",
+      "auth": "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only",
+      "tenant_id": "`entra` only: the Entra tenant (directory) id",
+      "client_id": "`entra` only: the service principal's application (client) id",
+      "partially_succeeded": "how a build that partially succeeded counts for the gates: `failure` (the default) or `neutral`",
+      "pat": "the connector's personal access token, typed once (`auth: pat`)",
+      "client_secret": "the service principal's client secret, typed once (`auth: entra`)",
+      "run_token": "a second, narrower personal access token that runs clone and push with, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Azure Repos Git REST API (pull requests)",
+        "url": "https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests"
+      },
+      {
+        "title": "Branch policies and settings",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies"
+      },
+      {
+        "title": "Use personal access tokens",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+      },
+      {
+        "title": "Service hooks events (pull request, build)",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"
       }
     ],
     "origin": "shipped"

@@ -813,7 +813,7 @@ async def azure_boards_webhook(
 ) -> WebhookAck:
     """A service hook does not sign its deliveries: the shared secret is the only barrier, sent as the
     password of the subscription's basic authentication or in an `X-Choregos-Secret` header."""
-    from tranibor_adapters.tracker.azure_boards import shared_secret_of
+    from tranibor_adapters.azure_devops import shared_secret_of
     from tranibor_adapters.tracker.azure_boards_events import parse_azure_boards_event
 
     body = await request.body()
@@ -821,8 +821,7 @@ async def azure_boards_webhook(
     if not verify_shared_secret(get_settings().generic_webhook_secret, provided):
         raise unauthorized("invalid shared secret")
     payload = json.loads(body or b"{}")
-    # The hook's own id is the delivery id; a redelivery carries the same one.
-    delivery = str(payload.get("notificationId") or payload.get("id") or "") or body_digest(body)
+    delivery = _azure_delivery_id(payload, body)
     if await _already_seen(session, "azure-boards", delivery, "azure-boards", body):
         return WebhookAck(accepted=True, duplicate=True)
 
@@ -928,6 +927,98 @@ def _azure_boards_tracker_of(session: Any) -> TrackerOf:
         return dict(found) if isinstance(found, dict) else None
 
     return read
+
+
+# ───────────────────────────── Azure DevOps Repos and Pipelines (S13-08) ─────────────────────────────
+
+
+@router.post(
+    "/azure-devops",
+    response_model=WebhookAck,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="azureDevopsWebhook",
+)
+async def azure_devops_webhook(
+    request: Request,
+    session: PlatformDb,
+    x_choregos_secret: Annotated[str, Header()] = "",
+    authorization: Annotated[str, Header()] = "",
+) -> WebhookAck:
+    """The service hooks of pull requests (`git.pullrequest.*`) and of builds and runs (`build.complete`,
+    `ms.vss-pipelines.run-state-changed-event`). A service hook does not sign its deliveries: the shared
+    secret is the only barrier, sent as the password of the subscription's basic authentication or in an
+    `X-Choregos-Secret` header, as for the Azure Boards route."""
+    from tranibor_adapters.azure_devops import shared_secret_of
+    from tranibor_adapters.azure_devops_events import parse_azure_devops_event
+
+    body = await request.body()
+    provided = shared_secret_of({"X-Choregos-Secret": x_choregos_secret, "Authorization": authorization})
+    if not verify_shared_secret(get_settings().generic_webhook_secret, provided):
+        raise unauthorized("invalid shared secret")
+    payload = json.loads(body or b"{}")
+    delivery = _azure_delivery_id(payload, body)
+    if await _already_seen(session, "azure-devops", delivery, "azure-devops", body):
+        return WebhookAck(accepted=True, duplicate=True)
+
+    events = parse_azure_devops_event(delivery, payload)
+    project, decided = await _azure_devops_project_for(session, payload)
+    if decided and project is None:
+        return WebhookAck(accepted=True, events=0)
+    delivered = await _dispatch(session, events, project_of=project)
+    return WebhookAck(accepted=True, events=delivered)
+
+
+def _azure_delivery_id(payload: dict[str, Any], body: bytes) -> str:
+    """The id a redelivery shares with its first delivery, and no other delivery does.
+
+    The event's own GUID (`id`) is unique. `notificationId` is a counter per subscription: two
+    subscriptions (projects, organisations) reuse the same values, so it only identifies a delivery
+    together with its `subscriptionId`. Without either, the body's digest."""
+    event = str(payload.get("id") or "")
+    if event:
+        return event
+    subscription = str(payload.get("subscriptionId") or "")
+    notification = str(payload.get("notificationId") or "")
+    if subscription and notification:
+        return f"{subscription}:{notification}"
+    return body_digest(body)
+
+
+async def _azure_devops_project_for(session: Any, payload: dict[str, Any]) -> tuple[Project | None, bool]:
+    """The project an Azure Repos or Pipelines delivery is for: the one whose Azure Repos or Azure
+    Pipelines connector holds its team project (case-blind), then, among several, the one whose connector
+    names the delivery's repository. An ambiguity routes nothing. Returns the project and whether a
+    connector decided, as `_jira_project_for` does; without one the lower-cased team project is the slug."""
+    from tranibor_adapters.azure_devops_events import repository_name_of, team_project_of
+
+    team_project = team_project_of(payload)
+    if not team_project:
+        return None, False
+    rows = (
+        await session.execute(
+            select(Connector, Project)
+            .join(Project, Project.id == Connector.project_id)
+            .where(Connector.type.in_(("azure-repos", "azure-pipelines")), Project.status != "archived")
+        )
+    ).all()
+    matches = [
+        (connector, project)
+        for connector, project in rows
+        if str((connector.config or {}).get("project", "")).casefold() == team_project.casefold()
+    ]
+    repository = (repository_name_of(payload) or "").casefold()
+    if len({project.id for _c, project in matches}) > 1 and repository:
+        named = [
+            m for m in matches if str((m[0].config or {}).get("repository", "")).casefold() == repository
+        ]
+        matches = named or matches
+    projects = {project.id: project for _c, project in matches}
+    if len(projects) == 1:
+        return next(iter(projects.values())), True
+    if projects:
+        logger.warning("azure devops event matches several projects, not routed", project=team_project)
+        return None, True
+    return None, False
 
 
 @router.post(

@@ -10,7 +10,7 @@ profiles and the labels; its **connectors** say which outside systems it talks t
 Its **readiness** (`GET /projects/{id}/readiness`) lists, from stored state, what it still lacks to run and who can fix each item.
 
 Connectors ship for: trackers (`github-issues`, `jira`, `gitlab-issues`, `internal`), source
-control (`github`), CI (`tekton`), CD (`argocd`), execution (`agent_sandbox`, the deployment's default; `tekton`, `k8s_job`, `aca`,
+control (`github`, `gitlab`, `azure-repos`), CI (`tekton`, `gitlab`, `azure-pipelines`), CD (`argocd`), execution (`agent_sandbox`, the deployment's default; `tekton`, `k8s_job`, `aca`,
 `local_docker`, each chosen by name), model gateway (`litellm`, `direct`), memory (`ecphoria`, `lexical`) and
 notification (`slack`). Each one has a `fake` twin used by the test suite.
 

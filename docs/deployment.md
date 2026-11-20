@@ -2256,9 +2256,9 @@ the chart already assumes.
 ### Webhook secrets
 
 `TRANIBOR_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `TRANIBOR_GENERIC_WEBHOOK_SECRET` is
-the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, Azure DevOps Boards (the
-password of the service hook's basic authentication, or an `X-Choregos-Secret` header), and **Tekton since
-0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
+the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, Azure DevOps Boards, Repos
+and Pipelines (the password of the service hook's basic authentication, or an `X-Choregos-Secret` header),
+and **Tekton since 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
 the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (the former spelling was removed in 0.24.0,
 see "Upgrading to 0.24"). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its
 `TRANIBOR_ENV`), an unsigned GitHub or Tekton webhook, whose secret is not configured, is refused with a 401;
@@ -2833,7 +2833,7 @@ FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egress
 ### Rate limits on sign-in and webhooks
 
 The routes without a principal are rate-limited: sign-in (`/api/v1/auth/*`) and every webhook under
-`/api/v1/webhooks/` (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab, and the plugin tracker route
+`/api/v1/webhooks/` (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab, Azure DevOps, and the plugin tracker route
 `POST /api/v1/webhooks/plugins/{org}/{plugin}/{server}`, whose deliveries come from outside providers
 through the ingress). Past `TRANIBOR_RATE_LIMIT_PER_MINUTE` requests (600 by default; 0 switches it
 off) in a sliding minute from one client, the API answers `429` with `Retry-After`. Authenticated routes
