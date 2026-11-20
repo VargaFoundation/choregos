@@ -1836,12 +1836,14 @@ export type WorkflowActionApproval = {
   approvers?: Array<{
     /** the least rank an approver holds: `contributor`, `approver`, `project_owner` or `org_admin`. `developer` and `release_captain` are their former names, read until the release the window list names (ADR 0181 C1) */
     role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
-    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052) */
+    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052); in a workflow's action, `{{ fields.<name> }}` names the group a field of the work item holds, rendered when the action is proposed (ADR 0196) */
     group?: string;
     min?: number;
   }>;
   step_up_minutes?: number;
   separation_of_duties?: boolean;
+  /** who may not decide the action, whatever their rank: e-mail addresses, or in a workflow's action `{{ fields.<name> }}`, rendered when it is proposed; an empty value excludes nobody (ADR 0196) */
+  excluded?: Array<string>;
 };
 
 /** title, reason and parameters rendered with the work item's fields; a human approval when an operation requires one or when `approval` is declared */

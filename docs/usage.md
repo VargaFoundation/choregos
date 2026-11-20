@@ -3340,6 +3340,16 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   A human group (a workflow actor's `group`, an approver rule's `group`, a knowledge base's group
   scope or grant) may arrive from the identity provider bare (`architects`) or as
   `choregos:<org>:<group>`; the second counts only in `<org>` (S40-27).
+- **Approvers from the work item** ([ADR 0196](adr/0196-an-actions-approvers-come-from-its-work-item.md)):
+  in a workflow's action, an approver rule's `group` may read ONE declared field,
+  `{"role": "approver", "group": "owners-{{ fields.tool }}"}`, and `excluded` lists who may not
+  decide, whatever their rank — an address, or one field each:
+  `"excluded": ["{{ fields.upn }}", "{{ fields.requester }}"]`. Both are rendered when the action is
+  proposed and stored rendered. A group whose field is absent or empty refuses the proposal (the
+  transition's `on_fail`); an exclusion that renders empty excludes nobody; an excluded person —
+  an organisation administrator included — gets `403`. The validator refuses any other template, and
+  a field `metadata.inputs` does not declare. Keep a literal prefix (`owners-`): the field then only
+  chooses among the groups the organisation named that way, and the rank is still asked.
 - **Running**: the approval starts `ActionWorkflow` (`action-<id>`) once it is committed, and
   answers at once. If Temporal was unreachable at that moment, the action stays `approved` and every
   API replica starts it again within about a minute; a workflow started for an action that is not
