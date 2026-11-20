@@ -683,6 +683,58 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("token",),
     ),
+    ("ci", "jenkins"): ConnectorTypeSpec(
+        "Jenkins",
+        ("ci",),
+        _object_schema(
+            {
+                "base_url": {"type": "string", "description": "the controller, https://jenkins.example.com"},
+                "job": {
+                    "type": "string",
+                    "description": "the job's path, folder/app; the multibranch folder when `multibranch`",
+                },
+                "user": {"type": "string", "description": "the user the API token belongs to"},
+                "multibranch": {"type": "boolean", "default": False},
+                "ref_parameter": {
+                    "type": "string",
+                    "default": "BRANCH",
+                    "description": "the build parameter that receives the ref (unused by a multibranch job)",
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "build parameters sent with every trigger",
+                },
+                "crumb": {"type": "boolean", "default": True},
+            },
+            ("base_url", "job", "user"),
+        ),
+        ("token",),
+    ),
+    ("ci", "github-actions"): ConnectorTypeSpec(
+        "GitHub Actions",
+        ("ci",),
+        _object_schema(
+            {
+                "repo": {
+                    "type": "string",
+                    "format": "github-repo",
+                    "description": "owner/repo, picked among the repositories the App can see",
+                },
+                "workflow": {
+                    "type": "string",
+                    "description": "the workflow file (ci.yml) to dispatch and to read; empty reads them all",
+                },
+                "inputs": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "workflow_dispatch inputs sent with every trigger",
+                },
+                "api_url": {"type": "string", "default": "https://api.github.com"},
+            },
+            ("repo",),
+        ),
+    ),
     ("cd", "argocd"): ConnectorTypeSpec(
         "Argo CD + Rollouts",
         ("cd",),

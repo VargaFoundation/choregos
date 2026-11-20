@@ -173,11 +173,13 @@ DEFAULT_PERMISSIONS = {
     "metadata": "read",
     # A CI that reports commit statuses (Tekton, Jenkins) is read through them (S59-09, S59-10).
     "statuses": "read",
+    # The `github-actions` CI: dispatch a workflow, rerun failed jobs, read runs and logs (S13-10).
+    "actions": "write",
 }
 
 #: Permissions a token asks for when the installation has them, and does without otherwise: an App
 #: set up before they were asked for keeps working, minus what they read.
-OPTIONAL_PERMISSIONS = frozenset({"statuses"})
+OPTIONAL_PERMISSIONS = frozenset({"statuses", "actions"})
 
 #: What the GitHub App must be granted for the adapters to work (ADR 0067). The setup procedure of
 #: the GitHub connectors renders this list and a test compares them, so a call the adapters start
@@ -191,6 +193,7 @@ APP_PERMISSIONS = {
     "metadata": "read",
     "organization_projects": "write",
     "statuses": "read",
+    "actions": "write",
 }
 
 #: The webhook events the platform parses (`tracker/github_events.py`).
@@ -202,6 +205,7 @@ APP_EVENTS = (
     "pull_request_review",
     "check_suite",
     "check_run",
+    "workflow_run",
 )
 
 RUNNER_PERMISSIONS = {"contents": "write", "metadata": "read"}
