@@ -14,6 +14,7 @@ from tranibor_core.domain import CheckRun, CiStatus
 from ..errors import ConfigurationError
 from ..http import RestClient
 from ..tracker.gitlab_events import parse_gitlab_event
+from ..tracker.gitlab_instance import check_instance
 
 State = Literal["pending", "running", "success", "failure", "error", "unknown"]
 Progress = Literal["queued", "in_progress", "completed"]
@@ -55,6 +56,14 @@ class GitLabCi:
     def _base(self) -> str:
         return f"/api/v4/projects/{quote(self.project, safe='')}"
 
+    async def test(self) -> dict[str, Any]:
+        """The connector's **Test**: reachable, trusted, recent enough, and the project readable."""
+        verdict = await check_instance(self.client)
+        if not verdict["ok"]:
+            return verdict
+        project = await self.client.request("GET", self._base)
+        return {"ok": bool(project), "project": self.project, "version": verdict["version"]}
+
     async def status_for(self, repo: str, sha: str) -> CiStatus:
         pipelines = await self.client.request(
             "GET", f"{self._base}/pipelines", params={"sha": sha, "order_by": "id", "sort": "desc"}
@@ -90,7 +99,3 @@ class GitLabCi:
         payload: dict[str, Any] = json.loads(body or b"{}")
         delivery = headers.get("x-gitlab-event-uuid", headers.get("X-Gitlab-Event-UUID", ""))
         return parse_gitlab_event("Pipeline Hook", delivery, payload)
-
-    async def test(self) -> dict[str, Any]:
-        payload = await self.client.request("GET", self._base)
-        return {"ok": bool(payload), "project": self.project}

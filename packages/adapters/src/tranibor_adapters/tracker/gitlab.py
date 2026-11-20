@@ -22,6 +22,7 @@ from ..errors import ConfigurationError
 from ..http import RestClient
 from .fields import RISK, SIZE, current_name
 from .gitlab_events import parse_gitlab_event
+from .gitlab_instance import check_instance
 from .start_rules import label_searches
 
 STATUS_COMMENT_MARKER = "<!-- choregos:status -->"
@@ -50,6 +51,14 @@ class GitLabTracker:
         self.encoded = quote(project, safe="")
         self.webhook_secret = webhook_secret
         self.label_prefix = label_prefix
+
+    async def test(self) -> dict[str, Any]:
+        """The connector's **Test**: reachable, trusted, recent enough, and the project readable."""
+        verdict = await check_instance(self.client)
+        if not verdict["ok"]:
+            return verdict
+        project = await self.client.request("GET", f"/api/v4/projects/{self.encoded}")
+        return {"ok": bool(project), "project": self.project, "version": verdict["version"]}
 
     def _iid(self, key: str) -> int:
         return int(key.rsplit("#", 1)[-1])
