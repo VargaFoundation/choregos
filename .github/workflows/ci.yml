@@ -528,6 +528,31 @@ jobs:
           docker buildx build --builder default --load -f plugins/investment-research/Dockerfile \
             --build-arg "RUNNER_IMAGE=${RUNNER_IMAGE}" --iidfile /tmp/investment-research.iid .
           docker run --rm --entrypoint choregos-quant "$(cat /tmp/investment-research.iid)" --help >/dev/null
+      # The `procurement` job image, the same way (ADR 0198): FROM this runner, and its command reads a real
+      # PDF inside the image, handed where a job step finds its inputs. `job.json` must say the file was read.
+      - name: the procurement job image builds FROM this runner, and its command reads a PDF
+        if: matrix.image == 'runner'
+        env:
+          RUNNER_IMAGE: ${{ github.ref == 'refs/heads/main' && format('ghcr.io/graalsystems/tranibor-runner@{0}', steps.build.outputs.digest) || format('ghcr.io/graalsystems/tranibor-runner:{0}', github.sha) }}
+        run: |
+          docker buildx build --builder default --load -f plugins/procurement/Dockerfile \
+            --build-arg "RUNNER_IMAGE=${RUNNER_IMAGE}" --iidfile /tmp/procurement.iid .
+          image="$(cat /tmp/procurement.iid)"
+          workspace="$(mktemp -d)"
+          mkdir -p "${workspace}/.choregos/inputs"
+          cp plugins/procurement/tests/fixtures/alderbrook-offer.pdf "${workspace}/.choregos/inputs/"
+          chmod -R a+rwX "${workspace}"
+          # Mounted, not baked in: the command runs as a job step does, as uid 1000, in /workspace.
+          docker run --rm --entrypoint tranibor-procurement -e TRANIBOR_WORKSPACE=/workspace \
+            -v "${workspace}:/workspace" "${image}" extract
+          python3 - "${workspace}/.choregos/job.json" <<'PY'
+          import json
+          import sys
+
+          job = json.load(open(sys.argv[1], encoding="utf-8"))
+          assert "alderbrook-offer.pdf" in json.dumps(job), job
+          print(json.dumps(job, indent=2)[:2000])
+          PY
       - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         if: github.ref == 'refs/heads/main'
       - name: keyless signature, under both names

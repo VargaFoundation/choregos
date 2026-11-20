@@ -120,6 +120,11 @@ headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases 
 	  --generate-hashes --exclude-newer P14D --exclude-newer-package certifi=false \
 	  -o docker/headroom/requirements.txt
 
+.PHONY: procurement-lock
+procurement-lock:  ## Re-export plugins/procurement/requirements.txt from uv.lock (hashes; the job image installs it, ADR 0198)
+	$(UV) export --frozen --package tranibor-procurement --no-dev --no-emit-workspace --no-header \
+	  --no-annotate -o plugins/procurement/requirements.txt
+
 .PHONY: laya-lock
 laya-lock:  ## Recompile docker/laya/requirements.txt (hashes, CPU-only torch, releases at least 14 days old)
 	$(UV) pip compile docker/laya/requirements.in --universal --python-version 3.12 --torch-backend cpu \
