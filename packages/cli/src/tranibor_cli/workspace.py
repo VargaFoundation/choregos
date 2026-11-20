@@ -196,15 +196,34 @@ def run_rows(key: Key, detail: RunDetail | None, now: datetime, out: Console) ->
     return rows
 
 
-class FlightTree(Tree[dict[str, Any]]):
-    """The live tree: Enter expands a node, `x` stops what is under the cursor."""
+#: A run that ended without an outcome: `r` may replay its stage (S67-30).
+RELAUNCHABLE = frozenset({"failed", "cancelled", "timed_out"})
 
-    BINDINGS: ClassVar[list[BindingType]] = [Binding("x", "stop", "Stop (asks why)")]
+
+class FlightTree(Tree[dict[str, Any]]):
+    """The live tree: Enter expands a node, `x` stops what is under the cursor, `r` relaunches a failed or
+    cancelled one (the footer shows `r` only where it applies)."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("x", "stop", "Stop (asks why)"),
+        Binding("r", "relaunch", "Relaunch (asks why)"),
+    ]
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        if action == "relaunch":
+            app = self.app
+            return isinstance(app, Workspace) and app.relaunch_target() is not None
+        return True
 
     def action_stop(self) -> None:
         app = self.app
         assert isinstance(app, Workspace)
         app.action_stop_selected()
+
+    def action_relaunch(self) -> None:
+        app = self.app
+        assert isinstance(app, Workspace)
+        app.action_relaunch_selected()
 
 
 class DecisionList(OptionList):
@@ -245,6 +264,9 @@ class StopScreen(ModalScreen[str | None]):
     """A stop always asks why (ADR 0142 §2): an empty reason is not sent."""
 
     BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "dismiss(None)", "Keep it running")]
+    VERB: ClassVar[str] = "Stop"
+    NOUN: ClassVar[str] = "stop"
+    CONFIRM: ClassVar[str] = "Enter stops it · Esc keeps it running"
 
     def __init__(self, what: str) -> None:
         super().__init__()
@@ -252,19 +274,28 @@ class StopScreen(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Static(Text(f"Stop {self.what}", style="bold"))
+            yield Static(Text(f"{self.VERB} {self.what}", style="bold"))
             yield Static("The reason is audited and shown on the work item.")
             yield Input(placeholder="reason (required)", id="reason", max_length=500)
             yield Static("", id="problem")
-            yield Static("Enter stops it · Esc keeps it running")
+            yield Static(self.CONFIRM)
 
     @on(Input.Submitted, "#reason")
     def submit(self, event: Input.Submitted) -> None:
         reason = event.value.strip()
         if not reason:
-            self.query_one("#problem", Static).update(Text("✗ a stop needs a reason", style="red"))
+            self.query_one("#problem", Static).update(Text(f"✗ a {self.NOUN} needs a reason", style="red"))
             return
         self.dismiss(reason)
+
+
+class RelaunchScreen(StopScreen):
+    """A relaunch asks why too (S67-30): same dialog, same rule, other words."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [Binding("escape", "dismiss(None)", "Leave it")]
+    VERB = "Relaunch"
+    NOUN = "relaunch"
+    CONFIRM = "Enter relaunches it · Esc leaves it as it is"
 
 
 class TextScreen(ModalScreen[str | None]):
@@ -910,6 +941,7 @@ class Workspace(App[None]):
         self.draw_artefacts()
         self.draw_projects()
         self.draw_context()
+        self.refresh_bindings()
 
     def draw_header(self) -> None:
         """`acme · finance` at the left, `1 running · 2 waiting for you · $1.24 today` at the right: what runs
@@ -1428,6 +1460,7 @@ class Workspace(App[None]):
     @on(Tree.NodeHighlighted)
     def selection_moved(self, event: Any) -> None:
         self.draw_context()
+        self.refresh_bindings()  # `r` is in the footer only on what can be relaunched
 
     @on(OptionList.OptionSelected, "#decisions")
     def decision_chosen(self, event: OptionList.OptionSelected) -> None:
@@ -1594,6 +1627,8 @@ class Workspace(App[None]):
         stop = (
             Text("x stops it, with a reason", style="dim")
             if entry.get("can_stop") and entry.get("status") in activity.IN_FLIGHT
+            else Text("r relaunches it, with a reason", style="dim")
+            if entry.get("status") in RELAUNCHABLE and entry.get("work_item_id")
             else Text("")
         )
         return facts(title, rows, *notes, stop)
@@ -1902,6 +1937,7 @@ class Workspace(App[None]):
         entries += [
             Entry("command", "Decide what waits for me", "F2", self.action_decide),
             Entry("command", "Stop the selected run or item", "x", self._stop_from_palette),
+            Entry("command", "Relaunch the selected failed run or item", "r", self._relaunch_from_palette),
             Entry("command", "New conversation", "Ctrl-N", self.action_new_conversation),
             Entry("command", "Open a conversation", "Ctrl-O", self.action_conversations),
             Entry("command", "Choose the assistant", "Ctrl-A", self.action_assistants),
@@ -1993,6 +2029,10 @@ class Workspace(App[None]):
     def _stop_from_palette(self) -> None:
         self.action_show_view("activity")
         self.action_stop_selected()
+
+    def _relaunch_from_palette(self) -> None:
+        self.action_show_view("activity")
+        self.action_relaunch_selected()
 
     def action_quit_workspace(self) -> None:
         self.exit()
@@ -2129,6 +2169,61 @@ class Workspace(App[None]):
             )
         else:
             self.notify("put the cursor on a run or a work item", severity="information")
+
+    def relaunch_target(self) -> tuple[str, str, str | None] | None:
+        """What `r` would relaunch under the tree's cursor: (what, work item id, run id), or `None`. A run
+        that ended failed, cancelled or timed out; or a work item with nothing in flight whose latest run
+        ended so. The route is the work item's `rerun_stage` action (it replays the stage)."""
+        try:
+            node = self.query_one(FlightTree).cursor_node
+        except NoMatches:
+            return None
+        data = (node.data if node else None) or {}
+        if data.get("kind") == "run":
+            entry = data["entry"]
+            if entry.get("status") in RELAUNCHABLE and entry.get("work_item_id"):
+                what = f"run {str(entry['id'])[:12]}"
+                if entry.get("work_item_key"):
+                    what += f" of {entry['work_item_key']}"
+                return what, str(entry["work_item_id"]), str(entry["id"])
+        elif data.get("kind") == "item" and data.get("work_item_id"):
+            item_id = str(data["work_item_id"])
+            if any(e.get("work_item_id") == item_id for e in self.board.in_flight.values()):
+                return None
+            latest = max(data["runs"], key=lambda r: str(r.get("ended_at") or r.get("started_at") or ""))
+            if latest.get("status") in RELAUNCHABLE:
+                return f"work item {activity.work_item_of(latest)}", item_id, None
+        return None
+
+    def action_relaunch_selected(self) -> None:
+        target = self.relaunch_target()
+        if target is None:
+            self.notify(
+                "put the cursor on a failed or cancelled run, or on a work item whose last run ended so",
+                severity="information",
+            )
+            return
+        what, item_id, run_id = target
+
+        def relaunch(reason: str | None) -> None:
+            if reason:
+                body: dict[str, Any] = {"action": "rerun_stage", "reason": reason}
+                if run_id:
+                    body["run_id"] = run_id
+                self.run_worker(self.send_relaunch(what, item_id, body), exit_on_error=False)
+
+        self.push_screen(RelaunchScreen(what), relaunch)
+
+    async def send_relaunch(self, what: str, item_id: str, body: dict[str, Any]) -> None:
+        try:
+            await self.api.post(f"/work-items/{item_id}/actions", json=body)
+        except (ApiError, httpx.TransportError) as exc:
+            self.notify(str(exc), title=f"could not relaunch {what}", severity="error", timeout=20)
+            return
+        self.notify(f"{what}: {body['reason']}", title="relaunch requested")
+        with contextlib.suppress(ApiError, httpx.TransportError):
+            self.board = activity.Board.of(await self.api.get(f"/orgs/{self.organisation}/activity"))
+        self.redraw()
 
     def ask_reason(self, what: str, method: str, path: str, body: dict[str, Any]) -> None:
         def stop(reason: str | None) -> None:

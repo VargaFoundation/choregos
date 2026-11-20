@@ -1192,6 +1192,181 @@ async def test_a_run_the_person_may_not_stop_opens_no_dialog(platform: Platform)
         assert "Stop run" not in screen_text(app)
 
 
+# ───────────────────────────────────── a relaunch (S67-30) ─────────────────────────────────────
+
+BAD = "run-bad00001"
+
+
+def _failed_run(**changes: Any) -> dict[str, Any]:
+    return (
+        _entry(
+            BAD,
+            status="failed",
+            ended_at=_iso(NOW),
+            can_stop=False,
+            stage_role="review",
+            failure={"reason": "budget", "summary": "The run spent its budget."},
+        )
+        | changes
+    )
+
+
+def _relaunches(platform: Platform) -> list[tuple[str, Any]]:
+    return [stop for stop in platform.stops if stop[1].get("action") == "rerun_stage"]
+
+
+async def test_r_relaunches_a_failed_run_through_the_work_item_action_with_its_reason(
+    platform: Platform,
+) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Relaunch run run-bad00001" in screen_text(app) and "FIN-12" in screen_text(app)
+        await pilot.press("enter")  # no reason
+        await pilot.pause()
+        assert "a relaunch needs a reason" in screen_text(app)
+        assert platform.stops == []
+        await pilot.press(*"budget topped up", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert platform.stops == [
+        (
+            "/api/v1/work-items/wi-12/actions",
+            {"action": "rerun_stage", "reason": "budget topped up", "run_id": BAD},
+        )
+    ]
+
+
+async def test_escape_in_the_relaunch_dialog_relaunches_nothing(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r", *"x", "escape")
+        await pilot.pause()
+        assert "Relaunch run" not in screen_text(app)
+    assert platform.stops == []
+
+
+async def test_a_cancelled_run_is_relaunched_too(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run(status="cancelled", failure=None)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r", *"again", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert _relaunches(platform)
+
+
+async def test_a_work_item_whose_last_run_failed_is_relaunched_without_a_run_id(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "FIN-12")
+        await pilot.press("r", *"again", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert platform.stops == [
+        ("/api/v1/work-items/wi-12/actions", {"action": "rerun_stage", "reason": "again"})
+    ]
+
+
+async def test_a_running_run_has_no_relaunch_key_and_no_footer_entry(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Relaunch" not in screen_text(app)
+        assert "x stops it" in screen_text(app)
+    assert platform.stops == []
+
+
+async def test_a_succeeded_run_is_not_relaunched(platform: Platform) -> None:
+    platform.in_flight = []
+    platform.finished = [_entry(RUN, status="succeeded", ended_at=_iso(NOW), can_stop=False)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Relaunch" not in screen_text(app)
+    assert platform.stops == []
+
+
+async def test_the_footer_shows_relaunch_only_on_what_can_be_relaunched(platform: Platform) -> None:
+    platform.finished = [_failed_run(work_item_id="wi-4", work_item_key="OPS-4")]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        footer = lambda: screen_text(app).splitlines()[-1]  # noqa: E731
+        await put_cursor_on(pilot, "review")
+        await pilot.pause(0.2)
+        assert "r Relaunch (asks why)" in footer()
+        assert "r relaunches it" in pane(app)
+        await put_cursor_on(pilot, "implement")  # still running
+        await pilot.pause(0.2)
+        assert "Relaunch" not in footer() and "x Stop (asks why)" in footer()
+
+
+async def test_the_palette_relaunch_command_does_the_same_as_the_key(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await show(pilot, "decisions")
+        await _palette(pilot, "relaunch")
+        assert re.search(r"Relaunch the selected failed run or item\s+r", screen_text(app))
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "activity"
+        assert "Relaunch run run-bad00001" in screen_text(app)
+        await pilot.press(*"budget topped up", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert platform.stops == [
+        (
+            "/api/v1/work-items/wi-12/actions",
+            {"action": "rerun_stage", "reason": "budget topped up", "run_id": BAD},
+        )
+    ]
+
+
+async def test_the_palette_relaunch_command_says_what_it_needs_on_a_running_run(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await _palette(pilot, "relaunch")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "Relaunch run" not in screen_text(app)
+        assert any("failed or cancelled" in n.message for n in app._notifications)
+    assert platform.stops == []
+
+
+async def test_a_refused_relaunch_says_why(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    platform.router.post(f"{V1}/work-items/wi-12/actions").mock(
+        return_value=Response(409, json={"title": "Conflict", "detail": "the work item's budget is spent"})
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r", *"again", "enter")
+        await until(
+            pilot, lambda: any("could not relaunch" in (n.title or "") for n in app._notifications), "refusal"
+        )
+
+
 # ─────────────────────── an expanded run node (S67-14, ADR 0154 §2, §5) ───────────────────────
 
 
@@ -1573,6 +1748,37 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
+def test_the_workspace_snapshot_on_a_failed_run_with_the_relaunch_dialog(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    colour: str,
+    columns: str,
+) -> None:
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    from tranibor_cli.workspace import FlightTree
+
+    _showcase(platform)
+    app = make_app(conversation=CID)
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await put_cursor_on(pilot, "OPS-4")
+        failed = next(
+            n for n in app._by_key.values() if (n.data or {}).get("entry", {}).get("id") == "run-failed-0001"
+        )
+        app.query_one(FlightTree).move_cursor(failed, animate=False)
+        await pilot.pause()
+        await pilot.press("r", *"budget topped up")
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
 @pytest.mark.parametrize("view", ["conversation", "activity", "projects", "decisions", "artefacts", "live"])
 def test_the_workspace_snapshot(
     snap_compare: Any,
@@ -1726,10 +1932,14 @@ async def test_the_palette_lists_every_kind_with_the_key_that_also_reaches_it(pl
         assert all(e.reach for e in entries)
         # Nothing is only in the palette: a command's key is bound, a tab's digit is bound.
         bound = {b.key for b in type(app).BINDINGS if isinstance(b, Binding)}
+        from tranibor_cli.workspace import FlightTree
+
+        tree_keys = {b.key for b in FlightTree.BINDINGS if isinstance(b, Binding)}
+        assert {"x", "r"} <= tree_keys  # the keys of the stop and relaunch commands
         for entry in entries:
             if entry.kind == "tab":
                 assert entry.reach.removeprefix("key ") in bound, entry
-            elif entry.kind == "command" and entry.reach != "x":
+            elif entry.kind == "command" and entry.reach not in tree_keys:
                 assert entry.reach.lower().replace("esc", "escape").replace("-", "+") in bound, entry
             elif entry.kind == "assistant":
                 assert "ctrl+a" in bound
