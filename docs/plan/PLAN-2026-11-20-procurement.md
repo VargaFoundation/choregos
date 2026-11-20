@@ -381,7 +381,9 @@ two in step.
    the plan before it is committed.
 2. `tests/docs/test_plan_s84_in_backlog.py` mirrors `tests/docs/test_plan_stories_in_backlog.py`:
    heading pattern `^### (S84-\d+[a-z]?) ·`, every plan story is a backlog story, the backlog has no
-   S84 story the plan lacks, every dependency sits in a lower `sprint`. `PA-` headings are not read.
+   S84 story the plan lacks, every dependency comes before its story (a lower `sprint`, or the same
+   wave and a lower `priority`). `PA-` headings are stories of the other repository and stay out of
+   the backlog.
 3. One status row per story, all ⬜, this story ✅ with what it proves (a plan and a guard) and what
    it does not (no line of code).
 

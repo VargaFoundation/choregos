@@ -56,6 +56,7 @@ streams:
   S80: "From engine to product: the plan of 2026-11-16"
   S81: "The phone is a surface of the platform: an Android app for agents, assistants and voice (ADRs 0192-0194)"
   S83: "The contracts speak no trade: neutral names, software delivery and investment research as plugins, ontology removed (ADR 0181)"
+  S84: "Procurement as a first-party plugin, and the files a person hands a work item (ADRs 0197-0198)"
 
 stories:
 
@@ -6057,3 +6058,179 @@ stories:
       - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
       - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
     notes: "ADR 0190, follow-up"
+  - id: S84-00
+    title: "docs(plan): procurement as a first-party plugin, stream S84 and its backlog stories"
+    stream: S84
+    sprint: 0
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "docs/plan/PLAN-2026-11-20-procurement.md is in the repository and every S84 story heading of the plan is a backlog story"
+      - "tests/docs/test_plan_s84_in_backlog.py turns red when a story is removed from the backlog or when a dependency does not come before its story"
+    notes: "PLAN-2026-11-20-procurement. sprint is the plan's wave. The stories of the agents repository (PA-01 to PA-11) have no entry here."
+  - id: S84-01
+    title: "docs(adr): 0197, a person hands files to a work item and a step reads them as attachments"
+    stream: S84
+    sprint: 0
+    priority: 2
+    size: S
+    depends_on: [S84-00]
+    acceptance:
+      - "The record is indexed, names no trade, and says what it refuses: a file type in metadata.inputs, a glob in inputs, a knowledge base per work item"
+    notes: "Generic capability of the core, for any trade. Extends ADR 0049 and ADR 0078 §6."
+  - id: S84-02
+    title: "docs(adr): 0198, procurement is a plugin whose code half is a job image"
+    stream: S84
+    sprint: 0
+    priority: 3
+    size: S
+    depends_on: [S84-00]
+    acceptance:
+      - "The record is indexed and states the three limits a reader must know: no OCR, no injection detector, no write to a third-party system in lot 1"
+      - "docs/site/build/plugins-and-trades.md names the plugin among its examples"
+    notes: "The two halves, the job image with its own environment, agents that never compute, the purchasing profile, untrusted and confidential documents."
+  - id: S84-03
+    title: "contract(contracts): metadata.attachments, the work item files route and the reserved input attachments (ADR 0197)"
+    stream: S84
+    sprint: 0
+    priority: 4
+    size: M
+    depends_on: [S84-01]
+    acceptance:
+      - "A workflow with metadata.attachments parses; min above max and an unknown accepted type are refused; an output named attachments is refused"
+      - "POST /work-items/{id}/files is in the OpenAPI document and the generated types are committed"
+      - "The trade guard of the contracts is green and its allowlist unchanged"
+    notes: "contract-change, human review owed (ADR 0180 §3). No behaviour: the route is served by S84-04."
+  - id: S84-04
+    title: "feat(api): a person attaches files to a work item, and a start waits for them (ADR 0197)"
+    stream: S84
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S84-03]
+    acceptance:
+      - "A file a person sends is an input artifact, checked by type, bytes, size and count, with one audit entry and no content in it"
+      - "The same name again is a new revision, the same bytes again make none; a store that fails leaves no row"
+      - "A workflow that requires files refuses start at creation and refuses mark_agent_ready until they are there"
+    notes: "Right item:control. Green on SQLite and on PostgreSQL."
+  - id: S84-05
+    title: "feat(core,api): a step reads the files handed to its work item as attachments (ADR 0197)"
+    stream: S84
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S84-04]
+    acceptance:
+      - "A run whose transition declares attachments is listed and served every handed file; a run that does not is served none"
+      - "The validator refuses attachments as an output, and as an input of a workflow that can receive no file"
+      - "The artifact flow gives attachments the origin attached"
+    notes: "The runner does not change, and a test proves it. No file under the orchestrator's workflows changes."
+  - id: S84-06
+    title: "feat(web): a person hands files when filing a work item, and sees them on its page (ADR 0197)"
+    stream: S84
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S84-04]
+    acceptance:
+      - "The file control appears only for a workflow that declares attachments, and the form cannot be sent under the minimum"
+      - "Filing creates without starting, sends the files, then starts; a refused upload shows its message and the item's link"
+      - "The work item page lists the handed files and offers to add some while the item is not terminal"
+    notes: "make web-ci. No string of the trade in apps/web."
+  - id: S84-07
+    title: "feat(procurement): the tranibor-procurement distribution and its extract job command (ADR 0198)"
+    stream: S84
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S84-02]
+    acceptance:
+      - "extract turns the files of a step's inputs into one JSON document of text, with measured facts for what could not be read or was cut"
+      - "Amounts in decimal-comma notation are rewritten to decimal-point form; dates, identifiers and phone numbers are untouched; an undecided file is left as written and counted"
+      - "A conversion that hangs is killed at its timeout and counted unreadable"
+      - "The API and runner images still build; the vocabulary guard of the core is green and untouched"
+    notes: "plugins/procurement, a workspace member that is no dependency of the root project and has no extension entry point."
+  - id: S84-08
+    title: "feat(procurement): compare and tier, the numbers of a comparison computed by a job (ADR 0198)"
+    stream: S84
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S84-07]
+    acceptance:
+      - "Totals, mismatches, ranking and spread are computed in decimal arithmetic, to the cent, from the structured offers"
+      - "tier fails without its threshold argument and never defaults to the lighter tier"
+      - "The schema of the structured offers is a file of the distribution, and every example of it validates"
+    notes: "Two outputs: comparison, and award_basis, the document a memo must quote in full."
+  - id: S84-09
+    title: "build(procurement): the procurement job image, built FROM the release's runner (ADR 0198)"
+    stream: S84
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S84-08]
+    acceptance:
+      - "CI builds the image FROM the pull request's runner and the command reads a real PDF inside it"
+      - "The command has its own virtual environment; the runner's environment is unchanged"
+      - "The chart and the local install map the image under the job image name procurement"
+    notes: "Release R1 follows this story; the release is the owner's."
+  - id: S84-10
+    title: "feat(plugins): the core ships the procurement plugin offline and plays its template end to end"
+    stream: S84
+    sprint: 5
+    priority: 1
+    size: L
+    depends_on: [S84-09]
+    acceptance:
+      - "The locked archive is the one the tests read; plugins-check passes offline"
+      - "Three handed offers reach a buyer with a memo whose every number was computed; a total nobody computed, an omitted mismatch and an invented price never reach a person"
+      - "Totals over the threshold reach the committee, and a buyer alone cannot award them"
+      - "An unreadable file stops at a person before any agent runs"
+    notes: "Also waits for PA-04 of the agents repository (procurement 0.1.0 published). Fakes, scripted agents, no real model."
+  - id: S84-11
+    title: "feat(dev): the local install opens a procurement project with three sample offers"
+    stream: S84
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S84-10]
+    acceptance:
+      - "The local-install job reaches the seeded work item and starts it"
+      - "Running the seed twice changes nothing"
+      - "A documentation page walks the journey gate by gate and shows the cost of the work item"
+    notes: "Release R2 follows S84-10 to S84-12."
+  - id: S84-12
+    title: "feat(procurement): supplier-check and renewals, the measured facts of an onboarding and of a renewal campaign"
+    stream: S84
+    sprint: 6
+    priority: 2
+    size: M
+    depends_on: [S84-10]
+    acceptance:
+      - "supplier-check counts missing and expired documents, identity mismatches and duplicates; a relay that fails is an error, never a zero"
+      - "renewals lists the contracts ending in the window, at most the ceiling, and counts the ones left out"
+    notes: "Jobs that call a connector operation through the run's tool relay, as the investment snapshot does."
+  - id: S84-13
+    title: "feat(plugins): procurement 0.2 offline, a governed write and a renewal campaign end to end"
+    stream: S84
+    sprint: 9
+    priority: 1
+    size: L
+    depends_on: [S84-12]
+    acceptance:
+      - "A complete supplier file creates one record after a second person's approval, and replaying the activity creates no second one"
+      - "The reviewer alone cannot approve; a duplicate stops before any approval is asked; a rejected approval writes nothing"
+      - "A renewal campaign opens one child per contract and waits for all"
+    notes: "Also waits for PA-11 of the agents repository (procurement 0.2.0 published). The purchasing server is its fake."
+  - id: S84-14
+    title: "test(live): the purchasing server's profile against a real Odoo, every night"
+    stream: S84
+    sprint: 9
+    priority: 2
+    size: M
+    depends_on: [S84-13]
+    acceptance:
+      - "The nightly job starts the service itself and fails, not skips, when it does not start"
+      - "Every mapped operation of the profile is played, writes and compensations included"
+    notes: "The backend is the owner's decision before wave 7; Odoo is the plan's default."
