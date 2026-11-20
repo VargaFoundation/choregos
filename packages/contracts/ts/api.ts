@@ -135,6 +135,8 @@ export type Theme = {
     control?: number;
     /** px; absent = the console default */
     surface?: number;
+    /** px, on badges, chips, counters and bars (dots and avatars stay round); absent = round */
+    pill?: number;
   };
   /** The mono font stays Geist Mono */
   fonts?: {
