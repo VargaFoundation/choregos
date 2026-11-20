@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -225,7 +226,7 @@ def test_the_builtin_builds_a_bearer_client_without_an_email() -> None:
     assert cloud.flavor == "cloud"
 
 
-def test_configuration_errors_are_loud() -> None:
+def test_configuration_errors_are_loud(tmp_path: Path) -> None:
     with pytest.raises(ConfigurationError, match="flavor"):
         _jira_tracker({"flavor": "server2", "base_url": BASE, "project_key": "B", "api_token": "t"})
     with pytest.raises(ConfigurationError, match="ca_bundle"):
@@ -236,6 +237,18 @@ def test_configuration_errors_are_loud() -> None:
                 "project_key": "B",
                 "api_token": "t",
                 "ca_bundle": "/nope.pem",
+            }
+        )
+    junk = tmp_path / "junk.pem"
+    junk.write_text("not a certificate")
+    with pytest.raises(ConfigurationError, match="no usable certificate"):
+        _jira_tracker(
+            {
+                "flavor": "datacenter",
+                "base_url": BASE,
+                "project_key": "B",
+                "api_token": "t",
+                "ca_bundle": str(junk),
             }
         )
     with pytest.raises(ConfigurationError, match="email"):

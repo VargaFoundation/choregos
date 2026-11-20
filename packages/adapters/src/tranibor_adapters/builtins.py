@@ -10,6 +10,7 @@ package, never through a copy.
 from __future__ import annotations
 
 import os
+import ssl
 from collections.abc import Callable
 from typing import Any
 
@@ -62,12 +63,17 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
         ca_bundle = str(cfg.get("ca_bundle") or "").strip() or None
         if ca_bundle is not None and not os.path.isfile(ca_bundle):
             raise ConfigurationError(f"`ca_bundle` is not a readable file: {ca_bundle}")
-        client: RestClient = RestClient(
-            cfg["base_url"],
-            headers={"Authorization": f"Bearer {cfg['api_token']}"},
-            service="jira",
-            ca_bundle=ca_bundle,
-        )
+        try:
+            client: RestClient = RestClient(
+                cfg["base_url"],
+                headers={"Authorization": f"Bearer {cfg['api_token']}"},
+                service="jira",
+                ca_bundle=ca_bundle,
+            )
+        except ssl.SSLError as error:  # a file that is not a PEM bundle
+            raise ConfigurationError(
+                f"`ca_bundle` {ca_bundle} holds no usable certificate: {error}"
+            ) from error
     else:
         auth = (str(cfg["email"]), str(cfg["api_token"]))
         client = (
