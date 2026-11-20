@@ -88,3 +88,42 @@ async def test_the_claimed_installation_is_injected_when_the_connector_is_built(
             session, owner_project.org_id, "scm", "github", row.config, row.secret_refs, row.secret_ref
         )
     assert config["installation_id"] == 41
+
+
+async def test_the_github_actions_ci_is_pinned_like_the_other_github_connectors(
+    client: AsyncClient, project: dict[str, Any], github: Any
+) -> None:
+    """`ci/github-actions` is served by the App: on a multi-organisation instance organisation B cannot
+    save it on, nor run it through, the installation organisation A claimed (ADR 0073)."""
+    import pytest
+    from sqlalchemy import select
+    from tranibor_adapters.errors import ConfigurationError
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.services import github_app
+
+    from .github_app_kit import add_organisation, claim_for
+
+    async with session_scope(orgs="*") as session:
+        mine = (await session.execute(select(Project.org_id).where(Project.id == project["id"]))).scalar_one()
+    globex = await add_organisation("globex")
+    github.add_installation(1, "globex-inc")
+    await claim_for(1, "globex-inc", globex)
+    github.add_installation(2, "northwind")
+    await claim_for(2, "northwind", str(mine))
+
+    refused = await _put(client, project, "ci", "github-actions", {"repo": "globex-inc/private-repo"})
+    assert refused.status_code == 422, refused.text
+    accepted = await _put(client, project, "ci", "github-actions", {"repo": "northwind/billing"})
+    assert accepted.status_code == 200, accepted.text
+    assert "installation_id" not in accepted.json()["config"]
+
+    async with session_scope(orgs="*") as session:
+        pinned = await github_app.pin_installation(
+            session, str(mine), "ci", "github-actions", {"repo": "northwind/billing"}
+        )
+        assert pinned["installation_id"] == 2
+        with pytest.raises(ConfigurationError, match="not installed on `globex-inc`"):
+            await github_app.pin_for_runtime(
+                session, str(mine), "ci", "github-actions", {"repo": "globex-inc/private-repo"}
+            )

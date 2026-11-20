@@ -33,7 +33,7 @@ export function workflowsQuiExigent(reasons: string[]): string[] {
   return [...new Set(names)];
 }
 
-const GITHUB_TYPES = new Set(["github", "github-issues"]);
+const GITHUB_TYPES = new Set(["github", "github-issues", "github-actions"]);
 
 /**
  * The GitHub subtitle of a card: which account's installation the connector goes through, or the way to
