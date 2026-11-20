@@ -5785,6 +5785,15 @@ stories:
     size: L
     depends_on: [S80-12]
     notes: "values/all-in-one.yaml, subcharts choregos-objectstore and choregos-keycloak. The agent-sandbox operator is not vendored (k8s_job fallback). Proven by rendering only."
+
+  - id: S80-19
+    title: "feat(plugins): a HashiCorp Vault Transit key wrapper as an extension, rotation through rewrap, Kubernetes and token auth (ADR 0103)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: []
+    notes: "Closes the no-native-Vault gap without a Vault client in the core. plugins/vault-transit, a fake Vault transport, docs for External Secrets Operator and for the wrapper. Fixes POST /platform/secrets/rewrap ignoring a store set through set_secret_store. Not done: a run against a real Vault, a published wheel or image, an async KeyWrapper protocol."
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
     stream: S81

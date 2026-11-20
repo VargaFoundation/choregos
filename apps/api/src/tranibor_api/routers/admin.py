@@ -55,11 +55,14 @@ async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
     """After a KEK rotation (the new key first in `TRANIBOR_SECRETS_KEKS`): re-wrap every sealed
     secret's data key under the active key. The values are never read out nor changed (ADR 0058).
     The GitHub App registered from a manifest is sealed under the same key and moves with them (ADR 0167)."""
-    from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable
+    from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable, get_secret_store
     from ..services import github_app_credentials
 
     await require_platform_admin(session, principal)
-    store = SealedDbSecretStore()
+    # The store an extension set (a KMS or Vault wrapper, ADR 0103), else the environment keyring: a
+    # rotation must run under the wrapper that seals, not under a keyring the deployment may not hold.
+    configured = get_secret_store()
+    store = configured if isinstance(configured, SealedDbSecretStore) else SealedDbSecretStore()
     try:
         async with in_platform_scope(session):
             rewrapped = await store.rewrap(session)
