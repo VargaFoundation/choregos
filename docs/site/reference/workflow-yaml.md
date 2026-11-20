@@ -169,6 +169,7 @@ at most.
 | `description` | one sentence |
 | `extends` | `template:<name>@<version>`: start from a shipped template |
 | `inputs` | the JSON Schema of a work item's fields; every door (console, CLI, REST, MCP, A2A, triggers) checks fields against it |
+| `attachments` | the files a person may hand to a work item (ADR 0197): `accept` (artifact types, 1 to 20, required), `min` (0 to 50, default 0), `max` (1 to 50, default 20); a step reads them through the reserved input `attachments` |
 | `catalogue` | how the workflow catalogue presents it: `title` (80 characters), `summary` (400), `tags` (12 at most); the engine ignores it |
 
 ## `actors`

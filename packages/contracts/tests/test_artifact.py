@@ -107,3 +107,82 @@ def test_the_workflow_schema_knows_every_type() -> None:
     schema = contracts.load_schema("workflow.schema.json")
     transition = schema["$defs"]["transition"]["properties"]["output_types"]["additionalProperties"]
     assert set(transition["enum"]) == set(ARTIFACT_TYPES)
+
+
+# ───────────────────────── files handed to a work item (ADR 0197) ─────────────────────────
+
+
+def _workflow(attachments: object) -> dict[str, object]:
+    return {
+        "apiVersion": "choregos/v1",
+        "kind": "Workflow",
+        "metadata": {"name": "t", "version": 1, "attachments": attachments},
+        "actors": {"owner": {"type": "human", "group": "po"}},
+        "states": {"inbox": {"display": "Inbox"}, "done": {"display": "Done", "terminal": True}},
+        "transitions": [{"id": "t1", "from": "inbox", "to": "done", "by": "owner"}],
+    }
+
+
+def _schema_errors(raw: dict[str, object]) -> list[str]:
+    validator = Draft202012Validator(contracts.load_schema("workflow.schema.json"))
+    return [error.message for error in validator.iter_errors(raw)]
+
+
+def test_a_workflow_that_takes_files_parses_with_the_defaults() -> None:
+    raw = _workflow({"accept": ["pdf", "xlsx"]})
+    assert _schema_errors(raw) == []
+    attachments = contracts.Workflow.model_validate(raw).metadata.attachments
+    assert attachments is not None
+    assert (attachments.accept, attachments.min, attachments.max) == (["pdf", "xlsx"], 0, 20)
+
+
+def test_a_workflow_without_the_block_takes_no_file() -> None:
+    raw = _workflow(None)
+    del raw["metadata"]["attachments"]  # type: ignore[call-overload]
+    assert contracts.Workflow.model_validate(raw).metadata.attachments is None
+
+
+def test_min_above_max_is_refused() -> None:
+    with pytest.raises(ValidationError, match="above `max`"):
+        contracts.Workflow.model_validate(_workflow({"accept": ["pdf"], "min": 5, "max": 3}))
+
+
+def test_an_unknown_accepted_type_is_refused_and_named() -> None:
+    raw = _workflow({"accept": ["pdf", "exe"]})
+    with pytest.raises(ValidationError, match="unknown artifact type `exe`"):
+        contracts.Workflow.model_validate(raw)
+    assert _schema_errors(raw)
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"accept": []},
+        {"min": 1},
+        {"accept": ["pdf"], "max": 51},
+        {"accept": ["pdf"], "max": 0},
+        {"accept": ["pdf"], "min": -1},
+        {"accept": ["pdf"], "extra": 1},
+        {"accept": ["pdf"] * 21},
+    ],
+)
+def test_the_block_is_closed_and_bounded_in_the_schema_and_the_model(block: dict[str, object]) -> None:
+    raw = _workflow(block)
+    assert _schema_errors(raw)
+    with pytest.raises(ValidationError):
+        contracts.Workflow.model_validate(raw)
+
+
+def test_attachments_is_a_reserved_name() -> None:
+    assert contracts.ATTACHMENTS_INPUT == "attachments"
+    assert contracts.ATTACHMENTS_INPUT in contracts.RESERVED_ARTIFACT_NAMES
+
+
+def test_a_handed_file_says_who_handed_it() -> None:
+    assert Artifact.model_validate(_example()).handed_by is None
+    assert Artifact.model_validate({**_example(), "handed_by": "person"}).handed_by == "person"
+    with pytest.raises(ValidationError):
+        Artifact.model_validate({**_example(), "handed_by": "robot"})
+    validator = Draft202012Validator(contracts.load_schema("artifact.schema.json"))
+    assert list(validator.iter_errors({**_example(), "handed_by": "a2a"})) == []
+    assert list(validator.iter_errors({**_example(), "handed_by": "robot"}))

@@ -117,6 +117,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
 NO_CLIENT_YET: dict[str, str] = {
+    "/work-items/{id}/files": "a person hands files to a work item (ADR 0197); the contract declares it in "
+    "S84-03, S84-04 serves it and S84-06 gives it the console's file control",
     "/me/conversations/{conversation_id}/events": "followed from another surface (ADR 0154 §4, G2): "
     "`choregos chat` (S67-09) and the editor extension (S68) are its clients; S67-08 serves it",
     "/orgs/{org}/security": "the organisation's re-authentication setting (ADR 0170, D5) is "

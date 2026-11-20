@@ -1633,6 +1633,43 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /work-items/{id}/files:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [work-items]
+      operationId: attachWorkItemFiles
+      description: >-
+        A person hands one or several files to the work item (ADR 0197), for whoever holds `item:control` on its
+        project. Each file becomes an input artifact of the work item, produced by `person:<user id>`, stored before
+        its row is written. The files of one request are the repeated multipart part `files`. A file is checked before
+        it is stored: its type must be in the workflow's `metadata.attachments.accept`, its bytes must be what its type
+        says, and its size must be within the project's limit for handed files (`a2a.max_file_bytes`). Its name is a
+        slug of its file name; the same name again is a new revision, the same bytes again make none. Allowed in any
+        state that is not terminal. There is no `GET`: the artifact list (`listWorkItemArtifacts`) returns the handed
+        files, with `handed_by`. 409 for a terminal work item, 413 for a file over the limit, 422 for a type not
+        accepted, bytes that are not their type, a name that is empty or that two files of the request share, or more
+        distinct names than `max`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  items: { type: string, format: binary }
+            encoding:
+              files: { style: form, explode: true }
+      responses:
+        "201": { description: Stored, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Artifact" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { description: A file is larger than the project's limit, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/journey:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:

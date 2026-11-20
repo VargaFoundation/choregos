@@ -102,7 +102,10 @@ ARTIFACT_TYPES: dict[str, ArtifactType] = {
 #: The artifact the platform records after a step, from the SCM's comparison of the pushed branch
 #: (ADR 0129 §7). Measured, never declared: no output may take this name.
 DIFF_ARTIFACT = "diff"
-RESERVED_ARTIFACT_NAMES = frozenset({DIFF_ARTIFACT})
+#: The reserved input name (ADR 0197 §8): a transition that lists it in `inputs` receives every file a
+#: person or an application handed to the work item. Never an output (§9).
+ATTACHMENTS_INPUT = "attachments"
+RESERVED_ARTIFACT_NAMES = frozenset({DIFF_ARTIFACT, ATTACHMENTS_INPUT})
 
 #: Extensions that name the same type as another spelling.
 _EXTENSION_ALIASES = {"jpg": "jpeg", "md": "markdown", "mmd": "mermaid", "txt": "text", "htm": "html"}
@@ -336,3 +339,5 @@ class Artifact(Strict):
     display: ArtifactDisplay | None = None
     #: A `level` or a `metric`, once its digest checked (ADR 0129 §11); the rest is read from its content.
     value: str | int | float | None = None
+    #: Who handed the file (ADR 0197 §2): a `person` or an `a2a` task; `null` for a step's output.
+    handed_by: Literal["person", "a2a"] | None = None
