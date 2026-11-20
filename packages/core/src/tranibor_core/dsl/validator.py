@@ -15,6 +15,7 @@ from jsonschema.exceptions import SchemaError
 from tranibor_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    ATTACHMENTS_INPUT,
     CHECKED_TYPES,
     FACT_TYPES,
     MAX_FACTS,
@@ -104,6 +105,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_confidence_thresholds(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
+    _check_attachments(wf, report, source)
     _check_effects(wf, report, source)
     _check_output_types(wf, report, source)
     _check_artifact_declarations(wf, report, source)
@@ -240,7 +242,8 @@ def _check_artifact_declarations(wf: Workflow, report: ValidationReport, source:
         for name in sorted(RESERVED_ARTIFACT_NAMES & set(t.outputs)):
             report.error(
                 "outputs.reserved",
-                f"`{name}` is measured by the platform: no step may declare it as an output",
+                f"transition `{t.key}`: `{name}` is measured by the platform: no step may declare it "
+                "as an output",
                 ["transitions", index, "outputs"],
                 source,
             )
@@ -500,6 +503,29 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 [*location, "action", "not_before"],
                 source,
             )
+
+
+def _check_attachments(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`attachments` is the files handed to a work item (ADR 0197 §9): a step reads them, none writes
+    them, and a workflow that could never be handed one cannot ask for them."""
+    can_receive = wf.metadata.attachments is not None or wf.a2a is not None
+    for index, t in enumerate(wf.transitions):
+        if ATTACHMENTS_INPUT in t.inputs and not can_receive:
+            report.error(
+                "inputs.attachments",
+                f"transition `{t.key}` reads `{ATTACHMENTS_INPUT}`, but this workflow takes no file: "
+                "declare `metadata.attachments` or an `a2a:` block",
+                ["transitions", index, "inputs"],
+                source,
+            )
+    if ATTACHMENTS_INPUT in (wf.artifacts or {}):
+        report.error(
+            "artifacts.attachments",
+            f"`{ATTACHMENTS_INPUT}` is the files handed to the work item, each with its own type: "
+            "it is never shown as one value, so `artifacts:` cannot describe it",
+            ["artifacts", ATTACHMENTS_INPUT],
+            source,
+        )
 
 
 def _check_spawns(wf: Workflow, report: ValidationReport, source: Any) -> None:
