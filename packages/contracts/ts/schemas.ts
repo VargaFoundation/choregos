@@ -689,6 +689,8 @@ export type PluginServer = {
   implements?: Array<"tracker">;
   webhook?: {
     path: string;
+    /** forward the delivery's `Authorization` header to this server's `tracker_parse_event`, for a sender that signs its deliveries with a bearer token the server verifies (ADR 0198); never logged nor stored by the platform, and never forwarded to a server that does not declare it */
+    forward_authorization?: boolean;
   };
   /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
   fake?: {
