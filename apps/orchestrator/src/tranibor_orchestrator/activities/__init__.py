@@ -33,6 +33,8 @@ ALL_ACTIVITIES = [
     knowledge.sync_knowledge_source,
     knowledge.plan_distillation,
     knowledge.distill_part,
+    knowledge.submit_distillation_batch,
+    knowledge.collect_distillation_batch,
     knowledge.reduce_distillation,
     knowledge.publish_distillation,
     knowledge.fail_distillation,

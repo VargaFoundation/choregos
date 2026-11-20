@@ -414,6 +414,15 @@ class Settings(BaseSettings):
     knowledge_distill_budget_usd: float = 10.0
     #: The output a call is assumed to produce, to estimate a cost before spending it.
     knowledge_distill_output_tokens_per_call: int = 6_000
+    #: Distil the parts of a base through the gateway's batch API (OpenAI-compatible Files + Batches),
+    #: at half the price on every token (S4-09, ADR 0190). Off by default: a batch lasts up to a day, and
+    #: the gateway's upstream must serve batches for the distiller's alias (`platform/standard`); when it
+    #: refuses, or the gateway has no batch route, the run silently takes the synchronous path.
+    knowledge_distill_batch: bool = False
+    #: Seconds between two polls of a batch.
+    knowledge_distill_batch_poll_seconds: int = 120
+    #: `max_tokens` of one batched part (a batch request has no default).
+    knowledge_distill_batch_max_tokens: int = 16_000
     #: The gateway model that embeds knowledge chunks, unless `default_model_profiles["embed"]` says.
     knowledge_embedding_model: str = "platform/embed"
     #: A directory of `<id>.site.md` notes and `<new-id>.md` procedures a deployment adds to the

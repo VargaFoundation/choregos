@@ -60,6 +60,14 @@ async def sync_knowledge_source(payload: dict[str, Any]) -> dict[str, Any]:
 # replayed or retried activity makes no second model call and publishes nothing twice (ADR 0008).
 
 
+def _distill() -> Any:
+    """The API's distillation steps, imported on use. One import for the steps that share it (the
+    orchestrator's imports of the API only go down, ADR 0099)."""
+    from tranibor_api.knowledge import distill
+
+    return distill
+
+
 def _refused(error: Exception) -> ApplicationError:
     """A refusal is final: retrying a base that is too large or a budget that is spent changes nothing."""
     return ApplicationError(
@@ -69,17 +77,17 @@ def _refused(error: Exception) -> ApplicationError:
 
 @activity.defn(name="plan_distillation")
 async def plan_distillation(payload: dict[str, Any]) -> dict[str, Any]:
-    from tranibor_api.knowledge.distill import DistillationError, step_plan
-
+    steps = _distill()
     try:
-        return await step_plan(
+        done: dict[str, Any] = await steps.step_plan(
             str(payload["org"]),
             str(payload["base_id"]),
             list(payload.get("exclude") or []),
             payload.get("max_usd"),
         )
-    except DistillationError as error:
+    except steps.DistillationError as error:
         raise _refused(error) from error
+    return done
 
 
 @activity.defn(name="distill_part")
@@ -97,6 +105,33 @@ async def distill_part(payload: dict[str, Any]) -> dict[str, Any]:
         )
     except DistillationError as error:
         raise _refused(error) from error
+
+
+@activity.defn(name="submit_distillation_batch")
+async def submit_distillation_batch(payload: dict[str, Any]) -> dict[str, Any]:
+    """Submits the parts nobody has stored as one batch (S4-09, ADR 0190). Idempotent: the batch id is
+    kept in the base's record, a retry or a replay finds it and submits nothing."""
+    steps = _distill()
+    try:
+        done: dict[str, Any] = await steps.step_submit_batch(
+            str(payload["org"]), str(payload["base_id"]), list(payload.get("exclude") or [])
+        )
+    except steps.DistillationError as error:
+        raise _refused(error) from error
+    return done
+
+
+@activity.defn(name="collect_distillation_batch")
+async def collect_distillation_batch(payload: dict[str, Any]) -> dict[str, Any]:
+    """One poll of the batch; stores each answer by digest once it has ended (S4-09, ADR 0190)."""
+    steps = _distill()
+    try:
+        done: dict[str, Any] = await steps.step_collect_batch(
+            str(payload["org"]), str(payload["base_id"]), list(payload.get("exclude") or [])
+        )
+    except steps.DistillationError as error:
+        raise _refused(error) from error
+    return done
 
 
 @activity.defn(name="reduce_distillation")

@@ -6034,3 +6034,15 @@ stories:
     acceptance:
       - "`cost_ledger.tokens_cache_write` (migration, default 0); the gateway adapter reads `cache_creation_input_tokens`"
       - "The cost report's rows and total carry `tokens_cache_write` next to `tokens_cached` (contract PR first)"
+  - id: S4-09
+    title: "Non-interactive model work through a batch API at -50 % — distillation map step first, evals after"
+    stream: S4
+    sprint: 2
+    priority: 9
+    size: M
+    depends_on: [S4-03]
+    acceptance:
+      - "Opt-in setting, default off; one batch submitted once with its id stored; a restart polls, never submits again"
+      - "Results mapped by custom_id; each part booked at the batch price; the synchronous path stays the fallback"
+      - "Evals (activities/evals.py) through the same adapter — follow-up; cache columns (S4-07) and caching markers (S4-08) are siblings"
+    notes: "ADR 0190"

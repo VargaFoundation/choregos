@@ -33,6 +33,7 @@ RECORDED_ACTIVITY_NAMES = {
     "close_human_request",
     "close_out",
     "cloturer_l_action",  # lang: fr-ok
+    "collect_distillation_batch",
     "collect_run_artifacts",
     "collect_spend",
     "compensate_effect",
@@ -96,6 +97,7 @@ RECORDED_ACTIVITY_NAMES = {
     "start_run",
     "start_session_pod",
     "stop_session_pod",
+    "submit_distillation_batch",
     "summarize_eval_cell",
     "suspend_run",
     "sync_knowledge_source",

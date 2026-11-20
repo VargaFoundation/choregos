@@ -27,6 +27,7 @@ fakes (no Temporal) and for the tests. Under `TRANIBOR_FAKES` the distiller is d
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import hashlib
 import json
@@ -40,6 +41,15 @@ import httpx
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import undefer
+from tranibor_adapters.batch import (
+    DISCOUNT,
+    BatchBackend,
+    BatchError,
+    BatchRequest,
+    GatewayBatches,
+    json_text,
+)
+from tranibor_adapters.fakes.batch import FakeBatches
 from tranibor_core import utcnow
 from tranibor_core.prompt_cache import with_prompt_cache
 
@@ -805,7 +815,10 @@ async def step_plan(
             f"the estimated cost (${total:.2f}) is above the ${max_usd:.2f} asked", "over_budget"
         )
     await _progress(org, base_id, phase="plan", parts_total=len(estimate.parts), parts_done=0, spent_usd=0.0)
-    return {
+    batched = _batchable(loaded) is not None
+    # A batched part is paid at the batch price: the budget is checked against that, not the full one.
+    rate = DISCOUNT if batched else 1.0
+    planned: dict[str, Any] = {
         "status": "planned",
         "model": loaded.distiller.model,
         "parts": [
@@ -813,13 +826,17 @@ async def step_plan(
                 "index": part.index,
                 "digest": part_digest(loaded.distiller.model, loaded.instructions, part.text),
                 "characters": part.characters,
-                "est_usd": estimate.part_costs[part.index],
+                "est_usd": _scaled(estimate.part_costs[part.index], rate),
             }
             for part in estimate.parts
         ],
         "merge_est_usd": estimate.merge_cost,
         "budget_usd": effective_budget(max_usd),
     }
+    if batched:  # absent otherwise: a plan, and the history that holds it, from before S4-09 read the same
+        planned["batch"] = True
+        planned["batch_poll_s"] = get_settings().knowledge_distill_batch_poll_seconds
+    return planned
 
 
 async def _stored(org: str, base_id: str, digest: str) -> KnowledgeDistillationPart | None:
@@ -938,6 +955,207 @@ async def step_part(
         )
     await _progress(org, base_id, phase="map", parts_done=index + 1, spent_usd=round(spent_usd + cost, 4))
     return {"status": "done", "cost_usd": cost, "reused": reused}
+
+
+# ------------------------------------------------------------------- the map step, in a batch (S4-09)
+#
+# Nobody waits on a distillation: its parts go to the gateway's batch API as ONE batch (half the
+# price on every token), polled until it ends. The batch id is kept in the base's `distillation`
+# record (`batch`), so a restart resumes the poll instead of submitting again; results are mapped
+# back by `custom_id`, never by position; each part is stored by its digest like a synchronous one, so
+# `step_part` afterwards finds it, and a part the batch could not answer falls back to the synchronous
+# path (ADR 0190).
+
+FAKE_BATCHES = FakeBatches()
+#: A batch ends within 24 h; a poll loop that has waited longer than this gives up.
+MAX_BATCH_WAIT_S = 26 * 3600
+
+
+def get_batch_backend(settings: Settings | None = None) -> tuple[BatchBackend, str] | None:
+    """The batch backend and the alias it asks, or `None` (off, or no gateway key): the synchronous path.
+
+    The same gateway, key and alias as `get_distiller`: a batch is one more way to call the model."""
+    settings = settings or get_settings()
+    if not settings.knowledge_distill_batch:
+        return None
+    if settings.fakes:
+        return FAKE_BATCHES, distiller_model(settings)
+    if not settings.gateway_master_key:
+        return None
+    return GatewayBatches(settings.gateway_url, settings.gateway_master_key), distiller_model(settings)
+
+
+def _batchable(loaded: Loaded) -> tuple[BatchBackend, str] | None:
+    """Only the platform's own distillers are batched: an injected one (a test's) keeps its own calls."""
+    if not isinstance(loaded.distiller, GatewayDistiller | FakeDistiller):
+        return None
+    return get_batch_backend()
+
+
+def _scaled(cost: float | None, rate: float) -> float | None:
+    return None if cost is None else cost * rate
+
+
+async def _record(org: str, base_id: str) -> dict[str, Any]:
+    async with session_scope(orgs=[org]) as session:
+        base = await session.get(KnowledgeBase, base_id)
+        return dict(base.distillation or {}) if base is not None else {}
+
+
+async def step_submit_batch(
+    org: str, base_id: str, exclude: list[str], *, distiller: Distiller | None = None
+) -> dict[str, Any]:
+    """Submits the parts nobody has stored yet as one batch, once: the id is kept right after.
+
+    `submitted` (the id is in the record), `nothing_to_do` (every part is stored), or `unavailable`
+    (no provider, or it refused: the parts are then distilled synchronously)."""
+    loaded = await _load(org, base_id, distiller)
+    if loaded is None:
+        return {"status": "gone"}
+    chosen = _batchable(loaded)
+    if chosen is None:
+        return {"status": "unavailable", "reason": "no batch provider for this distiller"}
+    backend, model = chosen
+    wanted: dict[str, str] = {}
+    requests: list[BatchRequest] = []
+    settings = get_settings()
+    for part in plan(loaded.corpus, settings.knowledge_distill_part_chars, exclude):
+        digest = part_digest(loaded.distiller.model, loaded.instructions, part.text)
+        if await _stored(org, base_id, digest) is None:
+            wanted[f"part-{part.index}"] = digest
+            requests.append(
+                BatchRequest(
+                    f"part-{part.index}",
+                    loaded.instructions,
+                    corpus_text([*part.sources]),
+                    settings.knowledge_distill_batch_max_tokens,
+                )
+            )
+    if not requests:
+        return {"status": "nothing_to_do"}
+    kept = (await _record(org, base_id)).get("batch") or {}
+    if kept.get("requests") == wanted and kept.get("state") == "submitted":
+        # A restart, or a retried activity: the batch is already out, poll it, never pay for a second.
+        return {"status": "submitted", "batch_id": kept["id"], "requests": len(wanted), "resumed": True}
+    await _refuse_if_stopped(org, base_id)
+    try:
+        batch_id = await backend.submit(model, requests)
+    except BatchError as error:
+        logger.warning("knowledge.distill.batch_refused", base=base_id, error=str(error))
+        return {"status": "unavailable", "reason": str(error)}
+    await _progress(
+        org,
+        base_id,
+        phase="map",
+        batch={
+            "id": batch_id,
+            "provider": backend.name,
+            "model": model,
+            "state": "submitted",
+            "requests": wanted,
+            "submitted_at": utcnow().isoformat(),
+        },
+    )
+    return {"status": "submitted", "batch_id": batch_id, "requests": len(wanted), "resumed": False}
+
+
+async def step_collect_batch(
+    org: str, base_id: str, exclude: list[str], *, distiller: Distiller | None = None
+) -> dict[str, Any]:
+    """One poll. `in_progress`, or `done` once the batch has ended and every answer it gave is stored
+    by digest, booked at the batch price. `digests` are the parts stored by this batch; a part the
+    batch could not answer (errored, expired, cut, not JSON) is counted in `fallback` and left to
+    `step_part`'s synchronous call."""
+    batch = (await _record(org, base_id)).get("batch") or {}
+    chosen = get_batch_backend()
+    if batch.get("state") != "submitted" or chosen is None:
+        return {"status": "done", "cost_usd": 0.0, "digests": [], "fallback": 0}
+    backend = chosen[0]
+    if (await backend.poll(batch["id"])).state == "in_progress":
+        return {"status": "in_progress"}
+    loaded = await _load(org, base_id, distiller)
+    if loaded is None:
+        return {"status": "gone"}
+    size = get_settings().knowledge_distill_part_chars
+    parts = {f"part-{p.index}": p for p in plan(loaded.corpus, size, exclude)}
+    cost, digests, fallback = 0.0, [], 0
+    for result in await backend.results(batch["id"]):
+        digest, part = batch["requests"].get(result.custom_id), parts.get(result.custom_id)
+        if digest is None or part is None:
+            continue
+        stored = await _stored(org, base_id, digest)
+        if stored is not None:  # a retried collect: the first answer stands, and was already booked
+            if (stored.answer or {}).get("batch") == batch["id"]:
+                digests.append(digest)
+                cost += stored.cost_usd
+            continue
+        if part_digest(loaded.distiller.model, loaded.instructions, part.text) != digest:
+            fallback += 1  # the base changed while the batch ran: step_part says so
+            continue
+        answer = json_text(result.text) if result.status == "succeeded" else None
+        if answer is None:
+            logger.info("knowledge.distill.batch_part_unusable", base=base_id, part=result.custom_id)
+            fallback += 1
+            continue
+        usage = {
+            "input_tokens": int(result.usage.get("input_tokens") or 0),
+            "output_tokens": int(result.usage.get("output_tokens") or 0),
+        }
+        full = cost_of(loaded.price, usage["input_tokens"], usage["output_tokens"])
+        part_cost = _scaled(full, DISCOUNT) or 0.0
+        principles, dropped = checked(answer, [*part.sources])
+        await _store(
+            org,
+            base_id,
+            usage,
+            digest=digest,
+            model=loaded.distiller.model,
+            part_index=part.index,
+            documents=part.documents,
+            characters=part.characters,
+            answer={
+                "description": str(answer.get("description") or ""),
+                "principles": principles,
+                "dropped": dropped,
+                "usage": usage,
+                "batch": batch["id"],
+            },
+            cost_usd=part_cost,
+            status="done",
+        )
+        digests.append(digest)
+        cost += part_cost
+    await _progress(org, base_id, batch={**batch, "state": "collected"})
+    return {"status": "done", "cost_usd": cost, "digests": digests, "fallback": fallback}
+
+
+async def _cancel_batch(batch: dict[str, Any] | None) -> None:
+    """Best effort: a stopped or failed run stops paying for a batch still out."""
+    chosen = get_batch_backend()
+    if not batch or batch.get("state") != "submitted" or chosen is None:
+        return
+    try:
+        await chosen[0].cancel(batch["id"])
+    except BatchError as error:
+        logger.warning("knowledge.distill.batch_cancel_failed", batch=batch["id"], error=str(error))
+
+
+async def _map_in_batch(
+    org: str, base_id: str, exclude: list[str], poll_s: int, *, distiller: Distiller | None
+) -> tuple[float, set[str]]:
+    """The in-process run (fakes, tests): submit, poll until the batch ends, collect."""
+    try:
+        sent = await step_submit_batch(org, base_id, exclude, distiller=distiller)
+        if sent["status"] != "submitted":
+            return 0.0, set()
+        for _ in range(max(1, MAX_BATCH_WAIT_S // max(poll_s, 1))):
+            got = await step_collect_batch(org, base_id, exclude, distiller=distiller)
+            if got["status"] == "done":
+                return float(got["cost_usd"]), set(got["digests"])
+            await asyncio.sleep(poll_s)
+    except BatchError as error:
+        raise DistillationError(f"the batch failed: {error}", "gateway") from error
+    raise DistillationError("the batch did not end within 26 hours", "gateway")
 
 
 def _candidates(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1167,6 +1385,7 @@ async def step_fail(
         if base is None:
             return {"status": "gone"}
         before = base.distillation or {}
+        stray = before.get("batch")
         if code == "cancelled":
             if before.get("status") != "stopped":
                 return before  # a late answer of a run that was stopped and relaunched: not this run's
@@ -1191,6 +1410,7 @@ async def step_fail(
                 "spent_usd": round(spent_usd, 4),
             }
         base.distillation = outcome
+    await _cancel_batch(stray)
     logger.info("knowledge.distill.failed", org=org, base=base_id, code=code)
     return outcome
 
@@ -1214,8 +1434,15 @@ async def distill(
             return {"status": "gone"}
         budget = float(planned["budget_usd"])
         digests = []
+        batched: set[str] = set()
+        if planned.get("batch"):
+            paid, batched = await _map_in_batch(
+                org, base_id, exclude, int(planned["batch_poll_s"]), distiller=distiller
+            )
+            spent += paid
         for part in planned["parts"]:
-            if over_budget(spent, part["est_usd"], budget):
+            # a part the batch stored costs nothing more: its price is already in `spent`
+            if part["digest"] not in batched and over_budget(spent, part["est_usd"], budget):
                 raise DistillationError(
                     f"stopped before part {part['index'] + 1}: ${spent:.2f} spent, the next call would pass "
                     f"the budget of ${budget:.2f}; nothing was published",
