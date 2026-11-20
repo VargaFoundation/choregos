@@ -98,6 +98,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_gates_have_something_to_check(wf, report, source)
     _check_output_schemas(wf, report, source)
     _check_output_sections(wf, report, source)
+    _check_numbers_identifiers(wf, report, source)
     _check_known_roles(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
@@ -1015,6 +1016,21 @@ def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -
                         [*path, name],
                         source,
                     )
+
+
+def _check_numbers_identifiers(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`numbers_measured`'s `identifiers:` is `read` (the default) or `skip` (S84-16): any other value would
+    silently read identifiers, which is not what its author asked."""
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            value = g.params.get("identifiers") if g.name == "numbers_measured" else None
+            if value is not None and value not in ("read", "skip"):
+                report.error(
+                    "gate.numbers_measured",
+                    f"`identifiers:` is `read` or `skip`, not `{value}`",
+                    ["transitions", index, "gates", g_index, "params", "identifiers"],
+                    source,
+                )
 
 
 def _check_output_sections(wf: Workflow, report: ValidationReport, source: Any) -> None:

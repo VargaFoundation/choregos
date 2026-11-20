@@ -239,7 +239,9 @@ the platform did not measure (a job's facts, `dod.facts`): a threshold on a numb
 wrote is not a guarantee. `numbers_measured` reads the numbers an agent writes in its outputs and
 requires each to be found in the `sources:` documents an earlier step produced — rounding, a
 percentage for a fraction and a dropped sign are tolerated; years, integers below `ignore_below`
-(default 10) and an explicit `allow:` list are skipped. The source `fields` is the work item's own
+(default 10) and an explicit `allow:` list are skipped; with `identifiers: skip` (off by default), so
+are identifiers (`FA-0012`, `CTR_17`, `v2.3.1`), references and not amounts, a hole a workflow opens
+knowingly since `EUR-99999` is one too. The source `fields` is the work item's own
 fields, which a person can edit; a child opened by a fan-out reads `parent.<doc>[.<key>...]` instead,
 the parent's measured document (a key `$name` is the child's own field `name`); a work item with no
 parent has no such source and is refused. `must_quote:` names sources whose every number must also

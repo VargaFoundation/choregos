@@ -911,27 +911,43 @@ def _output_schema(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 #: A number in prose: not inside a word (`s1`, `sma20`), thousands separators allowed, an optional %.
 _NUMBER = re.compile(r"(?<![\w.])[-+]?\d+(?:[,\u202f ]\d{3})*(?:\.\d+)?(?:\s?%)?(?![\w])")
 _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+#: An identifier (`FA-0012`, `PO-2026-0042`, `CTR_17`, `ISO-9001`, `v2.3.1`): a letter first, then
+#: letters and digits joined by `-`, `_`, `/` or `.`, holding a digit and a separator or a
+#: letter-digit boundary. Its digits name a thing, they do not measure one.
+_IDENTIFIER = re.compile(
+    r"(?<![\w])(?=[A-Za-z][A-Za-z0-9]*(?:[-_/.][A-Za-z0-9]+)*)"
+    r"(?=[A-Za-z0-9_/.-]*\d)"
+    r"(?:[A-Za-z]+\d[A-Za-z0-9]*|[A-Za-z][A-Za-z0-9]*(?=[-_/.][A-Za-z0-9]))"
+    r"(?:[-_/.][A-Za-z0-9]+)*"
+)
 
 
-def _numbers_in(value: Any) -> list[float]:
+def _numbers_in(value: Any, skip_identifiers: bool = False) -> list[float]:
     """Every number a document holds: its JSON numbers, and the numbers written in its strings."""
     if isinstance(value, bool):
         return []
     if isinstance(value, int | float):
         return [float(value)]
     if isinstance(value, str):
-        return [n for _text, n in _cited(value)]
+        return [n for _text, n in _cited(value, skip_identifiers)]
     if isinstance(value, dict):
-        return [n for v in value.values() for n in _numbers_in(v)]
+        return [n for v in value.values() for n in _numbers_in(v, skip_identifiers)]
     if isinstance(value, list):
-        return [n for v in value for n in _numbers_in(v)]
+        return [n for v in value for n in _numbers_in(v, skip_identifiers)]
     return []
 
 
-def _cited(text: str) -> list[tuple[str, float]]:
-    """The numbers a text writes, as written and as values; a percentage is a fraction (12.5% = 0.125)."""
+def _cited(text: str, skip_identifiers: bool = False) -> list[tuple[str, float]]:
+    """The numbers a text writes, as written and as values; a percentage is a fraction (12.5% = 0.125).
+
+    ISO dates are removed first: they are not amounts. With `skip_identifiers`, identifiers (`FA-0012`,
+    `CTR_17`, `v2.3.1`) are removed too; off by default, since `EUR-99999` is an identifier to this rule.
+    """
+    text = _ISO_DATE.sub(" ", text)
+    if skip_identifiers:
+        text = _IDENTIFIER.sub(" ", text)
     found = []
-    for match in _NUMBER.finditer(_ISO_DATE.sub(" ", text)):
+    for match in _NUMBER.finditer(text):
         written = match.group(0).strip()
         digits = re.sub(r"[,\u202f %]", "", written)
         try:
@@ -1013,7 +1029,14 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     RESEARCH-4 on dev called a DSR of 0.03 "passing" when the bar had been lowered to 0. Each
     `must_quote` source is also a source of the check above. A number is quoted when it is written
     exactly (`0.95`, or `95%`), not merely rounded to: a "1" must not quote a bar of 0.95.
+
+    `identifiers: skip` (S84-16) reads an identifier (`FA-0012`, `PO-2026-0042`, `CTR_17`, `v2.3.1`) as
+    a reference, not an amount: its digits are read neither in the outputs nor in the sources. It is off by
+    default (`identifiers: read`) because it is a hole a workflow opens knowingly: `EUR-99999` is an
+    identifier to this rule, so an amount glued to letters by a separator is no longer checked.
     """
+    # `identifiers: skip` (S84-16); the validator refuses any value but `read` and `skip`.
+    skip = params.get("identifiers") == "skip"
     must_quote = [str(s) for s in (params.get("must_quote") or [])]
     sources = [str(s) for s in (params.get("sources") or [])]
     sources += [s for s in must_quote if s not in sources]
@@ -1039,7 +1062,7 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
             detail=f"source documents absent: {', '.join(absent)}",
             annotations=absent,
         )
-    measured = [n for s in sources for n in _numbers_in(_output_value(documents[s]))]
+    measured = [n for s in sources for n in _numbers_in(_output_value(documents[s]), skip)]
     measured += [float(n) for n in (params.get("allow") or [])]
     produced = ctx.result.outputs.model_dump(exclude_none=True)
     checked = [str(o) for o in (params.get("outputs") or ctx.expected_outputs)]
@@ -1059,8 +1082,8 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     for name in checked:
         raw = produced[name]
         text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
-        cited_everywhere += _cited(text)
-        for written, value in _cited(text):
+        cited_everywhere += _cited(text, skip)
+        for written, value in _cited(text, skip):
             is_integer = not written.endswith("%") and _decimals(written) == 0
             if is_integer and (abs(value) < ignore_below or 1900 <= value <= 2100):
                 continue
@@ -1070,7 +1093,7 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     unquoted = [
         f"{source}: {number:g}"
         for source in must_quote
-        for number in _numbers_in(_output_value(documents[source]))
+        for number in _numbers_in(_output_value(documents[source]), skip)
         if not any(_quotes(written, value, number) for written, value in cited_everywhere)
     ]
     problems = []
