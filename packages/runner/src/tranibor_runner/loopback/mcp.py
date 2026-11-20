@@ -158,13 +158,16 @@ class McpProxy:
 
 
 def _credential(env: dict[str, str]) -> dict[str, str]:
-    """The header a server's `env` declares, sent the way the prompt loop sends it (`prompt._auth`):
-    `Authorization` carries a bearer token, any other header its value as it is."""
+    """The headers a server's `env` declares, sent the way the prompt loop sends them (`prompt._auth`):
+    `Authorization` carries a bearer token, any other header its value as it is (the memory's
+    `X-Ecphoria-Tenant` rides with its key)."""
+    headers: dict[str, str] = {}
     for header, value in env.items():
         if header.lower() == "authorization":
-            return {"authorization": f"Bearer {value.removeprefix('Bearer ').strip()}"}
-        return {header: value}
-    return {}
+            headers["authorization"] = f"Bearer {value.removeprefix('Bearer ').strip()}"
+        else:
+            headers[header] = value
+    return headers
 
 
 def _is_batch(content: bytes) -> bool:
