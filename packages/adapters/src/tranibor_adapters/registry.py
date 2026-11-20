@@ -193,7 +193,7 @@ def account_of(kind: str, type_name: str, config: dict[str, Any] | None) -> str 
     cfg = config or {}
     if type_name in {"jira", "confluence"}:
         return str(cfg.get("email") or "") or None
-    if type_name == "azure-boards" and cfg.get("auth") == "entra":
+    if type_name in {"azure-boards", "azure-repos", "azure-pipelines"} and cfg.get("auth") == "entra":
         return str(cfg.get("client_id") or "") or None
     if kind == "mcp" and cfg.get("auth_scheme") == "basic":
         return str(cfg.get("username") or "") or None

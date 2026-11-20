@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
+from .azure_pipelines import AzurePipelinesCi
 from .gitlab import GitLabCi
 from .tekton import TektonCi
 
-__all__ = ["GitLabCi", "TektonCi"]
+__all__ = ["AzurePipelinesCi", "GitLabCi", "TektonCi"]

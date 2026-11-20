@@ -13,6 +13,10 @@
  },
  {
   "kind": "ci",
+  "type": "azure-pipelines"
+ },
+ {
+  "kind": "ci",
   "type": "gitlab"
  },
  {
@@ -146,6 +150,10 @@
  {
   "kind": "runtime",
   "type": "tekton"
+ },
+ {
+  "kind": "scm",
+  "type": "azure-repos"
  },
  {
   "kind": "scm",
