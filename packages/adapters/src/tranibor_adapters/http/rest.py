@@ -31,12 +31,15 @@ class RestClient:
         timeout: float = 20.0,
         client: httpx.AsyncClient | None = None,
         service: str = "rest",
+        ca_bundle: str | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.service = service
         self._headers = {"Accept": "application/json", **(headers or {})}
         self._auth = auth
-        self._client = client or httpx.AsyncClient(timeout=timeout)
+        # `ca_bundle`: the PEM file that vouches for an internal instance (self-managed GitLab, Jira
+        # Data Center) whose certificate a private CA signed. Verification is never switched off.
+        self._client = client or httpx.AsyncClient(timeout=timeout, verify=ca_bundle if ca_bundle else True)
 
     async def aclose(self) -> None:
         await self._client.aclose()

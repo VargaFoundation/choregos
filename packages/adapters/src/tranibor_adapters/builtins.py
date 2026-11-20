@@ -48,23 +48,40 @@ def _names(listed: str) -> list[str]:
 
 
 def _jira_tracker(cfg: dict[str, Any]) -> Any:
-    """Jira Cloud: the email and the API token as Basic, the token from the vault, never from the
-    repository. A scoped token goes through the Atlassian gateway, a classic one to the site."""
+    """Jira. Cloud (default): the email and the API token as Basic, the token from the vault, never
+    from the repository; a scoped token goes through the Atlassian gateway, a classic one to the
+    site. `flavor: datacenter` (Data Center / Server 9.x, 10.x): a personal access token as Bearer,
+    REST API v2, an optional `ca_bundle` for an internal CA."""
     from .http import RestClient
     from .tracker.jira import JiraGatewayClient, JiraTracker
 
-    auth = (str(cfg["email"]), str(cfg["api_token"]))
-    client = (
-        JiraGatewayClient(cfg["base_url"], cloud_id=cfg.get("cloud_id"), auth=auth, service="jira")
-        if cfg.get("auth") == "scoped"
-        else RestClient(cfg["base_url"], auth=auth, service="jira")
-    )
+    flavor = str(cfg.get("flavor") or "cloud")
+    if flavor not in {"cloud", "datacenter"}:
+        raise ConfigurationError(f"unknown Jira flavor `{flavor}`: `cloud` or `datacenter`")
+    if flavor == "datacenter":
+        ca_bundle = str(cfg.get("ca_bundle") or "").strip() or None
+        if ca_bundle is not None and not os.path.isfile(ca_bundle):
+            raise ConfigurationError(f"`ca_bundle` is not a readable file: {ca_bundle}")
+        client: RestClient = RestClient(
+            cfg["base_url"],
+            headers={"Authorization": f"Bearer {cfg['api_token']}"},
+            service="jira",
+            ca_bundle=ca_bundle,
+        )
+    else:
+        auth = (str(cfg["email"]), str(cfg["api_token"]))
+        client = (
+            JiraGatewayClient(cfg["base_url"], cloud_id=cfg.get("cloud_id"), auth=auth, service="jira")
+            if cfg.get("auth") == "scoped"
+            else RestClient(cfg["base_url"], auth=auth, service="jira")
+        )
     return JiraTracker(
         client,
         cfg["project_key"],
         webhook_secret=cfg.get("webhook_secret", ""),
         field_names=cfg.get("field_names"),
         candidates_jql=cfg.get("candidates_jql"),
+        flavor="datacenter" if flavor == "datacenter" else "cloud",
     )
 
 
@@ -516,11 +533,11 @@ def _register_forges() -> None:
     from .ci.gitlab import GitLabCi
     from .ci.tekton import TektonCi
     from .executor.tekton import KubernetesClient
-    from .http import RestClient
     from .scm.github import GitHubScm
     from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
+    from .tracker.gitlab_instance import build_client as build_gitlab_client
     from .tracker.internal import InternalTracker
 
     register("tracker", "github-issues", _SHIPPED_SPECS[("tracker", "github-issues")])(
@@ -537,11 +554,7 @@ def _register_forges() -> None:
     register("tracker", "plugin", _SHIPPED_SPECS[("tracker", "plugin")])(_plugin_tracker)
     register("tracker", "gitlab-issues", _SHIPPED_SPECS[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(
-            RestClient(
-                cfg.get("base_url", "https://gitlab.com"),
-                headers={"PRIVATE-TOKEN": cfg["token"]},
-                service="gitlab",
-            ),
+            build_gitlab_client(cfg),
             cfg["project"],
             webhook_secret=cfg.get("webhook_secret", ""),
         )
@@ -556,11 +569,7 @@ def _register_forges() -> None:
     )
     register("scm", "gitlab", _SHIPPED_SPECS[("scm", "gitlab")])(
         lambda cfg: GitLabScm(
-            RestClient(
-                cfg.get("base_url", "https://gitlab.com"),
-                headers={"PRIVATE-TOKEN": cfg["token"]},
-                service="gitlab",
-            ),
+            build_gitlab_client(cfg),
             cfg["project"],
             default_branch=cfg.get("default_branch", "main"),
         )
@@ -574,11 +583,7 @@ def _register_forges() -> None:
     )
     register("ci", "gitlab", _SHIPPED_SPECS[("ci", "gitlab")])(
         lambda cfg: GitLabCi(
-            RestClient(
-                cfg.get("base_url", "https://gitlab.com"),
-                headers={"PRIVATE-TOKEN": cfg["token"]},
-                service="gitlab",
-            ),
+            build_gitlab_client(cfg),
             cfg["project"],
         )
     )

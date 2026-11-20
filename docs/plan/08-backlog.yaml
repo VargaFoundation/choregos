@@ -6057,3 +6057,14 @@ stories:
       - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
       - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
     notes: "ADR 0190, follow-up"
+  - id: S13-09
+    title: "Jira Data Center / Server flavour and self-managed GitLab (base URL prefix, custom CA, version floor)"
+    stream: S13
+    sprint: 5
+    priority: 6
+    size: M
+    depends_on: [S13-04]
+    acceptance:
+      - "`flavor: datacenter` uses REST v2, wiki markup, a bearer PAT, users by name/key and a signed webhook; Cloud unchanged"
+      - "GitLab tracker, SCM and CI accept a base URL under a path prefix and a ca_bundle, and refuse an instance older than 15.0"
+      - "Tests against simulated transports for both flavours; supported versions in docs/integrations.md"

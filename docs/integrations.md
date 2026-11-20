@@ -730,6 +730,41 @@ verify that a server honours the key: the statement is the administrator's.
 - **An outpost does not keep data where it is.** A tool's result travels to Tranibor, is bounded and
   screened there, and is read by a model.
 
+## Jira Data Center and self-managed GitLab (S13-09)
+
+Two trackers have a second deployment flavour, for the instances a company runs itself. Both are built
+and tested against **simulated transports**; neither has been run against a real Data Center or
+self-managed instance yet (the row in `docs/plan/status/S13.md` says so).
+
+| Connector | Flavour | Supported versions | Configuration |
+| :-- | :-- | :-- | :-- |
+| `tracker/jira` | Jira Cloud (default) | the current Cloud | `base_url`, `email`, `api_token`, optional `auth: scoped`, `cloud_id` |
+| `tracker/jira` | Jira Data Center / Server | **9.0 and later** (9.x, 10.x) | `flavor: datacenter`, `base_url` (with the context path if any, `https://jira.example.org/jira`), `api_token` = a personal access token, optional `ca_bundle` |
+| `tracker/gitlab-issues`, `scm/gitlab`, `ci/gitlab` | gitlab.com | current | `project`, `token` |
+| same three | self-managed | **GitLab 15.0 and later** | `base_url` (with its path prefix if any, `https://tools.example.org/gitlab`), `project`, `token`, optional `ca_bundle` |
+
+**Jira Data Center** speaks REST API v2, not Cloud's v3. Concretely: descriptions and comments are
+written in **wiki markup** (the status table becomes a `||header||` table, `**x**` becomes `*x*`)
+instead of Atlassian Document Format; the token is sent as `Authorization: Bearer`, so no `email` is
+asked; a person is its login or key (`name`, `key`) rather than an `accountId`, and the assignee of a
+created issue is `{"name": ...}`; candidates are polled with the classic `/rest/api/2/search`; custom
+fields (Size, Risk, ...) are still found by their name through `/rest/api/2/field`. The **Test**
+button reads `/rest/api/2/serverInfo` and refuses a server older than 9.0.
+
+Webhooks on Data Center: a delivery that carries `X-Hub-Signature: sha256=<hmac>` is verified with the
+connector's `webhook_secret`, and a bad signature is never rescued by another header. A server that does
+not sign still works through the `X-Choregos-Secret` header, as on Cloud. Data Center sends no delivery
+identifier: the digest of the body stands in for it, so a retry is recognised. Whether a given 9.x
+release signs its webhooks is **not verified here**; use the shared-secret header if yours does not.
+
+**Self-managed GitLab**: `base_url` may carry a path prefix (a relative URL root) and a port; the
+adapters call `<base_url>/api/v4/...`. `ca_bundle` is the path of a PEM file (inside the pod) holding the
+internal CA that signed the instance's certificate: TLS verification is never switched off, and a file
+that is missing or not a PEM bundle refuses the connector. The **Test** button reads `/api/v4/version`
+and refuses an instance older than **15.0** (project access tokens on every tier, issue links with a
+`link_type`), and reports an untrusted certificate or an unreachable host as a verdict. Webhook
+verification is unchanged: the shared `X-Gitlab-Token`.
+
 ## Limits
 
 - 120 calls a minute per token, per API replica (HTTP 429 with `Retry-After` beyond).
