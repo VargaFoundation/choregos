@@ -281,6 +281,20 @@ def test_without_the_mode_nothing_of_it_is_rendered() -> None:
         assert "choregos-api-secrets" not in _names(documents, "Secret")
 
 
+def _api_checksum(*arguments: str) -> str:
+    api = _one(_docs(*arguments), "Deployment", "choregos-api")
+    return str(api["spec"]["template"]["metadata"]["annotations"]["checksum/config"])
+
+
+def test_the_new_keys_do_not_restart_the_api_of_an_install_that_does_not_use_them() -> None:
+    base = _api_checksum()
+    # Keys this story added, left off by their owner: the API pod must not roll.
+    unused = ["--set", "global.objectStore.serviceName=other", "--set", "global.oidc.generateSecret=true"]
+    assert _api_checksum(*unused) == base
+    # The check discriminates: a key the API reads does change the checksum.
+    assert _api_checksum("--set", "global.oidc.clientId=another") != base
+
+
 def _refused(*arguments: str) -> str:
     result = _render("-f", str(PROFILE), *arguments, check=False)
     assert result.returncode != 0
