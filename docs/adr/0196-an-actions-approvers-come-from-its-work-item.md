@@ -1,6 +1,6 @@
 # 0196 — An action's approvers come from its work item
 
-- **Status**: proposed, 2026-11-20 (story S84-01)
+- **Status**: accepted, 2026-11-20 (decided by the project lead at merge; story S84-01)
 - **Concerns**: `packages/contracts` (`ActionApprover.group`, `ActionApprovalSpec.excluded`, the workflow
   schema, `openapi.yaml`), `apps/api/src/tranibor_api/services/actions.py`, the DSL validator
 

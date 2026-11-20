@@ -1,6 +1,6 @@
 # 0197 — A workflow files a work item in another project
 
-- **Status**: proposed, 2026-11-20 (story S84-02)
+- **Status**: accepted, 2026-11-20 (decided by the project lead at merge; story S84-02)
 - **Concerns**: `apps/api/src/tranibor_api/effects.py` (a third core effect), `ProjectConfig.accepts_items_from`
   (`packages/contracts`), `tests/conformance/templates/test_templates.py`
 

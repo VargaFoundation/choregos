@@ -1,6 +1,6 @@
 # 0199 — A fan-out's children are the platform's
 
-- **Status**: proposed, 2026-11-20 (story S84-04)
+- **Status**: accepted, 2026-11-20 (decided by the project lead at merge; story S84-04)
 - **Concerns**: `apps/orchestrator/src/tranibor_orchestrator/activities/children.py` (`spawn_children`),
   `apps/api/src/tranibor_api/services/tickets.py` (`create_work_item`), the tracker writes of
   `activities/tracker.py`

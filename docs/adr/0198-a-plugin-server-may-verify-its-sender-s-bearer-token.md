@@ -1,6 +1,6 @@
 # 0198 — A plugin server may verify its sender's bearer token
 
-- **Status**: proposed, 2026-11-20 (story S84-03)
+- **Status**: accepted, 2026-11-20 (decided by the project lead at merge; story S84-03)
 - **Concerns**: `packages/contracts/schemas/plugin-server.schema.json` (`webhook.forward_authorization`),
   `apps/api/src/tranibor_api/routers/webhooks.py` (`plugin_webhook`)
 
