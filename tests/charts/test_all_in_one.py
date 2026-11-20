@@ -140,7 +140,9 @@ def test_the_realm_agrees_with_the_api() -> None:
     assert "https://choregos.example.com/api/v1/auth/callback" in console["redirectUris"]
     # The secret is a substitution, never written into the ConfigMap.
     assert console["secret"] == "${CHOREGOS_OIDC_CLIENT_SECRET}"
-    assert "choregos-cli" in clients and clients["choregos-cli"]["publicClient"] is True
+    # The CLI's public client is the console's client id with `-cli` appended.
+    cli = clients[console["clientId"] + "-cli"]
+    assert cli["publicClient"] is True
     mapper = console["protocolMappers"][0]
     assert mapper["config"]["claim.name"] == "groups" and mapper["config"]["full.path"] == "false"
     assert {g["name"] for g in realm["groups"]} >= {"choregos:acme:org-admins", "choregos:acme:viewers"}

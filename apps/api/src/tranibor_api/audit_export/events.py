@@ -5,7 +5,7 @@ Every event carries what a receiver needs to verify the chain **without the plat
 place (`seq`), the hash of the entry before it (`prev_hash`) and its own (`hash`), and, unless switched
 off, `canonical`: the exact text `hash = sha256(prev_hash || canonical)` covers (ADR 0182 point 2). A
 receiver that keeps the last `hash` of each chain can see a missing, reordered or altered entry; the
-algorithm is `choregos_api.audit_chain.link_hash`, six lines in any language.
+algorithm is `tranibor_api.audit_chain.link_hash`, six lines in any language.
 
 The same event is written in three forms: a JSON object (`as_json`), RFC 5424 structured data
 (`structured_data`) and CEF (`as_cef`).
