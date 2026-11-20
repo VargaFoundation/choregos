@@ -53,6 +53,8 @@ EXCLUDED_PREFIXES = (
     "packages/contracts/ts/",
     "packages/contracts/src/tranibor_contracts/env.py",
     "tests/compat/",
+    # a golden render of what `process` hands a job: both spellings, on purpose (R4 adoption)
+    "packages/adapters/tests/fixtures/separate_agent/",
     "tools/rename_env_vars.py",
     "compat/",
 )
