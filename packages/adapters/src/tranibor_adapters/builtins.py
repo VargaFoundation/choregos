@@ -604,6 +604,7 @@ def _register_forges() -> None:
     from .ci.jenkins import JenkinsCi
     from .ci.tekton import TektonCi
     from .executor.tekton import KubernetesClient
+    from .http import RestClient
     from .scm.github import GitHubScm
     from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
