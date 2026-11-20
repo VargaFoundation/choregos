@@ -849,7 +849,7 @@ async def azure_boards_webhook(
 ) -> WebhookAck:
     """A service hook does not sign its deliveries: the shared secret is the only barrier, sent as the
     password of the subscription's basic authentication or in an `X-Choregos-Secret` header."""
-    from tranibor_adapters.tracker.azure_boards import shared_secret_of
+    from tranibor_adapters.azure_devops import shared_secret_of
     from tranibor_adapters.tracker.azure_boards_events import parse_azure_boards_event
 
     body = await request.body()
