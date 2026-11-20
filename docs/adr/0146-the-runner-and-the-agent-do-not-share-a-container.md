@@ -21,10 +21,15 @@
 **Decision**: §1-§4 and §8-§9 are the decision, for the `agent_sandbox` executor first: the agent runs
 in a container of its own, as another uid, and the flag is `CHOREGOS_RUNNER_AGENT_ISOLATION`
 (`process` | `container`), set in the chart by `global.runner.agentIsolation` (until 0.27.15
-`runner.sandbox.agentIsolation`, the warm pool's alone; S65-04d made it the deployment's). **The default stays
-`process`** (§13): the shape is proved on a kubelet with runc, not yet on the operator or under
-gVisor. A deployment turns `container` on in dev first, and rolls back by setting `process`: the
-chart then renders the pod it rendered before this ADR (a test compares the two).
+`runner.sandbox.agentIsolation`, the warm pool's alone; S65-04d made it the deployment's). **The chart's
+default is `container` from 0.28** (S65-04m, §13): the shape is proved on a kubelet with runc (S65-04h, i)
+and, with the real runner image, under gVisor on a deployed cluster (S65-04o), and the diametral dev and
+production clusters run it on the warm pool and on `k8s_job` (see "Proved on the clusters" below). The
+code's default, read when nothing sets `CHOREGOS_RUNNER_AGENT_ISOLATION` (Docker Compose, the demo, a
+runner its executor says nothing to), stays `process`: the runner is told by its executor, and an executor
+that cannot start the agent's container (`tekton`, `aca`) would otherwise refuse every run of an
+installation that never asked. A deployment rolls back by setting `process`: the chart then renders the pod
+it rendered before this ADR (a test compares the two), and every run journals `agent.isolation: process`.
 
 Built (S65-04d, e, g and the `agent_sandbox` part of h, i):
 
@@ -115,6 +120,26 @@ gVisor, the operator's behaviour with the sidecar (readiness, suspension), the r
 with a real harness.
 
 **Built after, S65-04j (§7)**: the memory MCP server of an agent is a credentialed server like the others, and a *scoped* one. `McpServerRef` gained `scope_arguments` (arguments the runner overwrites in every `tools/call`) and `allowed_tools` (the only tools the loopback relays). For memory the orchestrator announces `tenant_id = <project>` and the tools of the binding's mode; the key stays in `env` and never reaches the agent. A scoped server goes through the loopback even without a header, and where there is no container isolation it is withheld from the agent, because nothing there could keep the key or the scope out of its reach. Ecphoria's MCP does not read `X-Ecphoria-Tenant` and the platform key has no tenant, so the tools that are not scoped by their `tenant_id` argument (`query`, `ingest`, `set_state`, the graph tools, and the id-based `update_memory`, `delete_memory`, `memory_history`, `link_memory`, `memory_feedback`, `memory_provenance`) are not offered. They come back when Ecphoria scopes keys or the MCP honours the tenant header.
+
+**Proved on the clusters (S65-04o, S65-04m; 2026-11-19/20)**: the diametral dev and production clusters run
+0.27.16 with `global.runner.agentIsolation: container` (choregos-deploy#315, #316; Argo dev 245→246, prod 74→75),
+every run pod under the `gvisor` RuntimeClass. The probe of `tests/cluster/test_agent_isolation.py`, run on dev
+with the real runner image in the warm pool's own pod and in `k8s_job`'s Job: from the agent's container (uid
+1001), no run token, no gateway key, no runner process (each container of a gVisor pod has its own PID
+namespace: there is no `/proc/<runner>` to read), no runner file; the shared volumes both ways; the gate's
+target closed and the egress proxy answering 407 without credentials. Real runs (agent trials, opencode,
+`platform/cheap`) on the warm pool and on `k8s_job`, on dev and on production, probed from outside while the
+agent slept: from the agent's container 0 credential variables in any readable `/proc/*/environ` and 0 runner
+processes, while the runner's container of the `k8s_job` pod finds 12 such lines (its run Secret); each run
+journals `agent.isolation: container` and `egress.gate` closed, reaches `pypi.org` through the CONNECT listener
+(`hosted.egress`, HTTP 200 with `HTTPS_PROXY=http://127.0.0.1:4003`) and not directly (timeout), and writes and
+reads the project's Ecphoria memory through the runner's loopback (`memory_add_memory`, `memory_search_memory`,
+tenant the project's slug), which `process` withholds (S65-04j memory story). `/readiness` says
+`agent-isolation: done` for both executors. **Not proved**: the agent-sandbox operator's suspension and
+resumption with the sidecar; a code agent's own image on a cluster (no `CHOREGOS_AGENT_IMAGES` there);
+`tekton` and `aca`, which refuse; Claude Code and gemini-cli as the agent on a cluster (S65-04a measures them on
+Docker); what an agent can reach inside the namespace, since a pod's network is shared by its containers (it
+holds no credential for what it reaches).
 
 ## Context
 
