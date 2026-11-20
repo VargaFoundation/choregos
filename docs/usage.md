@@ -2037,7 +2037,7 @@ How people sign in to the instance is on **Administration → Identity** (below)
   deployment's own answer (`TRANIBOR_EXECUTOR_KIND`, `TRANIBOR_EXECUTORS_ALLOWED`); change it in the
   chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
   was removed (S42-07b), only the `GET` remains.
-- **Gateway keys.** A table of the keys the model gateway minted for runs (key id, run, project, spent over budget, expiry, state, creation date), for platform administrators; a key's secret is never shown (`GET /platform/gateway/keys`).
+- **Gateway keys.** A table of the keys the model gateway minted for runs (key id, run, project, spent over budget, expiry, state, creation date), newest first, for platform administrators; a key's secret is never shown (`GET /platform/gateway/keys`). The server filters and pages it (ADR 0206): the text box matches a part of the key id, the run id or the project slug, the state keeps the active or the revoked keys, and **More** reads the next 50.
 
 ### Identity
 

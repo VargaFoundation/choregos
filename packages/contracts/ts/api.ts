@@ -6450,6 +6450,11 @@ export type GatewayKeyInfo = {
   created_at: string;
 };
 
+export type GatewayKeyPage = {
+  items: Array<GatewayKeyInfo>;
+  meta: PageMeta;
+};
+
 export type AuditEntry = {
   id: string;
   actor_id?: string | null;
@@ -6893,7 +6898,7 @@ export interface Operations {
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
-  listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: GatewayKeyPage };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };

@@ -181,7 +181,7 @@ import type {
   MeDto,
   Memory,
   MemoryAbReport,
-  GatewayKeyInfo,
+  GatewayKeyPage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -1424,7 +1424,10 @@ export const api = {
   memoryAbReport: (org: string = DEFAULT_ORG, weeks = 4) =>
     request<MemoryAbReport>(`/orgs/${org}/memory/ab-report${query({ weeks: String(weeks) })}`),
   /** Platform administrators only: the keys the model gateway minted for runs, never the secret. */
-  gatewayKeys: () => request<GatewayKeyInfo[]>("/platform/gateway/keys"),
+  gatewayKeys: (params: { q?: string; state?: "active" | "revoked"; cursor?: string; limit?: number } = {}) =>
+    request<GatewayKeyPage>(
+      `/platform/gateway/keys${query(compact({ q: params.q, state: params.state, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   memory: (org: string, slug: string) => request<MemoryStore>(`/orgs/${org}/memories/${slug}`),
   createGlobalMemory: (org: string, body: MemoryStoreCreate) =>
     request<MemoryStore>(`/orgs/${org}/memories`, { method: "POST", body: JSON.stringify(body) }),
