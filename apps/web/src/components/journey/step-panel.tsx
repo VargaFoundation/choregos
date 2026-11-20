@@ -125,7 +125,7 @@ export function StepPanel({
                 data-testid={`attempt-${t.id}`}
                 onClick={() => setChosen(t.id)}
                 className={cn(
-                  "rounded-full border px-2.5 py-0.5 text-xs pointer-coarse:min-h-11",
+                  "rounded-pill border px-2.5 py-0.5 text-xs pointer-coarse:min-h-11",
                   t.id === attempt?.id
                     ? "border-accent-line bg-accent-soft text-accent-strong"
                     : "border-line text-ink-muted hover:text-ink",

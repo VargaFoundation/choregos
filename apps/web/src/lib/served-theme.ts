@@ -93,10 +93,12 @@ export function themeCss(theme: ServedTheme): string {
   const shared: string[] = [];
   const control = px(theme.radius?.control, 8);
   const surface = px(theme.radius?.surface, 12);
+  const pill = px(theme.radius?.pill, 999);
   if (control !== undefined) shared.push(`--radius-sm:${control}px`, `--radius:${control}px`);
   if (surface !== undefined) {
     for (const name of ["md", "lg", "xl", "2xl", "3xl", "4xl"]) shared.push(`--radius-${name}:${surface}px`);
   }
+  if (pill !== undefined) shared.push(`--radius-pill:${pill}px`);
   if (sans.family) {
     shared.push(
       `--choregos-font-sans:"${sans.family}",var(--font-geist-sans),ui-sans-serif,system-ui,sans-serif`,

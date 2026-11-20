@@ -126,7 +126,7 @@ export function Badge({ tone = "neutral", variant = "outline", dot = true, class
     <span
       className={cn(
         "inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap",
-        variant === "plain" ? TEXT[tone] : cn("rounded-full border px-2 py-0.5 leading-4", PASTILLE[tone]),
+        variant === "plain" ? TEXT[tone] : cn("rounded-pill border px-2 py-0.5 leading-4", PASTILLE[tone]),
         className,
       )}
       {...props}

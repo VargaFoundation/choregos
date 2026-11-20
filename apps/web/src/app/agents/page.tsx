@@ -99,7 +99,7 @@ function Agents() {
               aria-pressed={onlyAwaiting}
               onClick={() => setOnlyAwaiting(!onlyAwaiting)}
               data-testid="awaiting-chip"
-              className={`rounded-full border px-3 py-1 text-xs ${onlyAwaiting ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+              className={`rounded-pill border px-3 py-1 text-xs ${onlyAwaiting ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
             >
               Awaiting approval ({awaiting.size})
             </button>
@@ -109,7 +109,7 @@ function Agents() {
             aria-pressed={onlyStarred}
             onClick={() => setOnlyStarred(!onlyStarred)}
             data-testid="starred-chip"
-            className={`rounded-full border px-3 py-1 text-xs ${onlyStarred ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+            className={`rounded-pill border px-3 py-1 text-xs ${onlyStarred ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
           >
             Starred
           </button>
@@ -118,7 +118,7 @@ function Agents() {
             aria-pressed={byStars}
             onClick={() => setByStars(!byStars)}
             data-testid="sort-stars"
-            className={`rounded-full border px-3 py-1 text-xs ${byStars ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+            className={`rounded-pill border px-3 py-1 text-xs ${byStars ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
           >
             Most starred first
           </button>
@@ -128,7 +128,7 @@ function Agents() {
               aria-pressed={showRetired}
               onClick={() => setShowRetired(!showRetired)}
               data-testid="retired-chip"
-              className={`rounded-full border px-3 py-1 text-xs ${showRetired ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+              className={`rounded-pill border px-3 py-1 text-xs ${showRetired ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
             >
               Show retired ({retired})
             </button>
