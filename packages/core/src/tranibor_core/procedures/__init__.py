@@ -59,7 +59,7 @@ PRIMARY_KEYS = ("connector", "source", "agent", "door_client")
 QUALIFIER_KEYS = ("card_host", "preset")
 
 #: The webhook routes of the API (`routers/webhooks.py`).
-WEBHOOK_SOURCES = ("github", "jira", "gitlab", "argocd", "tekton", "alertmanager")
+WEBHOOK_SOURCES = ("github", "jira", "azure-devops", "gitlab", "argocd", "tekton", "alertmanager")
 #: `{{name}}` or `{{name:argument}}`: the only forms a body may use, and the only names.
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)(?::([a-z0-9_/-]+))?\s*\}\}")
 #: `{{plugin_webhook_url:<plugin>/<server>}}`: the webhook route of a plugin's server (ADR 0093, S43-05b).

@@ -13,6 +13,9 @@ from typing import Any
 
 from tranibor_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATTERN
 
+from .azure_devops import azure_egress as _azure_egress
+from .azure_devops import check_azure_pipelines as _check_azure_pipelines
+from .azure_devops import check_azure_repos as _check_azure_repos
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .forge_accounts import DEFAULT_BASE_URL as _FORGE_DEFAULTS
@@ -316,6 +319,35 @@ _DEMO_CONFIGURATION = _object_schema(
 #: configuration (the one the console draws its form from) and its SECRET fields, which are only
 #: written as a reference. These schemas used to live in the API's router, duplicating the
 #: registry and disagreeing with it (jira was "unavailable" there while it is registered).
+_AZURE_CONNECTION: dict[str, Any] = {
+    "base_url": {
+        "type": "string",
+        "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of "
+        "an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+    },
+    "project": {"type": "string", "description": "the Azure DevOps team project"},
+    "auth": {
+        "type": "string",
+        "enum": ["pat", "entra"],
+        "default": "pat",
+        "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal "
+        "(client credentials), Azure DevOps Services only",
+    },
+    "tenant_id": {"type": "string", "description": "`entra` only: the Entra tenant (directory) id"},
+    "client_id": {
+        "type": "string",
+        "description": "`entra` only: the service principal's application (client) id",
+    },
+    "partially_succeeded": {
+        "type": "string",
+        "enum": ["failure", "neutral"],
+        "default": "failure",
+        "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is "
+        "read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+    },
+}
+
+
 _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("tracker", "github-issues"): ConnectorTypeSpec(
         "GitHub Issues + Projects v2",
@@ -427,6 +459,54 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("project",),
         ),
         ("token",),
+    ),
+    ("scm", "azure-repos"): ConnectorTypeSpec(
+        "Azure DevOps Repos",
+        ("scm",),
+        _object_schema(
+            {
+                **_AZURE_CONNECTION,
+                "repository": {
+                    "type": "string",
+                    "description": "the Azure Repos Git repository (name or id)",
+                },
+                "default_branch": {"type": "string", "default": "main"},
+                "merge_strategy": {
+                    "type": "string",
+                    "enum": ["squash", "noFastForward", "rebase", "rebaseMerge"],
+                    "default": "squash",
+                    "description": "how a pull request is completed; auto-complete is never set and no "
+                    "branch policy is bypassed",
+                },
+                "delete_source_branch": {"type": "boolean", "default": False},
+            },
+            ("base_url", "project", "repository"),
+        ),
+        ("pat", "client_secret", "run_token"),
+        egress=_azure_egress,
+        check_config=_check_azure_repos,
+    ),
+    ("ci", "azure-pipelines"): ConnectorTypeSpec(
+        "Azure Pipelines",
+        ("ci",),
+        _object_schema(
+            {
+                **_AZURE_CONNECTION,
+                "repository": {
+                    "type": "string",
+                    "description": "optional: only the builds of this Azure Repos repository (name or id)",
+                },
+                "pipeline": {
+                    "type": "string",
+                    "description": "optional: the pipeline (name or id) whose builds are read and which is "
+                    "queued when none is named",
+                },
+            },
+            ("base_url", "project"),
+        ),
+        ("pat", "client_secret"),
+        egress=_azure_egress,
+        check_config=_check_azure_pipelines,
     ),
     ("ci", "tekton"): ConnectorTypeSpec(
         "Tekton Pipelines",

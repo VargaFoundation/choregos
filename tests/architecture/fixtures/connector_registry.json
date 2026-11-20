@@ -614,6 +614,163 @@
   },
   {
     "capabilities": [
+      "scm"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "pat",
+          "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal (client credentials), Azure DevOps Services only",
+          "enum": [
+            "pat",
+            "entra"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "`entra` only: the service principal's application (client) id",
+          "type": "string"
+        },
+        "default_branch": {
+          "default": "main",
+          "type": "string"
+        },
+        "delete_source_branch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "merge_strategy": {
+          "default": "squash",
+          "description": "how a pull request is completed; auto-complete is never set and no branch policy is bypassed",
+          "enum": [
+            "squash",
+            "noFastForward",
+            "rebase",
+            "rebaseMerge"
+          ],
+          "type": "string"
+        },
+        "partially_succeeded": {
+          "default": "failure",
+          "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+          "enum": [
+            "failure",
+            "neutral"
+          ],
+          "type": "string"
+        },
+        "project": {
+          "description": "the Azure DevOps team project",
+          "type": "string"
+        },
+        "repository": {
+          "description": "the Azure Repos Git repository (name or id)",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "`entra` only: the Entra tenant (directory) id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "project",
+        "repository"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure DevOps Repos",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "scm",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "pat",
+      "client_secret",
+      "run_token"
+    ],
+    "type": "azure-repos"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "pat",
+          "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal (client credentials), Azure DevOps Services only",
+          "enum": [
+            "pat",
+            "entra"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "`entra` only: the service principal's application (client) id",
+          "type": "string"
+        },
+        "partially_succeeded": {
+          "default": "failure",
+          "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+          "enum": [
+            "failure",
+            "neutral"
+          ],
+          "type": "string"
+        },
+        "pipeline": {
+          "description": "optional: the pipeline (name or id) whose builds are read and which is queued when none is named",
+          "type": "string"
+        },
+        "project": {
+          "description": "the Azure DevOps team project",
+          "type": "string"
+        },
+        "repository": {
+          "description": "optional: only the builds of this Azure Repos repository (name or id)",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "`entra` only: the Entra tenant (directory) id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure Pipelines",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "pat",
+      "client_secret"
+    ],
+    "type": "azure-pipelines"
+  },
+  {
+    "capabilities": [
       "ci"
     ],
     "config_schema": {
