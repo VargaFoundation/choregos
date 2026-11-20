@@ -15,10 +15,10 @@ async def _post(monkeypatch: pytest.MonkeyPatch, path: str, public_url: str, hea
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_ENV", "dev")
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", public_url)
-    monkeypatch.setenv("CHOREGOS_GITHUB_WEBHOOK_SECRET", "")
-    monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "")
+    monkeypatch.setenv("TRANIBOR_ENV", "dev")
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", public_url)
+    monkeypatch.setenv("TRANIBOR_GITHUB_WEBHOOK_SECRET", "")
+    monkeypatch.setenv("TRANIBOR_GENERIC_WEBHOOK_SECRET", "")
     reset_settings_cache()
     try:
         app = create_app()

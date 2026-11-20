@@ -2,7 +2,7 @@
 
 The running edition is not a setting: it is the enterprise extension that declares it when it
 loads (`edition.declare`). The chart, for its part, ANNOUNCES an edition (`global.edition` ->
-`CHOREGOS_EDITION`). Nothing linked the two, and the gap was silent: a platform announced as
+`TRANIBOR_EDITION`). Nothing linked the two, and the gap was silent: a platform announced as
 enterprise on community images starts, looks healthy, exposes `/metrics`, and refuses the second
 organisation weeks later, a symptom with no apparent relation to its cause.
 """
@@ -29,7 +29,7 @@ def test_announcing_enterprise_without_an_extension_refuses_to_start(monkeypatch
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_EDITION", "enterprise")
+    monkeypatch.setenv("TRANIBOR_EDITION", "enterprise")
     reset_settings_cache()
     try:
         with pytest.raises(RuntimeError) as failure:
@@ -39,7 +39,7 @@ def test_announcing_enterprise_without_an_extension_refuses_to_start(monkeypatch
         assert "choregos-ee" in message, "the refusal must say which package is missing"
         assert "community" in message, "the refusal must say how to go back"
     finally:
-        monkeypatch.delenv("CHOREGOS_EDITION", raising=False)
+        monkeypatch.delenv("TRANIBOR_EDITION", raising=False)
         reset_settings_cache()
 
 
@@ -48,12 +48,12 @@ def test_announcing_community_starts(monkeypatch: Any) -> None:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_EDITION", "community")
+    monkeypatch.setenv("TRANIBOR_EDITION", "community")
     reset_settings_cache()
     try:
         assert create_app() is not None
     finally:
-        monkeypatch.delenv("CHOREGOS_EDITION", raising=False)
+        monkeypatch.delenv("TRANIBOR_EDITION", raising=False)
         reset_settings_cache()
 
 
@@ -63,13 +63,13 @@ def test_announcing_enterprise_with_an_extension_that_declares_itself_starts(mon
     from tranibor_api.edition import ENTERPRISE, declare
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_EDITION", "enterprise")
+    monkeypatch.setenv("TRANIBOR_EDITION", "enterprise")
     reset_settings_cache()
     declare(ENTERPRISE, features=frozenset({"multi_org"}))
     try:
         assert create_app() is not None
     finally:
-        monkeypatch.delenv("CHOREGOS_EDITION", raising=False)
+        monkeypatch.delenv("TRANIBOR_EDITION", raising=False)
         reset_settings_cache()
 
 

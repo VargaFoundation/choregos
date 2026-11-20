@@ -176,7 +176,7 @@ async def test_the_agent_reaches_the_gateway_through_the_run_s_proxy(
     assert env["HEADROOM_OFFLINE"] == "1"
     assert env["LITELLM_LOCAL_MODEL_COST_MAP"] == "True"
     assert env["HEADROOM_SAVINGS_PROFILE"] == "balanced"
-    assert not any(key.startswith(("CHOREGOS_", "OPENAI_", "ANTHROPIC_")) for key in env), sorted(env)
+    assert not any(key.startswith(("TRANIBOR_", "OPENAI_", "ANTHROPIC_")) for key in env), sorted(env)
     assert not {"sk-fake", runner_settings.run_token} & set(env.values())
 
     # It works outside the workspace, and dies with the run.

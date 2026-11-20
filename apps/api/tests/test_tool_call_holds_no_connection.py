@@ -8,7 +8,7 @@ external call runs — the fake provider is asked — and finds no connection ch
 transaction committed before the call left, and its line is booked after it.
 
 These run on SQLite (the pool is a queue there too) and, in CI's second pass, on PostgreSQL under RLS
-(`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`), where the booking after the call also proves that the run
+(`TRANIBOR_TEST_SUITE_ON_POSTGRES=1`), where the booking after the call also proves that the run
 token's scope is set again. The pool itself, exhausted and not, is `test_tool_call_pool_postgres.py`.
 """
 

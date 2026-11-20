@@ -19,7 +19,7 @@ NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"
 LIVE_TESTS = ROOT / "tests" / "live"
 # Opt-in switches of the local stacks (a collector, an LLM Guard, a decision model), run by their own
 # jobs in ci.yml.
-NOT_SECRETS = {"CHOREGOS_LIVE_OTEL", "CHOREGOS_LIVE_LLM_GUARD", "CHOREGOS_LIVE_DECISIONS"}
+NOT_SECRETS = {"TRANIBOR_LIVE_OTEL", "TRANIBOR_LIVE_LLM_GUARD", "TRANIBOR_LIVE_DECISIONS"}
 
 
 def _jobs() -> dict[str, Any]:
@@ -48,11 +48,11 @@ def test_the_live_job_reads_its_required_services_from_the_repository() -> None:
     2026-10-28). So the job takes the list from the repository variable, and passes every secret of
     every service it could name (see the test below)."""
     env = _jobs()["live"]["env"]
-    assert str(env.get("CHOREGOS_LIVE_REQUIRED", "")).replace(" ", "") == (
-        "${{vars.CHOREGOS_LIVE_REQUIRED}}"
+    assert str(env.get("TRANIBOR_LIVE_REQUIRED", "")).replace(" ", "") == (
+        "${{vars.TRANIBOR_LIVE_REQUIRED}}"
     ), "without a required service every missing secret is a skip, and the night stays green"
     for name, value in env.items():
-        if name.startswith("CHOREGOS_LIVE_") and name != "CHOREGOS_LIVE_REQUIRED":
+        if name.startswith("TRANIBOR_LIVE_") and name != "TRANIBOR_LIVE_REQUIRED":
             assert "secrets." in str(value), f"{name} must come from a secret, never be written here"
 
 
@@ -71,6 +71,6 @@ def test_the_live_job_passes_every_variable_the_live_tests_require() -> None:
                 constants = [a.value for a in node.args if isinstance(a, ast.Constant)]
                 asked |= {value for value in constants if isinstance(value, str)}
     asked -= NOT_SECRETS
-    assert {"CHOREGOS_LIVE_ROVO_ACCESS_TOKEN", "CHOREGOS_LIVE_REALTIME_MODEL"} <= asked
+    assert {"TRANIBOR_LIVE_ROVO_ACCESS_TOKEN", "TRANIBOR_LIVE_REALTIME_MODEL"} <= asked
     missing = sorted(asked - set(_jobs()["live"]["env"]))
     assert not missing, f"asked by tests/live, passed by no step of the live job: {missing}"

@@ -1,7 +1,7 @@
 image:
   # `litellm-database`: the variant that can hold virtual keys (hence a database).
   repository: ghcr.io/berriai/litellm-database
-  tag: "v1.105.5"
+  tag: "v1.108.12"
 # The aliases Choregos asks for (`profile:*` → `platform/*`), and what they become in
 # amont. Deux formes possibles :
 #   - upstream = another gateway (the platform's own): api_base + virtual key;
@@ -13,7 +13,8 @@ upstream:
 # Each entry: `alias` (what Choregos asks for), `model` (what LiteLLM calls), and optionally `mode`
 # (`embedding`, `evaluation` for a decision model), `apiBase` and `apiKeyEnv` (its own endpoint and the
 # environment variable holding its key, instead of the upstream's), `inputCostPerToken` and
-# `outputCostPerToken` (USD, its internal price: ADR 0004). `global.decisions.embedded` adds
+# `outputCostPerToken` (USD, its internal price: ADR 0004) and `modelInfo` (the rest of its price sheet,
+# verbatim: `cache_read_input_token_cost`, `cache_creation_input_token_cost`, `tiered_pricing`). `global.decisions.embedded` adds
 # `platform/decide` (Laya, ADR 0121) to this list.
 models:
   - alias: platform/standard
@@ -30,6 +31,36 @@ models:
 database:
   # Dedicated database on the same server (created at initdb by the postgresql subchart).
   name: litellm
+  # Empty host / user / passwordSecret: the umbrella's `global.database`. An operator's PostgreSQL names
+  # its own (`{name, key}` of the Secret holding the password).
+  host: ""
+  user: ""
+  passwordSecret: {}
+  # `prefer`, `require` (a server that refuses clear connections), `verify-full`...
+  sslmode: prefer
+# Secrets the models' `apiKeyEnv` name: `[{name: PLATFORM_LLM_KEY, secretName: ..., key: ...}]`.
+extraSecretEnv: []
+# Read the image's price sheet instead of fetching the upstream one at each start.
+localModelCostMap: false
+# ADR 0084: the secrets-masking guard, loaded on every request, fails closed. On by default; an
+# operator that has not yet decided to load it on its gateway switches it off here and nothing changes
+# for it. It acts only for a key the platform marked (`sandbox.llm_security_analyzer`).
+guardrail:
+  enabled: true
+# ADR 0018: each call made with a run's key is a span of its trace; inert without an OTLP endpoint.
+spans:
+  enabled: true
+# The Kyverno `non-root` rule is strict: the pod context is required. The image runs as uid 1000. An
+# operator whose namespace admits it may relax these fields (`runAsNonRoot: false`, `runAsUser: 0`).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile: { type: RuntimeDefault }
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities: { drop: ["ALL"] }
 resources:
   requests: { cpu: 200m, memory: 512Mi }
   limits: { cpu: "1", memory: 2Gi }

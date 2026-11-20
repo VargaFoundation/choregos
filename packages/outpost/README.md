@@ -34,14 +34,14 @@ Options come before the command, or from the environment:
 
 | Option | Environment | Default | What |
 |:--|:--|:--|:--|
-| `--policy` | `CHOREGOS_OUTPOST_POLICY` | `/etc/choregos-outpost/policy.yaml` | the policy file |
-| `--state-dir` | `CHOREGOS_OUTPOST_STATE_DIR` | `/var/lib/choregos-outpost` | the identity and the journal; it must outlive a restart |
-| `--identity-dir` | `CHOREGOS_OUTPOST_IDENTITY_DIR` | `<state dir>/identity` | the keys, when they live elsewhere (a volume mounted read-only) |
-| `--ca-file` | `CHOREGOS_OUTPOST_CA_FILE` | none | an authority to trust besides the system's: an inspecting proxy's, a private one |
-| `--proxy` | `CHOREGOS_OUTPOST_PROXY` | `HTTPS_PROXY`, unless `NO_PROXY` covers the door | the outbound proxy towards the door only |
-| `--log-level` | `CHOREGOS_OUTPOST_LOG_LEVEL` | `INFO` | the daemon's own log (JSON lines on standard output) |
+| `--policy` | `TRANIBOR_OUTPOST_POLICY` | `/etc/choregos-outpost/policy.yaml` | the policy file |
+| `--state-dir` | `TRANIBOR_OUTPOST_STATE_DIR` | `/var/lib/choregos-outpost` | the identity and the journal; it must outlive a restart |
+| `--identity-dir` | `TRANIBOR_OUTPOST_IDENTITY_DIR` | `<state dir>/identity` | the keys, when they live elsewhere (a volume mounted read-only) |
+| `--ca-file` | `TRANIBOR_OUTPOST_CA_FILE` | none | an authority to trust besides the system's: an inspecting proxy's, a private one |
+| `--proxy` | `TRANIBOR_OUTPOST_PROXY` | `HTTPS_PROXY`, unless `NO_PROXY` covers the door | the outbound proxy towards the door only |
+| `--log-level` | `TRANIBOR_OUTPOST_LOG_LEVEL` | `INFO` | the daemon's own log (JSON lines on standard output) |
 
-`enrol` takes its token from `--token`, `--token-file` or `CHOREGOS_OUTPOST_ENROLMENT_TOKEN`. It
+`enrol` takes its token from `--token`, `--token-file` or `TRANIBOR_OUTPOST_ENROLMENT_TOKEN`. It
 prints the fingerprint of the instance's own signing key, never the one the door's answer echoes:
 that answer is not signed. A person approves the instance in the console only if the fingerprint
 shown there is the one printed. `--no-facts` sends no fact about the machine (by default its host

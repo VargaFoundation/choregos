@@ -30,7 +30,7 @@ def registry(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeRegistryClient]:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_images import set_image_services
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_REGISTRIES", json.dumps(["ghcr.io/acme"]))
+    monkeypatch.setenv("TRANIBOR_HOSTED_REGISTRIES", json.dumps(["ghcr.io/acme"]))
     reset_settings_cache()
     client = FakeRegistryClient(strict=True)
     client.push(REF, "the triager")

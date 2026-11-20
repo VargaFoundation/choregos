@@ -12,7 +12,7 @@ by a real `.dist-info` is found by `importlib.metadata`, and an extension that b
 process. What was not, and it is the heart of the commercial model:
 
 * **the edition**: `declare(ENTERPRISE)` called from the entry point, not from the test;
-* **the start-up**: the API refuses `CHOREGOS_EDITION=enterprise` when nothing declared itself
+* **the start-up**: the API refuses `TRANIBOR_EDITION=enterprise` when nothing declared itself
   (#107). A real extension must therefore lift that refusal, otherwise the guard is a wall;
 * **the second organisation**: the community edition's `409` must open;
 * **the group mapper** (seam C3) and a **gate**, both through the entry point.
@@ -144,7 +144,7 @@ def test_the_api_starts_whereas_it_refused_without_an_extension(
 ) -> None:
     """The guard of #107 must be a check, not a wall.
 
-    It refuses `CHOREGOS_EDITION=enterprise` when no extension declared itself. If a real
+    It refuses `TRANIBOR_EDITION=enterprise` when no extension declared itself. If a real
     extension did not lift it, the guard would forbid the enterprise edition instead of checking
     it, and nobody would notice before having a `choregos-ee` to deploy.
     """
@@ -152,7 +152,7 @@ def test_the_api_starts_whereas_it_refused_without_an_extension(
     from tranibor_api.edition import reset
     from tranibor_api.main import _check_the_edition, create_app
 
-    monkeypatch.setenv("CHOREGOS_EDITION", "enterprise")
+    monkeypatch.setenv("TRANIBOR_EDITION", "enterprise")
     reset_settings_cache()
     try:
         # Without a loaded extension: refusal, with the cause named.
@@ -162,7 +162,7 @@ def test_the_api_starts_whereas_it_refused_without_an_extension(
         # With one: the application builds.
         assert create_app() is not None
     finally:
-        monkeypatch.delenv("CHOREGOS_EDITION", raising=False)
+        monkeypatch.delenv("TRANIBOR_EDITION", raising=False)
         reset_settings_cache()
 
 

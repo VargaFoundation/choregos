@@ -44,7 +44,7 @@ from ..deps import Config, Db, Me, PlatformDb, resolve_project
 from ..edition import group_mapper
 from ..errors import ApiError, forbidden, not_found, unauthorized, unprocessable
 from ..logging import get_logger
-from ..rbac import Permission
+from ..rbac import Permission, rank_of
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
 from ..services.api_tokens import api_token_dto, linked_projects
@@ -60,11 +60,17 @@ logger = get_logger("choregos.auth")
 OIDC_COOKIE = "choregos_oidc"
 OIDC_HANDSHAKE_S = 600
 
+#: The role groups an identity provider sends, bare or as `choregos:<org>:<group>`. `approvers` and
+#: `contributors` are the neutral names (ADR 0181 C1); `release-captains` and `developers` give the same
+#: roles until the release `tranibor_contracts.window` names, so a deployment renames its groups inside
+#: the window.
 GROUP_ROLES: dict[str, Role] = {
     "org-admins": Role.ORG_ADMIN,
     "product-owners": Role.PROJECT_OWNER,
-    "release-captains": Role.RELEASE_CAPTAIN,
-    "developers": Role.DEVELOPER,
+    "approvers": Role.APPROVER,
+    "release-captains": Role.APPROVER,
+    "contributors": Role.CONTRIBUTOR,
+    "developers": Role.CONTRIBUTOR,
     "viewers": Role.VIEWER,
 }
 
@@ -158,8 +164,8 @@ async def _discover(issuer: str) -> dict[str, str]:
         raise ApiError(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Identity provider unavailable",
-            f"OIDC discovery at {url} failed: {reason}; set CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT, "
-            "CHOREGOS_OIDC_TOKEN_ENDPOINT and CHOREGOS_OIDC_USERINFO_ENDPOINT if the provider "
+            f"OIDC discovery at {url} failed: {reason}; set TRANIBOR_OIDC_AUTHORIZATION_ENDPOINT, "
+            "TRANIBOR_OIDC_TOKEN_ENDPOINT and TRANIBOR_OIDC_USERINFO_ENDPOINT if the provider "
             "publishes none",
         )
     _endpoints[issuer] = found
@@ -649,10 +655,9 @@ async def _relink_in_window(
 def roles_from_groups(groups: list[str], default_org: str) -> dict[str, Role]:
     """`choregos:<org>:<group>` → role on that org. A bare group only counts for `default_org`.
 
-    When several groups target the same organisation, the highest wins — the order of
-    `GROUP_ROLES` is descending.
+    When several groups target the same organisation, the highest wins. The roles come back under
+    their neutral names; a membership row is written with `Role.stored`.
     """
-    rank = {role: i for i, role in enumerate(GROUP_ROLES.values())}
     roles: dict[str, Role] = {}
     for group in groups:
         if group.startswith("choregos:"):
@@ -663,7 +668,7 @@ def roles_from_groups(groups: list[str], default_org: str) -> dict[str, Role]:
         role = GROUP_ROLES.get(name)
         if not org or role is None:
             continue
-        if org not in roles or rank[role] < rank[roles[org]]:
+        if org not in roles or rank_of(role) > rank_of(roles[org]):
             roles[org] = role
     return roles
 
@@ -698,15 +703,15 @@ async def _map_groups_to_roles(
     # this file — that is all the C3 seam asked for, and nothing more.
     default_org = only_org.slug if only_org is not None else settings.oidc_default_org
     roles = group_mapper(roles_from_groups)(groups, default_org)
-    # A group that names a FORMER slug (`choregos:<old>:<group>`, or `CHOREGOS_OIDC_DEFAULT_ORG` left at
+    # A group that names a FORMER slug (`choregos:<old>:<group>`, or `TRANIBOR_OIDC_DEFAULT_ORG` left at
     # the old slug) grants its role on the renamed organisation (ADR 0090). When a current slug and an
     # alias of the same organisation both appear, the higher role wins, as for two groups of one slug.
-    rank = {role: i for i, role in enumerate(GROUP_ROLES.values())}
+    # A mapper an extension declared may answer either spelling of a renamed role (ADR 0181 C1).
     resolu: dict[str, Role] = {}
     for name, role in roles.items():
         actuel = (await current_slugs(session, [name]))[name]
-        if actuel not in resolu or rank[role] < rank[resolu[actuel]]:
-            resolu[actuel] = role
+        if actuel not in resolu or rank_of(role) > rank_of(resolu[actuel]):
+            resolu[actuel] = role.neutral
     roles = resolu
     if only_org is not None:
         roles = {slug: role for slug, role in roles.items() if slug == only_org.slug}
@@ -730,13 +735,14 @@ async def _map_groups_to_roles(
                 Membership(
                     user_id=user.id,
                     org_id=org.id,
-                    role=str(roles[org.slug]),
+                    role=str(roles[org.slug].stored),
                     source="idp" if ecraser else "manual",
                 )
             )
-        elif ecraser:
-            # The role follows the provider, the provenance does not: a manual row stays manual.
-            existing.role = str(roles[org.slug])
+        elif ecraser and Role(existing.role).neutral is not roles[org.slug]:
+            # The role follows the provider, the provenance does not: a manual row stays manual. The
+            # same role under its other spelling is no change: the row keeps what it holds.
+            existing.role = str(roles[org.slug].stored)
     if ecraser:
         await _revoke_unmapped_memberships(session, user, set(roles), only_org=only_org)
 
@@ -854,12 +860,12 @@ async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-on
 
 
 async def _development_groups(session: Any, email: str, settings: Settings) -> list[str]:
-    """In development sign-in: admin if the e-mail is listed, developer otherwise.
+    """In development sign-in: admin if the e-mail is listed, contributor otherwise.
 
     In `oidc_default_org` when it is set; otherwise in every organisation of the
     bench — a bench only has one, and that is what "development" means.
     """
-    name = "org-admins" if email.lower() in settings.dev_admins else "developers"
+    name = "org-admins" if email.lower() in settings.dev_admins else "contributors"
     if settings.oidc_default_org:
         return [f"choregos:{settings.oidc_default_org}:{name}"]
     orgs = (await session.execute(select(Organization.slug))).scalars().all()

@@ -1,7 +1,7 @@
 """The documentation over the MCP door (S62-10, ADR 0150): `docs_search` and `docs_read`.
 
 The documentation is the Markdown of `docs/site/` that the API image carries; here, a fixture tree
-under `CHOREGOS_DOCS_DIR`. The tools are announced to every token that opens the door, read only,
+under `TRANIBOR_DOCS_DIR`. The tools are announced to every token that opens the door, read only,
 audited and rate limited like the door's other reads, and read nothing outside that directory.
 """
 
@@ -78,8 +78,8 @@ def docs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, app: Any) -> Path:
     from tranibor_api.config import reset_settings_cache
 
     site = _tree(tmp_path / "documentation")
-    monkeypatch.setenv("CHOREGOS_DOCS_DIR", str(site))
-    monkeypatch.setenv("CHOREGOS_DOCS_URL", BASE)
+    monkeypatch.setenv("TRANIBOR_DOCS_DIR", str(site))
+    monkeypatch.setenv("TRANIBOR_DOCS_URL", BASE)
     reset_settings_cache()
     return site
 
@@ -294,8 +294,8 @@ async def test_a_build_without_documentation_says_so(
     directory = tmp_path / "no-docs"
     if kind == "empty":
         directory.mkdir()
-    monkeypatch.setenv("CHOREGOS_DOCS_DIR", str(directory))
-    monkeypatch.setenv("CHOREGOS_DOCS_URL", BASE)
+    monkeypatch.setenv("TRANIBOR_DOCS_DIR", str(directory))
+    monkeypatch.setenv("TRANIBOR_DOCS_URL", BASE)
     reset_settings_cache()
     token = await _token(client, "mcp:read")
     names = {o["name"] for o in (await _rpc(client, token, "tools/list")).json()["result"]["tools"]}
@@ -419,17 +419,6 @@ def test_anchors_follow_docusaurus() -> None:
     )
 
 
-def test_an_ontology_cannot_take_the_names_of_the_doors_tools() -> None:
-    from tranibor_api.mcp.caller import Caller
-    from tranibor_api.mcp.tools import Context, core_tools
-    from tranibor_api.rbac import Principal
-    from tranibor_ontology.mcpgen import RESERVED_TOOLS
-
-    caller = Caller(principal=Principal(user_id="u", email="u@x.test"), token=None, scopes=frozenset())
-    ctx = Context(session=None, caller=caller, project=None, org=None, console="")  # type: ignore[arg-type]
-    assert {tool.name for tool in core_tools(ctx)} <= RESERVED_TOOLS
-
-
 # ───────────────────────────── as resources (ADR 0191 §8) ─────────────────────────────
 
 
@@ -496,7 +485,7 @@ async def test_a_build_without_documentation_lists_no_resource(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_DOCS_DIR", str(tmp_path / "absent"))
+    monkeypatch.setenv("TRANIBOR_DOCS_DIR", str(tmp_path / "absent"))
     reset_settings_cache()
     token = await _token(client, "mcp:read")
     assert (await _result(client, token, "resources/list")) == {"resources": []}

@@ -25,7 +25,6 @@ MAX_LINES = 300
 ROOT_NAMES = (
     "EXTENSION_GROUP",
     "FAKE_ENTRA",
-    "FAKE_MARKETDATA",
     "FAKE_MCP",
     "FAKE_MCP_GATEWAY",
     "FAKE_NETOPS",
@@ -42,10 +41,24 @@ ROOT_NAMES = (
 )
 
 
+def _extension_packages() -> set[str]:
+    """The top-level packages of the installed extensions (`choregos.plugins`): what they register is
+    theirs, and their own tests hold it (a first-party plugin's included, ADR 0181)."""
+    from importlib import metadata
+
+    return {
+        p.value.partition(":")[0].partition(".")[0] for p in metadata.entry_points(group="choregos.plugins")
+    }
+
+
 def describe_registry() -> list[dict[str, Any]]:
-    """Every registered pair, in registration order, with what its spec declares."""
+    """Every pair the core registered, in registration order, with what its spec declares."""
     described = []
+    extensions = _extension_packages()
     for (kind, type_name), spec in registry._SPECS.items():
+        factory = registry._REGISTRY.get((kind, type_name))
+        if getattr(factory, "__module__", "").partition(".")[0] in extensions:
+            continue
         described.append(
             {
                 "kind": kind,

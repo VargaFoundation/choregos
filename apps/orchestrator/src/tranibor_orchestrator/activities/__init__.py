@@ -23,6 +23,7 @@ from . import (
     schedules,
     scm,
     stage,
+    step_effects,
     suspension,
     tracker,
     train,
@@ -88,6 +89,8 @@ ALL_ACTIVITIES = [
     scm.enqueue_merge,
     scm.ensure_branch,
     scm.collect_run_artifacts,
+    # An extension's `does:` (ADR 0181): the core's own effects keep their activities above.
+    step_effects.run_step_effect,
     train.load_train_config,
     train.check_window,
     train.create_release,

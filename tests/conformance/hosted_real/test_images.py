@@ -11,7 +11,7 @@ Docker and runs the image through `tests/conformance/hosted`:
 
 The image is then run with `docker run` by the conformance harness and must pass every check.
 Skipped without a daemon (and, for the zips, a registry); the `hosted-images` CI job fails on a skip.
-`CHOREGOS_TEST_HOSTED_EXAMPLES` (comma separated) narrows the run to some examples.
+`TRANIBOR_TEST_HOSTED_EXAMPLES` (comma separated) narrows the run to some examples.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from ..hosted.harness import HOSTED_CHECKS, HostedAgentSpec, run_hosted_suite
 pytestmark = pytest.mark.hosted_docker
 
 EXAMPLES = pathlib.Path(__file__).resolve().parents[3] / "examples" / "hosted"
-WANTED = {name for name in os.environ.get("CHOREGOS_TEST_HOSTED_EXAMPLES", "").split(",") if name}
+WANTED = {name for name in os.environ.get("TRANIBOR_TEST_HOSTED_EXAMPLES", "").split(",") if name}
 ALL = sorted(
     path.name
     for path in EXAMPLES.iterdir()
@@ -47,7 +47,7 @@ def test_every_example_is_covered() -> None:
     """A new example directory is built and run too: none is left out by forgetting a list."""
     assert len(ALL) == 11, ALL
     assert set(ALL) >= WANTED, (
-        f"CHOREGOS_TEST_HOSTED_EXAMPLES names an example that does not exist: {WANTED - set(ALL)}"
+        f"TRANIBOR_TEST_HOSTED_EXAMPLES names an example that does not exist: {WANTED - set(ALL)}"
     )
 
 

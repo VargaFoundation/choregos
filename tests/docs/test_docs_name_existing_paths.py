@@ -43,6 +43,8 @@ HISTORICAL: dict[str, str] = {
     "docker/dockerfile": "the BuildKit frontend reference `docker/dockerfile:1`, not a path",
     "packages/adapters/memory/pgvector.py": "docs/plan/04: a fallback adapter, never built",
     "charts/choregos/values/gateway.yaml": "docs/plan/04: a sketched base configuration, never split out",
+    "trials/ontology/": "the 0.21 rename table: a trial removed with the ontology (ADR 0181, O4-1)",
+    "trials/dev-platform/": "the 0.21 rename table: a trial removed with the ontology (ADR 0181, O4-1)",
 }
 
 
@@ -96,13 +98,13 @@ def test_no_upgrade_fragment_left() -> None:
     renamed = text.split("## Renamed in 0.21 (ADR 0098)", 1)[1]
     # One row of each kind of fragment: operator names, extension API, services, log keys, trials.
     for name in (
-        "CHOREGOS_ONTOLOGY_TRIAL",
+        "TRANIBOR_ONTOLOGY_TRIAL",
         "`tranibor_api.extensions`",
         "`tranibor_api.edition`",
         "`tranibor_api.services`",
         "`a2a.call` log key",
         "TRIAL_FAKES_URL",
-        "CHOREGOS_RECORD_HISTORY",
+        "TRANIBOR_RECORD_HISTORY",
         "`tools:`",
     ):
         assert name in renamed, f"the 0.21 rename section lost {name}"

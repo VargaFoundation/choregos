@@ -33,7 +33,7 @@ async def _second_replica(email: str) -> AsyncClient:
 @pytest.mark.skipif(
     not SUITE_ON_POSTGRES,
     reason="the cross-replica cancel exists when the application runs on PostgreSQL: CI's PostgreSQL pass "
-    "(`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`) runs it",
+    "(`TRANIBOR_TEST_SUITE_ON_POSTGRES=1`) runs it",
 )
 async def test_a_cancel_sent_to_another_replica_stops_the_turn(
     client: AsyncClient,

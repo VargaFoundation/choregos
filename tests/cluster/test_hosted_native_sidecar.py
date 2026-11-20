@@ -13,7 +13,7 @@ default Python process ends on 143 and a SIGKILL on 137, so the agent's exit cod
 
 It needs the reference image, built and loadable by the cluster (`docker build -t
 reference-agent:dev examples/hosted/reference && kind load docker-image reference-agent:dev
---name choregos`), named by `CHOREGOS_HOSTED_REFERENCE_IMAGE`; without it, it is skipped.
+--name choregos`), named by `TRANIBOR_HOSTED_REFERENCE_IMAGE`; without it, it is skipped.
 """
 
 from __future__ import annotations
@@ -45,9 +45,9 @@ RUNNER = (
 
 
 def _reference_image() -> str:
-    image = os.environ.get("CHOREGOS_HOSTED_REFERENCE_IMAGE", "")
+    image = os.environ.get("TRANIBOR_HOSTED_REFERENCE_IMAGE", "")
     if not image:
-        pytest.skip("CHOREGOS_HOSTED_REFERENCE_IMAGE unset: the reference hosted example's image is needed")
+        pytest.skip("TRANIBOR_HOSTED_REFERENCE_IMAGE unset: the reference hosted example's image is needed")
     return image
 
 
@@ -56,7 +56,7 @@ def _spec(ns: str, image: str) -> StageJobSpec:
     # kept for the type and replaced by the loaded tag, which is what the node can run.
     agent = AgentContainer(
         image="registry.invalid/agent@sha256:" + "a" * 64,
-        env={"PORT": "8088", "CHOREGOS_RUN_ID": "hosted-1", "CHOREGOS_MODEL": "reference"},
+        env={"PORT": "8088", "TRANIBOR_RUN_ID": "hosted-1", "TRANIBOR_MODEL": "reference"},
         termination_grace_s=30,
         cpu="250m",
         memory="256Mi",

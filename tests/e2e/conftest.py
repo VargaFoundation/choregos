@@ -21,14 +21,14 @@ import pytest
 #: that assumed an empty webhook secret got 401. Only the `environnement_e2e` fixture sets them,
 #: for the duration of this package's tests, and gives the environment back as it found it.
 ENVIRONNEMENT_E2E: dict[str, str] = {
-    "CHOREGOS_FAKES": "1",
-    "CHOREGOS_ENV": "test",
+    "TRANIBOR_FAKES": "1",
+    "TRANIBOR_ENV": "test",
     # The development login is OFF by default since 2026-09-24: a test that uses it
     # must say so, and name who is admin.
-    "CHOREGOS_DEV_LOGIN_ENABLED": "true",
-    "CHOREGOS_DEV_ADMIN_EMAILS": "admin@northwind.dev",
+    "TRANIBOR_DEV_LOGIN_ENABLED": "true",
+    "TRANIBOR_DEV_ADMIN_EMAILS": "admin@northwind.dev",
     # Webhooks refuse an empty secret since P0-3: the end-to-end bench sets one.
-    "CHOREGOS_GENERIC_WEBHOOK_SECRET": "e2e-webhook-secret",
+    "TRANIBOR_GENERIC_WEBHOOK_SECRET": "e2e-webhook-secret",
 }
 
 
@@ -177,7 +177,7 @@ class Platform:
 @pytest.fixture
 async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Platform]:
     # Through `monkeypatch`: a scenario's database does not outlive its test (#259).
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/e2e.db")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/e2e.db")
     from httpx import ASGITransport, AsyncClient
     from temporalio.testing import WorkflowEnvironment
     from tranibor_adapters import AdapterSet

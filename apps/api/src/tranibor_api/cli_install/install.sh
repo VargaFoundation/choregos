@@ -11,13 +11,14 @@
 # (`~/.local/bin/choregos` by default). It never calls sudo: pick a prefix you can write to.
 #
 # Options:
-#   --prefix DIR   install into DIR/bin (default: $HOME/.local; also CHOREGOS_INSTALL_PREFIX)
+#   --prefix DIR   install into DIR/bin (default: $HOME/.local; also TRANIBOR_INSTALL_PREFIX)
 #   --url URL      the instance to install from (default: the one that served this script)
 #   --help         this text
 set -eu
 
 INSTANCE_URL='__CHOREGOS_INSTANCE_URL__'
-PREFIX="${CHOREGOS_INSTALL_PREFIX:-${HOME:-}/.local}"
+# TRANIBOR_INSTALL_PREFIX; the former CHOREGOS_INSTALL_PREFIX still works (ADR 0176 R4).
+PREFIX="${TRANIBOR_INSTALL_PREFIX:-${CHOREGOS_INSTALL_PREFIX:-${HOME:-}/.local}}"
 RELEASES='__CHOREGOS_RELEASES__'
 
 say() { printf '%s\n' "$*"; }
@@ -28,7 +29,7 @@ usage() {
 Installs the choregos CLI from $INSTANCE_URL, in the version it runs.
 
 Usage: sh install.sh [--prefix DIR] [--url URL]
-  --prefix DIR   install into DIR/bin (default: \$HOME/.local; also CHOREGOS_INSTALL_PREFIX)
+  --prefix DIR   install into DIR/bin (default: \$HOME/.local; also TRANIBOR_INSTALL_PREFIX)
   --url URL      the instance to install from (default: $INSTANCE_URL)
 EOF
 }

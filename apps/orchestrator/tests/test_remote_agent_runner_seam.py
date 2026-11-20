@@ -2,7 +2,7 @@
 
 `prepare_stage` and `start_run` produce what the executor puts in the pod: a StageInput and, in the
 run's Secret, the access token. The runner is started here with exactly that — the spec's input and
-`CHOREGOS_RUN_REMOTE_TOKEN` — against the scriptable A2A agent. What is proved: the remote agent
+`TRANIBOR_RUN_REMOTE_TOKEN` — against the scriptable A2A agent. What is proved: the remote agent
 receives the token the orchestrator minted and the step the orchestrator prepared, and the result
 the runner posts is an ordinary `StageResult` (the transition's gates read it like any other).
 """
@@ -83,7 +83,7 @@ async def test_the_runner_calls_the_remote_agent_with_the_token_the_orchestrator
     settings = RunnerSettings(
         run_id=spec.run_id, workspace=tmp_path / "workspace", run_token="run-token-value"
     ).model_copy(
-        # What the executor puts in the pod's environment: `CHOREGOS_RUN_REMOTE_TOKEN`.
+        # What the executor puts in the pod's environment: `TRANIBOR_RUN_REMOTE_TOKEN`.
         update={"remote_token": spec.remote_token or "", "remote_poll_seconds": 0.01}
     )
     runner = Runner(settings, api)  # type: ignore[arg-type]

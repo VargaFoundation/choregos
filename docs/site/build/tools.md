@@ -42,7 +42,7 @@ asks for the credential and whether the server is available to every project or 
 same by API, for a documentation search server your team runs:
 
 ```shell
-curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/connectors" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -s "$TRANIBOR_API_URL/api/v1/orgs/acme/connectors" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/json' -d '{
   "name": "docs-search",
   "type": "mcp",
@@ -76,10 +76,10 @@ server is a read; any other is a write. Open reads as `allowed`, and writes as `
 are sure. The same by API:
 
 ```bash
-curl -s -X POST "$CHOREGOS_API_URL/api/v1/orgs/acme/connectors/docs-search/discover" \
-  -H "Authorization: Bearer $CHOREGOS_TOKEN"
-curl -s -X PATCH "$CHOREGOS_API_URL/api/v1/orgs/acme/connectors/docs-search/operations/search_docs" \
-  -H "Authorization: Bearer $CHOREGOS_TOKEN" -H 'Content-Type: application/json' -d '{"policy": "allowed"}'
+curl -s -X POST "$TRANIBOR_API_URL/api/v1/orgs/acme/connectors/docs-search/discover" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN"
+curl -s -X PATCH "$TRANIBOR_API_URL/api/v1/orgs/acme/connectors/docs-search/operations/search_docs" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' -d '{"policy": "allowed"}'
 ```
 
 **What you should see:** the discovery lists the tools it `added`, each with its policy `forbidden`

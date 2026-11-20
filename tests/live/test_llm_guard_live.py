@@ -12,7 +12,7 @@ signature of a thinking block the guard masked must not reach the agent.
 
 Docker and Helm, and an opt-in — it pulls images and takes a minute:
 
-    CHOREGOS_LIVE_LLM_GUARD=1 uv run pytest tests/live/test_llm_guard_live.py -m live
+    TRANIBOR_LIVE_LLM_GUARD=1 uv run pytest tests/live/test_llm_guard_live.py -m live
 """
 
 from __future__ import annotations
@@ -171,7 +171,7 @@ StreamGuard.feed = _fails
 
 def _files(tmp_path_factory: pytest.TempPathFactory, sabotage: str = "") -> tuple[pathlib.Path, str]:
     """The chart's LiteLLM files and the fake provider in a directory; returns it and the image."""
-    require("CHOREGOS_LIVE_LLM_GUARD")
+    require("TRANIBOR_LIVE_LLM_GUARD")
     for tool in ("docker", "helm"):
         if shutil.which(tool) is None:
             pytest.skip(f"live test skipped — `{tool}` absent")
@@ -258,6 +258,31 @@ def _events(text: str) -> list[dict[str, Any]]:
     ]
 
 
+def _leaks(text: str) -> list[str]:
+    """Every string field of a stream joined across its chunks, path by path: the fields a secret
+    comes back whole in, once its pieces are put together. `_read` knows the fields a route is
+    documented to stream in; this knows none, so a copy of the answer in a field nobody reads
+    (LiteLLM's `provider_specific_fields`, S40-16j) is read too."""
+    if not text.startswith(("data:", "event:")):
+        return ["the whole body"] if SECRET in text or PASSWORD in text else []
+    joined: dict[str, list[str]] = {}
+
+    def walk(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                walk(item, f"{path}.{key}")
+        elif isinstance(value, list):
+            for number, item in enumerate(value):
+                walk(item, f"{path}[{number}]")
+        elif isinstance(value, str):
+            joined.setdefault(path, []).append(value)
+
+    for event in _events(text):
+        walk(event, "")
+    whole = {path: "".join(parts) for path, parts in joined.items()}
+    return sorted(path for path, value in whole.items() if SECRET in value or PASSWORD in value)
+
+
 def _read_whole(answer: dict[str, Any]) -> Read:
     if "choices" in answer:
         message = answer["choices"][0]["message"]
@@ -318,6 +343,7 @@ def test_a_marked_key_never_sees_a_secret_in_the_model_s_answer(
     read = _read(answer)
     # The whole body: a stream's `.done` events and its final response repeat the text whole.
     assert SECRET not in answer and PASSWORD not in answer
+    assert not _leaks(answer), "a secret, put back together from the stream's pieces"
     assert REDACTED in read.words
     assert json.loads(read.arguments) == {"path": "k.txt", "content": REDACTED}
     assert REDACTED in read.reasoning, "the model's reasoning reached the agent, masked"
@@ -375,6 +401,7 @@ def test_a_native_anthropic_answer_is_masked_and_its_masked_thinking_unsigned(
     answer = gateway.call(gateway.key({GUARD_METADATA_KEY: GUARD_REDACT}), route, stream, model=ANTHROPIC)
     read = _read(answer)
     assert SECRET not in answer and PASSWORD not in answer
+    assert not _leaks(answer), "a secret, put back together from the stream's pieces"
     assert REDACTED in read.words and REDACTED in read.reasoning
     assert json.loads(read.arguments) == {"path": "k.txt", "content": REDACTED}
     assert SIGNATURE not in answer, "the signature of a thinking block the guard masked reached the agent"
@@ -389,4 +416,5 @@ def test_a_native_anthropic_answer_reaches_an_unmarked_key_signed(
     answer = gateway.call(gateway.key({"run_id": "r1"}), route, stream, model=ANTHROPIC)
     read = _read(answer)
     assert SECRET in read.words and SECRET in read.reasoning
+    assert _leaks(answer), "the check the masked answer passes would find a secret"
     assert SIGNATURE in answer

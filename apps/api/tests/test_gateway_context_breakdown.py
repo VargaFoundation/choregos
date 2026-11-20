@@ -164,7 +164,7 @@ async def test_without_a_master_key_the_routes_open_to_nobody(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", "")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_MASTER_KEY", "")
     reset_settings_cache()
     await _run(project, "run-gw-7", "claude-code", [])
 

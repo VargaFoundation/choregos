@@ -456,7 +456,7 @@ async def checked_github_app(
         )
     if await github_app_credentials.refresh(session) is None:
         raise conflict(
-            "this deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID, or one created from the console): "
+            "this deployment has no GitHub App (TRANIBOR_GITHUB_APP_ID, or one created from the console): "
             "name a `documents/git` connector"
         )
     owner = repository.split("/", 1)[0]

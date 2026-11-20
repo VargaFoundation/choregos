@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import AfterValidator, Field
 
-from .enums import EventType, HumanRequestKind, InboundEventType
+from .enums import EventType, HumanRequestKind
+from .open_lists import INBOUND_EVENT_TYPES
 from .workflow import Strict
 
 
@@ -20,7 +21,9 @@ def _now() -> datetime:
 class InboundEvent(Strict):
     """External event normalised by an adapter (docs/plan/01 §1.7)."""
 
-    type: InboundEventType
+    #: One of the core's `InboundEventType` (returned as the member), or a type an extension declared
+    #: (`INBOUND_EVENT_TYPES.declare`, ADR 0181); any other is refused.
+    type: Annotated[str, AfterValidator(INBOUND_EVENT_TYPES.validate)]
     source: str
     delivery_id: str
     ts: datetime = Field(default_factory=_now)

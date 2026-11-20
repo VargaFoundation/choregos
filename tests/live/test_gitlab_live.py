@@ -25,14 +25,14 @@ async def tracker() -> AsyncIterator[GitLabTracker]:
     """One client per test: `httpx` binds its connections to the loop that opened them."""
     import os
 
-    env = require("CHOREGOS_LIVE_GITLAB_TOKEN", "CHOREGOS_LIVE_GITLAB_PROJECT")
+    env = require("TRANIBOR_LIVE_GITLAB_TOKEN", "TRANIBOR_LIVE_GITLAB_PROJECT")
     client = RestClient(
-        os.environ.get("CHOREGOS_LIVE_GITLAB_URL") or "https://gitlab.com",
-        headers={"PRIVATE-TOKEN": env["CHOREGOS_LIVE_GITLAB_TOKEN"]},
+        os.environ.get("TRANIBOR_LIVE_GITLAB_URL") or "https://gitlab.com",
+        headers={"PRIVATE-TOKEN": env["TRANIBOR_LIVE_GITLAB_TOKEN"]},
         service="gitlab",
     )
     try:
-        yield GitLabTracker(client, env["CHOREGOS_LIVE_GITLAB_PROJECT"])
+        yield GitLabTracker(client, env["TRANIBOR_LIVE_GITLAB_PROJECT"])
     finally:
         await client.aclose()
 

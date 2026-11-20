@@ -27,7 +27,7 @@ import json
 import math
 import os
 import random
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -56,18 +56,20 @@ STRATEGIES = {
 }
 PERIOD = {"start": "2018-01-01", "oos_start": "2022-01-01", "end": "2024-12-31"}
 HISTORIES = Path(__file__).resolve().parents[1] / "replay" / "histories"
+OFFLINE = Path(__file__).resolve().parents[2] / "plugins" / "offline"
+JOB_IMAGE = "registry.example/tranibor-investment-research@sha256:" + "b" * 64
 
 
 async def _replayed(handle: Any, archive: str) -> None:
     """The campaign's history replays against the current code, and is archived for the next ones
-    (`CHOREGOS_RECORD_HISTORY=1`): a change to the interpreter that would decide differently
+    (`TRANIBOR_RECORD_HISTORY=1`): a change to the interpreter that would decide differently
     on a job step fails `tests/replay`."""
     from temporalio.worker import Replayer
     from tranibor_orchestrator.workflows import ALL_WORKFLOWS
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_RECORD_HISTORY"):
+    if os.environ.get("TRANIBOR_RECORD_HISTORY"):
         target = HISTORIES / archive
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -151,16 +153,29 @@ class Bench(FakeExecutor):
 
 
 @pytest.fixture
-def market(monkeypatch: pytest.MonkeyPatch) -> Any:
-    import tranibor_adapters
-    from tranibor_adapters.fakes.marketdata import FakeMarketData
+def market(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+    from tranibor_investment_research.marketdata import fake as fakes
 
-    fake = FakeMarketData()
+    fake = fakes.FakeMarketData()
     fake.fixtures["TRND.US"] = sawtooth()
     fake.fixtures["TRN2.US"] = sawtooth(seed=11, phase=20)
-    monkeypatch.setattr(tranibor_adapters, "FAKE_MARKETDATA", fake)
+    monkeypatch.setattr(fakes, "FAKE", fake)
     monkeypatch.setenv("CONNECTOR_E2E_MARKETDATA_KEY", KEY)
-    return fake
+    # The template is the `investment-research` plugin's (S83-07): installed from the archive the core ships
+    # offline, its job steps name the plugin's job image, which the operator maps. The bench runs the
+    # command in a subprocess, whatever the image; the API and the worker still check the name.
+    monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(OFFLINE))
+    monkeypatch.setenv("TRANIBOR_JOB_IMAGES", json.dumps({"investment-research": JOB_IMAGE}))
+    _settings_changed()
+    yield fake
+
+
+def _settings_changed() -> None:
+    from tranibor_api.config import reset_settings_cache
+    from tranibor_orchestrator.config import get_settings
+
+    reset_settings_cache()
+    get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -180,8 +195,8 @@ async def api_url(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> AsyncI
         await asyncio.sleep(0.02)
     port = server.servers[0].sockets[0].getsockname()[1]
     url = f"http://127.0.0.1:{port}"
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_URL", url)
-    monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_URL", url)
+    monkeypatch.setenv("TRANIBOR_HEARTBEAT_SECONDS", "1")
     reset_settings_cache()
     yield url
     server.should_exit = True
@@ -293,9 +308,13 @@ async def _organisation(client: AsyncClient) -> dict[str, Any]:
               "secret_refs": {"api_key": "env:CONNECTOR_E2E_MARKETDATA_KEY"}},
     )  # fmt: skip
     assert connector.status_code == 201, connector.text
+    plugin = {"source": "offline", "name": "investment-research", "version": "0.1.0"}
+    installed = await client.post(f"{ORG}/plugins/install", json=plugin)
+    assert installed.status_code == 201, installed.text
     created = await client.post(
         f"{ORG}/projects",
-        json={"slug": "research", "name": "Research", "template_ref": "investment-research",
+        json={"slug": "research", "name": "Research",
+              "template_ref": "plugin:investment-research/investment-research",
               "config": {"slug": "research", "org": "northwind"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text

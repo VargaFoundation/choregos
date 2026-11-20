@@ -27,7 +27,7 @@ info:
     ignores a field it does not know, which is how a later need reaches an older daemon before it ever
     becomes a verb. Every problem is an RFC 9457 document with a `code` and the door's `server_time`.
 
-    Where the door is switched off (`CHOREGOS_OUTPOSTS`, ADR 0147 §12) it is not mounted: the daemon
+    Where the door is switched off (`TRANIBOR_OUTPOSTS`, ADR 0147 §12) it is not mounted: the daemon
     meets a 404 that is not one of this contract's problems.
   license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
 servers:

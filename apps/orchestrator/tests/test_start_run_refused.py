@@ -107,3 +107,59 @@ async def test_another_error_is_still_retried(setup: Fixture) -> None:
     async with session_scope() as session:
         run = await session.get(Run, str(plan["run_id"]))
         assert run is not None and run.status == "queued"
+
+
+async def test_under_container_a_run_on_an_executor_that_cannot_isolate_is_refused_by_name(
+    setup: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0146 §9 (S65-04d): the deployment's isolation reaches the executor with the run, and one
+    without `separate_agent` refuses it at `start`, once, with a reason the timeline names."""
+    from tranibor_api.db.models import Run
+    from tranibor_api.db.session import session_scope
+    from tranibor_core.agent_isolation import AGENT_ISOLATION_UNAVAILABLE
+    from tranibor_orchestrator.config import get_settings
+
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", "container")
+    get_settings.cache_clear()
+    try:
+        executor = FakeExecutor(capabilities=frozenset({"queue"}))
+        setup.adapters.executor = executor
+        plan = await _prepare(setup)
+        run_id = str(plan["run_id"])
+        with pytest.raises(ApplicationError) as raised:
+            await _start(setup, plan)
+    finally:
+        get_settings.cache_clear()
+    assert raised.value.non_retryable is True
+    assert raised.value.type == AGENT_ISOLATION_UNAVAILABLE
+    assert "`fake`" in str(raised.value)
+    assert executor.started == [], "nothing started"
+    async with session_scope() as session:
+        run = await session.get(Run, run_id)
+        assert run is not None and run.status == "failed"
+        assert run.result is not None and run.result["reason"] == AGENT_ISOLATION_UNAVAILABLE
+
+
+async def test_under_container_an_executor_that_isolates_is_handed_the_word(
+    setup: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tranibor_orchestrator.config import get_settings
+
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", "container")
+    get_settings.cache_clear()
+    try:
+        executor = FakeExecutor()
+        setup.adapters.executor = executor
+        await _start(setup, await _prepare(setup))
+    finally:
+        get_settings.cache_clear()
+    (spec,) = executor.started
+    assert spec.agent_isolation == "container"
+
+
+async def test_by_default_a_run_asks_for_process(setup: Fixture) -> None:
+    executor = FakeExecutor(capabilities=frozenset())
+    setup.adapters.executor = executor
+    await _start(setup, await _prepare(setup))
+    (spec,) = executor.started
+    assert spec.agent_isolation == "process"

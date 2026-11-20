@@ -58,10 +58,10 @@ async def _worker_keywords(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, An
 @pytest.mark.usefixtures("_fresh_settings")
 async def test_the_defaults_are_the_values_the_worker_always_had(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (
-        "CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES",
-        "CHOREGOS_WORKER_MAX_CONCURRENT_WORKFLOW_TASKS",
-        "CHOREGOS_WORKER_MAX_CONCURRENT_LOCAL_ACTIVITIES",
-        "CHOREGOS_WORKER_MAX_CACHED_WORKFLOWS",
+        "TRANIBOR_WORKER_MAX_CONCURRENT_ACTIVITIES",
+        "TRANIBOR_WORKER_MAX_CONCURRENT_WORKFLOW_TASKS",
+        "TRANIBOR_WORKER_MAX_CONCURRENT_LOCAL_ACTIVITIES",
+        "TRANIBOR_WORKER_MAX_CACHED_WORKFLOWS",
     ):
         monkeypatch.delenv(name, raising=False)
     received = await _worker_keywords(monkeypatch)
@@ -75,10 +75,10 @@ async def test_the_defaults_are_the_values_the_worker_always_had(monkeypatch: py
 
 @pytest.mark.usefixtures("_fresh_settings")
 async def test_the_environment_reaches_every_worker(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES", "7")
-    monkeypatch.setenv("CHOREGOS_WORKER_MAX_CONCURRENT_WORKFLOW_TASKS", "11")
-    monkeypatch.setenv("CHOREGOS_WORKER_MAX_CONCURRENT_LOCAL_ACTIVITIES", "13")
-    monkeypatch.setenv("CHOREGOS_WORKER_MAX_CACHED_WORKFLOWS", "0")
+    monkeypatch.setenv("TRANIBOR_WORKER_MAX_CONCURRENT_ACTIVITIES", "7")
+    monkeypatch.setenv("TRANIBOR_WORKER_MAX_CONCURRENT_WORKFLOW_TASKS", "11")
+    monkeypatch.setenv("TRANIBOR_WORKER_MAX_CONCURRENT_LOCAL_ACTIVITIES", "13")
+    monkeypatch.setenv("TRANIBOR_WORKER_MAX_CACHED_WORKFLOWS", "0")
     received = await _worker_keywords(monkeypatch)
     assert len(received) == 2
     for keywords in received:
@@ -93,6 +93,6 @@ def test_a_worker_with_no_slot_is_refused_at_start(monkeypatch: pytest.MonkeyPat
     from pydantic import ValidationError
     from tranibor_orchestrator.config import get_settings
 
-    monkeypatch.setenv("CHOREGOS_WORKER_MAX_CONCURRENT_ACTIVITIES", "0")
+    monkeypatch.setenv("TRANIBOR_WORKER_MAX_CONCURRENT_ACTIVITIES", "0")
     with pytest.raises(ValidationError, match="worker_max_concurrent_activities"):
         get_settings()

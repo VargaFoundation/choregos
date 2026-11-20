@@ -30,7 +30,7 @@ if __name__ == "__main__":
 ```
 
 Package it in an image built `FROM` the Tranibor runner image, give the image a name in the
-platform's `CHOREGOS_AGENT_IMAGES`, and register the agent with
+platform's `TRANIBOR_AGENT_IMAGES`, and register the agent with
 `runtime: {kind: code, image: <name>, command: [python, -m, my_agent]}`. The full guide is
 [docs/code-agents.md](https://github.com/graalsystems/tranibor/blob/main/docs/code-agents.md).
 

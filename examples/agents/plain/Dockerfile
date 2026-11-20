@@ -5,7 +5,7 @@
 # Build from the repository root (until the SDK is on PyPI; then `uv pip install tranibor-agent-sdk`):
 #   docker build -f examples/agents/plain/Dockerfile \
 #     --build-arg RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:<tag> -t my-registry/ticket-triager .
-# Then pin the pushed image by digest in the operator's `CHOREGOS_AGENT_IMAGES`.
+# Then pin the pushed image by digest in the operator's `TRANIBOR_AGENT_IMAGES`.
 ARG RUNNER_IMAGE=ghcr.io/vargafoundation/choregos-runner:0.17.15
 FROM ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 AS uv
 

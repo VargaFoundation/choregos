@@ -36,9 +36,9 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chs_session")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chs_session")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.setenv("COLUMNS", "200")
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
@@ -257,7 +257,7 @@ def _plain(result: Any) -> str:
 def test_a_confirmation_sent_with_a_pasted_token_is_refused_and_says_how_to_sign_in(
     platform: Platform, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_pasted")
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_pasted")
     result = _run("approve", "act-1", stdin="approve\n")
     assert result.exit_code == 1
     text = _plain(result)

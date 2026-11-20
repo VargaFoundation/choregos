@@ -11,7 +11,7 @@ What it does not show: that an answered question costs one run, not two — that
 orchestrator's, proved on the fakes (`apps/orchestrator/tests/test_suspend_around_human.py`);
 proving it here needs the whole platform deployed with this executor on the cluster.
 
-Non-destructive (a namespace of its own): `CHOREGOS_CLUSTER_ALLOW_SHARED=<context>`.
+Non-destructive (a namespace of its own): `TRANIBOR_CLUSTER_ALLOW_SHARED=<context>`.
 """
 
 from __future__ import annotations

@@ -25,7 +25,6 @@ OWNED = (
     f"{SRC}fakes/",
     f"{SRC}families.py",
     f"{SRC}memory/",
-    f"{SRC}marketdata/",
     f"{SRC}identity/",
     f"{SRC}documents/",
     f"{SRC}web_search/",
@@ -56,7 +55,6 @@ OWNED_TESTS = (
     "test_fakes",
     "test_fake_hr",
     "test_served_fakes",
-    "test_marketdata",
     "test_netops_reads",
     "test_netops_writes",
     "test_object_store",
@@ -96,7 +94,7 @@ def _free_port() -> int:
 def test_python_m_fakes_server_serves() -> None:
     """The chart's container command is `python -m tranibor_adapters.fakes.server`."""
     port = _free_port()
-    env = {**os.environ, "CHOREGOS_DEMO_PORT": str(port), "CONNECTOR_DEMO_TOKEN": "t"}
+    env = {**os.environ, "TRANIBOR_DEMO_PORT": str(port), "CONNECTOR_DEMO_TOKEN": "t"}
     process = subprocess.Popen(
         [sys.executable, "-m", "tranibor_adapters.fakes.server"],
         env=env,

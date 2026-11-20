@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Button, Card, ErrorNote, Heading, Input, Select, StepNumber } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { needsWorkspace } from "@/lib/neutral-names";
 
 const STEPS = ["template", "project", "connectors", "summary"];
 const TRACKERS = [
@@ -65,7 +66,7 @@ export default function NewProjectPage() {
   const withTemplate = !form.sansDepot && form.template !== "";
   // The workflow the platform gives a project without a template (ADR 0110): adopting it again is moot.
   const automatique = form.sansDepot ? "core/default-request" : "core/default-simple";
-  const offerts = (catalogue.data ?? []).filter((e) => !form.sansDepot || !e.needs_repository);
+  const offerts = (catalogue.data ?? []).filter((e) => !form.sansDepot || !needsWorkspace(e));
   const choisi = withTemplate ? undefined : offerts.find((e) => `${e.source}/${e.name}` === form.workflow);
 
   async function create() {

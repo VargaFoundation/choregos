@@ -9,10 +9,12 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from tranibor_contracts import ExecutorKind, StageInput, StageResult, StageStatus, TransitionRef
+from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 from tranibor_core.hosted import native_sidecars_refusal
 
 from ..errors import UnsupportedClusterError
+from ..executor.isolation import refuse_unless_separate
 
 StageHandler = Callable[[StageInput], StageResult | Any]
 
@@ -27,14 +29,19 @@ class FakeExecutor:
     """
 
     kind = ExecutorKind.FAKE
-    capabilities: frozenset[str] = frozenset()
+    #: `separate_agent` by default: the fake starts no runner, so no agent ever shares one's container,
+    #: and a deployment under `container` (ADR 0146) still runs its demo and its tests on it.
+    capabilities: frozenset[str] = frozenset({SEPARATE_AGENT})
 
     def __init__(
-        self, handler: StageHandler | None = None, capabilities: frozenset[str] = frozenset()
+        self,
+        handler: StageHandler | None = None,
+        capabilities: frozenset[str] = frozenset({SEPARATE_AGENT}),
     ) -> None:
         self.handler = handler
         # Scriptable: a test announces `suspend`/`resume` to play an executor that can keep a
-        # sandbox across a person's answer (ADR 0016), without one.
+        # sandbox across a person's answer (ADR 0016), without one; or withholds `separate_agent`
+        # to play one that refuses a run under `container`.
         self.capabilities = frozenset(capabilities)
         #: `(run_id, until)` of each suspension; the run ids resumed, in order.
         self.suspended: list[tuple[str, Any]] = []
@@ -90,6 +97,7 @@ class FakeExecutor:
         self.start_calls_by_run[spec.run_id] = self.start_calls_by_run.get(spec.run_id, 0) + 1
         if self.start_error is not None:
             raise self.start_error
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None and self.server_version is not None:
             refusal = native_sidecars_refusal(self.server_version)
             if refusal is not None:

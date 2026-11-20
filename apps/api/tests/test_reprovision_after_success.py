@@ -6,7 +6,7 @@ Temporal; `_start` reads that refusal as "already started", the request still wr
 `running`, and nothing ever finished the project: `a2a-smoke` on the prod tenant stayed `provisioning`
 after S62-13's fix was deployed, because its first run had succeeded. `FakeTemporal` never refuses, so
 only a real server shows it. Uses a local Temporal dev server (`WorkflowEnvironment.start_local`), or
-the one `CHOREGOS_TEST_TEMPORAL_ADDRESS` names.
+the one `TRANIBOR_TEST_TEMPORAL_ADDRESS` names.
 """
 
 from __future__ import annotations
@@ -45,9 +45,9 @@ async def env() -> AsyncIterator[Any]:
     from temporalio.client import Client
     from temporalio.testing import WorkflowEnvironment
 
-    address = os.environ.get("CHOREGOS_TEST_TEMPORAL_ADDRESS")
+    address = os.environ.get("TRANIBOR_TEST_TEMPORAL_ADDRESS")
     if address:
-        namespace = os.environ.get("CHOREGOS_TEST_TEMPORAL_NAMESPACE", "default")
+        namespace = os.environ.get("TRANIBOR_TEST_TEMPORAL_NAMESPACE", "default")
         yield WorkflowEnvironment.from_client(await Client.connect(address, namespace=namespace))
         return
     environment = await WorkflowEnvironment.start_local()

@@ -371,7 +371,7 @@ def built(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
     for kind in KINDS:
         register(kind, "probe", spec)(lambda cfg: object())
     monkeypatch.setitem(_REGISTRY, ("scm", "github"), lambda cfg: received.append(cfg) or object())
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     try:
         yield received
     finally:

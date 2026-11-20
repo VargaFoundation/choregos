@@ -12,8 +12,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_demo_runs_end_to_end(tmp_path: Path, monkeypatch: Any, capsys: Any) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/demo.db")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/demo.db")
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
     from tranibor_orchestrator.activities.base import set_adapters_override
@@ -36,4 +36,4 @@ async def test_demo_runs_end_to_end(tmp_path: Path, monkeypatch: Any, capsys: An
     assert "| Approval |" in output, "the human step appears in the table"
     assert "findings filed       : 1" in output
     assert "pull request         : https://" in output
-    assert os.environ["CHOREGOS_FAKES"] == "1"
+    assert os.environ["TRANIBOR_FAKES"] == "1"

@@ -75,7 +75,7 @@ with links when it reads the tree. None of these needs a harness to change.
 | Can the port rule hold for a project's checks? | The checks have never run confined; a test suite that opens local sockets may not survive it | The checks of two real repositories under the launcher's `confine`, on a kernel with Landlock ABI 4 | a |
 | What does the runner's container need for itself? | It has never run without the agent beside it | Peak memory and CPU of the runner's container over the same runs | a |
 | What does the agent-sandbox operator make of a native sidecar in a template? | The schema accepts it; readiness, the pod's end and suspension are the controller's behaviour | `tests/cluster` on a cluster with the operator | i |
-| What does one container of a gVisor pod see of another? | Nothing here runs two containers under gVisor and looks | The probe of S44-01b across the two containers, on runc and under gVisor | j |
+| What does one container of a gVisor pod see of another? | Nothing here runs two containers under gVisor and looks | The probe of S44-01b across the two containers, on runc and under gVisor | o |
 | Does a Container Apps job stop a second container when the first ends? | The executor declares one container | A live job with two | l |
 
 Whether a harness can speak ACP on anything but its own stdio is **not** on this list: the launcher
@@ -94,18 +94,18 @@ starts it with pipes, so the answer changes nothing.
 | S65-04g | 3 | M | The checks run in the agent's container | a, e |
 | S65-04h | 3 | M | `local_docker` and `k8s_job` start the agent's container | c, d, e |
 | S65-04i | 4 | L | A warm sandbox has two containers | h |
-| S65-04j | 4 | M | What the agent's container reaches, on runc and under gVisor | h |
+| S65-04o | 4 | M | What the agent's container reaches, on runc and under gVisor (planned as S65-04j) | h |
 | S65-04k | 4 | M | A code agent's image is the agent's container | h |
 | S65-04l | 5 | M | `tekton` and `aca` say what they can | h |
-| S65-04m | 5 | S | `container` is the default | f, g, i, j, k |
+| S65-04m | 5 | S | `container` is the default | f, g, i, o, k |
 | S65-04n | 6 | M | A runner image without the harnesses | m |
 
 ```
 wave 1  a measure · b links · c repository · d setting        (independent; b and c hold today)
 wave 2  e launcher                                            (after d)
 wave 3  f credentials (a, e) · g checks (a, e) · h two executors (c, d, e)
-wave 4  i warm pool · j probes · k code agents                (after h)
-wave 5  l tekton, aca (h) · m default (f, g, i, j, k)
+wave 4  i warm pool · o probes · k code agents                (after h)
+wave 5  l tekton, aca (h) · m default (f, g, i, o, k)
 wave 6  n runner image                                        (after m)
 ```
 
@@ -124,6 +124,62 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
 - **Accepted when**: `tests/conformance/backends/test_acp_conformance.py`, run in the two-container
   shape, passes its seven checks for the three harnesses, or the STATUS row names each harness and
   check that fails and why.
+
+#### Measured (S65-04a, 2026-11-19)
+
+`tests/live/test_agent_shape_live.py` (marker `live`) makes the pod with Docker: the runner's container
+on an `--internal` network whose only way out is an egress proxy container standing in for the pod's
+(`agent_shape/egress_proxy.py`, it logs every tunnel); the agent's container in the runner's network
+namespace, uid 1001 group 1000, read-only root, its own `/tmp`, no capability, no secret, `choregos-runner
+launcher` as its command; `/workspace` and `/exchange` shared, empty, setgid group 1000, as the
+SandboxTemplate gives them (S65-04i). The step runs through `Runner.execute` with
+`agent_isolation=container` (`agent_shape/runner_side.py`): fix `add()` in a small Python repository, read a
+code word from an MCP server that wants a bearer header, write it to a file; the project's checks are
+`make test`, a dependency install through the proxy variables (`pip install six`, `npm pack is-number`)
+and a probe that looks, by SHA-256 digest, for the gateway key, the egress token, the MCP header and the
+run token in every `/proc/*/environ` and `cmdline` it can read and every small file of `/workspace`,
+`/exchange` and `/tmp`. Model: `choregos-claude-haiku` on the dev LiteLLM, key `tranibor-live-tests`.
+Image: 0.27.15 with the two image fixes below applied on top, the checkout's `packages/` mounted over
+the image's; Linux 6.18 (WSL2), Landlock ABI 7, `confinement: best_effort`.
+
+| | claude-agent-acp 0.85.1 | opencode 1.18.31 | gemini-cli 0.60.0 |
+|:--|:--|:--|:--|
+| Started by the launcher, in the agent's container | yes | yes, after #1977 (exited before `initialize`, then `session/new` refused) | yes |
+| What it asked of 4001 | `POST /v1/messages?beta` ×9, `POST /v1/messages/count_tokens?beta` ×20 (both 404 before #1964) | `POST /chat/completions` ×9 | `POST /v1beta/models/<m>:streamGenerateContent?alt=sse` ×9-26 |
+| Headers it sent there (names) | `x-api-key`, `authorization`, `anthropic-version`, `anthropic-beta`, `anthropic-dangerous-direct-browser-access`, `x-app`, `x-claude-code-session-id`, `x-stainless-*` | `authorization`, `x-session-affinity`, `x-session-id` | `x-goog-api-key`, `x-goog-api-client`, `x-gemini-api-privileged-user-id` |
+| Key in its environment | the loopback key only (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`) | the loopback key only (`OPENAI_API_KEY`) | the loopback key only (`GEMINI_API_KEY`, `OPENAI_API_KEY`) |
+| Probe: the four credentials in its container | none, 8 processes all uid 1001, no runner process visible | none, 7 processes | none, 8 processes |
+| MCP through 4002, header added by the runner | yes: `server/discover`, `initialize`, `tools/list`, `tools/call` | yes | yes after #1991 (no request at all before) |
+| Network: direct / through 4003 | direct refused (no route, no DNS); `https://pypi.org` 200 in 0.15 s | same | same |
+| What it tried to reach on its own | `api.anthropic.com` ×3, refused (#1987) | nothing | `play.googleapis.com` ×13-41, refused (#1987) |
+| Dependency install through 4003 | pip 0.99 s, npm 0.77 s, no failure | pip 1.0 s, npm 0.86 s | pip 1.05 s, npm 0.95 s |
+| The project's checks, in the agent's container | 3 of 3 pass | 3 of 3 pass | 3 of 3 pass (the file was fixed) |
+| Tool calls (`max_turns` 25) | 9 | 9 | 2-3 |
+| Outcome | `done`, 20 s, 0.004 USD at the gateway | `done`, 25 s | `invalid_result`: the gateway refused the turns (#1990) |
+| Runner container: peak memory, CPU | 80 MiB, 2.1 s | 82 MiB, 2.3 s | 77-89 MiB, 2.7-4.1 s |
+| Agent container: peak memory, CPU | 298 MiB, 7.0 s | 693 MiB, 19.0 s | 394-406 MiB, 7-8 s |
+
+What broke and was fixed: #1964 (the model listener forwarded `messages` to the gateway's root, where
+LiteLLM serves it only under `/v1`, and did not serve `count_tokens`; the image's `/workspace` held the
+build's caches, so a Docker run's fresh tree was taken for a replay's and nothing was checked out),
+#1977 (opencode wrote into its read-only config root at start; its ACP layer connects to its own server
+on a random loopback port, which the port rule refused), #1991 (gemini-cli read no MCP server from an
+untrusted workspace). Findings: #1986 (a `session/new` error escapes `Runner.execute`; a dead agent is
+seen only at the 60 s `initialize` timeout), #1987 (harness telemetry through 4003), #1990 (gemini-cli on
+a Claude model through LiteLLM's Gemini adapter).
+Since then `gemini-cli` is declared with Gemini models only (#1990: LiteLLM's adapter names every tool call
+`call_<function name>` and reads no id from the body, so no listener-side id can help).
+An agent that fails before its first prompt now ends the run with a failed result naming how
+(`agent_exited`, `agent_session_refused`, `agent_unreachable`), when it fails rather than at the `initialize` timeout (#1986).
+
+Not measured: the conformance suite file itself in this shape (its seven checks are read from the
+step's journal instead: `initialize`, MCP, the trivial prompt, the result, `max_turns` and the cost at
+the gateway; **a denied write was not attempted**, so `permission_denied` is not measured); the checks of
+two real repositories under the port rule (the checks run unconfined in the agent's container, S65-04g);
+a kubelet, the agent-sandbox operator, gVisor; an image built by the CI with the fixes (they were
+applied on top of 0.27.15). A last run of the three, meant to give one set of numbers from one image,
+was cut short by the dev gateway (502 during a LiteLLM rollout, then `max_parallel_requests` 4 held at
+0): the numbers above come from the last good run of each harness.
 
 ### S65-04b · fix(runner): the runner follows no link in the tree
 
@@ -150,6 +206,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
 - `CHOREGOS_RUNNER_AGENT_ISOLATION` (`process`, the default, or `container`), the chart's value, the
   `separate_agent` capability, the runner's exit code for "no launcher", the `agent.isolation` event,
   and the API's readiness line. No executor declares the capability yet.
+- **Done** (2026-11-19): the chart's value is `global.runner.agentIsolation` (the API, the workers and the
+  warm pool's template read one value); `agent_sandbox` declares the capability when its template has the
+  agent's container; the routing executor sends a run to the executor that can isolate it.
 - **Accepted when**: under `container`, `start` on an executor without the capability raises a
   `ConfigurationError` that names the executor and sends nothing to its backend; readiness says the
   same sentence; a runner told `container` with nothing on the launcher's port exits with the new code
@@ -194,6 +253,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
   gets a second container in the runner's network namespace. The tree and the exchange directory are
   mounted in both, the runner's directory in `runner` only, the agent's home in `agent` only. Both
   executors declare `separate_agent`.
+- **Done** (2026-11-19, STATUS S65-04h): both executors, the kind proof of the Job, and the runner's own
+  requests (§12: 250m/512Mi, limits 1/2Gi, measured). Beside a hosted agent the launcher's container is
+  named `launcher`.
 - **Accepted when**: the Job's `agent` container has `restartPolicy: Always`, no `secretKeyRef`, no
   `envFrom` and only those mounts; a cluster older than 1.29 is refused before anything is created;
   `docker run` for the agent names no secret variable; on a kind cluster the Job completes and the
@@ -209,7 +271,11 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
   ignores a key line of the other container; on a cluster with the operator a run completes, and a
   suspended then resumed run finds its tree, the runner's repository and the agent's home.
 
-### S65-04j · test(cluster): what the agent's container reaches, on runc and under gVisor
+### S65-04o · test(cluster): what the agent's container reaches, on runc and under gVisor
+
+Planned as S65-04j; that id was taken in STATUS by an unrelated story (an agent's project memory over
+MCP, #1882), so the cluster proof carries **S65-04o**.
+
 
 - The probe of S44-01b, run from the agent's container of a real pod: the runner's environment, the
   runner's files, the listed and the unlisted port.
@@ -224,6 +290,11 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
   image must hold.
 - **Accepted when**: the Job of a code agent names the platform's image for `runner` and the
   operator's for `agent`, and `make conformance-agent` passes in that shape.
+- **Done** (2026-11-19, STATUS S65-04k), with one gap: the conformance suite runs every code agent behind a
+  launcher too, and the plain example passes from its source; with an image (`make conformance-agent
+  IMAGE=...`) it needs `--network=host` to reach the fake gateway, which Docker Desktop does not give the
+  WSL host, so the image shape was not run here (the launcher was seen starting in the image as uid 1001
+  under a read-only root).
 
 ### S65-04l · feat(adapters): `tekton` and `aca` say what they can
 
@@ -232,6 +303,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
 - **Accepted when**: `tests/conformance/executors/test_capabilities.py` shows `tekton` declaring
   `separate_agent` with a Task that carries the sidecar; `aca` either declares it with a live run
   recorded in STATUS, or refuses `container` with a reason that names it — one test either way.
+- **Done** (2026-11-19, STATUS S65-04l), the refusal for both: neither declares the capability (the two
+  were frozen by ADR 0180 when the work started); each refuses `container` naming itself and the reason.
+  A Task sidecar for `tekton` or a live two-container job for `aca` stays open for whoever needs them.
 
 ### S65-04m · chore(release): `container` is the default
 
@@ -240,6 +314,9 @@ is amended before wave 3; the boundary of waves 2 and 4 does not depend on it.
 - **Accepted when**: the default values render the two-container template and Job;
   `tests/docs/test_upgrade_notes.py` names the setting; a run under `process` journals
   `agent.isolation` with that word.
+- **Done** (2026-11-20, STATUS S65-04m): the chart's default from 0.28; the code's default, read when nothing sets
+  the variable (Compose, the demo, a runner its executor says nothing to), stays `process`. The upgrade note is
+  under "Upgrading to 0.28" and its test is `tests/docs/test_upgrade_notes_agent_isolation.py`.
 
 ### S65-04n · build(docker): a runner image without the harnesses
 
@@ -257,7 +334,7 @@ Each is a sentence of ADR 0146 with the story whose test holds it.
 | The runner executes no program stored where the agent can write | c, g |
 | The runner follows no link when it reads or writes a shared volume | b |
 | A deployment that asks for `container` never gets `process`: the executor refuses, the runner exits | d, e |
-| From the agent's container, the runner's environment and files cannot be read, on runc and under gVisor | j |
+| From the agent's container, the runner's environment and files cannot be read, on runc and under gVisor | o |
 
 Shared by every story: `make ci` green; a STATUS row saying what the pull request proves and does not
 prove; a guard is delivered only with the test that fails without it.

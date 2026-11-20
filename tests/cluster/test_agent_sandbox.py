@@ -5,7 +5,7 @@ The bench (kind) has no agent-sandbox operator; this runs where a platform team 
 NON-destructive — one namespace of its own, deleted at the end — so it may run on a shared
 cluster named explicitly:
 
-    CHOREGOS_CLUSTER_CONTEXT=dev CHOREGOS_CLUSTER_ALLOW_SHARED=dev make test-cluster
+    TRANIBOR_CLUSTER_CONTEXT=dev TRANIBOR_CLUSTER_ALLOW_SHARED=dev make test-cluster
 
 Without the operator it is skipped, and says so: a skipped proof is not a proof.
 """

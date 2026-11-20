@@ -81,8 +81,8 @@ docker compose --profile temporal-ui up   # adds the Temporal UI on http://local
 docker compose down -v                    # stops everything and deletes the data
 ```
 
-Ports taken on your machine? `CHOREGOS_PORT_WEB`, `CHOREGOS_PORT_API` and
-`CHOREGOS_PORT_TEMPORAL_UI` in `.env`. PostgreSQL runs without `fsync` here, for start-up time:
+Ports taken on your machine? `TRANIBOR_PORT_WEB`, `TRANIBOR_PORT_API` and
+`TRANIBOR_PORT_TEMPORAL_UI` in `.env`. PostgreSQL runs without `fsync` here, for start-up time:
 keep nothing in this install that you cannot recreate.
 
 ## 2. Other ways to look
@@ -140,11 +140,11 @@ there, so what the organisation changed since stays. It can ship its own policy 
 workflows call (`requires.org_connectors`: `directory: identity`…), for the administrator to declare.
 
 What only a plugin understands, a template ships as an **extension** (`defaults.extensions`, a name →
-a folder of the template): `joiners-leavers` ships its ontology as `ontology: ./ontology`. When the
-project is born, the plugin that declared an installer under that name installs it — an invalid
-package fails the creation, like an invalid workflow. Without such a plugin (the ontology plugin is a
-trial, off unless `CHOREGOS_ONTOLOGY_TRIAL=1`), the project is born without it, and the audit log
-says so (`template.extension.skip`).
+a folder of the template, `<installer>: ./<folder>`). When the project is born, the plugin that
+declared an installer under that name installs it — an invalid package fails the creation, like an
+invalid workflow. Without such a plugin, the project is born without it, and the audit log says so
+(`template.extension.skip`). No template shipped with the platform carries one since the ontology
+was removed (ADR 0181, O4-1).
 
 ### Install the CLI from your instance
 
@@ -157,7 +157,7 @@ irm https://choregos.example.com/cli/install.ps1 | iex          # Windows, in Po
 ```
 
 `choregos self update` keeps it in step after an upgrade of the instance; the CLI says so on stderr,
-once a day, when the two versions differ (`CHOREGOS_NO_VERSION_CHECK=1` silences it). See
+once a day, when the two versions differ (`TRANIBOR_NO_VERSION_CHECK=1` silences it). See
 [cli.md](cli.md#install-from-your-instance).
 
 ### Create the project

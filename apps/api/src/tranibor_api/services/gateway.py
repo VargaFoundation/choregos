@@ -85,7 +85,7 @@ async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str,
     """The gateway whose models the organisation's catalogue describes.
 
     An organisation connector of kind `gateway` wins (an organisation that brings its own
-    gateway); otherwise the deployment's default (`CHOREGOS_GATEWAY_TYPE`, LiteLLM when unset).
+    gateway); otherwise the deployment's default (`TRANIBOR_GATEWAY_TYPE`, LiteLLM when unset).
     """
     connector = await _org_connector(session, org_id)
     gateway: Any

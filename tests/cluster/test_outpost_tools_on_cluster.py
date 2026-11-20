@@ -25,7 +25,7 @@ Skipped without a cluster (`conftest.context`), without `helm`, and without the 
 
     make images
     kind load docker-image choregos-api:dev choregos-outpost:dev --name choregos
-    CHOREGOS_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster/test_outpost_tools_on_cluster.py
+    TRANIBOR_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster/test_outpost_tools_on_cluster.py
 """
 
 from __future__ import annotations
@@ -54,8 +54,8 @@ from .conftest import context, kubectl, run_probe
 pytestmark = [pytest.mark.cluster, pytest.mark.slow]
 
 #: The two images, as `make images` tags them; another tag can be named for a bench of one's own.
-API_IMAGE = os.environ.get("CHOREGOS_CLUSTER_API_IMAGE", "choregos-api:dev")
-OUTPOST_IMAGE = os.environ.get("CHOREGOS_CLUSTER_OUTPOST_IMAGE", "choregos-outpost:dev")
+API_IMAGE = os.environ.get("TRANIBOR_CLUSTER_API_IMAGE", "choregos-api:dev")
+OUTPOST_IMAGE = os.environ.get("TRANIBOR_CLUSTER_OUTPOST_IMAGE", "choregos-outpost:dev")
 CHART = Path(__file__).parents[2] / "charts" / "choregos-outpost"
 SERVER_SCRIPT = Path(__file__).parent / "assets" / "outpost_mcp_server.py"
 RELEASE = "site"
@@ -153,18 +153,18 @@ def _platform(namespace: str) -> str:
     database = "postgresql+asyncpg://choregos:choregos@postgres:5432/choregos"
     keks = base64.b64encode(_seed("the key wrapper")).decode()
     env = [
-        {"name": "CHOREGOS_FAKES", "value": "1"},
-        {"name": "CHOREGOS_ENV", "value": "test"},
-        {"name": "CHOREGOS_DEV_LOGIN_ENABLED", "value": "true"},
-        {"name": "CHOREGOS_DEV_ADMIN_EMAILS", "value": "admin@northwind.dev"},
-        {"name": "CHOREGOS_DATABASE_URL", "value": database},
-        {"name": "CHOREGOS_SESSION_SECRET", "value": _seed("the session secret").hex()},
-        {"name": "CHOREGOS_RECONCILE_INTERVAL_SECONDS", "value": "0"},
-        {"name": "CHOREGOS_RUN_TOKEN_PRIVATE_KEY", "value": _p256_pem("the run tokens")},
-        {"name": "CHOREGOS_SECRETS_KEKS", "value": f"k1:{keks}"},
-        {"name": "CHOREGOS_OUTPOSTS", "value": "on"},
-        {"name": "CHOREGOS_OUTPOSTS_DOOR_URL", "value": f"http://api.{namespace}.svc:8000"},
-        {"name": "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY", "value": _ed25519_pem("the door's signing key")},
+        {"name": "TRANIBOR_FAKES", "value": "1"},
+        {"name": "TRANIBOR_ENV", "value": "test"},
+        {"name": "TRANIBOR_DEV_LOGIN_ENABLED", "value": "true"},
+        {"name": "TRANIBOR_DEV_ADMIN_EMAILS", "value": "admin@northwind.dev"},
+        {"name": "TRANIBOR_DATABASE_URL", "value": database},
+        {"name": "TRANIBOR_SESSION_SECRET", "value": _seed("the session secret").hex()},
+        {"name": "TRANIBOR_RECONCILE_INTERVAL_SECONDS", "value": "0"},
+        {"name": "TRANIBOR_RUN_TOKEN_PRIVATE_KEY", "value": _p256_pem("the run tokens")},
+        {"name": "TRANIBOR_SECRETS_KEKS", "value": f"k1:{keks}"},
+        {"name": "TRANIBOR_OUTPOSTS", "value": "on"},
+        {"name": "TRANIBOR_OUTPOSTS_DOOR_URL", "value": f"http://api.{namespace}.svc:8000"},
+        {"name": "TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY", "value": _ed25519_pem("the door's signing key")},
     ]
     api = _deployment(
         namespace,

@@ -25,7 +25,7 @@ The same command as the install, with the new version:
 
 ```shell
 helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
-  --version 0.27.15 --namespace choregos -f my-values.yaml
+  --version 0.27.16 --namespace choregos -f my-values.yaml
 ```
 
 - The database migrations run as a Helm hook **before** the new API starts
@@ -66,7 +66,7 @@ Nothing changes for an organisation that installs none. The migrations run with 
 usual. The full table is in the
 [deployment reference](../../deployment.md#upgrading-to-026); what you do is:
 
-1. **Bound the token exchange.** Set `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` to a JSON list of your sources'
+1. **Bound the token exchange.** Set `TRANIBOR_TOKEN_EXCHANGE_AUDIENCES` to a JSON list of your sources'
    audiences (in `global.extraEnv`) before binding a need that uses the person's identity
    (`user_exchange`). Unset, a connector's editor chooses any audience the identity provider allows. See
    the [review of the person's identity](../../security.md).

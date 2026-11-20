@@ -24,7 +24,7 @@ fields:
   pull request on that repository, and Argo CD applies it.
 - The GitHub App of the platform installed on the GitOps repository (see the GitHub procedures): the
   writes go through it.
-- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`).
+- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`).
 
 ## At Argo CD
 

@@ -47,7 +47,7 @@ def test_the_migration_backfills_a_seeded_ledger(tmp_path: pathlib.Path) -> None
     file = tmp_path / "backfill.db"
     url = f"sqlite:///{file}"
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     try:
         config = _config(url)

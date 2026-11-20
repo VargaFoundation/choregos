@@ -105,8 +105,8 @@ async def test_install_runs_the_server_under_the_pod_rules(
 ) -> None:
     _set(
         settings_env,
-        CHOREGOS_PLUGIN_SERVERS_RUNTIME_CLASS="gvisor",
-        CHOREGOS_PLUGIN_SERVERS_API_NAMESPACE="choregos",
+        TRANIBOR_PLUGIN_SERVERS_RUNTIME_CLASS="gvisor",
+        TRANIBOR_PLUGIN_SERVERS_API_NAMESPACE="choregos",
     )
     await _install(client)
     deployment = _only(kube, "deployments")
@@ -320,7 +320,7 @@ async def test_a_host_the_bounds_deny_is_refused_at_configuration(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi, settings_env: pytest.MonkeyPatch
 ) -> None:
     await _install(client)
-    _set(settings_env, CHOREGOS_NETWORK_INSTANCE_DENY="evil.example")
+    _set(settings_env, TRANIBOR_NETWORK_INSTANCE_DENY="evil.example")
     refused = await client.patch(
         f"{ORG}/connectors/hello", json={"config": {"base_url": "https://evil.example"}}
     )
@@ -349,8 +349,8 @@ async def test_a_name_collision_is_409_before_anything_is_written(
 @pytest.mark.parametrize(
     ("env", "needle"),
     [
-        ({"CHOREGOS_PLUGIN_SERVERS_REGISTRIES": '["ghcr.io/acme"]'}, "not from a registry"),
-        ({"CHOREGOS_HOSTED_COSIGN": "enforce"}, "no trusted signature"),
+        ({"TRANIBOR_PLUGIN_SERVERS_REGISTRIES": '["ghcr.io/acme"]'}, "not from a registry"),
+        ({"TRANIBOR_HOSTED_COSIGN": "enforce"}, "no trusted signature"),
     ],
 )
 async def test_the_image_rules_refuse(
@@ -385,7 +385,7 @@ async def test_a_signed_image_passes_enforce(
     verifier.sign(yaml.safe_load((HELLO / "servers" / "hello.yaml").read_text())["image"])
     set_image_services(FakeRegistryClient(), verifier)
     try:
-        _set(settings_env, CHOREGOS_HOSTED_COSIGN="enforce")
+        _set(settings_env, TRANIBOR_HOSTED_COSIGN="enforce")
         assert (await _ask(client)).status_code == 202
     finally:
         set_image_services(None)

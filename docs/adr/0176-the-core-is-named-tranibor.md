@@ -6,7 +6,7 @@
   2026-11-17: "do the renames now", the trademark gate being skipped); R1 is implemented by S75-01,
   R3 steps (a) and (b) by S75-03 (2026-11-18), R2 by S75-02 (2026-11-18), shipped by release 0.27.14,
   and R3 step (c) on the Diametral deployments (2026-11-18, see the amendment "0.27.14 on a real
-  release"), and R3 step (d) (2026-11-18, see the amendment "step (d)"); R4 and R3 step (e) are not
+  release"), and R3 step (d) (2026-11-18, see the amendment "step (d)"); R4 by S75-04 (2026-11-19); R3 step (e) is not
   started
 - **Concerns**: the whole repository (25,000 occurrences of the old name in 4,600 files, counted on
   2026-11-17), and above all `packages/*` (the distributions and import packages), `publishing.json` and
@@ -81,7 +81,7 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
    self-update accept both release asset names for the window. The Postgres database and role names, the
    Kubernetes namespace and the Helm release names are **deployment values** and stay what each
    deployment chose.
-5. **R4, the environment variables (not started).** `TRANIBOR_*` is read first and `CHOREGOS_*` is the
+5. **R4, the environment variables (implemented by S75-04).** `TRANIBOR_*` is read first and `CHOREGOS_*` is the
    fallback, per variable, in one place: the four settings classes that carry `env_prefix="CHOREGOS_"`
    (API, API egress, orchestrator, runner) take both prefixes through one shared helper in the core, and
    the direct reads (`os.environ`, 199 files) go through it. When only the old name is set, the process
@@ -90,6 +90,20 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
    existing values files still set, so a production's Helm values with `CHOREGOS_*` keep working until it
    moves them. A test lists every variable of the repository and refuses one that is read by a path that
    bypasses the helper. The fallback is removed in the minor after the shims (R2), in its own PR.
+
+   *As implemented (S75-04).* The shared helper is `tranibor_contracts.env`, run once when any
+   `tranibor_*` package is imported (before any settings class reads the environment): it copies each
+   `CHOREGOS_X` into `TRANIBOR_X` when the latter is absent, in the process environment and in the `.env`
+   file, and logs one warning per variable (logger `tranibor.env`, never the value). So the settings
+   classes, `os.environ` reads and Typer `envvar=` options all see one name, with no per-site change.
+   `tools/rename_env_vars.py` rewrites the code, tests and docs (`--check` is a test); replay it on rebase.
+   **Emission** goes both ways during the window: the runner's job environment, the hosted agent's, and
+   the Kubernetes, ACA and Docker executors' variables carry `TRANIBOR_X` and `CHOREGOS_X` (`with_legacy`,
+   `with_legacy_entries`), because a runner image, or an agent script, from before the rename reads the
+   former names. The runner's credential scrub and the reserved-prefix filters cover both prefixes.
+   **Not yet moved**: the charts' rendered variables and the images' `ENV` defaults stay `CHOREGOS_*` (a
+   chart rendering both names next to an image default of the other would let the stale one win); they
+   move with the chart step of R3. The web reads `TRANIBOR_API_URL` then `CHOREGOS_API_URL`.
 6. **What is deliberately not renamed, in any round**, because a party outside this repository (or a row
    already written) holds it, and a rename needs that party to move first; each can later gain a second
    name beside the first, through a contract change, never by replacing it:
@@ -190,6 +204,13 @@ One commit cannot rename all four, and the fourth layer must not be renamed by a
   name, so both names render the same objects (`tests/charts/test_chart_names.py`).
 - `tranibor-quant` is dropped from point 4's list: no such image exists, `quant` is a command of the
   runner image (#1847).
+- **Amended 2026-11-19 (S83-07, [ADR 0181](0181-the-contracts-speak-no-trade.md) O4-3).** `quant` left the
+  core for the `investment-research` plugin, and with it the runner image: its command now runs in that
+  plugin's job image, **`tranibor-investment-research`**, not `tranibor-quant`. The release builds it
+  FROM the runner it has just published and signs it (jobs `job-image`, `job-image-manifest` of
+  `release.yml`), under that one name: it is new, so it has no `choregos-*` alias to carry, and it is
+  not one of the platform's images (`IMAGE_COMPONENTS`). R2's `quant` package and its shim
+  `compat/choregos-quant` are removed with it, as ADR 0181 point 6 planned.
 - **Not done in (b)**: the native CLI files keep their `choregos-<platform>` names (the install scripts
   and the self-update must accept both first: the manifest names one file per platform, and an installed
   CLI picks it by platform, so a second name needs a contract for the manifest first); the images `main`

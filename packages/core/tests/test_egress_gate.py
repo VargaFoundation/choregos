@@ -210,15 +210,15 @@ def test_invalid_settings_are_refused() -> None:
 
 def test_the_deployment_turns_it_on_and_names_target_and_deadline() -> None:
     assert gate_from_env({}) is None
-    assert gate_from_env({"CHOREGOS_RUNNER_EGRESS_GATE": "false"}) is None
-    gate = gate_from_env({"CHOREGOS_RUNNER_EGRESS_GATE": "true"})
+    assert gate_from_env({"TRANIBOR_RUNNER_EGRESS_GATE": "false"}) is None
+    gate = gate_from_env({"TRANIBOR_RUNNER_EGRESS_GATE": "true"})
     assert gate == EgressGate()
     assert gate is not None and gate.target == DEFAULT_TARGET
     gate = gate_from_env(
         {
-            "CHOREGOS_RUNNER_EGRESS_GATE": "true",
-            "CHOREGOS_RUNNER_EGRESS_GATE_TARGET": "10.0.0.9:8443",
-            "CHOREGOS_RUNNER_EGRESS_GATE_DEADLINE": "12.5",
+            "TRANIBOR_RUNNER_EGRESS_GATE": "true",
+            "TRANIBOR_RUNNER_EGRESS_GATE_TARGET": "10.0.0.9:8443",
+            "TRANIBOR_RUNNER_EGRESS_GATE_DEADLINE": "12.5",
         }
     )
     assert gate == EgressGate(target="10.0.0.9:8443", deadline_s=12.5)

@@ -102,9 +102,9 @@ describe("the CLI the instance serves (S62-08), pure parts", () => {
     expect(formatSize(12)).toBe("12 B");
     const posix = firstCommands("linux", "https://choregos.example.org", "acme");
     expect(posix).toContain("choregos login --api-url https://choregos.example.org --token <full-access token> --org acme");
-    expect(posix).toContain("export CHOREGOS_API_URL=https://choregos.example.org CHOREGOS_TOKEN=");
+    expect(posix).toContain("export TRANIBOR_API_URL=https://choregos.example.org TRANIBOR_TOKEN=");
     expect(firstCommands("windows", "https://choregos.example.org", "acme")).toContain(
-      '$env:CHOREGOS_API_URL = "https://choregos.example.org"',
+      '$env:TRANIBOR_API_URL = "https://choregos.example.org"',
     );
   });
 });

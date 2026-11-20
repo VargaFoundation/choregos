@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """What production is, and the fakes it refuses (S80-03).
 
-Production is `CHOREGOS_ENV` set to `staging` or `prod` (the chart's `global.environment`): the same
+Production is `TRANIBOR_ENV` set to `staging` or `prod` (the chart's `global.environment`): the same
 notion that already refuses a PostgreSQL superuser, the development sign-in and the demonstration
 connectors there. Nothing else says "production": no second variable, no guess from a URL.
 
-`CHOREGOS_FAKES` (ADR 0005) switches the whole platform to its in-memory fakes. That is what the
+`TRANIBOR_FAKES` (ADR 0005) switches the whole platform to its in-memory fakes. That is what the
 tests, the end-to-end suite and `make demo` run on, and it is a bench's switch only: on, it relaxes the
 network egress control to `warn` (`tranibor_core.egress.default_mode`) and hands the API an in-memory
 secret store when no key is configured (`tranibor_api.secret_store`). Every process that reads it, the
@@ -18,11 +18,11 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
-#: The `CHOREGOS_ENV` values that are production.
+#: The `TRANIBOR_ENV` values that are production.
 PRODUCTION_ENVIRONMENTS = frozenset({"staging", "prod"})
 #: The variable that turns the fakes on, and the one that names the environment.
-FAKES_VARIABLE = "CHOREGOS_FAKES"
-ENVIRONMENT_VARIABLE = "CHOREGOS_ENV"
+FAKES_VARIABLE = "TRANIBOR_FAKES"
+ENVIRONMENT_VARIABLE = "TRANIBOR_ENV"
 #: What pydantic reads as true for a boolean setting: the fakes are on for any of them.
 _TRUE = frozenset({"1", "true", "yes", "on", "y", "t"})
 
@@ -36,7 +36,7 @@ def is_production(environment: str | None) -> bool:
 
 
 def fakes_on(value: str | bool | None) -> bool:
-    """Whether a `CHOREGOS_FAKES` value turns the fakes on, read as the settings read it."""
+    """Whether a `TRANIBOR_FAKES` value turns the fakes on, read as the settings read it."""
     if isinstance(value, bool):
         return value
     return (value or "").strip().lower() in _TRUE

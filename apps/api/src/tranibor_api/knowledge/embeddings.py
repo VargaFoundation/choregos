@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Embeddings for the knowledge index (ADR 0051): through the LiteLLM gateway, or a fake.
 
-The model is the deployment's embedding profile (`CHOREGOS_DEFAULT_MODEL_PROFILES={"embed": …}`),
-else `CHOREGOS_KNOWLEDGE_EMBEDDING_MODEL` (`platform/embed`). Under `CHOREGOS_FAKES` the embedder is
+The model is the deployment's embedding profile (`TRANIBOR_DEFAULT_MODEL_PROFILES={"embed": …}`),
+else `TRANIBOR_KNOWLEDGE_EMBEDDING_MODEL` (`platform/embed`). Under `TRANIBOR_FAKES` the embedder is
 deterministic and local: hashed word counts, L2-normalised — enough for tests and demos to
 exercise the hybrid ranking, never a claim about semantic quality. Without a gateway key, there is
 no embedder, and the index serves full-text only (and says so).

@@ -27,8 +27,8 @@ def _reprs(value: Any) -> str | None:
 
 
 def _foreign_tables() -> set[str]:
-    """Tables a package outside the core maps on the core's `Base` (the ontology plugin's, once it is
-    imported by an earlier test of the same run): not part of `db/models/`, so not pinned here."""
+    """Tables a package outside the core maps on the core's `Base` (a plugin's, once it is imported
+    by an earlier test of the same run): not part of `db/models/`, so not pinned here."""
     return {
         mapper.persist_selectable.fullname  # type: ignore[attr-defined]
         for mapper in Base.registry.mappers

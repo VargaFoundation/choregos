@@ -34,6 +34,10 @@ from .specs import (
 )
 
 
+def _truthy(value: object) -> bool:
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
@@ -67,7 +71,7 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
 def _github_client(config: dict[str, Any]) -> Any:
     """Builds the GitHub client from the connector's configuration or the deployment's App.
 
-    The deployment's App is its settings (`CHOREGOS_GITHUB_APP_ID` / `_PRIVATE_KEY`), else the App a
+    The deployment's App is its settings (`TRANIBOR_GITHUB_APP_ID` / `_PRIVATE_KEY`), else the App a
     platform administrator registered from a manifest, which the API's process provider opens from the
     database (ADR 0167): the private key never travels in a connector's configuration."""
     import os
@@ -77,7 +81,7 @@ def _github_client(config: dict[str, Any]) -> Any:
     deployment_id, deployment_key = app_credentials()
     app_id = config.get("app_id") or deployment_id
     private_key = config.get("private_key") or deployment_key
-    token = config.get("token") or os.environ.get("CHOREGOS_GITHUB_TOKEN", "")
+    token = config.get("token") or os.environ.get("TRANIBOR_GITHUB_TOKEN", "")
     # `installation_id` is never typed (ADR 0073): the API injects the one this organisation claimed.
     # Without it (a single-organisation instance, a repository outside the claims) the installation
     # is discovered from the repository, as before.
@@ -110,20 +114,20 @@ def _direct_gateway(cfg: dict[str, Any]) -> Any:
     """
     from .gateway.direct import DirectGateway  # a lazy import, like the others'
 
-    environment = _env("CHOREGOS_ENV", "dev")
+    environment = _env("TRANIBOR_ENV", "dev")
     if environment in {"staging", "prod"}:
         raise ConfigurationError(
             f"connector `gateway: direct` refused in {environment}: this gateway measures no "
             "cost and applies no ceiling. Use `litellm`, which issues a virtual key capped per run."
         )
     return DirectGateway(
-        key=cfg.get("key", _env("CHOREGOS_GATEWAY_DIRECT_KEY", "")),
+        key=cfg.get("key", _env("TRANIBOR_GATEWAY_DIRECT_KEY", "")),
         models=cfg.get("models", []),
     )
 
 
 def _current_fake_mcp() -> Any:
-    """The fake MCP server of CHOREGOS_FAKES=1: one, scripted by the tests and the demo."""
+    """The fake MCP server of TRANIBOR_FAKES=1: one, scripted by the tests and the demo."""
     from .fakes.mcp import FakeMcpServer
 
     if _package.FAKE_MCP is None:
@@ -132,7 +136,7 @@ def _current_fake_mcp() -> Any:
 
 
 def fake_mcp_gateway() -> Any:
-    """The fake MCP gateway of CHOREGOS_FAKES=1: one, whose fallback is always the CURRENT `FAKE_MCP`."""
+    """The fake MCP gateway of TRANIBOR_FAKES=1: one, whose fallback is always the CURRENT `FAKE_MCP`."""
     from .fakes.mcp_gateway import FakeMcpGateway
 
     if _package.FAKE_MCP_GATEWAY is None:
@@ -174,7 +178,7 @@ def _fake_mcp_client(cfg: dict[str, Any]) -> Any:
 
 
 def _fake_oauth_transport() -> Any:
-    """Under CHOREGOS_FAKES=1, an `oauth_client_credentials` connector asks the fake OAuth provider."""
+    """Under TRANIBOR_FAKES=1, an `oauth_client_credentials` connector asks the fake OAuth provider."""
     from .fakes.oauth_provider import current_fake_oauth_provider
 
     return current_fake_oauth_provider().transport()
@@ -228,7 +232,7 @@ def _mcp_client(cfg: dict[str, Any]) -> Any:
 
 
 def _teams_notifier(cfg: dict[str, Any]) -> Any:
-    """The Teams webhook notifier. Under `CHOREGOS_FAKES=1` it is the real notifier (card, guarded transport,
+    """The Teams webhook notifier. Under `TRANIBOR_FAKES=1` it is the real notifier (card, guarded transport,
     egress allowlist) over the process-wide `FakeTeamsWebhook`, never a network call."""
     from .notify.teams import TeamsNotifier
 
@@ -252,7 +256,7 @@ def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
 
 
 def fake_outpost() -> Any:
-    """The fake outpost of CHOREGOS_FAKES=1: one, whose every alias is served by the CURRENT `FAKE_MCP`."""
+    """The fake outpost of TRANIBOR_FAKES=1: one, whose every alias is served by the CURRENT `FAKE_MCP`."""
     from .fakes.outpost import FakeOutpost
 
     if _package.FAKE_OUTPOST is None:
@@ -291,12 +295,12 @@ def _fake_entra_directory(cfg: dict[str, Any]) -> Any:
 
 
 def _demo_desk(family: str, *, refuse_in_production: bool) -> Any:
-    """The factory of a `<family>: demo` connector (or of its fake, under `CHOREGOS_FAKES=1`)."""
+    """The factory of a `<family>: demo` connector (or of its fake, under `TRANIBOR_FAKES=1`)."""
 
     def construct(cfg: dict[str, Any]) -> Any:
         from .fakes.hr import FAKES_BY_FAMILY, Desk
 
-        environment = _env("CHOREGOS_ENV", "dev")
+        environment = _env("TRANIBOR_ENV", "dev")
         if refuse_in_production and environment in {"staging", "prod"}:
             raise ConfigurationError(
                 f"connector `{family}: demo` refused in {environment}: an in-memory fake, which "
@@ -401,15 +405,6 @@ def _cilium(cfg: dict[str, Any]) -> Any:
     return CiliumNetwork.from_config(cfg, scm=scm)
 
 
-def _fake_marketdata(cfg: dict[str, Any]) -> Any:
-    """The fake of the `marketdata` family, shared in the process (scriptable by tests)."""
-    if _package.FAKE_MARKETDATA is None:
-        from .fakes.marketdata import FakeMarketData
-
-        _package.FAKE_MARKETDATA = FakeMarketData()
-    return _package.FAKE_MARKETDATA
-
-
 def _fake_web_search(cfg: dict[str, Any]) -> Any:
     """The fake of the `web_search` family, shared in the process (scriptable by tests)."""
     if _package.FAKE_WEB_SEARCH is None:
@@ -424,7 +419,7 @@ def _demo_cd(cfg: dict[str, Any]) -> Any:
     from .fakes.demo_cd import DemoCd, FakeDemoCd
     from .fakes.hr import Desk, RemoteDesk
 
-    environment = _env("CHOREGOS_ENV", "dev")
+    environment = _env("TRANIBOR_ENV", "dev")
     if environment in {"staging", "prod"}:
         raise ConfigurationError(
             f"connector `cd: demo` refused in {environment}: a simulated environment, a "
@@ -438,56 +433,6 @@ def _demo_cd(cfg: dict[str, Any]) -> Any:
     if "cd" not in desks:
         desks["cd"] = FakeDemoCd()
     return DemoCd(Desk(desks["cd"], str(cfg.get("api_key", ""))))
-
-
-def _register_marketdata() -> None:
-    """The `marketdata` family (S38-03): its free providers, their composite and its fake."""
-    from .marketdata import PROVIDERS, CompositeProvider, MarketDataProvider
-
-    def _provider(type_name: str, cfg: dict[str, Any], key: str | list[str] = "") -> MarketDataProvider:
-        options: dict[str, Any] = {"timeout_s": float(cfg.get("timeout_s", 20))}
-        if type_name == "stooq" and cfg.get("suffix_map"):
-            options["suffix_map"] = dict(cfg["suffix_map"])
-        if type_name == "alphavantage" and cfg.get("outputsize"):
-            options["outputsize"] = str(cfg["outputsize"])
-        if type_name != "yahoo":
-            # A string, or a list when the field holds several keys (ADR 0089).
-            options["api_key"] = key or cfg.get("api_key") or ""
-            options["key_rotation"] = strategy_of(cfg.get("key_rotation"))
-        return PROVIDERS[type_name](**options)
-
-    def _composite(cfg: dict[str, Any]) -> CompositeProvider:
-        names = [str(n) for n in cfg.get("sources") or []]
-        unknown = [n for n in names if n not in PROVIDERS]
-        if not names or unknown:
-            raise ConfigurationError(
-                f"marketdata composite: `sources` must list provider types among {sorted(PROVIDERS)}"
-                + (f" (unknown: {unknown})" if unknown else "")
-            )
-        configs = cfg.get("source_configs") or {}
-        return CompositeProvider(
-            [
-                (
-                    n,
-                    _provider(
-                        n,
-                        {"key_rotation": cfg.get("key_rotation"), **dict(configs.get(n) or {})},
-                        cfg.get(f"{n}_api_key") or "",
-                    ),
-                )
-                for n in names
-            ],
-            cross_check=bool(cfg.get("cross_check", True)),
-            tolerance=float(cfg.get("tolerance", 0.02)),
-        )
-
-    def _constructor(name: str) -> Callable[[dict[str, Any]], MarketDataProvider]:
-        return lambda cfg: _provider(name, cfg)
-
-    for name in PROVIDERS:
-        register("marketdata", name, _SHIPPED_SPECS[("marketdata", name)])(_constructor(name))
-    register("marketdata", "composite", _SHIPPED_SPECS[("marketdata", "composite")])(_composite)
-    register("marketdata", "fake")(_fake_marketdata)
 
 
 def _register_web_search() -> None:
@@ -531,7 +476,7 @@ def _plugin_tracker(cfg: dict[str, Any]) -> Any:
 
 
 def _register_fakes() -> None:
-    """The fake of every kind (`CHOREGOS_FAKES=1`)."""
+    """The fake of every kind (`TRANIBOR_FAKES=1`)."""
     from .fakes import (
         FakeCd,
         FakeCi,
@@ -649,8 +594,20 @@ def _register_forges() -> None:
     )
 
 
+def _own_resources(raw: str, key: str) -> dict[str, str] | None:
+    """`requests` or `limits` of `{"requests": {...}, "limits": {...}}` as JSON (ADR 0146 §12), the
+    runner container's own. Empty or absent: None, the executor's defaults."""
+    if not raw.strip():
+        return None
+    import json
+
+    values = json.loads(raw).get(key) or {}
+    return {str(k): str(v) for k, v in values.items()} or None
+
+
 def _register_runtimes() -> None:
     """The executors of the agents' steps."""
+    from tranibor_core.agent_isolation import deployment_agent_isolation
     from tranibor_core.egress_gate import gate_from_env
 
     from .executor.aca import AcaExecutor, AzureArmClient
@@ -668,43 +625,50 @@ def _register_runtimes() -> None:
     register("runtime", "k8s_job")(
         lambda cfg: KubernetesJobExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
-            cpu_limit=cfg.get("cpu_limit", os.environ.get("CHOREGOS_RUNNER_CPU_LIMIT", "") or "2"),
-            memory_limit=cfg.get("memory_limit", os.environ.get("CHOREGOS_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
+            cpu_limit=cfg.get("cpu_limit", os.environ.get("TRANIBOR_RUNNER_CPU_LIMIT", "") or "2"),
+            memory_limit=cfg.get("memory_limit", os.environ.get("TRANIBOR_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
             # The deployment's, never a connector's (S65-03): the chart's `runner.envFromSecrets`.
-            env_from_secrets=_names(os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "")),
+            env_from_secrets=_names(os.environ.get("TRANIBOR_RUNNER_ENV_SECRETS", "")),
             # How many runs run at the same time in the namespace. 0 = no ceiling.
-            max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
+            max_active=int(cfg.get("max_active", os.environ.get("TRANIBOR_RUNNER_MAX_ACTIVE", "") or 0)),
             # The chart's `global.imagePullSecrets` (S51-09): a step's own image may be private.
-            image_pull_secrets=_names(os.environ.get("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "")),
+            image_pull_secrets=_names(os.environ.get("TRANIBOR_RUNNER_IMAGE_PULL_SECRETS", "")),
             # The egress gate (S80-07f), the chart's `runner.egressGate`: the deployment's, never a
             # connector's, so a project cannot turn it off.
             egress_gate=gate_from_env(os.environ),
+            # The runner container's own requests and limits beside the agent's (ADR 0146 §12), the
+            # chart's `runner.ownResources`; the measured defaults when unset.
+            runner_requests=_own_resources(os.environ.get("TRANIBOR_RUNNER_OWN_RESOURCES", ""), "requests"),
+            runner_limits=_own_resources(os.environ.get("TRANIBOR_RUNNER_OWN_RESOURCES", ""), "limits"),
         )
     )
     register("runtime", "agent_sandbox", _SHIPPED_SPECS[("runtime", "agent_sandbox")])(
         lambda cfg: AgentSandboxExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
             warm_pool=cfg.get(
-                "warm_pool", os.environ.get("CHOREGOS_SANDBOX_WARM_POOL", "") or "choregos-runner"
+                "warm_pool", os.environ.get("TRANIBOR_SANDBOX_WARM_POOL", "") or "choregos-runner"
             ),
             assignment_port=int(
-                cfg.get("assignment_port", os.environ.get("CHOREGOS_SANDBOX_ASSIGNMENT_PORT", "") or 8765)
+                cfg.get("assignment_port", os.environ.get("TRANIBOR_SANDBOX_ASSIGNMENT_PORT", "") or 8765)
             ),
             # The template's RuntimeClass, which the chart sets from `runner.runtimeClass`.
-            runtime_class=cfg.get("runtime_class", os.environ.get("CHOREGOS_RUNNER_RUNTIME_CLASS", ""))
+            runtime_class=cfg.get("runtime_class", os.environ.get("TRANIBOR_RUNNER_RUNTIME_CLASS", ""))
             or None,
-            # The chart builds the warm pool's template and the orchestrator's `CHOREGOS_RUNNER_IMAGE`
+            # The chart builds the warm pool's template and the orchestrator's `TRANIBOR_RUNNER_IMAGE`
             # from the same value: a run asking for another image cannot be honoured.
-            pool_image=cfg.get("pool_image", os.environ.get("CHOREGOS_RUNNER_IMAGE", "")) or None,
-            max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
+            pool_image=cfg.get("pool_image", os.environ.get("TRANIBOR_RUNNER_IMAGE", "")) or None,
+            max_active=int(cfg.get("max_active", os.environ.get("TRANIBOR_RUNNER_MAX_ACTIVE", "") or 0)),
             # The deployment's, never a connector's (S65-03): the chart's `runner.envFromSecrets`.
-            env_from_secrets=_names(os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "")),
+            env_from_secrets=_names(os.environ.get("TRANIBOR_RUNNER_ENV_SECRETS", "")),
             # How long a finished sandbox keeps its volume (`runner.sandbox.ttlSecondsAfterFinished`).
             ttl_seconds=int(
                 cfg.get(
-                    "ttl_seconds", os.environ.get("CHOREGOS_SANDBOX_TTL_SECONDS", "") or DEFAULT_TTL_SECONDS
+                    "ttl_seconds", os.environ.get("TRANIBOR_SANDBOX_TTL_SECONDS", "") or DEFAULT_TTL_SECONDS
                 )
             ),
+            # The deployment's, never a connector's (ADR 0146): the chart renders the template's agent
+            # container from the same `global.runner.agentIsolation`.
+            agent_isolation=deployment_agent_isolation(os.environ),
         )
     )
     register("runtime", "aca", _SHIPPED_SPECS[("runtime", "aca")])(
@@ -739,11 +703,13 @@ def _register_memory_and_gateways() -> None:
     register("memory", "ecphoria", _SHIPPED_SPECS[("memory", "ecphoria")])(
         lambda cfg: EcphoriaMemory(
             # Like the gateway: the deployment's URL and token, unless overridden per project.
-            # `CHOREGOS_MEMORY_URL` was set by the chart and ignored here.
-            cfg.get("base_url", _env("CHOREGOS_MEMORY_URL", "http://ecphoria.choregos-memory:8432")),
-            token=cfg.get("token", _env("CHOREGOS_MEMORY_TOKEN", "")),
+            # `TRANIBOR_MEMORY_URL` was set by the chart and ignored here.
+            cfg.get("base_url", _env("TRANIBOR_MEMORY_URL", "http://ecphoria.choregos-memory:8432")),
+            token=cfg.get("token", _env("TRANIBOR_MEMORY_TOKEN", "")),
             tenant=cfg.get("tenant"),
             read_timeout_ms=int(cfg.get("read_timeout_ms", 300)),
+            # Off until the deployment runs an Ecphoria that confines the by-id tools to a tenant.
+            scoped_by_id=_truthy(cfg.get("scoped_by_id", _env("CHOREGOS_MEMORY_SCOPED_BY_ID", ""))),
         )
     )
     # `pgvector`: a deprecated alias of `lexical`: the name promised vectors, the code does a
@@ -753,8 +719,8 @@ def _register_memory_and_gateways() -> None:
     register("gateway", "direct", _SHIPPED_SPECS[("gateway", "direct")])(_direct_gateway)
     register("gateway", "litellm", _SHIPPED_SPECS[("gateway", "litellm")])(
         lambda cfg: LiteLlmGateway(
-            cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "http://litellm.choregos-gateway:4000")),
-            cfg.get("master_key", _env("CHOREGOS_GATEWAY_MASTER_KEY", "")),
+            cfg.get("base_url", _env("TRANIBOR_GATEWAY_URL", "http://litellm.choregos-gateway:4000")),
+            cfg.get("master_key", _env("TRANIBOR_GATEWAY_MASTER_KEY", "")),
             team_id=cfg.get("team_id"),
             internal_prices=cfg.get("internal_prices", {}),
             enterprise_tags=cfg.get("enterprise_tags", False),
@@ -762,8 +728,8 @@ def _register_memory_and_gateways() -> None:
     )
     register("gateway", "openai-compatible", _SHIPPED_SPECS[("gateway", "openai-compatible")])(
         lambda cfg: OpenAiCompatibleGateway(
-            cfg.get("base_url", _env("CHOREGOS_GATEWAY_URL", "")),
-            api_key=cfg.get("api_key", _env("CHOREGOS_GATEWAY_MASTER_KEY", "")),
+            cfg.get("base_url", _env("TRANIBOR_GATEWAY_URL", "")),
+            api_key=cfg.get("api_key", _env("TRANIBOR_GATEWAY_MASTER_KEY", "")),
             run_key=cfg.get("run_key", ""),
             headers=cfg.get("headers", {}),
             timeout=float(cfg.get("timeout_s", 20)),
@@ -831,10 +797,10 @@ def _register_mcp_and_notifiers() -> None:
     register("mcp", MCP_OUTPOST_TYPE, _SHIPPED_SPECS[("mcp", MCP_OUTPOST_TYPE)])(_mcp_outpost_client)
     register("notify", "slack", _SHIPPED_SPECS[("notify", "slack")])(
         lambda cfg: SlackNotifier(
-            webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),
-            bot_token=cfg.get("bot_token", _env("CHOREGOS_SLACK_TOKEN", "")),
+            webhook_url=cfg.get("webhook_url", _env("TRANIBOR_SLACK_WEBHOOK", "")),
+            bot_token=cfg.get("bot_token", _env("TRANIBOR_SLACK_TOKEN", "")),
             default_channel=cfg.get("channel", "#choregos"),
-            public_url=cfg.get("public_url", _env("CHOREGOS_PUBLIC_URL", "")),
+            public_url=cfg.get("public_url", _env("TRANIBOR_PUBLIC_URL", "")),
         )
     )
     register("notify", "teams", _SHIPPED_SPECS[("notify", "teams")])(_teams_notifier)
@@ -860,6 +826,5 @@ def _register_builtins() -> None:
     _register_runtimes()
     _register_memory_and_gateways()
     _register_documents_and_identity()
-    _register_marketdata()
     _register_web_search()
     _register_mcp_and_notifiers()

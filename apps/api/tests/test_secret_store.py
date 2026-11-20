@@ -173,12 +173,12 @@ def test_the_default_store_is_the_fake_only_under_fakes_without_a_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(ENV_KEKS, raising=False)
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert isinstance(get_secret_store(), FakeSecretStore)
     monkeypatch.setenv(ENV_KEKS, f"k1:{_key()}")
     assert isinstance(get_secret_store(), SealedDbSecretStore), "a configured key always wins"
     monkeypatch.delenv(ENV_KEKS)
-    monkeypatch.delenv("CHOREGOS_FAKES")
+    monkeypatch.delenv("TRANIBOR_FAKES")
     assert isinstance(get_secret_store(), SealedDbSecretStore) and not get_secret_store().available()
     scripted = FakeSecretStore(available=False)
     set_secret_store(scripted)

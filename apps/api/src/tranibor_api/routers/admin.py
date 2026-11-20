@@ -52,7 +52,7 @@ KNOWN_BACKENDS = [(name, list(capabilities)) for name, capabilities in KNOWN_BAC
 
 @router.post("/platform/secrets/rewrap", response_model=SecretsRewrap, operation_id="rewrapSecrets")
 async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
-    """After a KEK rotation (the new key first in `CHOREGOS_SECRETS_KEKS`): re-wrap every sealed
+    """After a KEK rotation (the new key first in `TRANIBOR_SECRETS_KEKS`): re-wrap every sealed
     secret's data key under the active key. The values are never read out nor changed (ADR 0058).
     The GitHub App registered from a manifest is sealed under the same key and moves with them (ADR 0167)."""
     from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable
@@ -143,14 +143,14 @@ async def list_agent_images(principal: Me, settings: Config) -> list[AgentImageI
 async def list_executors(principal: Me) -> list[ExecutorInfo]:
     """The executors this deployment runs agent stages on, read from its own configuration.
 
-    Always the deployment's answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`, the
+    Always the deployment's answer (`TRANIBOR_EXECUTOR_KIND`, `TRANIBOR_EXECUTORS_ALLOWED`, the
     chart's `global.runner.allowedExecutors`), never a stored row: the table is dropped (S42-07d,
     ADR 0072), as a stored list showed the console a list that nothing applied and hid the real
     one (S42-07). Not a hand-written list either: it used to claim Tekton was
     on everywhere, and a project that picked it on a cluster without Tekton died at its first run.
     """
     allowed = allowed_executor_kinds()
-    pattern = os.environ.get("CHOREGOS_RUNNER_NAMESPACE_PATTERN", "") or None
+    pattern = os.environ.get("TRANIBOR_RUNNER_NAMESPACE_PATTERN", "") or None
     return [
         ExecutorInfo(
             kind=kind,
@@ -286,16 +286,19 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
             )
         )
     ).scalar_one_or_none()
+    # Either spelling of a renamed role is accepted; the row is written with the one every reader of
+    # the previous release knows (`Role.stored`, ADR 0181 C1, ADR 0098 §4).
+    stored = body.role.stored
     if existing is None:
         existing = Membership(
             user_id=user.id,
             org_id=organization.id,
             project_id=project.id if project else None,
-            role=str(body.role),
+            role=str(stored),
         )
         session.add(existing)
     else:
-        existing.role = str(body.role)
+        existing.role = str(stored)
     await record(
         session,
         principal,
@@ -303,10 +306,10 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
         org_id=organization.id,
         target_type="user",
         target_id=user.id,
-        role=str(body.role),
+        role=str(stored),
     )
     return MembershipDto(
-        user_id=user.id, email=user.email, org=org, project_slug=body.project_slug, role=body.role
+        user_id=user.id, email=user.email, org=org, project_slug=body.project_slug, role=stored
     )
 
 

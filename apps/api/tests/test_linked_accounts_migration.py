@@ -91,7 +91,7 @@ def test_the_migration_copies_every_declared_link_unverified_and_back(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "linked.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     try:
@@ -136,7 +136,7 @@ def test_the_copy_sees_every_organisation_as_the_application_role_under_forced_r
 
     asyncio.run(_prepare_postgres())
     url = _app_url(PG_URL)
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", url)
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", url)
     get_settings.cache_clear()
 
     async def as_the_application(work: Any) -> Any:

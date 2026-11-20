@@ -41,8 +41,8 @@ def _id_token(**claims: Any) -> str:
 
 @pytest.fixture(autouse=True)
 def _provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
     forget_discovery()
     yield

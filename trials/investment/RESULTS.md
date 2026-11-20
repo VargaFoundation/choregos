@@ -1,5 +1,11 @@
 # Investment research — the free sources called for real, 2026-10-14 (S38-13, partial)
 
+> Since S83-07 and S83-08 ([ADR 0181](../../docs/adr/0181-the-contracts-speak-no-trade.md) O4-3, O4-4), what
+> this record calls the core's is the `investment-research` plugin's: the template, its agents and skills
+> are its content (installed from the plugin source), and `packages/quant` and the `marketdata` adapters
+> are its extension, `plugins/investment-research/` (the tests cited below are under its `tests/`). The
+> record itself is left as it was measured.
+
 **Question**: do the free sources the `marketdata` family wraps answer a script today, and does the
 `composite` cross-check work on real data?
 

@@ -47,7 +47,7 @@ MAX_BYTES = 64 * 1024 * 1024
 #: so `useradd` and the bytecode `pip` compiles stamp the epoch rather than the day of the build.
 TEMPLATE_VERSION = "2"
 #: The base image of each runtime the platform builds, pinned by digest; the operator replaces them
-#: with `CHOREGOS_HOSTED_BASE_IMAGES`, where an empty value takes a runtime away. .NET is built in its
+#: with `TRANIBOR_HOSTED_BASE_IMAGES`, where an empty value takes a runtime away. .NET is built in its
 #: SDK image (`dotnet_10_sdk`) and runs in the ASP.NET Core one, which has no compiler.
 DEFAULT_BASE_IMAGES = {
     "python_3_12": "docker.io/library/python:3.12-slim-bookworm"

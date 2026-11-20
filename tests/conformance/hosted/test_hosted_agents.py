@@ -1,6 +1,6 @@
 """The conformance of hosted agents (ADR 0080): the reference passes, each way of breaking it fails.
 
-The agents under test come from `CHOREGOS_CONFORMANCE_HOSTED_AGENTS`, JSON `{name: spec}` where a
+The agents under test come from `TRANIBOR_CONFORMANCE_HOSTED_AGENTS`, JSON `{name: spec}` where a
 spec is an argv, or `{"command": argv, "cwd": dir}`, or `{"image": ref}` (run through `docker run`),
 with optional `protocol`, `readiness_timeout_s`, `termination_grace_s` and `env`. Without it, the
 reference examples run (the Node one where `node` is installed). `make conformance-hosted
@@ -43,7 +43,7 @@ ROGUE = Path(__file__).with_name("rogue_hosted_agent.py")
 
 
 def configured_agents() -> dict[str, HostedAgentSpec]:
-    raw = os.environ.get("CHOREGOS_CONFORMANCE_HOSTED_AGENTS")
+    raw = os.environ.get("TRANIBOR_CONFORMANCE_HOSTED_AGENTS")
     if not raw:
         return {"reference": python_example("reference"), "reference-node": node_example("reference-node")}
     return {name: HostedAgentSpec.parse(spec) for name, spec in json.loads(raw).items()}
@@ -54,7 +54,7 @@ async def test_a_hosted_agent_passes_every_check(name: str) -> None:
     spec = configured_agents()[name]
     if spec.command and spec.command[0] == "node" and shutil.which("node") is None:
         pytest.skip("no `node` on this machine: the Node reference runs where Node is installed")
-    timeout = float(os.environ.get("CHOREGOS_CONFORMANCE_HOSTED_TIMEOUT", "120"))
+    timeout = float(os.environ.get("TRANIBOR_CONFORMANCE_HOSTED_TIMEOUT", "120"))
     result = await run_hosted_suite(name, spec, timeout_s=timeout)
     assert result.ok, result.failed
     assert set(result.passed) == set(HOSTED_CHECKS)
@@ -146,7 +146,7 @@ def test_under_docker_desktop_the_agent_joins_a_relay_that_forwards_the_loopback
     assert relay[relay.index("-p") : relay.index("-p") + 2] == ["-p", "127.0.0.1:8088:8088"]
     script = relay[-1]
     assert "TCP-LISTEN:4000,bind=127.0.0.1" in script and "TCP:host.docker.internal:4001" in script
-    monkeypatch.setenv("CHOREGOS_CONFORMANCE_DOCKER_NETWORK", "relay")
+    monkeypatch.setenv("TRANIBOR_CONFORMANCE_DOCKER_NETWORK", "relay")
     assert needs_relay()
-    monkeypatch.setenv("CHOREGOS_CONFORMANCE_DOCKER_NETWORK", "host")
+    monkeypatch.setenv("TRANIBOR_CONFORMANCE_DOCKER_NETWORK", "host")
     assert not needs_relay()

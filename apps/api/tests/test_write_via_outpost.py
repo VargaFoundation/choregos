@@ -16,7 +16,7 @@ The outpost's side is a scripted daemon at the real door, in front of the script
 (`kits/outpost_route.py`, `kits/outpost_writes.py`); the rendezvous is the real one, over the
 database; the action is played by the orchestrator's own activities, and where the test says so by
 the `ActionWorkflow` on a Temporal test server. They run on SQLite and, with
-`CHOREGOS_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level security.
+`TRANIBOR_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level security.
 """
 
 from __future__ import annotations

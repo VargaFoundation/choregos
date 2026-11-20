@@ -315,6 +315,7 @@ def entry_dto(
             WorkflowCatalogueRequirementDto(capability=e.capability, reasons=list(e.reasons))
             for e in requires
         ],
+        needs_workspace=any(e.capability == "scm" for e in requires),
         needs_repository=any(e.capability == "scm" for e in requires),
         groups=groups,
         agents=agents,

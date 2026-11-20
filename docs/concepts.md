@@ -68,7 +68,9 @@ A **backend** is the coding agent CLI (`claude-code`, `gemini-cli`, `opencode`, 
 image ships and that executes an agent stage. An **executor** is where that stage runs
 (`agent_sandbox`, `k8s_job`, `tekton`, `aca`, `local_docker`). Both are chosen by the deployment;
 *Administration → Platform* shows them (backends can be flagged enabled or disabled there, which
-readiness counts but the orchestrator does not enforce).
+readiness counts but the orchestrator does not enforce). `claude-code` runs on Claude models and
+`gemini-cli` on Gemini models only (a stage pairing them with another family is refused); the platform
+holds the other backends to no family.
 
 ## Agent scope
 
@@ -410,7 +412,7 @@ month budget (`monthly_org_usd` in its policy ceiling), each minus what the cost
 spent (models and tools) and minus the keys still open at that scope (an agent's open keys count
 against its day and month). Stages that reserve from the same scope are serialized (a PostgreSQL
 advisory lock), so two stages preparing at once cannot both take the same remainder. Below
-`CHOREGOS_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
+`TRANIBOR_MIN_RUN_RESERVATION_USD` (default 0.01 $) the stage does not start: no key, no run, and
 the work item goes to a person the same way.
 
 What a work item has spent is read from the cost ledger, models and tools alike, not kept in the

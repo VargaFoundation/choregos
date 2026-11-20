@@ -3,7 +3,7 @@
 (ADR 0122 §3, §5).
 
 When the run is offered tool scripts (`StageInput.tools.scripts`), the runner writes, outside the
-workspace (`$TMPDIR/choregos/tools`, named by `CHOREGOS_TOOLS_DIR` and put on `PYTHONPATH`):
+workspace (`$TMPDIR/choregos/tools`, named by `TRANIBOR_TOOLS_DIR` and put on `PYTHONPATH`):
 
 - `choregos_tools/__init__.py`: `tool_client.py` copied as it is — `call`, `search`, the outcomes;
 - `choregos_tools/<module>.py`: one module per server, one function per tool the run may call, its
@@ -68,7 +68,7 @@ INSTRUCTIONS = """
 ## Calling tools from a script
 
 Your platform tools are also a Python library: the tool `<server>__<tool>` is the function
-`<server>.<tool>(...)` after `from choregos_tools import <server>`; `$CHOREGOS_TOOLS_DIR/INDEX.md` lists them
+`<server>.<tool>(...)` after `from choregos_tools import <server>`; `$TRANIBOR_TOOLS_DIR/INDEX.md` lists them
 (name, access, what it does). A script calls the same tools, under the same rules, as a tool call.
 
 Write a script when it saves round trips: three or more calls that depend on each other, a loop over items,

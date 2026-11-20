@@ -39,7 +39,7 @@ def builder(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeImageBuilder]:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_builds import set_image_builder
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_BUILD_REPOSITORY", REPOSITORY)
+    monkeypatch.setenv("TRANIBOR_HOSTED_BUILD_REPOSITORY", REPOSITORY)
     reset_settings_cache()
     fake = FakeImageBuilder()
     set_image_builder(fake)
@@ -225,7 +225,7 @@ async def test_a_deployment_without_a_build_repository_fails_the_build_with_the_
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_BUILD_REPOSITORY", "")
+    monkeypatch.setenv("TRANIBOR_HOSTED_BUILD_REPOSITORY", "")
     reset_settings_cache()
     sha256 = (await _upload(client)).json()["sha256"]
     await _create(client, _runtime(sha256))
@@ -248,9 +248,9 @@ def test_the_deployment_hands_buildkit_its_address_and_tls_directory(monkeypatch
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services import hosted_builds
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-    monkeypatch.setenv("CHOREGOS_BUILDKIT_ADDRESS", "tcp://choregos-buildkitd:1234")
-    monkeypatch.setenv("CHOREGOS_BUILDKIT_TLS_DIR", "/etc/choregos/buildkit")
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
+    monkeypatch.setenv("TRANIBOR_BUILDKIT_ADDRESS", "tcp://choregos-buildkitd:1234")
+    monkeypatch.setenv("TRANIBOR_BUILDKIT_TLS_DIR", "/etc/choregos/buildkit")
     reset_settings_cache()
     hosted_builds.set_image_builder(None)
     try:

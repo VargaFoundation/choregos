@@ -311,12 +311,12 @@ def environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, fl
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", tmp_path / "config.json")
     monkeypatch.setattr(theme, "MONOCHROME", False)
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_test")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.setenv("TZ", "UTC")
     time.tzset()
-    for name in ("NO_COLOR", "FORCE_COLOR", "CHOREGOS_NO_MOTION"):
+    for name in ("NO_COLOR", "FORCE_COLOR", "TRANIBOR_NO_MOTION"):
         monkeypatch.delenv(name, raising=False)
     clock = {"mono": 1000.0}
     monkeypatch.setattr(live_app, "now", lambda: NOW)
@@ -651,7 +651,7 @@ async def test_the_selected_token_stays_in_view_on_a_narrow_terminal(platform: P
 # ─────────────────────────────────── motion and colour ───────────────────────────────────
 
 
-@pytest.mark.parametrize("how", ["NO_COLOR", "CHOREGOS_NO_MOTION", "flag"])
+@pytest.mark.parametrize("how", ["NO_COLOR", "TRANIBOR_NO_MOTION", "flag"])
 async def test_reduced_motion_has_no_spinner_and_no_travelling_token(
     platform: Platform, environment: dict[str, float], monkeypatch: pytest.MonkeyPatch, how: str
 ) -> None:

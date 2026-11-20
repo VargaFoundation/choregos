@@ -30,7 +30,7 @@ def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathli
     )
     (folder / "trial" / "a.yaml").write_text("a: 1\n", encoding="utf-8")
     (folder / "trial" / "sub" / "b.yaml").write_text("b: 2\n", encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(root))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(root))
     return folder
 
 

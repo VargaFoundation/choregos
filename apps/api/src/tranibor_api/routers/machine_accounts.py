@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Machine accounts (S62-01, ADR 0131): an application calls the A2A door under its own name.
 
-An account belongs to one project, as a `users` row with `is_service` and a `developer` membership.
+An account belongs to one project, as a `users` row with `is_service` and a `contributor` membership.
 Its tokens are `a2a` only, bound to the project and expiring; they are read and written at platform
 scope because `api_tokens` is filtered on the owner, and here the owner is not the caller.
 """
@@ -38,7 +38,7 @@ Slug = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
 #: `.invalid` is reserved (RFC 2606): no mail reaches it and no identity provider can vouch for it.
 ADDRESS_DOMAIN = "machines.choregos.invalid"
 #: What it takes to start, follow and stop work items; the door never lets it decide.
-ROLE = Role.DEVELOPER
+ROLE = Role.CONTRIBUTOR
 SOURCE = "machine"
 SCOPES = ["a2a"]
 
@@ -143,7 +143,11 @@ async def create_machine_account(
         await session.flush()
     session.add(
         Membership(
-            user_id=user.id, org_id=ctx.project.org_id, project_id=ctx.id, role=str(ROLE), source=SOURCE
+            user_id=user.id,
+            org_id=ctx.project.org_id,
+            project_id=ctx.id,
+            role=str(ROLE.stored),
+            source=SOURCE,
         )
     )
     account = MachineAccount(

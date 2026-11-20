@@ -50,8 +50,8 @@ async def test_without_the_development_login_the_dev_code_is_refused(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.routers.auth import forget_discovery
 
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
     forget_discovery()
     try:
@@ -126,7 +126,7 @@ async def test_a_project_role_does_not_cross_organisations(
     from tranibor_api.config import reset_settings_cache
 
     # the development login gives a role only in the default organisation
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "northwind")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", "northwind")
     reset_settings_cache()
     other_id = await _second_organisation()
     invited = await client.post(
@@ -170,7 +170,8 @@ async def test_the_oidc_groups_are_attached_to_their_organisation() -> None:
         ["choregos:northwind:developers", "choregos:other:org-admins", "developers", "unrelated"],
         default_org="",
     )
-    assert roles == {"northwind": Role.DEVELOPER, "other": Role.ORG_ADMIN}
+    # `developers` gives the neutral role (ADR 0181 C1); the row is written with `Role.stored`.
+    assert roles == {"northwind": Role.CONTRIBUTOR, "other": Role.ORG_ADMIN}
     # a bare group holds only for the default organisation, and the highest one wins
     roles = roles_from_groups(["developers", "choregos:northwind:product-owners"], default_org="northwind")
     assert roles == {"northwind": Role.PROJECT_OWNER}
@@ -194,9 +195,9 @@ async def test_the_oidc_flow_checks_state_and_pkce_and_bounds_the_redirection(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.routers.auth import forget_discovery
 
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "http://front.test")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "http://front.test")
     reset_settings_cache()
     forget_discovery()
     seen: dict[str, Any] = {}
@@ -316,7 +317,7 @@ async def test_the_routes_without_a_principal_are_limited(
 ) -> None:
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_RATE_LIMIT_PER_MINUTE", "2")
+    monkeypatch.setenv("TRANIBOR_RATE_LIMIT_PER_MINUTE", "2")
     from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()
@@ -335,9 +336,9 @@ async def test_a_github_webhook_without_a_secret_is_refused_in_production(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.main import create_app
 
-    monkeypatch.setenv("CHOREGOS_ENV", "prod")
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_GITHUB_WEBHOOK_SECRET", "")
+    monkeypatch.setenv("TRANIBOR_ENV", "prod")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_GITHUB_WEBHOOK_SECRET", "")
     reset_settings_cache()
     try:
         app = create_app()
@@ -367,10 +368,10 @@ async def test_a_direct_gateway_is_not_written_in_production(
     accepted = await client.put(path, json={"type": "direct", "config": {}})
     assert accepted.status_code == 200, accepted.text  # in a test, it is allowed
 
-    monkeypatch.setenv("CHOREGOS_ENV", "prod")
+    monkeypatch.setenv("TRANIBOR_ENV", "prod")
     # the development login is refused in prod (guard of `config.py`): the cookie already set
     # is enough, we only switch the flag off so that the settings can be built
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
     reset_settings_cache()
     try:
         assert get_settings().env == "prod"
@@ -380,8 +381,8 @@ async def test_a_direct_gateway_is_not_written_in_production(
         # and the gateway that measures does pass
         assert (await client.put(path, json={"type": "litellm", "config": {}})).status_code == 200
     finally:
-        monkeypatch.delenv("CHOREGOS_ENV", raising=False)
-        monkeypatch.delenv("CHOREGOS_DEV_LOGIN_ENABLED", raising=False)
+        monkeypatch.delenv("TRANIBOR_ENV", raising=False)
+        monkeypatch.delenv("TRANIBOR_DEV_LOGIN_ENABLED", raising=False)
         reset_settings_cache()
 
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """`FakeRegistryClient` and `FakeImageVerifier`: an OCI registry and a signature check in memory
-(ADR 0005, ADR 0080), for `CHOREGOS_FAKES=1` and tests.
+(ADR 0005, ADR 0080), for `TRANIBOR_FAKES=1` and tests.
 
 Scriptable: `push` puts an image under a tag (pushing again moves the tag, which is how a test
 proves that a version keeps the digest it was published with); `remove` makes a reference unknown;

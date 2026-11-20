@@ -2,7 +2,7 @@
 
 `/api/v1/internal/*` is what a run's pod calls with its run token. The deployment routes the whole
 `/api` prefix of its public hostnames to the API, so those routes answered there too. With
-`CHOREGOS_INTERNAL_API_GUARD=enforce` a request that arrives under a public hostname gets what an
+`TRANIBOR_INTERNAL_API_GUARD=enforce` a request that arrives under a public hostname gets what an
 unknown route gets, unless the hostname is a run door; the Service's name is served as before.
 
 The deployment these tests describe: a console on `app.example.com`, an API on `api.example.com`,
@@ -46,14 +46,14 @@ UNKNOWN = "/api/v1/no-such-route"
 def _deployed(monkeypatch: pytest.MonkeyPatch, mode: str | None, **more: str) -> None:
     """The settings of a deployment whose runs call the Service, with the guard in `mode`."""
     settings = {
-        "CHOREGOS_PUBLIC_URL": f"https://{CONSOLE}",
-        "CHOREGOS_API_URL": f"https://{API}",
-        "CHOREGOS_CORS_ORIGINS": f"https://{CONSOLE}",
-        "CHOREGOS_INTERNAL_API_URL": f"http://{SERVICE}",
+        "TRANIBOR_PUBLIC_URL": f"https://{CONSOLE}",
+        "TRANIBOR_API_URL": f"https://{API}",
+        "TRANIBOR_CORS_ORIGINS": f"https://{CONSOLE}",
+        "TRANIBOR_INTERNAL_API_URL": f"http://{SERVICE}",
         **more,
     }
     if mode is not None:
-        settings["CHOREGOS_INTERNAL_API_GUARD"] = mode
+        settings["TRANIBOR_INTERNAL_API_GUARD"] = mode
     for name, value in settings.items():
         monkeypatch.setenv(name, value)
     reset_settings_cache()
@@ -179,9 +179,9 @@ async def test_a_run_door_is_served_even_under_a_public_name(
     _deployed(
         monkeypatch,
         "enforce",
-        CHOREGOS_INTERNAL_API_URL=f"https://{DOOR}",
-        CHOREGOS_RUN_DOOR_HOSTS=json.dumps([DOOR]),
-        CHOREGOS_PUBLIC_HOSTS=json.dumps(["*.example.com"]),
+        TRANIBOR_INTERNAL_API_URL=f"https://{DOOR}",
+        TRANIBOR_RUN_DOOR_HOSTS=json.dumps([DOOR]),
+        TRANIBOR_PUBLIC_HOSTS=json.dumps(["*.example.com"]),
     )
     assert (await _on(client, DOOR, _network("run-guard-2"), token)).status_code == 200
     assert (await _on(client, f"{DOOR}:443", _network("run-guard-2"), token)).status_code == 200
@@ -195,7 +195,7 @@ async def test_a_forwarded_public_host_is_refused_and_opens_nothing(
     """A reverse proxy that rewrites `Host` (the console's relay of `/api/v1` does) says where the
     request came in with `X-Forwarded-Host`. A client may write the header: it never opens a door."""
     token = await _run(project, "run-guard-3")
-    _deployed(monkeypatch, "enforce", CHOREGOS_RUN_DOOR_HOSTS=json.dumps([DOOR]))
+    _deployed(monkeypatch, "enforce", TRANIBOR_RUN_DOOR_HOSTS=json.dumps([DOOR]))
     url = _network("run-guard-3")
 
     relayed = await _on(client, SERVICE, url, token, **{"X-Forwarded-Host": f"{CONSOLE}:443"})
@@ -237,7 +237,7 @@ async def test_the_default_mode_is_warn(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token = await _run(project, "run-guard-5")
-    monkeypatch.delenv("CHOREGOS_INTERNAL_API_GUARD", raising=False)
+    monkeypatch.delenv("TRANIBOR_INTERNAL_API_GUARD", raising=False)
     _deployed(monkeypatch, None)
     assert Settings().internal_api_guard == "warn"
     with structlog.testing.capture_logs() as logs:
@@ -268,7 +268,7 @@ async def test_enforce_never_refuses_the_address_runs_are_sent_to(
     """Runs outside the cluster call back over a public URL. With no run door declared, `enforce`
     would end every run at its first call: the guard warns instead, and says so at start-up."""
     token = await _run(project, "run-guard-7")
-    _deployed(monkeypatch, "enforce", CHOREGOS_INTERNAL_API_URL=callback)
+    _deployed(monkeypatch, "enforce", TRANIBOR_INTERNAL_API_URL=callback)
     with structlog.testing.capture_logs() as logs:
         answer = await _on(client, API, _network("run-guard-7"), token)
         announce(Settings())
@@ -277,15 +277,15 @@ async def test_enforce_never_refuses_the_address_runs_are_sent_to(
     assert events == ["internal_api.would_refuse", "internal_api.guard", "internal_api.guard_not_enforced"]
     told = logs[-1]
     assert told["callback_host"] == API
-    for name in ("CHOREGOS_RUN_DOOR_HOSTS", "CHOREGOS_INTERNAL_API_URL", "runDoor.hostnames"):
+    for name in ("TRANIBOR_RUN_DOOR_HOSTS", "TRANIBOR_INTERNAL_API_URL", "runDoor.hostnames"):
         assert name in told["detail"], f"the start-up line must name {name}"
 
     # The door declared and the runs sent to it: `enforce` applies again, and start-up says nothing more.
     _deployed(
         monkeypatch,
         "enforce",
-        CHOREGOS_INTERNAL_API_URL=f"https://{DOOR}",
-        CHOREGOS_RUN_DOOR_HOSTS=json.dumps([DOOR]),
+        TRANIBOR_INTERNAL_API_URL=f"https://{DOOR}",
+        TRANIBOR_RUN_DOOR_HOSTS=json.dumps([DOOR]),
     )
     with structlog.testing.capture_logs() as logs:
         announce(Settings())
@@ -300,13 +300,13 @@ async def test_enforce_never_refuses_the_address_runs_are_sent_to(
 def test_a_development_machine_is_never_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """`make api`: the API's public URL and the callback are both `localhost:8000`."""
     for name in (
-        "CHOREGOS_PUBLIC_URL",
-        "CHOREGOS_API_URL",
-        "CHOREGOS_CORS_ORIGINS",
-        "CHOREGOS_INTERNAL_API_URL",
+        "TRANIBOR_PUBLIC_URL",
+        "TRANIBOR_API_URL",
+        "TRANIBOR_CORS_ORIGINS",
+        "TRANIBOR_INTERNAL_API_URL",
     ):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_GUARD", "enforce")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_GUARD", "enforce")
     guard = guard_of(Settings())
     assert guard.public == ("localhost",)
     assert guard.callback == "localhost"
@@ -315,11 +315,11 @@ def test_a_development_machine_is_never_refused(monkeypatch: pytest.MonkeyPatch)
 
 def test_the_compose_install_is_not_held(monkeypatch: pytest.MonkeyPatch) -> None:
     """Compose: the console and the API are published on `localhost`, runs call the service `api`."""
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "http://localhost:3000")
-    monkeypatch.setenv("CHOREGOS_API_URL", "http://localhost:8000")
-    monkeypatch.setenv("CHOREGOS_CORS_ORIGINS", "http://localhost:3000")
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_URL", "http://api:8000")
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_GUARD", "enforce")
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "http://localhost:3000")
+    monkeypatch.setenv("TRANIBOR_API_URL", "http://localhost:8000")
+    monkeypatch.setenv("TRANIBOR_CORS_ORIGINS", "http://localhost:3000")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_URL", "http://api:8000")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_GUARD", "enforce")
     guard = guard_of(Settings())
     assert not guard.held and guard.refuses
     assert guard.public_host([("host", "api")]) is None
@@ -386,12 +386,12 @@ def test_a_wildcard_names_sub_domains_only() -> None:
 
 
 def test_an_unknown_mode_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_GUARD", "strict")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_GUARD", "strict")
     with pytest.raises(ValueError, match="internal_api_guard"):
         Settings()
 
 
-@pytest.mark.parametrize("name", ["CHOREGOS_RUN_DOOR_HOSTS", "CHOREGOS_PUBLIC_HOSTS"])
+@pytest.mark.parametrize("name", ["TRANIBOR_RUN_DOOR_HOSTS", "TRANIBOR_PUBLIC_HOSTS"])
 @pytest.mark.parametrize(
     "entry", ["https://runs.example.com", "runs.example.com:443", "runs.example.com/x", ""]
 )
@@ -405,12 +405,12 @@ def test_a_host_setting_that_is_not_a_hostname_is_refused(
 
 
 def test_the_host_settings_are_json_lists(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_RUN_DOOR_HOSTS", '["runs.example.com", "*.runs.example.net"]')
-    monkeypatch.setenv("CHOREGOS_PUBLIC_HOSTS", '["api.example.com", "*.example.org"]')
-    monkeypatch.setenv("CHOREGOS_API_URL", "https://API.example.com:8443")
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "https://app.example.com")
-    monkeypatch.setenv("CHOREGOS_CORS_ORIGINS", "https://app.example.com, https://second.example.com")
-    monkeypatch.setenv("CHOREGOS_INTERNAL_API_URL", "http://choregos-api.choregos.svc.cluster.local:8000")
+    monkeypatch.setenv("TRANIBOR_RUN_DOOR_HOSTS", '["runs.example.com", "*.runs.example.net"]')
+    monkeypatch.setenv("TRANIBOR_PUBLIC_HOSTS", '["api.example.com", "*.example.org"]')
+    monkeypatch.setenv("TRANIBOR_API_URL", "https://API.example.com:8443")
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "https://app.example.com")
+    monkeypatch.setenv("TRANIBOR_CORS_ORIGINS", "https://app.example.com, https://second.example.com")
+    monkeypatch.setenv("TRANIBOR_INTERNAL_API_URL", "http://choregos-api.choregos.svc.cluster.local:8000")
     guard = guard_of(Settings())
     assert guard.doors == ("runs.example.com", "*.runs.example.net")
     assert guard.public == ("app.example.com", "api.example.com", "second.example.com", "*.example.org")

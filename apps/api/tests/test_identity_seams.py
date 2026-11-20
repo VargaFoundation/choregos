@@ -82,8 +82,8 @@ async def test_reauth_asks_the_idp_to_authenticate_again(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.routers.auth import forget_discovery
 
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
     forget_discovery()
     try:
@@ -156,7 +156,7 @@ async def saml_client(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
         "[choregos.plugins]\nextension_saml = extension_saml:plug_in\n", encoding="utf-8"
     )
     sys.path.insert(0, str(root))
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/saml.db"
+    os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/saml.db"
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
     from tranibor_api.db.models import Organization

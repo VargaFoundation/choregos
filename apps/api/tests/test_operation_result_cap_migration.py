@@ -110,7 +110,7 @@ def test_the_cap_migration_goes_up_and_down_on_sqlite(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     database = tmp_path / "cap.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     get_settings.cache_clear()
     url = f"sqlite:///{database}"
     engine = create_engine(url)
@@ -135,7 +135,7 @@ def test_the_cap_migration_goes_up_and_down_on_postgresql_as_the_application_rol
 
     asyncio.run(_prepare_postgres())
     url = _app_url(PG_URL)
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", url)
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", url)
     get_settings.cache_clear()
 
     async def as_the_application(step: Callable[[Any], Any]) -> Any:

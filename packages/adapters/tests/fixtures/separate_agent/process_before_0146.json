@@ -1,0 +1,1137 @@
+{
+ "docker": [
+  [
+   "inspect",
+   "choregos-run-r-1"
+  ],
+  [
+   "ps",
+   "--all",
+   "--filter",
+   "label=choregos.run-id",
+   "--filter",
+   "status=exited",
+   "--format",
+   "{{.Names}}"
+  ],
+  [
+   "run",
+   "--detach",
+   "--name",
+   "choregos-run-r-1",
+   "--network",
+   "choregos_default",
+   "--cap-drop",
+   "ALL",
+   "--security-opt",
+   "no-new-privileges",
+   "--env",
+   "TRANIBOR_RUN_ID=r-1",
+   "--env",
+   "TRANIBOR_API_URL=http://choregos-api:8000",
+   "--env",
+   "CHOREGOS_RUN_ID=r-1",
+   "--env",
+   "CHOREGOS_API_URL=http://choregos-api:8000",
+   "--env",
+   "TRANIBOR_RUN_TOKEN",
+   "--env",
+   "TRANIBOR_RUN_GATEWAY_KEY",
+   "--env",
+   "CHOREGOS_RUN_TOKEN",
+   "--env",
+   "CHOREGOS_RUN_GATEWAY_KEY",
+   "--label",
+   "choregos.run-id=r-1",
+   "--label",
+   "choregos.project=demo",
+   "--env",
+   "HTTP_PROXY=http://egress:3128",
+   "--env",
+   "TRANIBOR_ENV=dev",
+   "--env",
+   "CHOREGOS_ENV=dev",
+   "registry.example/choregos-runner:1.0",
+   "run"
+  ],
+  [
+   "inspect",
+   "choregos-run-r-2"
+  ],
+  [
+   "ps",
+   "--all",
+   "--filter",
+   "label=choregos.run-id",
+   "--filter",
+   "status=exited",
+   "--format",
+   "{{.Names}}"
+  ],
+  [
+   "run",
+   "--detach",
+   "--name",
+   "choregos-run-r-2",
+   "--network",
+   "choregos_default",
+   "--cap-drop",
+   "ALL",
+   "--security-opt",
+   "no-new-privileges",
+   "--env",
+   "TRANIBOR_RUN_ID=r-2",
+   "--env",
+   "TRANIBOR_API_URL=http://choregos-api:8000",
+   "--env",
+   "CHOREGOS_RUN_ID=r-2",
+   "--env",
+   "CHOREGOS_API_URL=http://choregos-api:8000",
+   "--env",
+   "TRANIBOR_RUN_TOKEN",
+   "--env",
+   "TRANIBOR_RUN_GATEWAY_KEY",
+   "--env",
+   "CHOREGOS_RUN_TOKEN",
+   "--env",
+   "CHOREGOS_RUN_GATEWAY_KEY",
+   "--label",
+   "choregos.run-id=r-2",
+   "--label",
+   "choregos.project=demo",
+   "--env",
+   "HTTP_PROXY=http://egress:3128",
+   "--env",
+   "TRANIBOR_ENV=dev",
+   "--env",
+   "CHOREGOS_ENV=dev",
+   "--volume",
+   "choregos-run-r-2-workspace:/hosted-workspace",
+   "registry.example/choregos-runner:1.0",
+   "run"
+  ],
+  [
+   "run",
+   "--detach",
+   "--name",
+   "choregos-run-r-2-agent",
+   "--network",
+   "container:choregos-run-r-2",
+   "--cap-drop",
+   "ALL",
+   "--security-opt",
+   "no-new-privileges",
+   "--stop-timeout",
+   "30",
+   "--label",
+   "choregos.agent-of=r-2",
+   "--env",
+   "PORT=8088",
+   "--volume",
+   "choregos-run-r-2-workspace:/workspace",
+   "--group-add",
+   "1000",
+   "registry.example/hosted@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ]
+ ],
+ "job-gate=False": {
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+   "labels": {
+    "choregos/project": "demo",
+    "choregos/run-id": "r-1",
+    "choregos/work-item": "DEMO-1"
+   },
+   "name": "run-r-1",
+   "namespace": "proj-demo-runners"
+  },
+  "spec": {
+   "activeDeadlineSeconds": 7200,
+   "backoffLimit": 0,
+   "template": {
+    "metadata": {
+     "labels": {
+      "app.kubernetes.io/component": "runner",
+      "app.kubernetes.io/name": "choregos-runner",
+      "choregos/run-id": "r-1"
+     }
+    },
+    "spec": {
+     "automountServiceAccountToken": false,
+     "containers": [
+      {
+       "args": [
+        "run"
+       ],
+       "env": [
+        {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "CHOREGOS_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "CHOREGOS_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "HTTP_PROXY",
+         "value": "http://egress:3128"
+        },
+        {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
+        },
+        {
+         "name": "CHOREGOS_ENV",
+         "value": "dev"
+        }
+       ],
+       "envFrom": [
+        {
+         "secretRef": {
+          "name": "git-credentials"
+         }
+        }
+       ],
+       "image": "registry.example/choregos-runner:1.0",
+       "name": "runner",
+       "resources": {
+        "limits": {
+         "cpu": "2",
+         "memory": "6Gi"
+        },
+        "requests": {
+         "cpu": "1",
+         "memory": "2Gi"
+        }
+       },
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/workspace",
+         "name": "workspace"
+        }
+       ]
+      }
+     ],
+     "imagePullSecrets": [
+      {
+       "name": "pull"
+      }
+     ],
+     "restartPolicy": "Never",
+     "runtimeClassName": "gvisor",
+     "securityContext": {
+      "fsGroup": 1000,
+      "runAsNonRoot": true,
+      "runAsUser": 1000,
+      "seccompProfile": {
+       "type": "RuntimeDefault"
+      }
+     },
+     "serviceAccountName": "choregos-runner",
+     "volumes": [
+      {
+       "emptyDir": {
+        "sizeLimit": "10Gi"
+       },
+       "name": "workspace"
+      }
+     ]
+    }
+   },
+   "ttlSecondsAfterFinished": 3600
+  }
+ },
+ "job-gate=True": {
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+   "labels": {
+    "choregos/project": "demo",
+    "choregos/run-id": "r-1",
+    "choregos/work-item": "DEMO-1"
+   },
+   "name": "run-r-1",
+   "namespace": "proj-demo-runners"
+  },
+  "spec": {
+   "activeDeadlineSeconds": 7200,
+   "backoffLimit": 0,
+   "template": {
+    "metadata": {
+     "labels": {
+      "app.kubernetes.io/component": "runner",
+      "app.kubernetes.io/name": "choregos-runner",
+      "choregos/run-id": "r-1"
+     }
+    },
+    "spec": {
+     "automountServiceAccountToken": false,
+     "containers": [
+      {
+       "args": [
+        "run"
+       ],
+       "env": [
+        {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "CHOREGOS_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "CHOREGOS_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "HTTP_PROXY",
+         "value": "http://egress:3128"
+        },
+        {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
+        },
+        {
+         "name": "CHOREGOS_ENV",
+         "value": "dev"
+        },
+        {
+         "name": "TRANIBOR_EGRESS_GATE_REPORT",
+         "value": "/egress-gate/report.json"
+        },
+        {
+         "name": "CHOREGOS_EGRESS_GATE_REPORT",
+         "value": "/egress-gate/report.json"
+        }
+       ],
+       "envFrom": [
+        {
+         "secretRef": {
+          "name": "git-credentials"
+         }
+        }
+       ],
+       "image": "registry.example/choregos-runner:1.0",
+       "name": "runner",
+       "resources": {
+        "limits": {
+         "cpu": "2",
+         "memory": "6Gi"
+        },
+        "requests": {
+         "cpu": "1",
+         "memory": "2Gi"
+        }
+       },
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/workspace",
+         "name": "workspace"
+        },
+        {
+         "mountPath": "/egress-gate",
+         "name": "egress-gate",
+         "readOnly": true
+        }
+       ]
+      }
+     ],
+     "imagePullSecrets": [
+      {
+       "name": "pull"
+      }
+     ],
+     "initContainers": [
+      {
+       "command": [
+        "/app/.venv/bin/python",
+        "-m",
+        "tranibor_core.egress_gate",
+        "--target",
+        "1.1.1.1:443",
+        "--deadline",
+        "30",
+        "--closed-streak",
+        "3",
+        "--timeout",
+        "1",
+        "--interval",
+        "0.25",
+        "--report",
+        "/egress-gate/report.json"
+       ],
+       "image": "registry.example/choregos-runner:1.0",
+       "name": "egress-gate",
+       "resources": {
+        "limits": {
+         "cpu": "500m",
+         "memory": "256Mi"
+        },
+        "requests": {
+         "cpu": "50m",
+         "memory": "64Mi"
+        }
+       },
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "readOnlyRootFilesystem": true,
+        "runAsNonRoot": true,
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/egress-gate",
+         "name": "egress-gate"
+        }
+       ]
+      }
+     ],
+     "restartPolicy": "Never",
+     "runtimeClassName": "gvisor",
+     "securityContext": {
+      "fsGroup": 1000,
+      "runAsNonRoot": true,
+      "runAsUser": 1000,
+      "seccompProfile": {
+       "type": "RuntimeDefault"
+      }
+     },
+     "serviceAccountName": "choregos-runner",
+     "volumes": [
+      {
+       "emptyDir": {
+        "sizeLimit": "10Gi"
+       },
+       "name": "workspace"
+      },
+      {
+       "emptyDir": {
+        "sizeLimit": "1Mi"
+       },
+       "name": "egress-gate"
+      }
+     ]
+    }
+   },
+   "ttlSecondsAfterFinished": 3600
+  }
+ },
+ "job-hosted-gate=False": {
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+   "labels": {
+    "choregos/project": "demo",
+    "choregos/run-id": "r-1",
+    "choregos/work-item": "DEMO-1"
+   },
+   "name": "run-r-1",
+   "namespace": "proj-demo-runners"
+  },
+  "spec": {
+   "activeDeadlineSeconds": 7200,
+   "backoffLimit": 0,
+   "template": {
+    "metadata": {
+     "labels": {
+      "app.kubernetes.io/component": "runner",
+      "app.kubernetes.io/name": "choregos-runner",
+      "choregos/run-id": "r-1"
+     }
+    },
+    "spec": {
+     "automountServiceAccountToken": false,
+     "containers": [
+      {
+       "args": [
+        "run"
+       ],
+       "env": [
+        {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "CHOREGOS_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "CHOREGOS_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "HTTP_PROXY",
+         "value": "http://egress:3128"
+        },
+        {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
+        },
+        {
+         "name": "CHOREGOS_ENV",
+         "value": "dev"
+        }
+       ],
+       "envFrom": [
+        {
+         "secretRef": {
+          "name": "git-credentials"
+         }
+        }
+       ],
+       "image": "registry.example/choregos-runner:1.0",
+       "name": "runner",
+       "resources": {
+        "limits": {
+         "cpu": "2",
+         "memory": "6Gi"
+        },
+        "requests": {
+         "cpu": "1",
+         "memory": "2Gi"
+        }
+       },
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/workspace",
+         "name": "workspace"
+        },
+        {
+         "mountPath": "/hosted-workspace",
+         "name": "hosted-workspace"
+        }
+       ]
+      }
+     ],
+     "enableServiceLinks": false,
+     "imagePullSecrets": [
+      {
+       "name": "pull"
+      }
+     ],
+     "initContainers": [
+      {
+       "env": [
+        {
+         "name": "PORT",
+         "value": "8088"
+        }
+       ],
+       "image": "registry.example/hosted@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "name": "agent",
+       "ports": [
+        {
+         "containerPort": 8088,
+         "name": "agent"
+        }
+       ],
+       "resources": {
+        "limits": {
+         "cpu": "1",
+         "memory": "2Gi"
+        },
+        "requests": {
+         "cpu": "1",
+         "memory": "2Gi"
+        }
+       },
+       "restartPolicy": "Always",
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "runAsNonRoot": true,
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/workspace",
+         "name": "hosted-workspace",
+         "readOnly": false
+        }
+       ]
+      }
+     ],
+     "restartPolicy": "Never",
+     "runtimeClassName": "gvisor",
+     "securityContext": {
+      "fsGroup": 1000,
+      "runAsNonRoot": true,
+      "runAsUser": 1000,
+      "seccompProfile": {
+       "type": "RuntimeDefault"
+      }
+     },
+     "serviceAccountName": "choregos-runner",
+     "terminationGracePeriodSeconds": 30,
+     "volumes": [
+      {
+       "emptyDir": {
+        "sizeLimit": "10Gi"
+       },
+       "name": "workspace"
+      },
+      {
+       "emptyDir": {
+        "sizeLimit": "10Gi"
+       },
+       "name": "hosted-workspace"
+      }
+     ]
+    }
+   },
+   "ttlSecondsAfterFinished": 3600
+  }
+ },
+ "job-hosted-gate=True": {
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+   "labels": {
+    "choregos/project": "demo",
+    "choregos/run-id": "r-1",
+    "choregos/work-item": "DEMO-1"
+   },
+   "name": "run-r-1",
+   "namespace": "proj-demo-runners"
+  },
+  "spec": {
+   "activeDeadlineSeconds": 7200,
+   "backoffLimit": 0,
+   "template": {
+    "metadata": {
+     "labels": {
+      "app.kubernetes.io/component": "runner",
+      "app.kubernetes.io/name": "choregos-runner",
+      "choregos/run-id": "r-1"
+     }
+    },
+    "spec": {
+     "automountServiceAccountToken": false,
+     "containers": [
+      {
+       "args": [
+        "run"
+       ],
+       "env": [
+        {
+         "name": "TRANIBOR_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "CHOREGOS_RUN_ID",
+         "value": "r-1"
+        },
+        {
+         "name": "TRANIBOR_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "CHOREGOS_API_URL",
+         "value": "http://choregos-api:8000"
+        },
+        {
+         "name": "TRANIBOR_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "token",
+           "name": "run-r-1"
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_GATEWAY_KEY",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "gateway-key",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "TRANIBOR_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "CHOREGOS_RUN_REMOTE_TOKEN",
+         "valueFrom": {
+          "secretKeyRef": {
+           "key": "remote-token",
+           "name": "run-r-1",
+           "optional": true
+          }
+         }
+        },
+        {
+         "name": "HTTP_PROXY",
+         "value": "http://egress:3128"
+        },
+        {
+         "name": "TRANIBOR_ENV",
+         "value": "dev"
+        },
+        {
+         "name": "CHOREGOS_ENV",
+         "value": "dev"
+        },
+        {
+         "name": "TRANIBOR_EGRESS_GATE_REPORT",
+         "value": "/egress-gate/report.json"
+        },
+        {
+         "name": "CHOREGOS_EGRESS_GATE_REPORT",
+         "value": "/egress-gate/report.json"
+        }
+       ],
+       "envFrom": [
+        {
+         "secretRef": {
+          "name": "git-credentials"
+         }
+        }
+       ],
+       "image": "registry.example/choregos-runner:1.0",
+       "name": "runner",
+       "resources": {
+        "limits": {
+         "cpu": "2",
+         "memory": "6Gi"
+        },
+        "requests": {
+         "cpu": "1",
+         "memory": "2Gi"
+        }
+       },
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/workspace",
+         "name": "workspace"
+        },
+        {
+         "mountPath": "/hosted-workspace",
+         "name": "hosted-workspace"
+        },
+        {
+         "mountPath": "/egress-gate",
+         "name": "egress-gate",
+         "readOnly": true
+        }
+       ]
+      }
+     ],
+     "enableServiceLinks": false,
+     "imagePullSecrets": [
+      {
+       "name": "pull"
+      }
+     ],
+     "initContainers": [
+      {
+       "command": [
+        "/app/.venv/bin/python",
+        "-m",
+        "tranibor_core.egress_gate",
+        "--target",
+        "1.1.1.1:443",
+        "--deadline",
+        "30",
+        "--closed-streak",
+        "3",
+        "--timeout",
+        "1",
+        "--interval",
+        "0.25",
+        "--report",
+        "/egress-gate/report.json"
+       ],
+       "image": "registry.example/choregos-runner:1.0",
+       "name": "egress-gate",
+       "resources": {
+        "limits": {
+         "cpu": "500m",
+         "memory": "256Mi"
+        },
+        "requests": {
+         "cpu": "50m",
+         "memory": "64Mi"
+        }
+       },
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "readOnlyRootFilesystem": true,
+        "runAsNonRoot": true,
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/egress-gate",
+         "name": "egress-gate"
+        }
+       ]
+      },
+      {
+       "env": [
+        {
+         "name": "PORT",
+         "value": "8088"
+        }
+       ],
+       "image": "registry.example/hosted@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "name": "agent",
+       "ports": [
+        {
+         "containerPort": 8088,
+         "name": "agent"
+        }
+       ],
+       "resources": {
+        "limits": {
+         "cpu": "1",
+         "memory": "2Gi"
+        },
+        "requests": {
+         "cpu": "1",
+         "memory": "2Gi"
+        }
+       },
+       "restartPolicy": "Always",
+       "securityContext": {
+        "allowPrivilegeEscalation": false,
+        "capabilities": {
+         "drop": [
+          "ALL"
+         ]
+        },
+        "runAsNonRoot": true,
+        "seccompProfile": {
+         "type": "RuntimeDefault"
+        }
+       },
+       "volumeMounts": [
+        {
+         "mountPath": "/workspace",
+         "name": "hosted-workspace",
+         "readOnly": false
+        }
+       ]
+      }
+     ],
+     "restartPolicy": "Never",
+     "runtimeClassName": "gvisor",
+     "securityContext": {
+      "fsGroup": 1000,
+      "runAsNonRoot": true,
+      "runAsUser": 1000,
+      "seccompProfile": {
+       "type": "RuntimeDefault"
+      }
+     },
+     "serviceAccountName": "choregos-runner",
+     "terminationGracePeriodSeconds": 30,
+     "volumes": [
+      {
+       "emptyDir": {
+        "sizeLimit": "10Gi"
+       },
+       "name": "workspace"
+      },
+      {
+       "emptyDir": {
+        "sizeLimit": "10Gi"
+       },
+       "name": "hosted-workspace"
+      },
+      {
+       "emptyDir": {
+        "sizeLimit": "1Mi"
+       },
+       "name": "egress-gate"
+      }
+     ]
+    }
+   },
+   "ttlSecondsAfterFinished": 3600
+  }
+ }
+}

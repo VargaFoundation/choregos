@@ -28,7 +28,7 @@ describe("membershipGroups (S40-07)", () => {
     expect(groups.map((group) => group.org)).toEqual(["northwind", "acme"]);
     expect(groups[0]!.lines).toEqual([
       { scope: "organisation", role: "org_admin" },
-      { scope: "project/billing", role: "developer" },
+      { scope: "project/billing", role: "contributor" },
     ]);
     expect(JSON.stringify(groups)).not.toContain("platform");
   });

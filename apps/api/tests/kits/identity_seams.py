@@ -71,7 +71,7 @@ def identity_extension(tmp_path: pathlib.Path) -> Iterator[Any]:
 async def extended_client(
     identity_extension: pathlib.Path, tmp_path: pathlib.Path
 ) -> AsyncIterator[AsyncClient]:
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/identite.db"
+    os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/identite.db"
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
     from tranibor_api.db.models import Organization

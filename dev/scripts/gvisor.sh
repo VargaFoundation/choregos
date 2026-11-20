@@ -56,7 +56,7 @@ install_kind() {
   done
   # The RuntimeClass alone: the installer DaemonSet beside it is for real nodes.
   kubectl --context "$CONTEXT" apply -f infra/bootstrap/gvisor.yaml --selector '!app.kubernetes.io/part-of'
-  echo "✓ RuntimeClass gvisor — CHOREGOS_CLUSTER_CONTEXT=$CONTEXT make test-cluster"
+  echo "✓ RuntimeClass gvisor — TRANIBOR_CLUSTER_CONTEXT=$CONTEXT make test-cluster"
 }
 
 case "${1:-}" in

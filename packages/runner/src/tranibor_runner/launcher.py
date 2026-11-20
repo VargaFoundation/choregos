@@ -37,6 +37,7 @@ import struct
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 HEADER = struct.Struct(">cI")
@@ -53,6 +54,19 @@ LOST = 255
 #: The group bit the runner needs on what the agent writes (ADR 0146 §4): the two containers run as
 #: different users and share one volume through the pod's `fsGroup`.
 SHARED_UMASK = 0o002
+
+
+def share_with_group(path: Path) -> bool:
+    """Gives the group the working tree's root, setgid, so that the agent's container (another uid, the
+    runner's group) can write in it (ADR 0146). A pod's `emptyDir` is so already (`fsGroup`); a Docker
+    volume filled from the image's `/workspace` is the runner's alone. A root the caller does not own is
+    left as it is: False."""
+    try:
+        mode = path.stat().st_mode & 0o7777
+        os.chmod(path, mode | 0o2070)  # noqa: S103 - the group is the pod's two containers' only
+    except OSError:
+        return False
+    return True
 
 
 class LauncherError(RuntimeError):

@@ -17,7 +17,7 @@ ARCH = "org:northwind#memory:architecture-decisions"
 
 @pytest.fixture(autouse=True)
 def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
 
 def _memory() -> Any:

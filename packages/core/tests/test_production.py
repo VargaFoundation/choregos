@@ -32,7 +32,7 @@ def test_the_fakes_are_refused_in_production_naming_both_settings(environment: s
     with pytest.raises(FakesInProductionError) as refused:
         refuse_fakes_in_production(environment=environment, fakes="1", process="thing")
     message = str(refused.value)
-    assert "CHOREGOS_FAKES" in message and f"CHOREGOS_ENV={environment.strip()}" in message
+    assert "TRANIBOR_FAKES" in message and f"TRANIBOR_ENV={environment.strip()}" in message
     assert "the thing refuses to start" in message and "global.fakes" in message
 
 
@@ -43,5 +43,5 @@ def test_a_bench_or_production_without_fakes_passes(environment: str | None, fak
 
 def test_read_from_a_process_environment() -> None:
     with pytest.raises(FakesInProductionError):
-        refuse_fakes_in_this_environment("thing", {"CHOREGOS_ENV": "prod", "CHOREGOS_FAKES": "yes"})
-    refuse_fakes_in_this_environment("thing", {"CHOREGOS_FAKES": "yes"})
+        refuse_fakes_in_this_environment("thing", {"TRANIBOR_ENV": "prod", "TRANIBOR_FAKES": "yes"})
+    refuse_fakes_in_this_environment("thing", {"TRANIBOR_FAKES": "yes"})

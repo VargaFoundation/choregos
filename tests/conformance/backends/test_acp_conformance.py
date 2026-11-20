@@ -104,8 +104,10 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
     stage_input.agent.backend = backend_name
     # Each backend gets a model it accepts: the model-family constraint is part of the
     # contract (claude-code only accepts Claude).
-    if backend.model_constraint:
-        stage_input.model.litellm_model = f"anthropic/{backend.model_constraint[0]}-sonnet-5"
+    if "claude" in backend.model_constraint:
+        stage_input.model.litellm_model = "anthropic/claude-sonnet-5"
+    elif "gemini" in backend.model_constraint:
+        stage_input.model.litellm_model = "gemini/gemini-2.5-pro"
     plan = backend.launch_plan(stage_input, workspace)
     plan.materialize(workspace)
 
@@ -130,7 +132,7 @@ async def run_suite(backend_name: str, stage_input: StageInput, workspace: Path)
         **plan.env,
         **backend.model_env(stage_input.model, stage_input.gateway_key),
         "FAKE_AGENT_SCRIPT": json.dumps(script),
-        "CHOREGOS_WORKSPACE_PATH": str(workspace),
+        "TRANIBOR_WORKSPACE_PATH": str(workspace),
     }
     denials: list[str] = []
 

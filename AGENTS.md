@@ -27,11 +27,11 @@ or external: the external aliases' window closed with 0.23.0 and S45-49 removed 
 
 ## Commands (the CI's, no others)
 - Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test-cov` + `contracts-check` + `procedures-check` + `charts-lint`.
-- Python: `uv run ruff check packages apps/api apps/orchestrator tools tests` then
+- Python: `uv run ruff check packages apps/api apps/orchestrator plugins tools tests` then
   `ruff format --check` on the same paths — **`tests/` is one of them**, an E501 there breaks CI.
   `make lint` also runs `tools/check_english.py` (lines added since `origin/main`) and the full-repo
   ratchet `make english-ratchet` (`tools/check_english.py --all`, ADR 0098).
-- Typing: `uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools` (strict).
+- Typing: `uv run mypy packages/*/src apps/api/src apps/orchestrator/src plugins/*/src tools` (strict).
 - Tests: `uv run pytest -q`; `-m "not slow"` leaves out the slow ones (building the
   workspace). Coverage: `make test-cov` (part of `make ci`) over every package in pyproject's
   `[tool.coverage.run].source`, threshold 80 % (`fail_under`); the web suite has its own floor
@@ -56,7 +56,7 @@ or external: the external aliases' window closed with 0.23.0 and S45-49 removed 
   ESLint, Prettier.
 - Conventional commits: `feat(orchestrator): …`, `fix(runner): …`, `contract(schemas): …`.
   One story = one PR = one squash.
-- Fakes are mandatory: every integration has its scriptable `Fake*`; `CHOREGOS_FAKES=1` switches
+- Fakes are mandatory: every integration has its scriptable `Fake*`; `TRANIBOR_FAKES=1` switches
   the whole platform (ADR 0005).
 - Idempotence: every Temporal activity and every provisioning step can be replayed without a double
   effect (ADR 0008). No PR on `workflows/` without a replayed history (`tests/replay/`).

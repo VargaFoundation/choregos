@@ -22,7 +22,7 @@ COMMAND = ["python", "-m", "ticket_triager"]
 def images(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_AGENT_IMAGES", json.dumps({"ticket-triager": TRIAGER}))
+    monkeypatch.setenv("TRANIBOR_AGENT_IMAGES", json.dumps({"ticket-triager": TRIAGER}))
     reset_settings_cache()
 
 
@@ -103,6 +103,33 @@ async def test_the_pod_runs_the_agents_image(setup: Fixture, images: None) -> No
         }
     )
     assert setup.adapters.executor.started[-1].runner_image == TRIAGER
+    assert setup.adapters.executor.started[-1].agent_image is None, (
+        "under `process` the image is the runner's"
+    )
+
+
+async def test_under_container_the_agents_image_is_the_agents_container(
+    setup: Fixture, images: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0146 §10 (S65-04k): the runner is the platform's image, the operator's image is the agent's
+    container, started by its launcher: the author's code never runs beside the run's credentials."""
+    from tranibor_orchestrator.config import get_settings, reset_settings_cache
+
+    monkeypatch.setenv("TRANIBOR_RUNNER_AGENT_ISOLATION", "container")
+    reset_settings_cache()
+    await _agent(setup, _code())
+    prepared = await stage_activities.prepare_stage(_plan(setup))
+    await stage_activities.start_run(
+        {
+            "project_id": setup.project_id,
+            "work_item_id": setup.work_item_id,
+            "stage_input": prepared["stage_input"],
+        }
+    )
+    started = setup.adapters.executor.started[-1]
+    assert started.agent_isolation == "container"
+    assert started.runner_image == get_settings().runner_image
+    assert started.agent_image == TRIAGER
 
 
 async def test_an_anthropic_runtime_sets_the_models_api_format(setup: Fixture, images: None) -> None:

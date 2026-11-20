@@ -53,10 +53,10 @@ def idp(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.mcp.oauth import KEYS
 
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_ENABLED", "true")
     # The door follows the console's IdP: `mcp_oauth_issuer` is empty.
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_AUDIENCE", AUDIENCE)
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_AUDIENCE", AUDIENCE)
     reset_settings_cache()
     KEYS.clear()
     state: dict[str, Any] = {"k1": _key_pair(), "k2": _key_pair(), "published": ["k1"]}
@@ -207,8 +207,8 @@ async def test_another_idp_does_not_find_anyone_by_their_sub(
 
     await _link_admin()
     # The console signs in elsewhere: the same `sub` no longer designates the same person.
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", "https://console.test/realms/choregos")
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", "https://console.test/realms/choregos")
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_ISSUER", ISSUER)
     reset_settings_cache()
     client.cookies.clear()
     assert (await _tools(client, _token(idp["k1"]))).status_code == 403
@@ -229,7 +229,7 @@ async def test_the_integrations_page_says_where_and_with_which_client_to_connect
         "claude-code": {"client_id": "choregos-claude-code", "callback_port": 33418},
         "claude-ai": {"client_id": "choregos-claude-ai"},
     }
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps(clients))
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_CLIENTS", json.dumps(clients))
     reset_settings_cache()
     oauth = (await client.get("/api/v1/integrations")).json()["oauth"]
     assert oauth == {
@@ -249,11 +249,11 @@ def test_an_oauth_client_the_page_does_not_know_stops_the_startup(
     from pydantic import ValidationError
     from tranibor_api.config import Settings
 
-    monkeypatch.setenv("CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"claude_code": {"client_id": "x"}}))
+    monkeypatch.setenv("TRANIBOR_MCP_OAUTH_CLIENTS", json.dumps({"claude_code": {"client_id": "x"}}))
     with pytest.raises(ValidationError, match="claude_code"):
         Settings()
     monkeypatch.setenv(
-        "CHOREGOS_MCP_OAUTH_CLIENTS", json.dumps({"claude-code": {"client_id": "x", "callback_port": 80}})
+        "TRANIBOR_MCP_OAUTH_CLIENTS", json.dumps({"claude-code": {"client_id": "x", "callback_port": 80}})
     )
     with pytest.raises(ValidationError, match="callback_port"):
         Settings()

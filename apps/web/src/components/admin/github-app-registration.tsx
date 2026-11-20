@@ -76,7 +76,7 @@ function Current({ status }: { status: GitHubAppRegistrationStatus }) {
       <Card title="The deployment's GitHub App">
         <p className="text-sm">
           App <span className="font-mono" data-verbatim>{status.app_id}</span>, named by the deployment&apos;s settings (
-          <Code>CHOREGOS_GITHUB_APP_ID</Code> and its private key). They win over an App created here.
+          <Code>TRANIBOR_GITHUB_APP_ID</Code> and its private key). They win over an App created here.
         </p>
       </Card>
     );
@@ -95,7 +95,7 @@ function Current({ status }: { status: GitHubAppRegistrationStatus }) {
       </dl>
       {!status.usable && (
         <Alert tone="danger" title="Its credentials do not open" className="mt-3">
-          The key that sealed them is no longer in <Code>CHOREGOS_SECRETS_KEKS</Code>: put it back, or forget this App and
+          The key that sealed them is no longer in <Code>TRANIBOR_SECRETS_KEKS</Code>: put it back, or forget this App and
           create another.
         </Alert>
       )}

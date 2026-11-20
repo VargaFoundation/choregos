@@ -150,7 +150,7 @@ def test_the_base_url_is_one_spelling_per_instance() -> None:
 def test_the_connector_types_declare_their_egress_and_check_their_configuration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # the real factory, whatever ran before
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)  # the real factory, whatever ran before
     assert egress_hosts("forge_account", "github-oauth", {"client_id": "c"}) == [
         ("github.com", 443),
         ("api.github.com", 443),

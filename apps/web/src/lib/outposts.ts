@@ -160,7 +160,7 @@ export function deploymentReadiness(list: Pick<OutpostList, "enabled" | "door_si
   if (!list) return { create: null, enrol: null };
   const off = list.enabled
     ? null
-    : "Outposts are switched off on this deployment (CHOREGOS_OUTPOSTS): nothing is created and no token issued until its operator turns them on. What exists can still be read, revoked and deleted.";
+    : "Outposts are switched off on this deployment (TRANIBOR_OUTPOSTS): nothing is created and no token issued until its operator turns them on. What exists can still be read, revoked and deleted.";
   const keyless = list.door_signing_key
     ? null
     : "The outposts' door has no signing key on this deployment: there is no key to pin, so no enrolment token is issued until its operator sets one.";

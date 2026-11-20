@@ -19,9 +19,9 @@ CONSOLE = "http://console.example.test"
 
 @pytest.fixture(autouse=True)
 def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", CONSOLE)
-    monkeypatch.delenv("CHOREGOS_PROCEDURES_EXTRA", raising=False)
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", CONSOLE)
+    monkeypatch.delenv("TRANIBOR_PROCEDURES_EXTRA", raising=False)
     reset_settings_cache()
     core.reload()
     yield
@@ -107,7 +107,7 @@ async def test_a_deployment_adds_notes_and_procedures_through_its_directory(
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("CHOREGOS_PROCEDURES_EXTRA", str(tmp_path))
+    monkeypatch.setenv("TRANIBOR_PROCEDURES_EXTRA", str(tmp_path))
     reset_settings_cache()
 
     sharepoint = (await client.get("/api/v1/procedures/connector.documents.sharepoint")).json()
@@ -121,7 +121,7 @@ async def test_a_deployment_adds_notes_and_procedures_through_its_directory(
     found = (await client.get("/api/v1/procedures", params={"for": "connector:notify/mattermost"})).json()
     assert [p["id"] for p in found] == ["connector.notify.mattermost"]
     # Without the directory the notes are gone: they are the deployment's, not the platform's.
-    monkeypatch.delenv("CHOREGOS_PROCEDURES_EXTRA")
+    monkeypatch.delenv("TRANIBOR_PROCEDURES_EXTRA")
     reset_settings_cache()
     plain = (await client.get("/api/v1/procedures/connector.documents.sharepoint")).json()
     assert plain["sections"][-1]["key"] == "fails"

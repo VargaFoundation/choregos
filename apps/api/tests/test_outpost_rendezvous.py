@@ -7,7 +7,7 @@ daemon on the other side of the door. Delivery is the subject: a call is placed 
 call that was ever claimed is never claimed again, a claimed write whose lease ends is in doubt, and
 only a call no instance claimed may be placed again.
 
-They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level security.
+They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level security.
 """
 
 from __future__ import annotations

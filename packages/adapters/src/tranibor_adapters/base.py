@@ -163,7 +163,13 @@ class CdAdapter(Protocol):
 #:                (ADR 0013), because no run inherits another's filesystem or credentials.
 #:                A property of `start`, like `queue`: no method. Freezing a RUNNING sandbox
 #:                and restoring it is not what this word promises.
-EXECUTOR_CAPABILITIES: frozenset[str] = frozenset({"queue", "renew", "suspend", "resume", "snapshot"})
+#: - `separate_agent`: starts the step's agent in a container of its own in the run's pod, beside the
+#:                runner's, when the deployment asks for it (`TRANIBOR_RUNNER_AGENT_ISOLATION=container`,
+#:                ADR 0146 §9). A property of `start`, like `queue`: no method. Under `container` an
+#:                executor without it refuses the run (`tranibor_core.agent_isolation`).
+EXECUTOR_CAPABILITIES: frozenset[str] = frozenset(
+    {"queue", "renew", "suspend", "resume", "snapshot", "separate_agent"}
+)
 
 
 @runtime_checkable

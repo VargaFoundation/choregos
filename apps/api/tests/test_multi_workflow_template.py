@@ -31,7 +31,7 @@ transitions:
 @pytest.fixture
 def templates(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     """A templates folder of its own; `write(defaults)` puts the `hr` template in it."""
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(tmp_path))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(tmp_path))
     (tmp_path / "secret.yaml").write_text(_flow("leak", "outside"), encoding="utf-8")
 
     def write(defaults: dict[str, Any]) -> None:

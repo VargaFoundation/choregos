@@ -90,6 +90,7 @@ RECORDED_ACTIVITY_NAMES = {
     "run_eval_cell",
     "run_provision_step",
     "run_smoke",
+    "run_step_effect",
     "seed_eval_ticket",
     "soak",
     "spawn_children",

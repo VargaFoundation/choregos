@@ -8,7 +8,7 @@ in a short transaction of its own, on the model of the hosted sessions' `turns/n
 through the `LISTEN` connection every replica already holds, on a channel of its own, and looks again
 periodically whatever it heard: a notification can be lost across a reconnection.
 
-Only PostgreSQL has a pool and a `NOTIFY`: these tests run with `CHOREGOS_TEST_DATABASE_URL`, on the
+Only PostgreSQL has a pool and a `NOTIFY`: these tests run with `TRANIBOR_TEST_DATABASE_URL`, on the
 migrated schema, as the application role.
 """
 
@@ -43,8 +43,8 @@ async def client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[
     from tranibor_api.db.models import Organization
     from tranibor_api.db.session import session_scope
 
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", kit.ORG)
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     async with session_scope(orgs="*") as session:
         session.add(Organization(slug=kit.ORG, name="Northwind"))

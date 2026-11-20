@@ -177,7 +177,7 @@ Each actor has a `type`.
 
 | `type` | Keys | What it is |
 | --- | --- | --- |
-| `agent` | `role` (required), `agent`, `model`, `backend`, `playbook`, `max_turns`, `max_minutes`, `fresh_context` | an agent run in a sandbox. `agent` names a registry agent (`slug` or `slug@version`) whose version sets the instructions, model, limits and budget ([Build an agent](../build/agents.md)). `model` is `profile:<name>`, `profile:by_size` (the default, by the work item's size) or a model id. `backend` is the coding agent, the project's default otherwise. `playbook` names the instructions when there is no registry agent (the role's own otherwise). `fresh_context: true` starts without the previous runs' context |
+| `agent` | `role` (required), `agent`, `model`, `backend`, `playbook`, `max_turns`, `max_minutes`, `fresh_context`, `needs` | an agent run in a sandbox. `agent` names a registry agent (`slug` or `slug@version`) whose version sets the instructions, model, limits and budget ([Build an agent](../build/agents.md)). `model` is `profile:<name>`, `profile:by_size` (the default, by the work item's size) or a model id. `backend` is the coding agent, the project's default otherwise. `playbook` names the instructions when there is no registry agent (the role's own otherwise). `fresh_context: true` starts without the previous runs' context. `needs` lists the connector kinds the agent works through (`[scm]` for a repository), which the project must connect; a workflow whose agents declare no `needs` (one written before 0.28) has them guessed from the role (`implement`, `review`… need an `scm`) |
 | `human` | `group`, `user` (at least one), `sla_hours`, `escalate_to` | a person decides in the console: a member of the identity provider's `group`, or the person `user` names by e-mail. With both, that person is asked first and the group may answer once `sla_hours` (24 by default) has passed. An actor that approves a `train` names a `group` |
 | `system` | none | the platform itself: opens or merges a pull request (`does`), proposes an action |
 | `job` | `role` and `command` (required), `image`, `max_minutes` | a command run in the step's sandbox, without a model: `command` is an argument list, never a shell line; `image` is a job image the operator named. The facts it writes in `.choregos/facts.json` are measured |
@@ -222,6 +222,7 @@ A transition has `from` and `to`, and either `by` (an actor) or `via: release_tr
 | `on_fail` | what happens when the step or a gate fails: `to`, `max_attempts`, `escalate_to` (all three required) |
 | `on_reject` | for a human step: the state a rejection sends the work item to |
 | `on_changes_requested` | for a review: like `on_fail`, when changes are requested |
+| `repairs` | the outcome this transition repairs (`ci_failed`, `changes_requested`): it is taken when the work item meets that outcome, never on the normal path. A workflow that declares no `repairs:` (one written before 0.28) has its repairs guessed: an agent of role `fix_ci` repairs `ci_failed`, one of role `address_review` `changes_requested` |
 | `review` | who reviews: `agents` (actor names), `humans` (`group`, and `required`: `always`, `by_policy` or `never`) |
 | `timeout_hours` | how long the step may wait |
 | `does` | what the platform does on a system transition: `open_pr` or `merge_pr` |

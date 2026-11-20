@@ -86,8 +86,8 @@ async def test_the_pod_runs_the_runner_serving_the_session_beside_the_pinned_ima
     assert spec.gateway_key == KEY, "the session's key reaches the pod through its Secret"
     agent = spec.agent_container
     assert agent is not None and agent.image == PINNED
-    assert agent.env["CHOREGOS_MCP_SERVERS"] == "choregos", "the session's tools, served by the runner"
-    assert agent.env["CHOREGOS_RUN_ID"] == spec.run_id
+    assert agent.env["TRANIBOR_MCP_SERVERS"] == "choregos", "the session's tools, served by the runner"
+    assert agent.env["TRANIBOR_RUN_ID"] == spec.run_id
     assert all(value not in agent.env.values() for value in (spec.run_token, KEY))
     assert not {name for name in agent.env if "TOKEN" in name or "GATEWAY_KEY" in name}
     record = await _record(session_id)
@@ -107,7 +107,7 @@ async def test_a_session_pod_gets_no_workspace_whatever_the_version_asks(setup: 
     await pod_activities.start_session_pod({"session_id": session_id})
     (spec,) = setup.adapters.executor.started
     assert spec.agent_container is not None and spec.agent_container.workspace == "none"
-    assert "CHOREGOS_WORKSPACE" not in spec.agent_container.env
+    assert "TRANIBOR_WORKSPACE" not in spec.agent_container.env
     assert (await _record(session_id)).stage_input["hosted"]["workspace"] == "none"
 
 

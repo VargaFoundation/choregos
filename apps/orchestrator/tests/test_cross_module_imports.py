@@ -100,7 +100,7 @@ def test_test_modules_import_only_english_sources() -> None:
 
 
 def test_recording_reads_the_english_variable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_RECORD_HISTORY", "english")
+    monkeypatch.setenv("TRANIBOR_RECORD_HISTORY", "english")
     assert recording_history() == "english"
-    monkeypatch.delenv("CHOREGOS_RECORD_HISTORY")
+    monkeypatch.delenv("TRANIBOR_RECORD_HISTORY")
     assert recording_history() is None

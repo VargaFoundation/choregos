@@ -211,7 +211,7 @@ def test_a_python_install_has_no_binary_to_replace() -> None:
 
 @pytest.fixture
 def check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
-    monkeypatch.delenv("CHOREGOS_NO_VERSION_CHECK", raising=False)
+    monkeypatch.delenv("TRANIBOR_NO_VERSION_CHECK", raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     self_update._checked_this_process.clear()
     lines: list[str] = []
@@ -237,7 +237,7 @@ def test_another_version_warns_once_a_day(check: list[str]) -> None:
     assert line is not None and "\n" not in line
     assert "this CLI is 9.9.8, the instance at https://choregos.example.org runs 9.9.9" in line
     assert "curl -fsSL https://choregos.example.org/cli/install.sh | sh" in line or "irm " in line
-    assert "CHOREGOS_NO_VERSION_CHECK=1" in line
+    assert "TRANIBOR_NO_VERSION_CHECK=1" in line
     # The same process: no second request.
     assert check_version(URL, edition, current="9.9.8", now=1001.0, write=check.append) is None
     # Another process, an hour later: the state file holds it back, without a request.
@@ -256,7 +256,7 @@ def test_the_same_version_says_nothing(check: list[str]) -> None:
 
 
 def test_the_variable_silences_it(check: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_NO_VERSION_CHECK", "1")
+    monkeypatch.setenv("TRANIBOR_NO_VERSION_CHECK", "1")
     edition = _edition("9.9.9")
     assert check_version(URL, edition, current="9.9.8", now=1.0, write=check.append) is None
     assert edition.calls == []

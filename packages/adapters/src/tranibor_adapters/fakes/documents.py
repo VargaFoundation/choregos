@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """A document source in memory (ADR 0005): SharePoint, OneDrive, a web site or a git repository
-under `CHOREGOS_FAKES`, scripted by tests and demos — `put` a file, `delete` it, and the next
+under `TRANIBOR_FAKES`, scripted by tests and demos — `put` a file, `delete` it, and the next
 `changes` says so, delta-style (since the cursor) like Graph."""
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ def fake_source(key: str) -> FakeDocumentSource:
 
 
 class FakeDocumentsConnector:
-    """The `documents` connector under `CHOREGOS_FAKES`: each source is its own scripted fake."""
+    """The `documents` connector under `TRANIBOR_FAKES`: each source is its own scripted fake."""
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config

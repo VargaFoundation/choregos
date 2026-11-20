@@ -29,9 +29,9 @@ spec:
       seccompProfile: { type: RuntimeDefault }
       capabilities: { drop: [ALL] }
     env:
-      - { name: CHOREGOS_RUN_ID, value: $(params.run-id) }
-      - { name: CHOREGOS_API_URL, value: $(params.api-url) }
-      - name: CHOREGOS_RUN_TOKEN
+      - { name: TRANIBOR_RUN_ID, value: $(params.run-id) }
+      - { name: TRANIBOR_API_URL, value: $(params.api-url) }
+      - name: TRANIBOR_RUN_TOKEN
         valueFrom:
           secretKeyRef: { name: run-$(params.run-id), key: token }
       - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.monitoring:4318" }
@@ -43,11 +43,11 @@ spec:
       env:
         # The run's gateway key, from the run's Secret (#523); optional: a runner without it
         # reads the key from its input, as before.
-        - name: CHOREGOS_RUN_GATEWAY_KEY
+        - name: TRANIBOR_RUN_GATEWAY_KEY
           valueFrom:
             secretKeyRef: { name: run-$(params.run-id), key: gateway-key, optional: true }
         # The access token of a remote agent (ADR 0062), same Secret.
-        - name: CHOREGOS_RUN_REMOTE_TOKEN
+        - name: TRANIBOR_RUN_REMOTE_TOKEN
           valueFrom:
             secretKeyRef: { name: run-$(params.run-id), key: remote-token, optional: true }
       script: |
@@ -64,12 +64,12 @@ spec:
     - name: choregos-tools
       image: $(params.tools-image)
       env:
-        - name: CHOREGOS_RUN_TOKEN
+        - name: TRANIBOR_RUN_TOKEN
           valueFrom:
             secretKeyRef: { name: run-$(params.run-id), key: token }
-        - { name: CHOREGOS_API_URL, value: $(params.api-url) }
-        - { name: CHOREGOS_RUN_ID, value: $(params.run-id) }
-        - { name: CHOREGOS_TOOLS_PORT, value: "7777" }
+        - { name: TRANIBOR_API_URL, value: $(params.api-url) }
+        - { name: TRANIBOR_RUN_ID, value: $(params.run-id) }
+        - { name: TRANIBOR_TOOLS_PORT, value: "7777" }
       # `exec` and not `httpGet`: the server listens only on 127.0.0.1 (intended — a tools sidecar
       # must be reachable only by the agent of ITS pod), whereas the kubelet sends an httpGet probe
       # to the pod's IP. So it could never succeed, from day one.

@@ -69,7 +69,7 @@ class SourceUnavailableError(RuntimeError):
 
 
 async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
-    """The adapter of a source: under `CHOREGOS_FAKES`, its scripted fake."""
+    """The adapter of a source: under `TRANIBOR_FAKES`, its scripted fake."""
     config = source.config or {}
     # A git or web source's connector is opened below, once the network policy has been read: a private
     # repository or a walled site obeys the ceiling at every sync like a public one, and keeps the
@@ -227,7 +227,7 @@ async def github_app_credential(session: Any, org_id: str, url: str) -> Callable
     app = await github_app_credentials.refresh(session)
     if app is None:
         raise SourceUnavailableError(
-            "the deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID, or one created from the console): "
+            "the deployment has no GitHub App (TRANIBOR_GITHUB_APP_ID, or one created from the console): "
             "name a `documents/git` connector"
         )
     owner = repository.split("/", 1)[0]

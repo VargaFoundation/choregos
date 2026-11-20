@@ -56,8 +56,8 @@ shows the exact setup instead of a token. A name it does not know stops the API 
 would otherwise hide the client without a word. Never put a client secret here: the door checks
 tokens, it exchanges none.
 
-Without the chart, the same settings are `CHOREGOS_MCP_OAUTH_ENABLED`, `CHOREGOS_MCP_OAUTH_AUDIENCE`,
-`CHOREGOS_MCP_OAUTH_ISSUER` and `CHOREGOS_MCP_OAUTH_CLIENTS` (JSON:
+Without the chart, the same settings are `TRANIBOR_MCP_OAUTH_ENABLED`, `TRANIBOR_MCP_OAUTH_AUDIENCE`,
+`TRANIBOR_MCP_OAUTH_ISSUER` and `TRANIBOR_MCP_OAUTH_CLIENTS` (JSON:
 `{"claude-code": {"client_id": "…", "callback_port": 33418}}`). Do not set them in
 `global.extraEnv` as well: the chart refuses a name set twice.
 

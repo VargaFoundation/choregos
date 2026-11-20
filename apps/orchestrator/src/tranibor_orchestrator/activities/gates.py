@@ -17,7 +17,9 @@ from tranibor_core.gates import (
     ADR_PATTERN,
     ALREADY_FIXED_GATE,
     DIFF_GATES,
+    ProviderRequest,
     judged_on_a_run,
+    provide_facts,
     unchanged_run,
 )
 from tranibor_core.run_journal import GATE_OUTCOME
@@ -157,6 +159,20 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             fields=dict(item.fields or {}),
             parent_documents=await _parent_documents(session, item),
             branch_pushed=branch_pushed,
+            # What the extensions' context providers read for the gates that declare them (ADR 0181).
+            facts=await provide_facts(
+                gates,
+                ProviderRequest(
+                    project_id=str(payload["project_id"]),
+                    work_item_id=str(payload["work_item_id"]),
+                    run_id=str(run.id) if run is not None else None,
+                    result=result,
+                    fields=dict(item.fields or {}),
+                    documents=dict(item.documents or {}),
+                    project=bundle,
+                    session=session,
+                ),
+            ),
         )
         outcomes = [
             await _judge(gate, context, bundle, (scm, repo_config), diff is not None, run_scope)

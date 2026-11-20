@@ -50,6 +50,7 @@ from typing import Any
 
 import httpx
 from tranibor_contracts import ExecutorKind
+from tranibor_core.agent_isolation import SEPARATE_AGENT
 from tranibor_core.domain import (
     RUN_GATEWAY_KEY_ENV,
     RUN_REMOTE_TOKEN_ENV,
@@ -63,6 +64,7 @@ from tranibor_core.exit_codes import explanation
 from ..errors import ConfigurationError, UpstreamError
 from ..sealing import key_from_log, seal
 from . import egress_gate
+from .isolation import refuse_unless_separate
 from .tekton import (
     CORE_API,
     GATEWAY_KEY_FIELD,
@@ -98,7 +100,16 @@ RUNNER_LOG = {"container": "runner"}
 
 class AgentSandboxExecutor:
     kind = ExecutorKind.AGENT_SANDBOX
+    #: What every warm pool can do; `separate_agent` too when its template has the agent's container
+    #: (`pool_capabilities`), which the instance knows from `agent_isolation`.
     capabilities: frozenset[str] = frozenset({"queue", "renew", "snapshot", "suspend", "resume"})
+
+    @classmethod
+    def pool_capabilities(cls, agent_isolation: str) -> frozenset[str]:
+        """What a pool whose template the chart rendered under `agent_isolation` can do: a sandbox
+        cannot gain a container once made, so `separate_agent` is the template's, never a claim's."""
+        extra = {SEPARATE_AGENT} if agent_isolation == "container" else set()
+        return frozenset(cls.capabilities | extra)
 
     def __init__(  # noqa: PLR0913 - one option per deployment knob
         self,
@@ -112,9 +123,13 @@ class AgentSandboxExecutor:
         max_active: int = 0,
         env_from_secrets: list[str] | None = None,
         http: httpx.AsyncClient | None = None,
+        agent_isolation: str = "process",
     ) -> None:
         self.client = client or KubernetesClient()
         self.warm_pool = warm_pool
+        # The template's shape (ADR 0146): with the agent's container under `container`, without it
+        # under `process`. The chart renders the template and tells the workers from one value.
+        self.capabilities = self.pool_capabilities(agent_isolation)
         self.assignment_port = int(assignment_port)
         # The template's RuntimeClass. A claim cannot choose another one: the pool's pods are
         # already made. A run whose policy asks for a different one is refused, not run.
@@ -145,6 +160,7 @@ class AgentSandboxExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent by `run_id`: a second start finds the claim, or the run still queued."""
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which a "
@@ -160,6 +176,12 @@ class AgentSandboxExecutor:
                 f"`{self.pool_image}`: a sandbox cannot change image once made, and running the step "
                 "in the pool's image would silently substitute it; use `runner.executor: k8s_job` "
                 "for steps that name their own image"
+            )
+        if spec.agent_image and spec.agent_image != self.pool_image:
+            raise ConfigurationError(
+                f"the run's agent asks for image `{spec.agent_image}` (an agent written in code, ADR 0146 "
+                f"§10), the warm pool `{self.warm_pool}` runs its agent's container from its own image: "
+                "use `runner.executor: k8s_job` for agents written in code"
             )
         name = self._name(spec.run_id)
         ref = self._ref(name, spec.namespace, spec.run_id)

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The round trips of an organisation's runs, per agent and backend (S57-01, ADR 0122).
 
-    CHOREGOS_TOKEN=... uv run python tools/report_round_trips.py \\
+    TRANIBOR_TOKEN=... uv run python tools/report_round_trips.py \\
         --api https://choregos.example --org acme --days 30
 
     uv run python tools/report_round_trips.py --sql --days 30
@@ -15,7 +15,7 @@ and the wall time; then the total cost, and the share of runs with at least 5 pl
 value nobody measured is left out of its percentile, never counted as zero.
 
 It reads through the public API only, with an operator's token taken from the variable named by
-`--token-env` (`CHOREGOS_TOKEN` by default) and never printed. No route lists an organisation's runs
+`--token-env` (`TRANIBOR_TOKEN` by default) and never printed. No route lists an organisation's runs
 over a window, so it walks `GET /orgs/{org}/projects`, each project's `GET /projects/{id}/work-items`
 (trials included; a work item closed before the window is not opened), `GET /work-items/{id}/runs`
 and, for each run in the window, `GET /runs/{id}/access`. A work item or a run the token cannot read
@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.AsyncBaseTransport |
     parser.add_argument("--api", help="console/API base URL, e.g. https://choregos.example")
     parser.add_argument("--org", help="the organisation's slug")
     parser.add_argument("--days", type=int, default=30, help="the window, in days (default 30)")
-    parser.add_argument("--token-env", default="CHOREGOS_TOKEN", help="the variable holding the token")
+    parser.add_argument("--token-env", default="TRANIBOR_TOKEN", help="the variable holding the token")
     parser.add_argument("--json", action="store_true", help="print the rows as JSON")
     parser.add_argument("--sql", action="store_true", help="print the report as one SQL query")
     args = parser.parse_args(argv)

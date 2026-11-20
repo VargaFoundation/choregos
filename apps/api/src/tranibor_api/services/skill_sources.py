@@ -15,7 +15,7 @@ What is fetched, and how:
   link, a device or a file that is not UTF-8 text makes that skill refused, not the repository.
 
 The network is behind `SourceFetcher`; `FakeSourceFetcher` serves recorded tarballs to the tests
-and to `CHOREGOS_FAKES=1` (ADR 0005).
+and to `TRANIBOR_FAKES=1` (ADR 0005).
 """
 
 from __future__ import annotations
@@ -442,7 +442,7 @@ def set_fetcher(fetcher: SourceFetcher | None) -> None:
 
 
 def get_fetcher(fakes: bool) -> SourceFetcher:
-    """The fetcher set, else a recorded one under `CHOREGOS_FAKES=1`, else HTTPS."""
+    """The fetcher set, else a recorded one under `TRANIBOR_FAKES=1`, else HTTPS."""
     if "current" not in _FETCHER:
         _FETCHER["current"] = FakeSourceFetcher() if fakes else HttpsSourceFetcher()
     return _FETCHER["current"]

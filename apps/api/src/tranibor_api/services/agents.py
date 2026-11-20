@@ -96,7 +96,7 @@ def version_errors(spec: AgentSpec) -> None:
                     {
                         "loc": ["runtime", "image"],
                         "msg": f"unknown image `{spec.runtime.image}` "
-                        f"(CHOREGOS_AGENT_IMAGES knows: {', '.join(known) or 'none'})",
+                        f"(TRANIBOR_AGENT_IMAGES knows: {', '.join(known) or 'none'})",
                     }
                 ],
             )

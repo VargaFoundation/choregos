@@ -131,7 +131,7 @@ def action_url(organization: str | None, state: str) -> str:
 
 
 def get_conversion() -> ManifestConversionPort:
-    """The conversion endpoint: the scriptable fake under `CHOREGOS_FAKES`, GitHub's otherwise."""
+    """The conversion endpoint: the scriptable fake under `TRANIBOR_FAKES`, GitHub's otherwise."""
     if fakes_enabled():
         return FakeManifestConversion.shared()
     return GitHubManifestConversion()
@@ -142,8 +142,8 @@ async def blocked_by(session: AsyncSession, settings: Settings | None = None) ->
     settings = settings or get_settings()
     if credentials.deployment_defines_app(settings):
         return (
-            "the deployment's settings define the GitHub App (CHOREGOS_GITHUB_APP_ID / "
-            "CHOREGOS_GITHUB_APP_PRIVATE_KEY): they win over an App created here"
+            "the deployment's settings define the GitHub App (TRANIBOR_GITHUB_APP_ID / "
+            "TRANIBOR_GITHUB_APP_PRIVATE_KEY): they win over an App created here"
         )
     if await credentials.stored_registration(session) is not None:
         return "a GitHub App is already registered for this instance: forget it first"

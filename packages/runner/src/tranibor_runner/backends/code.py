@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from tranibor_contracts import ApiFormat, ModelRef, StageInput
+from tranibor_contracts.env import with_legacy
 
 from .base import Backend, LaunchPlan
 
@@ -29,12 +30,14 @@ class CodeBackend(Backend):
             raise ValueError("an agent written in code needs a command: its version declares none")
         return LaunchPlan(
             command=command,
-            env={
-                **stage_input.agent.launch.env,
-                # The SDK stops the agent at this many model calls: the same limit the runner's
-                # turn guard enforces from outside.
-                "CHOREGOS_MAX_TURNS": str(stage_input.budget.max_turns),
-            },
+            env=with_legacy(
+                {
+                    **stage_input.agent.launch.env,
+                    # The SDK stops the agent at this many model calls: the same limit the runner's
+                    # turn guard enforces from outside.
+                    "TRANIBOR_MAX_TURNS": str(stage_input.budget.max_turns),
+                }
+            ),
             files=dict(stage_input.agent.launch.files),
             mcp_servers=self.mcp_servers(stage_input),
         )

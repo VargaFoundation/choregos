@@ -11,7 +11,7 @@ KIND_CONFIG ?= dev/kind.yaml
 # Makefile did not.
 PNPM_VERSION ?= $(shell python3 -c "import json;print(json.load(open('apps/web/package.json'))['packageManager'].split('@')[1])")
 PNPM ?= corepack pnpm@$(PNPM_VERSION)
-PY_PATHS := packages apps/api apps/orchestrator tools tests
+PY_PATHS := packages apps/api apps/orchestrator plugins tools tests
 
 .PHONY: help
 help:  ## Print this help
@@ -47,7 +47,7 @@ format:  ## Format the Python code
 
 .PHONY: typecheck
 typecheck:  ## mypy --strict over packages and apps
-	$(UV) run mypy packages/*/src apps/api/src apps/orchestrator/src tools
+	$(UV) run mypy packages/*/src apps/api/src apps/orchestrator/src plugins/*/src tools
 
 .PHONY: test
 test:  ## Unit tests
@@ -316,7 +316,7 @@ compose-down:
 
 .PHONY: demo
 demo:  ## End-to-end scenario in memory (fakes, no cluster)
-	CHOREGOS_FAKES=1 $(UV) run python -m tranibor_orchestrator.demo
+	TRANIBOR_FAKES=1 $(UV) run python -m tranibor_orchestrator.demo
 
 .PHONY: demo-investment
 demo-investment:  ## Investment campaigns on fakes with the real runner and engine: adopted, not relevant, refused memo (S38-09)
@@ -324,7 +324,7 @@ demo-investment:  ## Investment campaigns on fakes with the real runner and engi
 
 .PHONY: api
 api:  ## Run the API locally (fakes)
-	CHOREGOS_FAKES=1 $(UV) run uvicorn tranibor_api.main:app --reload --port 8000
+	TRANIBOR_FAKES=1 $(UV) run uvicorn tranibor_api.main:app --reload --port 8000
 
 .PHONY: worker
 worker:  ## Run the Temporal workers
@@ -346,7 +346,7 @@ cluster-up:  ## kind cluster dedicated to tests (Calico: NetworkPolicies are enf
 	kubectl --context kind-choregos apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
 	@echo "· waiting for the CNI…"
 	kubectl --context kind-choregos -n kube-system rollout status ds/calico-node --timeout=300s
-	@echo "✓ cluster ready — CHOREGOS_CLUSTER_CONTEXT=kind-choregos make test-cluster"
+	@echo "✓ cluster ready — TRANIBOR_CLUSTER_CONTEXT=kind-choregos make test-cluster"
 
 .PHONY: cluster-gvisor
 cluster-gvisor:  ## gVisor in the test cluster's runners node and the `gvisor` RuntimeClass (S41-17), after cluster-up
@@ -358,7 +358,7 @@ cluster-down:  ## Destroy the test cluster
 
 .PHONY: test-cluster
 test-cluster:  ## Tests that need a real cluster (S2-12, S7-04, S8-06)
-	CHOREGOS_CLUSTER_CONTEXT=$${CHOREGOS_CLUSTER_CONTEXT:-kind-choregos} \
+	TRANIBOR_CLUSTER_CONTEXT=$${TRANIBOR_CLUSTER_CONTEXT:-kind-choregos} \
 	  $(UV) run pytest tests/cluster -m cluster -q
 
 .PHONY: test-live-local
@@ -378,7 +378,7 @@ conformance:  ## Conformance suites (ACP backends, templates)
 .PHONY: conformance-agent
 conformance-agent:  ## The 7 conformance checks of a code agent inside an image: IMAGE=<ref> COMMAND='["python","-m","my_agent"]'
 	@test -n '$(IMAGE)' && test -n '$(COMMAND)' || { echo "usage: make conformance-agent IMAGE=<ref> COMMAND='[\"python\",\"-m\",\"my_agent\"]'"; exit 2; }
-	CHOREGOS_CONFORMANCE_CODE_AGENTS='{"image": {"image": "$(IMAGE)", "command": $(COMMAND)}}' \
+	TRANIBOR_CONFORMANCE_CODE_AGENTS='{"image": {"image": "$(IMAGE)", "command": $(COMMAND)}}' \
 	  $(UV) run pytest tests/conformance/backends/test_code_agents.py -m conformance -q -k code_agent_passes
 
 # A Node example serves `responses_server.mjs` (S41-20), the others `responses_server.py`, or
@@ -390,7 +390,7 @@ HOSTED_SERVER = $(if $(wildcard examples/hosted/$(AGENT)/responses_server.mjs),$
 .PHONY: conformance-hosted
 conformance-hosted:  ## The 8 checks of a hosted agent (ADR 0080): IMAGE=<ref>, or AGENT=<examples/hosted dir> [PYTHON=<interpreter>|NODE=<node>]
 	@test -n '$(IMAGE)$(AGENT)' || { echo "usage: make conformance-hosted IMAGE=<ref> | AGENT=<dir of examples/hosted> [PYTHON=<interpreter>|NODE=<node>]"; exit 2; }
-	CHOREGOS_CONFORMANCE_HOSTED_AGENTS='$(if $(IMAGE),{"image": {"image": "$(IMAGE)"}},{"$(AGENT)": {"command": $(HOSTED_SERVER), "cwd": "$(CURDIR)/examples/hosted/$(AGENT)"}})' \
+	TRANIBOR_CONFORMANCE_HOSTED_AGENTS='$(if $(IMAGE),{"image": {"image": "$(IMAGE)"}},{"$(AGENT)": {"command": $(HOSTED_SERVER), "cwd": "$(CURDIR)/examples/hosted/$(AGENT)"}})' \
 	  $(UV) run pytest tests/conformance/hosted/test_hosted_agents.py -m conformance -q -k passes_every_check
 
 .PHONY: evals

@@ -19,7 +19,7 @@ from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from tranibor_contracts import ActionOrigin, ActionStatus, EventType
+from tranibor_contracts import ActionOrigin, ActionStatus, EventType, Role
 from tranibor_core import utcnow
 
 from ..audit import record
@@ -27,17 +27,23 @@ from ..db.models import Action, ActionEffect, Agent, Project, User, WorkItem
 from ..decision_session import holds_a_person_session, refusal
 from ..errors import ApiError, conflict, forbidden, unprocessable
 from ..freshness import authentication_age, require_fresh_authentication
+from ..rbac import rank_of
 from ..schemas.actions import ActionCreate, ActionDto, ActionEffectDto, ActionSettlementBody, ApprovalSpec
 from .events import persist_event
 from .human_groups import groups_for_org
 
-#: From lowest to highest: an approver must have at least the rank asked for.
-RANKS = {"viewer": 0, "developer": 1, "release_captain": 2, "project_owner": 3, "org_admin": 4}
+
+def _rank_asked(rule: dict[str, Any]) -> int:
+    """The rank an approval rule asks for. A rule may name a role under its former spelling
+    (`developer`, ADR 0181 C1), which ranks as its successor; an unknown one asks for a project owner."""
+    asked = rank_of(str(rule.get("role") or Role.PROJECT_OWNER))
+    return asked if asked >= 0 else rank_of(Role.PROJECT_OWNER)
 
 
 def rank(principal: Any, org: str, project: str) -> int:
+    """The decider's rank on the project: an approver must have at least the rank asked for."""
     roles = [principal.role_for(org, project), principal.org_roles.get(org)]
-    return max((RANKS.get(str(r), -1) for r in roles if r is not None), default=-1)
+    return max((rank_of(r) for r in roles if r is not None), default=-1)
 
 
 #: The namespace of transition action ids: a work item, a transition and an attempt always give the
@@ -325,7 +331,7 @@ async def _one_of_its_approvers(
     approval = action.approval or {}
     approvers = approval.get("approvers") or [{"role": "project_owner", "min": 1}]
     my_rank = rank(principal, org_slug, project.slug)
-    high_enough = [a for a in approvers if my_rank >= RANKS.get(str(a.get("role") or "project_owner"), 3)]
+    high_enough = [a for a in approvers if my_rank >= _rank_asked(a)]
     if not high_enough:
         raise forbidden(f"{gesture} this action needs an approver's rank")
     # A group named by the rule (ADR 0052) is a second condition, not an alternative: a project owner
@@ -384,7 +390,7 @@ async def decide(
     if any(d.get("by", "").lower() == principal.email.lower() for d in action.decisions or []):
         raise conflict("you have already decided this action")
     # `step_up_minutes` absent (`None`): the rule demands no recent authentication, which an
-    # extension's policy (the ontology) can say; an action proposed by the API always has one.
+    # extension's policy can say; an action proposed by the API always has one.
     freshness = approval.get("step_up_minutes", 10)
     age = (
         require_fresh_authentication(principal, int(freshness))

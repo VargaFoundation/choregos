@@ -46,7 +46,7 @@ def answer(text: str) -> str:
         os.environ["OPENAI_BASE_URL"] = os.environ["CONFORMANCE_OUTSIDE_MODEL"]
         os.environ["OPENAI_API_KEY"] = "sk-the-agents-own-key"
     elif ROGUE == "no_tools":
-        os.environ["CHOREGOS_MCP_SERVERS"] = ""
+        os.environ["TRANIBOR_MCP_SERVERS"] = ""
     elif ROGUE == "stray_egress":
         _tunnel("telemetry.example.com")
     elif ROGUE == "retries_forever":

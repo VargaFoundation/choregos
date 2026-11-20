@@ -135,6 +135,17 @@ is also [here](procedures/agent.code.md).
 1. **Build the image FROM the runner image.** The runner is the entrypoint; your agent is the
    subprocess it starts. Give the agent its own virtualenv so its dependencies never shadow the
    runner's. See `examples/agents/plain/Dockerfile`.
+   **Under `global.runner.agentIsolation: container`** ([ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md)
+   §10) your image is not the runner's any more: it is the **agent's container**, started with
+   `launcher --port 8766` beside a runner from the platform's own image, which holds the run's
+   credentials and never runs your code. What the image must then hold, which an image built FROM the
+   runner image already does: the runner's entrypoint (`choregos-runner launcher`, standard library
+   only), and your agent readable and runnable by **uid 1001, group 1000** (not the runner's uid 1000)
+   with a **read-only root file system**: install it under a path the image owns (`/opt/agents/...`,
+   world-readable), write nothing outside `/workspace`, `/exchange` (its `$HOME` and `$TMPDIR`) and
+   `/tmp`, and expect no secret in its environment: the model, the MCP servers and the network are
+   reached through the runner's loopback listeners. The run goes to a pod per run (`k8s_job` or
+   `local_docker`), never to the warm pool.
 2. **Check it** with the conformance suite (below), then push the image and take its digest.
 3. **Name it, as the operator.** Images are never written by a workflow or an agent. The operator
    maps a name to a digest-pinned reference (`global.images.agents` in the chart, see
@@ -175,8 +186,10 @@ make conformance        # the plain example runs here, in CI
 make conformance-agent IMAGE=<ref> COMMAND='["/opt/agents/plain/bin/python","-m","choregos_agent_examples.plain"]'
 ```
 
-`CHOREGOS_CONFORMANCE_CODE_AGENTS` (`{name: argv}` or `{name: {image, command}}`) names the agents
-the suite runs; an image is run with `docker run -i`.
+`TRANIBOR_CONFORMANCE_CODE_AGENTS` (`{name: argv}` or `{name: {image, command}}`) names the agents
+the suite runs; an image is run with `docker run -i`. Each agent runs the seven checks twice: as the
+runner's child (`process`), and behind a launcher (`container`, ADR 0146 §10), where an image starts
+`launcher` as uid 1001 with a read-only root and the agent is started through it, as in a run.
 
 ## Examples
 

@@ -103,7 +103,7 @@ def test_basic_without_a_username_or_an_unknown_scheme_is_refused() -> None:
 async def test_the_connector_type_builds_a_basic_client(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_adapters import build
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     client = build(
         "mcp",
         "mcp",

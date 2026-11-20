@@ -12,7 +12,7 @@ connectors route to it (ADR 0149). It is never handed MCP.
 - `alone`: the door served by a process of its own (`python -m tranibor_api.outposts`, ADR 0148 §8),
   where a deployment splits it out: the four verbs, two probes, the wake-up channel, nothing else.
 
-Mounted only when `CHOREGOS_OUTPOSTS` is on (`main.py`); its contract is
+Mounted only when `TRANIBOR_OUTPOSTS` is on (`main.py`); its contract is
 `packages/contracts/outpost-door.yaml`.
 """
 

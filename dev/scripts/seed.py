@@ -40,7 +40,7 @@ STATES = [
 
 
 async def main() -> int:
-    os.environ.setdefault("CHOREGOS_FAKES", "1")
+    os.environ.setdefault("TRANIBOR_FAKES", "1")
     from sqlalchemy import select
     from tranibor_api.db.models import (
         CostLedger,

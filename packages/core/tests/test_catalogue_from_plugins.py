@@ -100,7 +100,7 @@ def test_without_an_offline_directory_the_catalogue_is_empty(tmp_path: Path) -> 
 
 def test_the_environment_names_the_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     shutil.copy(OFFLINE / "netops-1.2.0.tar.gz", tmp_path)
-    monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(tmp_path))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(tmp_path))
     assert [e.slug for e in entries()] == ["netops"]
 
 

@@ -56,9 +56,9 @@ async def test_the_console_origin_the_cli_and_bearer_tokens_pass(client: AsyncCl
 
 
 async def test_cors_wildcard_stops_the_start(app: object, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_CORS_ORIGINS", "*")
+    monkeypatch.setenv("TRANIBOR_CORS_ORIGINS", "*")
     reset_settings_cache()
-    with pytest.raises(RuntimeError, match="CHOREGOS_CORS_ORIGINS"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_CORS_ORIGINS"):
         create_app()
 
 
@@ -111,7 +111,7 @@ async def test_origins_are_compared_normalised(
         ("http://app.example.com:80", "http://app.example.com"),
         ("https://app.example.com", "HTTPS://APP.EXAMPLE.COM:443"),
     ):
-        monkeypatch.setenv("CHOREGOS_PUBLIC_URL", public_url)
+        monkeypatch.setenv("TRANIBOR_PUBLIC_URL", public_url)
         reset_settings_cache()
         ok = await client.post(TOKENS, json={"name": "x"}, headers={"Origin": origin})
         assert ok.status_code == 201, (public_url, origin, ok.text)

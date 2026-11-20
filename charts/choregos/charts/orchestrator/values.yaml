@@ -41,6 +41,11 @@ runner:
   # `agent_sandbox` only: the executor for steps that name their own image. Empty: such a step is refused.
   customImageExecutor: k8s_job
   runtimeClass: ""
+  # The runner container's own requests and limits beside the agent's (ADR 0146 §12): see the umbrella
+  # chart's values.
+  ownResources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
   # `executor: agent_sandbox` only (ADR 0016): see the umbrella chart's values.
   warmPool:
     size: 0
@@ -49,13 +54,6 @@ runner:
     storageClassName: ""
     assignmentPort: 8765
     assignmentNetworkPolicy: true
-    # Where the coding agent runs (ADR 0146). `process`: in the runner's container, as its child
-    # (same uid, same /proc, same /app; what the platform shipped until 0.27). `container`: in
-    # its OWN container of the sandbox pod, another uid, started by a launcher; it then holds
-    # neither the runner's environment (run token, git token, egress report key) nor /app.
-    # `agent_sandbox` only: the runner refuses (exit 100) rather than fall back to `process`.
-    # Needs Kubernetes >= 1.29 (native sidecar). Roll back by setting `process`.
-    agentIsolation: process
     ttlSecondsAfterFinished: 300
   egressProxy: "http://choregos-egress.{namespace}.svc:3128"
   egressImage: ""

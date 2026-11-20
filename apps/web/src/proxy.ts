@@ -22,7 +22,7 @@ const EMBED_PATH = /^\/embed\/assistants\/([a-z0-9][a-z0-9_-]*)\/([a-z0-9][a-z0-
  * ours to rely on). Any failure frames nobody: `'none'`, the console's rule for every other page.
  */
 async function embedOrigins(org: string, slug: string): Promise<string[]> {
-  const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
+  const apiUrl = process.env.TRANIBOR_API_URL ?? "http://localhost:8000";
   try {
     const response = await fetch(`${apiUrl}/api/v1/public/assistants/${org}/${slug}/embed`, {
       cache: "no-store",
@@ -49,7 +49,7 @@ export function proxy(request: NextRequest): NextResponse | Promise<NextResponse
 
 function respond(request: NextRequest, frameAncestors: string, embed: boolean): NextResponse {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
+  const apiUrl = process.env.TRANIBOR_API_URL ?? "http://localhost:8000";
   const isDev = process.env.NODE_ENV === "development";
   const csp = [
     "default-src 'self'",

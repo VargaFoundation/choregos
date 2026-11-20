@@ -5,7 +5,7 @@
     python -m tranibor_api.local_demo litellm-config /litellm  # config.yaml + provider
 
 The one-shot `seed` service of the compose file runs it after the API is healthy, so that the
-API's own bootstrap (`CHOREGOS_BOOTSTRAP_ORG`, `amorcage.py`) has already created the organisation
+API's own bootstrap (`TRANIBOR_BOOTSTRAP_ORG`, `amorcage.py`) has already created the organisation
 and its admin. It writes to the database like `demo/seed.py` does: provisioning a project means
 Kubernetes namespaces and GitOps, which a laptop install does not have.
 
@@ -435,7 +435,7 @@ def main() -> None:
         provider = write_litellm_config(pathlib.Path(sys.argv[2]), os.environ)
         logger.info("litellm configured", mode=provider or "fakes", decisions=decisions_enabled(os.environ))
         return
-    provider_file = pathlib.Path(os.environ.get("CHOREGOS_LOCAL_PROVIDER_FILE", "/litellm/provider"))
+    provider_file = pathlib.Path(os.environ.get("TRANIBOR_LOCAL_PROVIDER_FILE", "/litellm/provider"))
     asyncio.run(seed_local_demo(settings, read_provider(provider_file)))
 
 

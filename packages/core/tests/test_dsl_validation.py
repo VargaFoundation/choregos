@@ -266,8 +266,8 @@ def test_16_a_deployment_playbook_silences_the_warning(tmp_path: Path) -> None:
     import os
 
     (tmp_path / "sourcing.md").write_text("You do sourcing.", encoding="utf-8")
-    previous = os.environ.get("CHOREGOS_PLAYBOOKS_DIR")
-    os.environ["CHOREGOS_PLAYBOOKS_DIR"] = str(tmp_path)
+    previous = os.environ.get("TRANIBOR_PLAYBOOKS_DIR")
+    os.environ["TRANIBOR_PLAYBOOKS_DIR"] = str(tmp_path)
     try:
         trade = BASE.replace(
             "dev: {{ type: agent, role: implement }}", "dev: {{ type: agent, role: sourcing }}"
@@ -275,9 +275,9 @@ def test_16_a_deployment_playbook_silences_the_warning(tmp_path: Path) -> None:
         _wf, report = parse_workflow(trade.format(transitions=OK_TRANSITIONS), strict=False)
     finally:
         if previous is None:
-            del os.environ["CHOREGOS_PLAYBOOKS_DIR"]
+            del os.environ["TRANIBOR_PLAYBOOKS_DIR"]
         else:
-            os.environ["CHOREGOS_PLAYBOOKS_DIR"] = previous
+            os.environ["TRANIBOR_PLAYBOOKS_DIR"] = previous
     # The base fixture carries other warnings (no human waiting state):
     # what matters here is that there is NONE about the playbook.
     assert "role.playbook_not_found" not in [i.code for i in report.warnings], [

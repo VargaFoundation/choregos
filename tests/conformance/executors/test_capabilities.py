@@ -23,6 +23,8 @@ pytestmark = pytest.mark.conformance
 #: concerned (ceiling reached, queue in arrival order).
 #: `snapshot` imposes none either since ADR 0053: it is a property of `start` (every run gets a
 #: sandbox made from the template, never a used one), proved by the executor's own tests.
+#: `separate_agent` neither (ADR 0146 §9): a property of `start` too, the agent's own container in the
+#: run's pod; an executor without it refuses a run under `container` (`test_agent_isolation_refusal.py`).
 EXPECTED_METHOD = {"renew": "renew", "suspend": "suspend", "resume": "resume"}
 
 # Building an executor outside a cluster: without `token`, the Kubernetes client goes and reads
@@ -44,7 +46,10 @@ def _executors() -> list[str]:
 
 def test_the_vocabulary_stays_closed() -> None:
     """A capability invented on the fly means nothing to the caller."""
-    assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == EXECUTOR_CAPABILITIES
+    assert (
+        frozenset({"queue", "renew", "suspend", "resume", "snapshot", "separate_agent"})
+        == EXECUTOR_CAPABILITIES
+    )
 
 
 @pytest.mark.parametrize("name", _executors())
@@ -78,7 +83,7 @@ def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: p
     re-read those three records before adding a name.
     """
     # The real executors, not the fakes another test may have switched on.
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     with_snapshot = [
         name
         for name in _executors()
@@ -88,3 +93,37 @@ def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: p
         f"{with_snapshot} announce `snapshot`: re-read docs/adr/0013, 0016 and 0053 "
         "(warm pool of never-used sandboxes; no restore of a running one)"
     )
+
+
+@pytest.mark.parametrize("name", ["tekton", "aca"])
+async def test_tekton_and_aca_refuse_the_agents_own_container_saying_why(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S65-04l: neither starts the agent's container (ADR 0146 §9). Under `container` each refuses the
+    run at `start`, naming itself and the reason, before anything reaches its backend; `/readiness`
+    reads the same sentence (`agent_isolation_refusal`)."""
+    from tranibor_adapters.errors import AgentIsolationRefusedError
+    from tranibor_core.agent_isolation import SEPARATE_AGENT, WHY_NOT_SEPARATE, agent_isolation_refusal
+    from tranibor_core.domain import StageJobSpec
+
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
+    executor = build("runtime", name, CONFIGS[name])
+    assert SEPARATE_AGENT not in executor.capabilities
+
+    async def nothing(*_: object, **__: object) -> None:
+        raise AssertionError(f"{name} reached its backend")
+
+    monkeypatch.setattr(executor.client, "request", nothing)
+    spec = StageJobSpec(
+        run_id="r-1",
+        project_slug="demo",
+        namespace="ns",
+        runner_image="registry.example/runner:1",
+        api_url="http://api",
+        run_token="token",
+        agent_isolation="container",
+    )
+    with pytest.raises(AgentIsolationRefusedError) as refused:
+        await executor.start(spec)
+    assert f"`{name}`" in str(refused.value) and WHY_NOT_SEPARATE[name] in str(refused.value)
+    assert str(refused.value) == agent_isolation_refusal("container", name, executor.capabilities)

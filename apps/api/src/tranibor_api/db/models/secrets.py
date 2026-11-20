@@ -23,7 +23,7 @@ class OrgSecret(Base, PkMixin, TimestampMixin):
     """A secret value typed in the console, sealed at rest (ADR 0058).
 
     Envelope encryption: the value is encrypted with a random data key (AES-256-GCM); the data key
-    is wrapped under a key-encryption key (KEK) the DEPLOYMENT holds (`CHOREGOS_SECRETS_KEKS`), never
+    is wrapped under a key-encryption key (KEK) the DEPLOYMENT holds (`TRANIBOR_SECRETS_KEKS`), never
     the database. The additional authenticated data binds a row to its organisation, name and
     version, so it cannot be moved. No plaintext, no hash, no fingerprint: the hash of a
     low-entropy secret leaks it."""

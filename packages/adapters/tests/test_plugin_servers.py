@@ -26,7 +26,7 @@ def _server(**changes: object) -> ServerDeployment:
         "image": IMAGE,
         "port": 8080,
         "health_path": "/healthz",
-        "env": {"CHOREGOS_SERVER_TOKEN": "t" * 43, "BASE_URL": "https://greet.example.com"},
+        "env": {"TRANIBOR_SERVER_TOKEN": "t" * 43, "BASE_URL": "https://greet.example.com"},
         "labels": {"app.kubernetes.io/name": "choregos-plugin-server"},
         "egress": (("greet.example.com", 443),),
     }
@@ -61,7 +61,7 @@ def test_no_host_no_egress_at_all() -> None:
 
 def test_the_configuration_digest_rolls_the_pods() -> None:
     first = _kind(server_manifests(_server()), "Deployment")
-    second = _kind(server_manifests(_server(env={"CHOREGOS_SERVER_TOKEN": "x"})), "Deployment")
+    second = _kind(server_manifests(_server(env={"TRANIBOR_SERVER_TOKEN": "x"})), "Deployment")
     digest = [d["spec"]["template"]["metadata"]["annotations"][CONFIG_DIGEST] for d in (first, second)]  # type: ignore[index]
     assert digest[0] != digest[1]
 
@@ -84,7 +84,7 @@ async def test_the_server_client_presents_its_token_and_needs_no_egress_policy(
 ) -> None:
     """The platform's call to its own Service is not an egress of the organisation: it passes in
     `enforce` with no policy in context, where any guarded client fails closed."""
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     seen: list[httpx.Request] = []
 
     def handle(request: httpx.Request) -> httpx.Response:

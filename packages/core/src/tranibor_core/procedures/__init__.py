@@ -12,7 +12,7 @@ shape and a person always finds "when it fails" in the same place:
     ## Before you start / ## At <vendor> / ## Permissions / ## In Tranibor / ## Test it /
     ## When it fails / (## On this platform, added by the deployment)
 
-A deployment adds to them through a directory (`CHOREGOS_PROCEDURES_EXTRA`, a ConfigMap in the
+A deployment adds to them through a directory (`TRANIBOR_PROCEDURES_EXTRA`, a ConfigMap in the
 chart) or a `choregos.procedures` entry point: `<id>.site.md` appends "On this platform" to a
 procedure, `<new-id>.md` adds a procedure for a type the platform does not know (a plugin's).
 """

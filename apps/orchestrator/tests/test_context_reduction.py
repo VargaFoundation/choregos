@@ -68,11 +68,11 @@ async def test_the_policy_and_its_role_override_reach_the_stage_input(setup: Fix
 
 async def test_the_kill_switch_wins_over_the_policy(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> None:
     await _set_context(setup.project_id, BOTH_ON)
-    monkeypatch.setenv("CHOREGOS_CONTEXT_REDUCTION", "off")
+    monkeypatch.setenv("TRANIBOR_CONTEXT_REDUCTION", "off")
     reset_settings_cache()
     try:
         prepared = await stage_activities.prepare_stage(_plan(setup, "implement"))
     finally:
-        monkeypatch.delenv("CHOREGOS_CONTEXT_REDUCTION")
+        monkeypatch.delenv("TRANIBOR_CONTEXT_REDUCTION")
         reset_settings_cache()
     assert "context" not in prepared["stage_input"]

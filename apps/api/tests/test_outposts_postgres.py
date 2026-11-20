@@ -5,7 +5,7 @@ that belong to one outpost (its instances, its enrolment tokens, its calls) exis
 that names that outpost inside an organisation scope that holds it, for reading and for writing, and a
 session that names none sees none of them, the platform's scope included. `outposts` is the
 organisation's registry: listed under the organisation's scope, narrowed to one row once an outpost is
-named. Runs only with `CHOREGOS_TEST_DATABASE_URL`: the schema is the migration's, the role is not a
+named. Runs only with `TRANIBOR_TEST_DATABASE_URL`: the schema is the migration's, the role is not a
 superuser, and `session_scope()` keeps its real fail-closed behaviour (`pg_app`).
 """
 

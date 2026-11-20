@@ -354,7 +354,7 @@ async def scm_for(session: AsyncSession, bundle: ProjectBundle, repository_url: 
 
 async def console_base(bundle: ProjectBundle) -> str:
     """The console's base URL for a link about this project's organisation: its verified host when it has one,
-    else the instance's `CHOREGOS_PUBLIC_URL` (ADR 0175, S74-03). A courtesy's link: never raises."""
+    else the instance's `TRANIBOR_PUBLIC_URL` (ADR 0175, S74-03). A courtesy's link: never raises."""
     from ..config import get_settings
 
     return await org_base_url(bundle.org_slug, public_url=get_settings().public_url)

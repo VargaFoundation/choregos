@@ -60,7 +60,7 @@ async def test_the_pod_runs_the_runner_and_the_agent_beside_it_without_any_secre
     assert agent is not None and agent.image == PINNED and agent.termination_grace_s == 40
     assert agent.env["OPENAI_BASE_URL"] == "http://127.0.0.1:4001/v1"
     assert agent.env["OPENAI_API_KEY"] == "choregos-loopback"
-    assert agent.env["CHOREGOS_RUN_ID"] == spec.run_id
+    assert agent.env["TRANIBOR_RUN_ID"] == spec.run_id
     secrets = [spec.run_token, spec.gateway_key, spec.remote_token]
     assert all(value not in agent.env.values() for value in secrets if value)
     assert not {name for name in agent.env if "TOKEN" in name or "GATEWAY_KEY" in name}
@@ -78,7 +78,7 @@ async def test_a_hosted_agent_that_asks_for_the_workspace_gets_the_repository(
     assert stage_input["hosted"]["workspace"] == workspace
     assert stage_input["repo"] is not None and stage_input["repo"]["work_branch"]
     assert spec.agent_container is not None and spec.agent_container.workspace == workspace
-    assert spec.agent_container.env["CHOREGOS_WORKSPACE"] == "/workspace"
+    assert spec.agent_container.env["TRANIBOR_WORKSPACE"] == "/workspace"
 
 
 async def test_an_actor_backend_on_a_hosted_agent_is_refused(setup: Fixture) -> None:

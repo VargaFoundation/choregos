@@ -1,6 +1,6 @@
 """The CI jobs that build and run every hosted example with Docker (S41-23).
 
-The real-Docker tests skip without `CHOREGOS_TEST_HOSTED_DOCKER=1`, and a skipped test is a green
+The real-Docker tests skip without `TRANIBOR_TEST_HOSTED_DOCKER=1`, and a skipped test is a green
 job: these checks keep the jobs setting it, covering every example, failing on a skip and behind the gate.
 """
 
@@ -38,12 +38,12 @@ def test_both_jobs_opt_in_to_docker_and_fail_on_a_skip() -> None:
     jobs = _workflow()["jobs"]
     for name in ("hosted-images", "hosted-docker"):
         job = jobs[name]
-        assert job["env"]["CHOREGOS_TEST_HOSTED_DOCKER"] == "1", name
+        assert job["env"]["TRANIBOR_TEST_HOSTED_DOCKER"] == "1", name
         assert "! grep -qi skipped pytest.out" in _runs(job), name
         assert 'test "${PIPESTATUS[0]}" -eq 0' in _runs(job), "the pytest status is not hidden by tee"
         assert "github.ref == 'refs/heads/main'" in job["if"], name
     for name in ("hosted-images", "hosted-docker"):
-        assert jobs[name]["env"]["CHOREGOS_TEST_HOSTED_REGISTRY"] == "localhost:5055", name
+        assert jobs[name]["env"]["TRANIBOR_TEST_HOSTED_REGISTRY"] == "localhost:5055", name
         assert "registry:2" in _runs(jobs[name]), name
     docker_run = _runs(jobs["hosted-docker"])
     assert "tests/conformance/hosted_real/test_shared_workspace.py" in docker_run

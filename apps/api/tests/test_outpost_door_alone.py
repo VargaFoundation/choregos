@@ -5,7 +5,7 @@ four verbs, two probes, the wake-up channel of the relay's connection, and nothi
 hold it to that: what it serves and what it does not, what it imports, where the sweep runs (the
 API, in both layouts, and never here), and that a process told to stop lets the polls it holds end.
 
-They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, again on PostgreSQL. What only
+They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, again on PostgreSQL. What only
 PostgreSQL can show, a poll woken through this process's own `LISTEN` connection, is at the end.
 """
 
@@ -165,7 +165,7 @@ async def test_an_error_is_answered_there_as_the_api_answers_it(
 
 def test_it_is_not_built_while_outposts_are_off(monkeypatch: pytest.MonkeyPatch) -> None:
     kit.configure(monkeypatch, outposts="off")
-    with pytest.raises(RuntimeError, match="CHOREGOS_OUTPOSTS is off"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_OUTPOSTS is off"):
         _alone()
 
 
@@ -174,7 +174,7 @@ def test_it_is_not_built_without_the_doors_origin_or_its_key(
     monkeypatch: pytest.MonkeyPatch, missing: str
 ) -> None:
     kit.configure(monkeypatch, **{missing: None})
-    with pytest.raises(RuntimeError, match=f"CHOREGOS_{missing.upper()}"):
+    with pytest.raises(RuntimeError, match=f"TRANIBOR_{missing.upper()}"):
         _alone()
 
 
@@ -220,7 +220,7 @@ def test_serving_the_door_alone_loads_no_other_part_of_the_api(door: kit.Door) -
     door's package and what it stands on, and none of the API's routers."""
     done = subprocess.run(
         [sys.executable, "-c", _CLOSURE],
-        env={**os.environ, "CHOREGOS_FAKES": "1"},
+        env={**os.environ, "TRANIBOR_FAKES": "1"},
         capture_output=True,
         text=True,
         timeout=120,
@@ -343,7 +343,7 @@ async def test_a_process_told_to_stop_lets_the_poll_it_holds_end(
     with log.open("w", encoding="utf-8") as output:
         process = subprocess.Popen(
             [sys.executable, "-m", "tranibor_api.outposts"],
-            env={**os.environ, "CHOREGOS_PORT": str(port), "CHOREGOS_LOG_LEVEL": "INFO"},
+            env={**os.environ, "TRANIBOR_PORT": str(port), "TRANIBOR_LOG_LEVEL": "INFO"},
             stdout=output,
             stderr=subprocess.STDOUT,
         )
@@ -388,8 +388,8 @@ async def pg_client(pg_app: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
     from tranibor_api.db.models import Organization
     from tranibor_api.db.session import session_scope
 
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", kit.ORG)
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", kit.ORG)
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     async with session_scope(orgs="*") as session:
         session.add(Organization(slug=kit.ORG, name="Northwind"))
@@ -522,11 +522,11 @@ async def test_it_does_not_serve_as_a_superuser_outside_development(
 
     application = _alone()
     # The test container's own role is a superuser: the one a deployment must never hand the door.
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", PG_URL)
-    monkeypatch.setenv("CHOREGOS_ENV", env)
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")  # the settings refuse it outside development
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", PG_URL)
+    monkeypatch.setenv("TRANIBOR_ENV", env)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")  # the settings refuse it outside development
     # The suite runs on the fakes, which staging and prod refuse first (S80-03): this test is about the role.
-    monkeypatch.setenv("CHOREGOS_FAKES", "false")
+    monkeypatch.setenv("TRANIBOR_FAKES", "false")
     reset_settings_cache()
     await db_session.dispose_engine()
     try:

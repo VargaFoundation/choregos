@@ -34,7 +34,7 @@ def live(
     no_motion: Annotated[
         bool,
         typer.Option(
-            "--no-motion", help="no spinner and no travelling token (also CHOREGOS_NO_MOTION, and NO_COLOR)"
+            "--no-motion", help="no spinner and no travelling token (also TRANIBOR_NO_MOTION, and NO_COLOR)"
         ),
     ] = False,
 ) -> None:
@@ -80,7 +80,7 @@ def live(
         name,
         is_default=is_default,
         colour=theme.wants_colour(),
-        motion=not (no_motion or os.environ.get("CHOREGOS_NO_MOTION")),
+        motion=not (no_motion or os.environ.get("TRANIBOR_NO_MOTION")),
     )
 
 

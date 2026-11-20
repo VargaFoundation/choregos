@@ -206,7 +206,7 @@ async def test_a_file_over_the_cap_is_refused(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB", "1")
+    monkeypatch.setenv("TRANIBOR_KNOWLEDGE_MAX_UPLOAD_MIB", "1")
     reset_settings_cache()
     await _base(client)
     refused = await _upload(client, "huge.txt", b"a" * (1024 * 1024 + 1))
@@ -234,7 +234,7 @@ async def test_a_conversion_past_its_timeout_is_stopped(
     """The child process is killed: a hostile or huge document cannot hold a worker forever."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S", "0.05")
+    monkeypatch.setenv("TRANIBOR_KNOWLEDGE_CONVERSION_TIMEOUT_S", "0.05")
     reset_settings_cache()
     await _base(client)
     document = await _converted(client, "notes.md", b"# Notes\n")
@@ -245,12 +245,12 @@ async def test_a_conversion_past_its_timeout_is_stopped(
 def test_the_converter_inherits_none_of_the_api_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.knowledge.conversion import child_environment
 
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", "postgresql://secret")
-    monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", "sk-secret")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", "postgresql://secret")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_MASTER_KEY", "sk-secret")
     monkeypatch.setenv("PATH", "/usr/bin")
     env = child_environment()
     assert env["PATH"] == "/usr/bin"
-    assert not [key for key in env if key.startswith("CHOREGOS_")]
+    assert not [key for key in env if key.startswith("TRANIBOR_")]
 
 
 async def test_a_stopped_replica_leaves_nothing_behind(client: AsyncClient, admin: str) -> None:

@@ -80,7 +80,7 @@ async def test_a_restart_after_a_review_sent_the_work_item_back_plays_a_new_atte
     from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
+    monkeypatch.setenv("TRANIBOR_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
     reset_settings_cache()
     project_id = await create_dev_project(setup)
     item_id, key = await create_ticket(setup, project_id, 8, "dev-simple")

@@ -3,7 +3,7 @@
 
 The runner reaches it through `transport()`; it reaches the platform the way a real container does,
 over real loopback sockets, with nothing but its environment: `OPENAI_BASE_URL` and the loopback key,
-`CHOREGOS_MCP_URL`, `HTTPS_PROXY`. Each `POST /responses` (or `/invocations`) plays the script —
+`TRANIBOR_MCP_URL`, `HTTPS_PROXY`. Each `POST /responses` (or `/invocations`) plays the script —
 model calls, MCP tool calls, tunnels — and answers `answer`, streamed as Responses events. It is
 ready after `ready_after` readiness probes; `None` never.
 
@@ -121,7 +121,7 @@ class FakeHostedAgent:
                 return answer.status_code, answer.json()
             if action[0] == "mcp":
                 _, server, tool, arguments = action
-                url = f"{self.env['CHOREGOS_MCP_URL']}{server}"
+                url = f"{self.env['TRANIBOR_MCP_URL']}{server}"
                 headers = {"accept": "application/json, text/event-stream"}
                 hello = await http.post(url, headers=headers, json=_rpc(0, "initialize", {}))
                 if hello.status_code != 200:

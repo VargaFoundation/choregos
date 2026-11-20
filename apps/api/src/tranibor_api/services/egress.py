@@ -76,7 +76,7 @@ def mode_of(settings: Settings) -> Mode:
 
 
 def ceiling_of(settings: Settings) -> dict[str, tuple[str, ...]]:
-    """The deployment's ceiling. `CHOREGOS_API_EGRESS_HOSTS` (the catalogue's older declaration) is
+    """The deployment's ceiling. `TRANIBOR_API_EGRESS_HOSTS` (the catalogue's older declaration) is
     read as `{"api": <hosts>}` when the ceiling does not name the API family: deprecated, one minor
     version."""
     declared = dict(settings.egress_ceiling)
@@ -198,7 +198,7 @@ def platform_change(
     requested_by: str = "",
 ) -> PlatformChange:
     """What the platform must still do for this host. The CE ships a neutral default; a deployment
-    brings its own template (`CHOREGOS_EGRESS_PLATFORM_CHANGE`)."""
+    brings its own template (`TRANIBOR_EGRESS_PLATFORM_CHANGE`)."""
     config = settings.egress_platform_change or {}
     needed = verdict.ceiling != "open"
     if not needed:

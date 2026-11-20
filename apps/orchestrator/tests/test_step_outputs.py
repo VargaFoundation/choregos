@@ -26,7 +26,7 @@ async def test_the_qualification_prompt_contains_the_sourcing_profiles(setup: An
 
     # the Jinja loader is cached with its directories: clear it on both sides
     _env.cache_clear()
-    os.environ["CHOREGOS_PLAYBOOKS_DIR"] = str(tmp_path)
+    os.environ["TRANIBOR_PLAYBOOKS_DIR"] = str(tmp_path)
     try:
         async with session_scope(orgs="*") as session:
             bundle = await project_bundle(session, setup.project_id)
@@ -53,6 +53,6 @@ async def test_the_qualification_prompt_contains_the_sourcing_profiles(setup: An
             )
             prompt = _render_playbook(plan, bundle, item, ContextPack.empty("q"))
     finally:
-        os.environ.pop("CHOREGOS_PLAYBOOKS_DIR", None)
+        os.environ.pop("TRANIBOR_PLAYBOOKS_DIR", None)
         _env.cache_clear()
     assert "Bakary" in prompt, "the profile produced by sourcing must be in the qualification prompt"

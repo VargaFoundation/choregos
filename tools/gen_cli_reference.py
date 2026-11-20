@@ -81,9 +81,9 @@ remains the way to work on the CLI itself.
 
 ## Profile
 
-The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
-path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
-`CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
+The profile lives in `~/.config/choregos/config.json` (`TRANIBOR_CONFIG` overrides the
+path): `api_url`, `token`, `org`. `choregos login` writes it; `TRANIBOR_API_URL`,
+`TRANIBOR_TOKEN` and `TRANIBOR_ORG` are read when no profile exists.
 
 ## Install from your instance
 
@@ -100,7 +100,7 @@ The scripts check the binary's sha256 against the instance's manifest
 (`/downloads/cli/manifest.json`) and never use sudo; `sh -s -- --prefix DIR` installs into `DIR/bin`.
 `choregos self update` later replaces the binary with the instance's current one. When the CLI
 talks to an instance that runs another version, it says so in one line on stderr, at most once a
-day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
+day (`TRANIBOR_NO_VERSION_CHECK=1` silences it).
 
 """
 # The release pages and the release workflow's signing identity come from the publishing identity
@@ -123,9 +123,9 @@ This page is generated from the CLI itself, and the repository's tests fail when
 commands. `choregos <command> --help` prints the same text for the version you installed
 ([Install the CLI](install.md)).
 
-The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` names another file):
-`api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`, `CHOREGOS_TOKEN` and
-`CHOREGOS_ORG` are read when no profile exists.
+The profile lives in `~/.config/choregos/config.json` (`TRANIBOR_CONFIG` names another file):
+`api_url`, `token`, `org`. `choregos login` writes it; `TRANIBOR_API_URL`, `TRANIBOR_TOKEN` and
+`TRANIBOR_ORG` are read when no profile exists.
 
 """
 

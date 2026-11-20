@@ -46,6 +46,8 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
     index = offline_index(OFFLINE)
     assert {name: sorted(v) for name, v in index.releases.items()} == {
         "authoring": ["1.1.0"],
+        # The investment research template's plugin (S83-07), from the graalsystems index.
+        "investment-research": ["0.1.0"],
         "mcp-clients": ["1.0.0"],
         "netops": ["1.2.0"],
         "requests": ["1.1.0"],
@@ -74,13 +76,13 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]
         path.write_text(
             yaml.safe_dump({"sources": [TRANIBOR], "defaultPlugins": defaults, "offline": str(offline)})
         )
-        monkeypatch.setenv("CHOREGOS_PLUGINS_CONFIG", str(path))
+        monkeypatch.setenv("TRANIBOR_PLUGINS_CONFIG", str(path))
         reset_settings_cache()
         return fake
 
     yield write
     plugin_sources.set_backend(None)
-    monkeypatch.delenv("CHOREGOS_PLUGINS_CONFIG", raising=False)
+    monkeypatch.delenv("TRANIBOR_PLUGINS_CONFIG", raising=False)
     reset_settings_cache()
 
 

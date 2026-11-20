@@ -1,7 +1,7 @@
 """`EvalMatrix` with its door dimension (S57-09, ADR 0122 §9): one cell per context and door, in order;
 agent cases and repetitions in each cell. Its two new histories replay (`tests/replay/histories/
 evals-tools-S57-09.json`, `evals-live-tools-S57-09.json`), and the histories recorded before it still do
-(`tests/replay/test_replay.py`). `CHOREGOS_RECORD_HISTORY=1` records them again."""
+(`tests/replay/test_replay.py`). `TRANIBOR_RECORD_HISTORY=1` records them again."""
 
 from __future__ import annotations
 

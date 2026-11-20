@@ -120,7 +120,7 @@ def test_tls_is_verified_by_default_and_trusts_the_ca_it_is_given() -> None:
 def test_turning_tls_verification_off_is_refused_in_staging_and_prod(
     environment: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_ENV", environment)
+    monkeypatch.setenv("TRANIBOR_ENV", environment)
     with pytest.raises(ConfigurationError, match="refused"):
         PfSenseFirewall.from_config({"base_url": "https://fw", "api_key": KEY, "verify_tls": False})
 
@@ -128,7 +128,7 @@ def test_turning_tls_verification_off_is_refused_in_staging_and_prod(
 def test_turning_tls_verification_off_in_dev_is_said_out_loud(monkeypatch: pytest.MonkeyPatch) -> None:
     from structlog.testing import capture_logs
 
-    monkeypatch.setenv("CHOREGOS_ENV", "dev")
+    monkeypatch.setenv("TRANIBOR_ENV", "dev")
     with capture_logs() as logs:
         firewall = PfSenseFirewall.from_config(
             {"base_url": "https://fw", "api_key": KEY, "verify_tls": False}

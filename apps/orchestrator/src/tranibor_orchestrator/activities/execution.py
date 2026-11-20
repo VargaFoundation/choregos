@@ -76,7 +76,7 @@ def hosts_to_reach_directly(settings: Any) -> list[str]:
 
 
 def runner_environment(settings: Any, namespace: str) -> dict[str, str]:
-    """The environment of an agent pod: what the deployment passes, its `CHOREGOS_ENV`, plus the egress proxy.
+    """The environment of an agent pod: what the deployment passes, its `TRANIBOR_ENV`, plus the egress proxy.
 
     `git`, `pip`, `npm`, `uv` and the agent read `HTTP_PROXY`/`HTTPS_PROXY`; `NO_PROXY` keeps the
     cluster's traffic (internal API, gateway, memory) direct: the proxy only serves to get out.
@@ -84,13 +84,13 @@ def runner_environment(settings: Any, namespace: str) -> dict[str, str]:
     """
     env = dict(settings.runner_env)
     # Where the run runs: the runner refuses the fakes in staging and prod (S80-03), and it can only
-    # tell from this. The deployment's value wins over one written in `CHOREGOS_RUNNER_ENV`.
+    # tell from this. The deployment's value wins over one written in `TRANIBOR_RUNNER_ENV`.
     environment = str(getattr(settings, "env", "") or "")
     if environment:
         env[ENVIRONMENT_VARIABLE] = environment
     if str(getattr(settings, "runner_egress_auth", "") or "") == "run":
         # The runner adds the run id and token to the proxy URL itself, before any child starts.
-        env["CHOREGOS_EGRESS_AUTH"] = "run"
+        env["TRANIBOR_EGRESS_AUTH"] = "run"
     proxy = str(getattr(settings, "runner_egress_proxy", "") or "").format(namespace=namespace)
     if proxy:
         env.setdefault("HTTP_PROXY", proxy)
@@ -250,15 +250,23 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             await session.commit()
             # The scope of the transaction ended with the commit (RLS is transaction-local).
             await limit_to_organisations(session, "*")
+        code_agent_apart = (
+            settings.runner_agent_isolation == "container"
+            and stage_input.job is None
+            and bool(stage_input.agent.image)
+        )
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
             namespace=_runner_namespace(settings, bundle.slug),
             # A job names its image (ADR 0056), an agent written in code too (ADR 0063); prepare_stage
-            # resolved each against the operator's map. Neither names a free reference.
+            # resolved each against the operator's map. Neither names a free reference. Under
+            # `container` a code agent's image is the agent's container and the runner is the platform's
+            # image (ADR 0146 §10): the author's code never runs beside the run's credentials.
             runner_image=(stage_input.job.image if stage_input.job else None)
-            or stage_input.agent.image
+            or (None if code_agent_apart else stage_input.agent.image)
             or settings.runner_image,
+            agent_image=stage_input.agent.image if code_agent_apart else None,
             api_url=stage_input.callbacks.api_url,
             run_token=run_token,
             gateway_key=gateway_key,
@@ -274,6 +282,8 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             },
             # A hosted agent's container beside the runner (ADR 0080): loopback addresses only.
             agent_container=agent_container(stage_input),
+            # Where the agent runs (ADR 0146): an executor that cannot start its container refuses.
+            agent_isolation=settings.runner_agent_isolation,
         )
         try:
             ref = await bundle.adapters.executor.start(spec)

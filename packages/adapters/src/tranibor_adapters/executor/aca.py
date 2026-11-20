@@ -23,9 +23,11 @@ from typing import Any
 
 import httpx
 from tranibor_contracts import ExecutorKind
+from tranibor_contracts.env import with_legacy_entries
 from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import ConfigurationError, UpstreamError
+from .isolation import refuse_unless_separate
 
 ARM = "https://management.azure.com"
 API_VERSION = "2024-03-01"
@@ -114,6 +116,8 @@ class AcaExecutor:
     """One ACA job per run, triggered manually, cleaned up by the ACA lifecycle."""
 
     kind = ExecutorKind.ACA
+    #: Never `separate_agent` (ADR 0146 §9, S65-04l): under `container` every run is refused at `start`,
+    #: with the reason in `tranibor_core.agent_isolation.WHY_NOT_SEPARATE`.
     capabilities: frozenset[str] = frozenset()
 
     def __init__(
@@ -150,6 +154,7 @@ class AcaExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Creates the job if it does not exist, then triggers it. Replayable without a double execution."""
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which this "
@@ -177,26 +182,28 @@ class AcaExecutor:
             "name": "runner",
             "image": spec.runner_image,
             "args": ["run"],
-            "env": [
-                {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
-                {"name": "CHOREGOS_API_URL", "value": spec.api_url},
-                # The token goes through a job secret: it does not appear in the definition
-                # rendered by ARM, so not in an `az containerapp job show` either.
-                {"name": "CHOREGOS_RUN_TOKEN", "secretRef": "run-token"},
-                # The run's gateway key, a job secret too (#523): never in the rendered definition.
-                *(
-                    [{"name": RUN_GATEWAY_KEY_ENV, "secretRef": "run-gateway-key"}]
-                    if spec.gateway_key
-                    else []
-                ),
-                # The access token of a remote agent (ADR 0062), a job secret like the key above.
-                *(
-                    [{"name": RUN_REMOTE_TOKEN_ENV, "secretRef": "run-remote-token"}]
-                    if spec.remote_token
-                    else []
-                ),
-                *[{"name": key, "value": value} for key, value in spec.env.items()],
-            ],
+            "env": with_legacy_entries(
+                [
+                    {"name": "TRANIBOR_RUN_ID", "value": spec.run_id},
+                    {"name": "TRANIBOR_API_URL", "value": spec.api_url},
+                    # The token goes through a job secret: it does not appear in the definition
+                    # rendered by ARM, so not in an `az containerapp job show` either.
+                    {"name": "TRANIBOR_RUN_TOKEN", "secretRef": "run-token"},
+                    # The run's gateway key, a job secret too (#523): never in the rendered definition.
+                    *(
+                        [{"name": RUN_GATEWAY_KEY_ENV, "secretRef": "run-gateway-key"}]
+                        if spec.gateway_key
+                        else []
+                    ),
+                    # The access token of a remote agent (ADR 0062), a job secret like the key above.
+                    *(
+                        [{"name": RUN_REMOTE_TOKEN_ENV, "secretRef": "run-remote-token"}]
+                        if spec.remote_token
+                        else []
+                    ),
+                    *[{"name": key, "value": value} for key, value in spec.env.items()],
+                ]
+            ),
             "resources": self._resources(spec),
         }
         configuration: dict[str, Any] = {

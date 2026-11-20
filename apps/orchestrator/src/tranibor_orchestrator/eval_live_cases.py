@@ -10,7 +10,7 @@ project's: its connectors, its policy, its agent.
 - **Connectors.** One organisation connector per connector of the case, of the type its kind's scenes run
   (`scene_type`), its configuration `{fake_scene: <scene>}` and nothing else (no address: it reaches no
   network), available to the selected projects only and turned on for the case's eval project alone. The
-  API serves it from the scene when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`); a
+  API serves it from the scene when the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`); a
   connector of the same name that is not the matrix's, or that holds another scene, is never touched: the
   case is skipped and says why.
 - **A plugin's server** (#1372, a plugin's matrix case: `{kind: "plugin:<plugin>/<server>", scene}`). The

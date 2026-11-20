@@ -16,8 +16,8 @@ from __future__ import annotations
 import fnmatch
 import json
 import re
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -79,6 +79,10 @@ class GateContext:
     #: Does the work item's branch exist on the SCM (S22-47)? `None` when nobody read it, or the
     #: SCM could not answer: `already_fixed_proven` then refuses rather than assume.
     branch_pushed: bool | None = None
+    #: What the context providers read for this evaluation, keyed by provider (ADR 0181, C0): a gate
+    #: an extension registers declares the providers it reads (`gate(..., reads=...)`), and finds their
+    #: facts here. A provider that was not called, or failed, has no key: its gates refuse.
+    facts: dict[str, Mapping[str, Any]] = field(default_factory=dict)
 
 
 @dataclass(slots=True, frozen=True)
@@ -133,17 +137,58 @@ def judged_on_a_run(name: str, params: Mapping[str, Any] | None = None) -> bool:
 _REGISTRY: dict[str, GateFn] = {}
 _ASYNC_GATES: set[str] = set()
 _NEEDS: dict[str, frozenset[str]] = {}
+#: gate -> the context providers whose facts it reads (`GateContext.facts`).
+_READS: dict[str, frozenset[str]] = {}
+#: gate -> the plugin whose extension registered it; a gate of the core has no entry.
+_PLUGIN_OF: dict[str, str] = {}
+
+#: The gates a plugin serves once its extension is installed, by name: what the core can say of a gate
+#: it does not know, so that a workflow naming one is refused naming the plugin to install (ADR 0181).
+#: Today the core still registers these (they move with round C2, under the same names); the entry
+#: speaks only when the gate is not registered. A plugin not listed here is refused as an unknown gate.
+PLUGIN_GATES: Mapping[str, str] = dict.fromkeys(
+    (
+        "scope_respected",
+        "diff_size_max",
+        "no_secrets",
+        "markdown_sections",
+        "adr_number_free",
+        "docs_updated",
+        "coverage_delta_min",
+        "ci_green",
+        "review_approved",
+        "scans_ok",
+        "provenance_signed",
+        "already_fixed_proven",
+    ),
+    "software-delivery",
+)
 
 
-def gate(name: str, *, asynchronous: bool = False, needs: tuple[str, ...] = ()) -> Callable[[GateFn], GateFn]:
-    """`needs`: the connector capabilities the guarantee reads (ADR 0034). A diff comes from the
-    `scm`, a pipeline status from the `ci`. A workflow that sets it requires them of its project."""
+def gate(
+    name: str,
+    *,
+    asynchronous: bool = False,
+    needs: tuple[str, ...] = (),
+    reads: tuple[str, ...] = (),
+    plugin: str | None = None,
+) -> Callable[[GateFn], GateFn]:
+    """Register a gate; the core's own, or an extension's from its `choregos.plugins` entry point.
+
+    `needs`: the connector capabilities the guarantee reads (ADR 0034). A diff comes from the `scm`, a
+    pipeline status from the `ci`. A workflow that sets it requires them of its project.
+    `reads`: the context providers whose facts the gate reads in `GateContext.facts` (ADR 0181): the
+    activity calls them before judging. `plugin`: the plugin whose extension registers the gate, named
+    when the gate cannot be judged."""
 
     def decorator(fn: GateFn) -> GateFn:
         _REGISTRY[name] = fn
         if asynchronous:
             _ASYNC_GATES.add(name)
         _NEEDS[name] = frozenset(needs)
+        _READS[name] = frozenset(reads)
+        if plugin is not None:
+            _PLUGIN_OF[name] = plugin
         return fn
 
     return decorator
@@ -154,6 +199,17 @@ def gate_needs(name: str) -> frozenset[str]:
     return _NEEDS.get(name, frozenset())
 
 
+def gate_reads(name: str) -> frozenset[str]:
+    """The context providers a gate reads; an unknown gate or one of the core reads none."""
+    return _READS.get(name, frozenset())
+
+
+def gate_plugin(name: str) -> str | None:
+    """The plugin that serves a gate: the one whose extension registered it, else the one `PLUGIN_GATES`
+    names for it; `None` for a gate of the core, or one nobody knows."""
+    return _PLUGIN_OF.get(name) or (PLUGIN_GATES.get(name) if name not in _REGISTRY else None)
+
+
 def known_gates() -> list[str]:
     return sorted(_REGISTRY)
 
@@ -162,12 +218,132 @@ def is_async_gate(name: str) -> bool:
     return name in _ASYNC_GATES
 
 
+def unavailable(name: str) -> str | None:
+    """Why this deployment cannot judge a gate, naming the plugin to install; `None` when it can.
+
+    A gate nobody registered, and a registered gate one of whose context providers no extension
+    declared: either would only fail when a work item reaches it, so a workflow naming one is refused
+    when it is published (ADR 0181)."""
+    if name not in _REGISTRY:
+        plugin = PLUGIN_GATES.get(name)
+        if plugin is not None:
+            return (
+                f"the gate `{name}` is served by the plugin `{plugin}`, whose extension is not installed "
+                "in this deployment: install it, or remove the gate"
+            )
+        return f"unknown gate: {name}: no installed extension provides it (known: {', '.join(known_gates())})"
+    missing = sorted(p for p in gate_reads(name) if p not in _PROVIDERS)
+    if missing:
+        owner = gate_plugin(name)
+        by = f"the plugin `{owner}`" if owner else "the core"
+        return (
+            f"the gate `{name}` of {by} reads the facts of {', '.join(f'`{p}`' for p in missing)}, which no "
+            "installed extension provides: install the extension that declares that context provider"
+        )
+    return None
+
+
 def evaluate(name: str, ctx: GateContext, params: dict[str, Any] | None = None) -> GateOutcome:
     """Evaluate a registry gate. An unknown gate is a configuration error."""
     fn = _REGISTRY.get(name)
     if fn is None:
-        raise GateError(f"unknown gate: {name} (known: {', '.join(known_gates())})")
+        raise GateError(unavailable(name) or f"unknown gate: {name}")
     return fn(ctx, params or {})
+
+
+# ───────────────────────────── context providers ─────────────────────────────
+
+
+@dataclass(slots=True, frozen=True)
+class ProviderRequest:
+    """What a context provider is given to read its facts, in the gate activity (ADR 0181, C0).
+
+    `gates` holds the declarations of this transition that read the provider, `(name, params)`.
+    `project` is the project as the worker holds it (its configuration, its policy engine and its
+    connectors) and `session` the activity's database session: both opaque to the core, which neither
+    reads nor types them. A provider reads; it never writes, and it is called again when the evaluation
+    is replayed."""
+
+    project_id: str
+    work_item_id: str
+    run_id: str | None = None
+    result: StageResult | None = None
+    gates: tuple[tuple[str, Mapping[str, Any]], ...] = ()
+    fields: Mapping[str, Any] = field(default_factory=dict)
+    documents: Mapping[str, Any] = field(default_factory=dict)
+    project: Any = None
+    session: Any = None
+
+
+ContextProvider = Callable[[ProviderRequest], Awaitable[Mapping[str, Any]]]
+
+_PROVIDERS: dict[str, ContextProvider] = {}
+_PROVIDER_PLUGIN: dict[str, str] = {}
+
+
+def context_provider(name: str, *, plugin: str) -> Callable[[ContextProvider], ContextProvider]:
+    """Declare a context provider: an activity-side function that reads the facts gates of `plugin` judge
+    (a diff, a pipeline's checks, a ticket's state), returned as a mapping filed under `name` in
+    `GateContext.facts`. Two providers under one name are refused: the second would silently change
+    what the first one's gates read."""
+
+    def decorator(fn: ContextProvider) -> ContextProvider:
+        owner = _PROVIDER_PLUGIN.get(name)
+        if name in _PROVIDERS and _PROVIDERS[name] is not fn:
+            raise GateError(f"the context provider `{name}` is already declared by the plugin `{owner}`")
+        _PROVIDERS[name] = fn
+        _PROVIDER_PLUGIN[name] = plugin
+        return fn
+
+    return decorator
+
+
+def known_providers() -> list[str]:
+    return sorted(_PROVIDERS)
+
+
+def providers_read_by(names: list[str]) -> list[str]:
+    """The providers the named gates read, each once, in order of name."""
+    return sorted({provider for name in names for provider in gate_reads(name)})
+
+
+async def provide_facts(
+    declarations: Sequence[Mapping[str, Any]], request: ProviderRequest
+) -> dict[str, Mapping[str, Any]]:
+    """Call each context provider the declared gates read, once, and file what it returns by name.
+
+    A provider that is not installed, raises, or returns something else than a mapping leaves no
+    key: the gates that read it refuse on their own, rather than judge facts nobody read. It is
+    logged, with the plugin that declared the provider."""
+    import structlog
+
+    log = structlog.get_logger("choregos.gates")
+    facts: dict[str, Mapping[str, Any]] = {}
+    for provider in providers_read_by([str(d["name"]) for d in declarations]):
+        fn = _PROVIDERS.get(provider)
+        if fn is None:
+            log.warning("gate.provider_missing", provider=provider)
+            continue
+        reading = tuple(
+            (str(d["name"]), dict(d.get("params") or {}))
+            for d in declarations
+            if provider in gate_reads(str(d["name"]))
+        )
+        try:
+            found = await fn(replace(request, gates=reading))
+        except Exception as error:  # a provider's failure is its gates' refusal, never the evaluation's
+            log.warning(
+                "gate.provider_failed",
+                provider=provider,
+                plugin=_PROVIDER_PLUGIN.get(provider),
+                error=str(error),
+            )
+            continue
+        if not isinstance(found, Mapping):
+            log.warning("gate.provider_invalid", provider=provider, plugin=_PROVIDER_PLUGIN.get(provider))
+            continue
+        facts[provider] = dict(found)
+    return facts
 
 
 def matches_any(path: str, patterns: list[str]) -> bool:

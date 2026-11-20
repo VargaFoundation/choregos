@@ -34,7 +34,7 @@ its next call), `choregos logout` ends it from the terminal, and `--fresh` makes
 provider for a new sign-in first. A script or CI keeps using an API token:
 
 ```bash
-choregos login --api-url https://api.example --token "$CHOREGOS_TOKEN" --org acme
+choregos login --api-url https://api.example --token "$TRANIBOR_TOKEN" --org acme
 choregos projects create billing-api --name "Billing API" --org acme
 choregos projects list
 ```
@@ -116,13 +116,13 @@ A self-hosted SearXNG and Firecrawl cannot read the organisation's setting, and 
 calls to an in-cluster Firecrawl. A deployment that wants their traffic through the proxy runs the relay,
 `python -m tranibor_api.relay` (the API image, its own Deployment, one per organisation), and points them at it:
 
-- environment: `CHOREGOS_RELAY_ORG` (the organisation's slug), `CHOREGOS_RELAY_API_URL` (e.g.
+- environment: `TRANIBOR_RELAY_ORG` (the organisation's slug), `TRANIBOR_RELAY_API_URL` (e.g.
   `http://choregos-api:8000/api/v1`: the Service, not a public hostname of the API, where the route the
   relay reads may be refused, see [the run's API and the run door](deployment.md#the-runs-api-and-the-run-door)),
-  `CHOREGOS_RELAY_API_TOKEN` (printed by
-  `python -m tranibor_api.relay mint --org <slug> --days N`, run where `CHOREGOS_RUN_TOKEN_PRIVATE_KEY` is set;
-  it expires, at most 400 days), `CHOREGOS_RELAY_CLIENT_TOKEN` (16 characters or more, shared with the clients),
-  `CHOREGOS_RELAY_LISTEN` (`0.0.0.0:3128` by default); it refuses to start without them;
+  `TRANIBOR_RELAY_API_TOKEN` (printed by
+  `python -m tranibor_api.relay mint --org <slug> --days N`, run where `TRANIBOR_RUN_TOKEN_PRIVATE_KEY` is set;
+  it expires, at most 400 days), `TRANIBOR_RELAY_CLIENT_TOKEN` (16 characters or more, shared with the clients),
+  `TRANIBOR_RELAY_LISTEN` (`0.0.0.0:3128` by default); it refuses to start without them;
 - SearXNG: `outgoing.proxies: {all://: ["http://search_engines:<client token>@<relay>:3128"]}`;
 - Firecrawl: `PROXY_SERVER=http://<relay>:3128`, `PROXY_USERNAME=web_search`, `PROXY_PASSWORD=<client token>`;
 - network policy: only SearXNG and Firecrawl reach the relay; the relay reaches the API, the proxy's host and
@@ -208,9 +208,9 @@ The core reads `env:NAME`; an extension declares other schemes (a vault) with
 `tranibor_core.secrets.declare_resolver`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
 
-`env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
+`env:NAME` reads only the variables matching `TRANIBOR_SECRET_ENV_PATTERN` (default
 `^CONNECTOR_[A-Z0-9_]+$`, chart value `global.secrets.envPattern`); the platform's own variables
-(`CHOREGOS_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
+(`TRANIBOR_*`, `DATABASE_*`, `PG*`, `AWS_*`, `KUBERNETES_*`, `TEMPORAL_*`) are refused whatever the
 pattern. A name outside it is a `422` at write and a connector in error at use. Only a platform
 administrator writes a reference (ADR 0088) — on a single-organisation install, that organisation's
 administrator; with several, an organisation's administrator and a project owner type the value, and
@@ -354,7 +354,7 @@ touch, and the application secret by reference. Its six operations come with the
 action replays: an account is looked up by UPN before it is created, "already a member" is a
 success, removing a missing member too. An account the platform creates enters the administrative
 unit; a gesture on an account outside it is refused, named, before anything is written. Graph's
-`Retry-After` is honoured. With `CHOREGOS_FAKES=1`, a scriptable Graph answers instead.
+`Retry-After` is honoured. With `TRANIBOR_FAKES=1`, a scriptable Graph answers instead.
 
 **Business families: `mdm`, `shipping`, `access_control`.** A device manager (enrol a device for
 its user, wipe it when it comes back, read it), a carrier (ship a parcel, book a collection — one
@@ -373,8 +373,11 @@ demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release tr
 project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
 server like any other, its tools discovered and born closed.
 
-**Market data: `marketdata`.** Daily prices for stocks and ETFs, read **through the platform**: the
-run's sandbox keeps its egress closed, provider keys stay on the API side (`secret_refs`, never in
+**Market data: `marketdata`.** A connector family of the `investment-research` plugin's extension,
+`tranibor-investment-research` ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), O4-4), not of the
+core: the published API and worker images install it, and its setup procedures come with the plugin's
+content ([Plugins, extensions and editions](site/build/plugins-and-trades.md)). Daily prices for stocks
+and ETFs, read **through the platform**: the run's sandbox keeps its egress closed, provider keys stay on the API side (`secret_refs`, never in
 the pod), and every call is a row of the cost ledger. Read-only, so both operations are `allowed`:
 `get_bars` (`symbol`, `start`, `end` as `YYYY-MM-DD` — bars sorted, one per date, `adj_close` null
 when the source has none) and `get_instrument` (`symbol` — name, `stock`/`etf`/`unknown`, currency,
@@ -391,8 +394,9 @@ is a named error (`422`).
 
 The composite lists provider **types**, not other connectors (an adapter is built from one
 connector's configuration and secrets), hence the flat `<type>_api_key` secret fields. With
-`CHOREGOS_FAKES=1` a `fake` serves deterministic synthetic bars (a random walk seeded by the symbol,
-business days only). Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
+`TRANIBOR_FAKES=1` a `fake` serves deterministic synthetic bars (a random walk seeded by the symbol,
+business days only): the extension registers it as the family's `fake` type, as the core does for its
+own, and tests script it as `tranibor_investment_research.marketdata.fake.FAKE`. Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
 the canonical JSON) in its `tool.called` event, so a result can later be matched to what the run was
 served, and `response_bytes`, the size in UTF-8 bytes of that same canonical JSON of the result: what
 the call put back into the model's context (S57-01). It also records `origin`, the door the call came through —
@@ -443,6 +447,7 @@ vendor). `ready` is true when no item is `todo`.
 | `connector-<kind>-stale` | | the last passing test is older than 7 days |
 | `github-app-<kind>` | the repository's owner has no installation claimed by the organisation ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)); `not_needed` without an App | |
 | `runtime-class` | the policy says `sandbox.runtime: gvisor` and the `agent_sandbox` warm pool runs another RuntimeClass (`global.runner.runtimeClass`): every run would be refused at start. Not listed for another executor, under fakes, when the policy asks for none, or when the deployment never set `global.runner.runtimeClass` (the pool's class is then unknown) | |
+| `agent-isolation` | the deployment runs every agent in a container of its own (`global.runner.agentIsolation: container`, [ADR 0146](adr/0146-the-runner-and-the-agent-do-not-share-a-container.md)) and the project's executor does not declare `separate_agent`: every run would be refused at start, with the same sentence. Not listed under `process` (the default) or under fakes | |
 | `repository` | a repository is needed and has no URL | |
 | `repository-checks` | | no `repo.test_command` and no `dod.facts`: the runner measures nothing |
 | `backend` | the default backend is not enabled on the deployment | |
@@ -1174,7 +1179,7 @@ says what this step accepts.
 branch with its base and records the artifact `diff`, a new revision only when the branch changed. The
 name is reserved: no output may take it, and what an agent writes under it is not recorded. A file whose
 patch holds a secret shape keeps only its name and counters, and the revision says which shape was found.
-A diff larger than `CHOREGOS_ARTIFACT_DIFF_MAX_BYTES` (1 MiB by default) is cut file by file, and says so.
+A diff larger than `TRANIBOR_ARTIFACT_DIFF_MAX_BYTES` (1 MiB by default) is cut file by file, and says so.
 
 Every output is kept as an **artifact** of the ticket, revision by revision:
 `GET /work-items/{id}/artifacts` lists them (type, media type, size, sha256, the run and agent that
@@ -1200,22 +1205,26 @@ A declared file that is missing goes back to the agent, then fails the step. Und
 kept too, under their own file name. Generating them is not the platform's job: office files come
 from skills run in the sandbox, images and video from models behind the gateway (their cost is in
 the ledger like any model call) or from MCP connectors. Files are limited to
-`CHOREGOS_ARTIFACT_MAX_BYTES` (200 MiB by default) and are never committed.
+`TRANIBOR_ARTIFACT_MAX_BYTES` (200 MiB by default) and are never committed.
 
 **Deterministic steps** (ADR 0056). A computation — a backtest, a data snapshot, a conversion — is
 code, not judgement: give it to a `job`, not to an agent.
 
 ```yaml
 actors:
-  engine: { type: job, role: backtest, command: [choregos-quant, backtest, --out, out], image: quant, max_minutes: 20 }
+  engine: { type: job, role: backtest, command: [choregos-quant, backtest, --out, out], image: investment-research, max_minutes: 20 }
 ```
 
 `command` is an argv, never a shell line. `image` names an image the operator mapped in
-`CHOREGOS_JOB_IMAGES` (`{"quant": "registry/…@sha256:…"}`), built from the runner image; without it
-the job runs in the runner image, and an unknown name stops the step. A job gets no model and no
+`TRANIBOR_JOB_IMAGES` (`{"investment-research": "registry/…@sha256:…"}`), built FROM the runner image
+of the same release, since the runner runs the command; without it the job runs in the runner image,
+which carries no trade's command, and an unknown name stops the step. A plugin whose template has job
+steps ships its job image: the `investment-research` plugin's is `tranibor-investment-research`, built
+and signed by each release FROM that release's runner (`plugins/investment-research/Dockerfile`,
+[ADR 0181](adr/0181-the-contracts-speak-no-trade.md) O4-3). A job gets no model and no
 gateway key. The runner writes the work item's fields in `.choregos/fields.json`, runs the command
-with `CHOREGOS_WORKSPACE`, `CHOREGOS_RUN_ID`, `CHOREGOS_API_URL` and the run's own token
-`CHOREGOS_RUN_TOKEN` (to call a connector through the internal API), and reads back
+with `TRANIBOR_WORKSPACE`, `TRANIBOR_RUN_ID`, `TRANIBOR_API_URL` and the run's own token
+`TRANIBOR_RUN_TOKEN` (to call a connector through the internal API), and reads back
 `.choregos/job.json` = `{"summary": …, "facts": {…}, "outputs": {…}}` and the files in
 `.choregos/outputs/`. None of these files is committed: the branch, and the pull request, carry only
 what the command changed in the repository (S51-08). A non-zero exit fails the step; the facts are **measured**, so
@@ -1394,7 +1403,7 @@ what lands in the agent's context, so the broker holds every result, read or wri
 | The result weighs more than the operation's cap as JSON, its data counted once: a text block that serializes its `structuredContent` (how a connector that is not MCP is answered, what MCP asks a server to write) is not counted again, a text that says something else (`web_fetch`'s page) is (#1374) | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; a `structuredContent` the text serializes is dropped (half an object is not the object); one the text does not say (what `web_fetch` fetched) stays whole beside the cut text when both fit the cap (#1383) |
 
 **The cap is per operation** (S40-17). By default it is the deployment's
-`CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB). An organisation administrator sets another for one
+`TRANIBOR_BROKER_RESULT_MAX_BYTES` (64 KiB). An organisation administrator sets another for one
 operation — a log reader that needs 256 KiB, a lookup that should never say more than 4 KiB:
 
 ```bash
@@ -1403,7 +1412,7 @@ curl -X PATCH "$API/api/v1/orgs/northwind/connectors/fournisseur/operations/read
 ```
 
 `null` returns it to the default; less than 1024 bytes is refused. Every cap, the default and an
-operation's, is bounded by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` (1 MiB by default): a cap above
+operation's, is bounded by `TRANIBOR_BROKER_RESULT_CEILING_BYTES` (1 MiB by default): a cap above
 it is refused with a `422` naming the ceiling, and a ceiling lowered later clips the caps already
 set, without rewriting them. The console edits it too: *Administration → Installed connectors*, the
 operation's *Result cap* column (empty returns it to the default).
@@ -1413,10 +1422,7 @@ an MCP-shaped answer as above; any other JSON keeps its shape when it fits and, 
 becomes `{text: <its JSON, cut, with the marker>, truncated}`. A catalogue entry may declare its
 own `result_max_bytes`, bounded by the same ceiling, and so may a plugin's tool, beside its `name`
 in what the plugin lists (S40-17b); the agent is not shown it, and a value that is not an integer of
-at least 1024 is refused when the tools are listed. The ontology plugin declares 256 KiB for a page
-of objects (`<type>_search`, a link, `action_list`) and for `ontology_describe`, so that a full page
-keeps its `next_cursor`, and 64 KiB for one object, one proposal or its status (S40-17c). Neither
-declares an output schema.
+at least 1024 is refused when the tools are listed.
 The injection guard then reads what is left (S40-18): an MCP-shaped answer's text blocks and every
 string of its `structuredContent` (S40-18b), any other JSON's strings, keys included; `sandbox.prompt_injection` decides as for a broker result (`warn`
 returns `suspicions` beside the result, `block` withholds it with `status_code: 451`).
@@ -1435,13 +1441,13 @@ never the excerpts — and says the content is data, never instructions; a run w
 `Tool calls left in this run: <n>.`. The result is shown as a script reads it (#1374): compact JSON,
 its data once — a text block that serializes its `structuredContent` is left out, a text that says
 something else (`web_fetch`'s page) stays — and cut only past the platform's own bound, 65,536
-characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `tranibor_core.mcp.RESULT_MAX_BYTES`), the
+characters (`TRANIBOR_BROKER_RESULT_MAX_BYTES`' default, `tranibor_core.mcp.RESULT_MAX_BYTES`), the
 notices outside the cut; a status of 400 or more is still `isError`. A result the API passes under the
 default bound therefore reaches the model whole. The API says the bound it held the result to,
 `result_max_bytes` in its answer (#1383): an operation's, a catalogue entry's or a plugin tool's own
-cap (the ontology's 256 KiB pages), the default for `web_fetch` and `web_search`. The tool server
+cap, the default for `web_fetch` and `web_search`. The tool server
 reads the result up to that bound instead of its 65,536, and does not show it to the model; the
-prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
+prompt backend's loop lets through up to `TRANIBOR_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
 `tranibor_core.mcp.RESULT_CEILING_BYTES`) and the notices.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
 under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
@@ -1449,11 +1455,7 @@ text its model reads (#1349, [hosted agents](hosted-agents.md)), and so do a pro
 messages and a realtime session's `function_call_output`s (#1399), which have no error flag: there a
 status of 400 or more is a first line, `FAILED (status <code>): the call did not succeed; what follows
 is its error, not a result.`, and the calls left are `Tool calls left in this session: <n>.`. Every door
-composes these lines in one place, `tranibor_core.tool_answer`. An ontology proposal says it was not
-executed (#1350): its
-`action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
-proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
-approves (`approve: auto`) reads `NOT FINISHED YET` until Temporal has played it.
+composes these lines in one place, `tranibor_core.tool_answer`.
 
 The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each tool does (S57-05,
 [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)): MCP's own
@@ -1469,9 +1471,6 @@ The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each t
 | a plugin extension's tool that declares `x-choregos-access` beside its `name` | what it declares (`read`, `write`, `approval`; any other value is refused when the tools are listed) |
 | a plugin extension's tool annotated `readOnlyHint: true`, declaring nothing | `read` |
 | any other plugin extension tool (MCP's default is not read-only) | `write` |
-
-The ontology plugin declares its reads (`describe`, `search`, `get`, links, `action_list`,
-`action_status`) `read` and its action tools `approval`: calling one proposes what a person decides.
 
 A connector operation whose server declares an `outputSchema` is listed with it: it describes the
 `structuredContent` of the tool's `result`. The run's tool server lists the tools to the model
@@ -1699,7 +1698,7 @@ taint from a secret to a socket, YARA rules, MCP tool poisoning, and dependencie
 vulnerabilities (PyPI, npm), as findings `skillspector:<rule>`; a HIGH or CRITICAL one, or its
 `DO_NOT_INSTALL`, makes the version high risk. A scanner that fails holds the version
 (`scanner_failed`); a mirror older than 72 h says the dependency check did not happen
-(`osv_mirror_missing`). `CHOREGOS_SKILL_SCANNER=off` turns it off; `CHOREGOS_OSV_MIRROR_URL` points
+(`osv_mirror_missing`). `TRANIBOR_SKILL_SCANNER=off` turns it off; `TRANIBOR_OSV_MIRROR_URL` points
 the daily download (OSV's PyPI and npm archives, about 260 MB) at an operator's own copy, or, empty,
 disables it:
 
@@ -2021,15 +2020,21 @@ How people sign in to the instance is on **Administration → Identity** (below)
   (fresh install) only `claude-code` is enabled, as the page shows. The project's allowed backends (`agent.allowed_backends` in its
   settings) are enforced at stage start too, with the same refusal ("the agent backend `x` is not one
   this project allows"), checked before the platform switch; an empty list restricts nothing. The
-  deployment's list (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
+  deployment's list (`TRANIBOR_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
   `allowedBackends`) only seeds new projects and the readiness check: it does not restrict existing ones. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
+  Two of them are held to a model family, a hard constraint no `allow_unvalidated` lifts: `claude-code`
+  takes Claude models only, `gemini-cli` Gemini models only. A stage that pairs one with another family is
+  refused when its model is resolved ("the backend `gemini-cli` only accepts gemini models (got …)", with the
+  reason), and the runner refuses it again at launch. For `gemini-cli` the reason is LiteLLM's Gemini adapter:
+  it names every tool call `call_<function name>`, so two calls of one tool share an id and Anthropic refuses
+  the turn; measured on the dev gateway, the step ran minutes before ending `invalid_result` (#1990).
 - **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
   deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
   others follow as *Not turned on here*, with what each needs (`agent_sandbox`: the
   kubernetes-sigs/agent-sandbox operator on the cluster; `tekton`: Tekton Pipelines), a one-line
   explanation and its set-up procedure. The list is the
-  deployment's own answer (`CHOREGOS_EXECUTOR_KIND`, `CHOREGOS_EXECUTORS_ALLOWED`); change it in the
+  deployment's own answer (`TRANIBOR_EXECUTOR_KIND`, `TRANIBOR_EXECUTORS_ALLOWED`); change it in the
   chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
   was removed (S42-07b), only the `GET` remains.
 - **Gateway keys.** A table of the keys the model gateway minted for runs (key id, run, project, spent over budget, expiry, state, creation date), for platform administrators; a key's secret is never shown (`GET /platform/gateway/keys`).
@@ -2369,13 +2374,13 @@ curl -X POST $API/orgs/acme/knowledge/architecture/documents -F file=@zoning-pri
 
 An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text, and structured text: YAML (`.yaml`,
 `.yml`), JSON, TOML; 20 MiB by default,
-`CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
+`TRANIBOR_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
 background**, in a child process that sees none of the API's secrets and is stopped after
-`CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
+`TRANIBOR_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
 gives its text without headings, and a scanned PDF fails (no OCR). A workbook gives one `## <sheet>`
 table per sheet (hidden sheets marked), with empty cells empty, numbers as the sheet shows them
 (percentages, thousands, dates), the cached value of each formula, and at most
-`CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
+`TRANIBOR_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
 shown`) and a document cut that way carries `warnings` (one sentence per cut sheet), shown in
 the console's document list and page, and counted in a source's last sync (`truncated`,
 `truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Structured
@@ -2451,8 +2456,8 @@ others, and the download is refused there (ADR 0174 point 7).
 
 A base served as an **index** is cut into contextual chunks (each prefixed by its document's title
 and heading path) and embedded through the gateway (`default_model_profiles["embed"]`, else
-`CHOREGOS_KNOWLEDGE_EMBEDDING_MODEL`, `platform/embed`; a deterministic fake under
-`CHOREGOS_FAKES`). Agents search it with the sidecar's `knowledge_search` tool, which answers
+`TRANIBOR_KNOWLEDGE_EMBEDDING_MODEL`, `platform/embed`; a deterministic fake under
+`TRANIBOR_FAKES`). Agents search it with the sidecar's `knowledge_search` tool, which answers
 numbered citations — document, section, excerpt, document id — from the bases their run names, while
 those are served to its project. When an excerpt is not enough, `knowledge_read(knowledge_base,
 document_id, section?)` reads the cited section whole (by its number in the document's outline or the
@@ -2665,13 +2670,13 @@ A base is read **in passes**. **Distil** first shows an estimate, with no model 
 tokens, documents, parts, model calls, the model and its price (`GET …/distill/estimate`; "not priced"
 when the model has no price in `/admin/models`), and the biggest documents, each with a toggle to leave
 it out (`exclude`, globs on the file name such as `*.xlsx`). Confirming starts the run with a cap of the
-estimate plus 25 %. The corpus is cut into parts of at most `CHOREGOS_KNOWLEDGE_DISTILL_PART_CHARS`
+estimate plus 25 %. The corpus is cut into parts of at most `TRANIBOR_KNOWLEDGE_DISTILL_PART_CHARS`
 (300 000 characters, whole documents in file-name order, a bigger document cut on its headings); each
 part is distilled once, the candidates are merged (duplicates joined, sources united, none invented),
 and the result is published. The page shows the phase and the spend ("map 3/8 - $0.92 spent"). A call
 is made only if the spend so far plus its estimate stays under the budget
-(`CHOREGOS_KNOWLEDGE_DISTILL_BUDGET_USD`, 10 by default, or the cap if lower): otherwise the run stops,
-says so and publishes nothing. A base needing more than `CHOREGOS_KNOWLEDGE_DISTILL_MAX_PARTS` (16)
+(`TRANIBOR_KNOWLEDGE_DISTILL_BUDGET_USD`, 10 by default, or the cap if lower): otherwise the run stops,
+says so and publishes nothing. A base needing more than `TRANIBOR_KNOWLEDGE_DISTILL_MAX_PARTS` (16)
 parts is refused with its biggest documents. Each call is kept by the digest of what it read: a retry
 costs nothing, and distilling again after one document changed pays for that document's part only. A
 distillation that shows `running` with no progress for 30 minutes no longer blocks a new one.
@@ -2860,7 +2865,7 @@ runner's guardrails refuse a request for a host outside the list, a denied host,
 empty, and the CLI's own `WebFetch`/`WebSearch` when built-in web tools are off; the refusal names the host
 and says to change the agent's Network section, the project's policy or the organisation's ceiling. For
 Claude Code, `WebFetch` and `WebSearch` are also denied in its settings. A deployment whose egress proxy
-wants run credentials sets `CHOREGOS_RUNNER_EGRESS_AUTH=run` on the orchestrator: the runner then adds its
+wants run credentials sets `TRANIBOR_RUNNER_EGRESS_AUTH=run` on the orchestrator: the runner then adds its
 run id and run token to `HTTP(S)_PROXY` before starting anything. These guardrails are a **net**, not a
 wall: see [security](security.md).
 
@@ -3067,7 +3072,7 @@ retrying recovers one minute after it stops. Governed writes are checked against
 (they are played by a workflow, which retries).
 
 Every request carries `User-Agent: Choregos/<version> (+<contact>)`: the ceiling's `user_agent_contact`,
-else the deployment's `CHOREGOS_USER_AGENT_CONTACT`, else the project's page. It is sent on MCP calls,
+else the deployment's `TRANIBOR_USER_AGENT_CONTACT`, else the project's page. It is sent on MCP calls,
 web crawls, git knowledge fetches and skill downloads. A web crawl also waits between two pages for the
 longer of the site's `Crawl-delay` (read under the names `ChoregosKnowledge` and `Tranibor`) and
 `60 / per_host_per_minute` seconds, and stops, keeping every page it did not reach, when the site
@@ -3091,7 +3096,7 @@ answers 429 (or 503 with `Retry-After`).
   not reach stops there);
 - the answer is text, HTML (returned as text, scripts and styles dropped), JSON or markdown, cut at
   `max_bytes`; anything else is a `415`. What comes back is third-party text: it is masked and bounded
-  like any tool result (#1383), at `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB by default) — a longer
+  like any tool result (#1383), at `TRANIBOR_BROKER_RESULT_MAX_BYTES` (64 KiB by default) — a longer
   page keeps its text up to the bound, ending with `[truncated by the platform: …]`, and what was
   fetched beside it, so the model and a script read the same cut; a job step's page is masked, never
   cut —, then goes through the prompt-injection guard like a connector's answer.
@@ -3147,16 +3152,16 @@ third-party text and go through the prompt-injection guard.
 **Turn and loop limits are enforced by the runner**, not only written in the prompt. Each tool call
 the agent makes counts as a turn: past the stage's `max_turns`, the runner cancels the ACP session
 and the stage fails with `reason: max_turns`. The same tool with the same arguments
-`CHOREGOS_RUNNER_LOOP_THRESHOLD` times in a row (5 by default; 0 disables) stops it with
+`TRANIBOR_RUNNER_LOOP_THRESHOLD` times in a row (5 by default; 0 disables) stops it with
 `reason: loop`. Either way the agent's partial work is published like any failed stage's, and the
 journal says `run.stopped`. When two consecutive attempts of a stage fail the same way (same
 reason, same first line of summary, numbers aside), the interpreter escalates instead of spending
 its remaining attempts.
 
-**The kernel confines the agent's process** before it starts ([ADR 0094](adr/0094-the-kernel-confines-the-agent-at-launch.md)): it may write only beneath the workspace, `$TMPDIR` (its `$HOME`) and `/dev`, and, when the run has an egress proxy, open TCP connections only to the proxy's port and the platform endpoints it reaches directly — a `curl --noproxy` to a public host is refused by Landlock, not by a guardrail. `CHOREGOS_RUNNER_CONFINEMENT` (in the chart's `runner.env`) sets `off`, `best_effort` (default: what the kernel supports, the rest journaled) or `enforce` (no Landlock, no agent: exit code 90). The run's journal says what applied: `agent.confinement`. Landlock needs kernel 5.13 for files and 6.7 for ports, and does not exist under gVisor.
+**The kernel confines the agent's process** before it starts ([ADR 0094](adr/0094-the-kernel-confines-the-agent-at-launch.md)): it may write only beneath the workspace, `$TMPDIR` (its `$HOME`) and `/dev`, and, when the run has an egress proxy, open TCP connections only to the proxy's port and the platform endpoints it reaches directly — a `curl --noproxy` to a public host is refused by Landlock, not by a guardrail. `TRANIBOR_RUNNER_CONFINEMENT` (in the chart's `runner.env`) sets `off`, `best_effort` (default: what the kernel supports, the rest journaled) or `enforce` (no Landlock, no agent: exit code 90). The run's journal says what applied: `agent.confinement`. Landlock needs kernel 5.13 for files and 6.7 for ports, and does not exist under gVisor.
 
 **Fewer tokens per run** ([ADR 0055](adr/0055-fewer-tokens-per-run.md)) is off unless the policy
-asks, and the deployment can still refuse it (`CHOREGOS_CONTEXT_REDUCTION=off`):
+asks, and the deployment can still refuse it (`TRANIBOR_CONTEXT_REDUCTION=off`):
 
 ```yaml
 context:
@@ -3177,12 +3182,12 @@ and their raw results stay out of the model's context. They are off unless the p
 run's agent makes them its default (below); the
 organisation's ceiling can forbid them; and the organisation switches them for all its runs (S57-05b):
 its setting `tool_scripts` is `enabled`, `disabled`, or `null` to follow the deployment's default
-(`CHOREGOS_TOOL_SCRIPTS`, off unless the operator turns it on). The operator also keeps a brake
-(`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) that refuses them to every organisation, whatever its setting says
+(`TRANIBOR_TOOL_SCRIPTS`, off unless the operator turns it on). The operator also keeps a brake
+(`TRANIBOR_TOOL_SCRIPTS_ALLOWED`) that refuses them to every organisation, whatever its setting says
 ([the deployment guide](deployment.md)). An organisation administrator switches them on with
 
 ```bash
-curl -X PATCH "$CHOREGOS_URL/api/v1/orgs/<org>" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -X PATCH "$TRANIBOR_URL/api/v1/orgs/<org>" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/json' -d '{"tool_scripts": "enabled"}'
 ```
 
@@ -3232,12 +3237,12 @@ tool server serves the bridge when the stage input offers it (S57-07): its route
 events are in [the deployment guide](deployment.md#the-tool-bridge).
 
 **What a script can do** (S57-08). When a stage is offered scripts, the runner writes, for that run and
-outside the repository, a Python library of the run's tools (`$CHOREGOS_TOOLS_DIR`, on the agent's
+outside the repository, a Python library of the run's tools (`$TRANIBOR_TOOLS_DIR`, on the agent's
 `PYTHONPATH`): `from choregos_tools import pfsense` then `pfsense.list_firewall_rules(interface="wan")`,
 one module per server (the part of a tool's name before `__`; `web_fetch`, `web_search` and catalogue
 tools are in `platform`), one function per tool, whose docstring is the tool's description, its access
 (`read`, `write`, `approval`) and its input schema; `call("<tool>", **arguments)` reaches a tool by its
-name, `search("<words>")` finds one, and `$CHOREGOS_TOOLS_DIR/INDEX.md` lists them all. The library is
+name, `search("<words>")` finds one, and `$TRANIBOR_TOOLS_DIR/INDEX.md` lists them all. The library is
 the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The agent's
 first prompt gains a section, "Calling tools from a script", after its own instructions and before the
 task (S57-11b: at the tail of the task, after its output contract, no model of the first live matrix used
@@ -3383,10 +3388,9 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
 - **Reading**: `GET /projects/{id}/actions/{id}` gives the decisions (who, when, how fresh their
   authentication was) and the **journal** — every effect's key, attempts, answer or error. Events
   `choregos.action.*` tell the same story on the ticket. In the console, every action has its page,
-  `/p/<project>/actions/<id>`, where it is decided — an ontology proposal too: it is a core action
-  under the same id, and its page says what it acts on (action type, targets, parameters), what its
-  effects returned and what its evidence collected. The former `/p/<project>/proposals[/<id>]` links
-  redirect there.
+  `/p/<project>/actions/<id>`, where it is decided. An action the ontology persisted before it was
+  removed (origin `ontology`, ADR 0181 O4-1) is read there like any other, and the former
+  `/p/<project>/proposals[/<id>]` links redirect there.
 - **Waiting for a person**: the console's **inbox** (`/inbox`, top bar, with a count) lists what
   cannot move until someone decides, across the organisation's projects: tickets stopped on a human
   request (approval, question, scope change, task — overdue first, then the nearest due date, then
@@ -3524,7 +3528,7 @@ workflow: a decision stays in the console, after a fresh sign-in. Tranibor repli
 link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
 
 `/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
-verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a github.com account linked to a member
+verified by its HMAC (`TRANIBOR_GITHUB_WEBHOOK_SECRET` is set), by a github.com account linked to a member
 of the project's organisation. The command runs with that member's own rights (a developer or
 above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
 and Tranibor confirms on the ticket. A login is never matched, so a renamed account inherits nothing.

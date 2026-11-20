@@ -167,12 +167,12 @@ def outposts_on(monkeypatch: pytest.MonkeyPatch) -> DaemonLog:
     from tranibor_api.secret_store import ENV_KEKS
     from tranibor_outpost import daemon
 
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS", "on")
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_URL", ORIGIN)
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY", _pem(SIGNING))
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS", json.dumps([_public(NEXT)]))
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS", "on")
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_URL", ORIGIN)
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY", _pem(SIGNING))
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_ANNOUNCED_KEYS", json.dumps([_public(NEXT)]))
     # The rate per instance is the door's, per replica; the tests poll as often as they need.
-    monkeypatch.setenv("CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE", "0")
+    monkeypatch.setenv("TRANIBOR_OUTPOSTS_DOOR_RATE_PER_MINUTE", "0")
     monkeypatch.setenv(ENV_KEKS, f"k1:{base64.b64encode(_seed('the key wrapper')).decode()}")
     monkeypatch.setattr(rendezvous, "LOOK_S", (0.05, 0.1))
     said = DaemonLog()

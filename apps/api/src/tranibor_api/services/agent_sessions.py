@@ -117,7 +117,7 @@ _CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle", "caller_gone", "agent
 #: The gateway's own words for a spent key, as `tranibor_runner.budget` reads them.
 _BUDGET_SIGNATURES = ("budget_exceeded", "budgetexceedederror", "exceededbudget", "budget has been exceeded")
 
-#: Tests and `CHOREGOS_FAKES` put their gateway and model transport here.
+#: Tests and `TRANIBOR_FAKES` put their gateway and model transport here.
 _OVERRIDES: dict[str, Any] = {}
 
 

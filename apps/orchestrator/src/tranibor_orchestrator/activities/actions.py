@@ -474,7 +474,8 @@ async def mark_awaiting_evidence(payload: dict[str, Any]) -> dict[str, Any]:
             # A row written before S45-39 holds `attente`: both are dropped.
             result.pop("waiting", None)
             result.pop("attente", None)  # lang: fr-ok — a row persisted before S45-39
-            # Not `evidence`: an ontology action keeps its own file of that name in `result`.
+            # Not `evidence`: an ontology action (persisted before 0.28) keeps its own file of that name
+            # in `result`.
             result.setdefault("evidence_received", []).append(dict(read_key(payload, "evidence") or {}))
         action.result = result
     return {"action_id": action_id, "status": action.status}

@@ -61,10 +61,10 @@ def test_the_direct_gateway_refuses_to_be_built_in_production(
     from tranibor_adapters import build
     from tranibor_adapters.errors import ConfigurationError
 
-    # `CHOREGOS_FAKES=1` (set by the API suite when everything runs together) short-circuits
+    # `TRANIBOR_FAKES=1` (set by the API suite when everything runs together) short-circuits
     # the factory and returns a fake: without this zero, the test passed alone and turned red in a group.
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    monkeypatch.setenv("CHOREGOS_ENV", environment)
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_ENV", environment)
     with pytest.raises(ConfigurationError, match="refused"):
         build("gateway", "direct", {})
 
@@ -73,6 +73,6 @@ def test_elle_se_construit_ailleurs(monkeypatch: pytest.MonkeyPatch) -> None:
     """A development workstation or a bench keeps the right to bring its own key."""
     from tranibor_adapters import build
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    monkeypatch.setenv("CHOREGOS_ENV", "dev")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_ENV", "dev")
     assert isinstance(build("gateway", "direct", {"key": "sk-perso"}), DirectGateway)

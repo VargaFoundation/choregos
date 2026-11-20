@@ -35,10 +35,10 @@ def test_a_clear_or_unreadable_value_is_refused(value: str) -> None:
 
 def test_env_reference_reads_only_connector_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """S39-06b: a reference is written by a tenant role; the platform's own secrets stay out of reach."""
-    monkeypatch.delenv("CHOREGOS_SECRET_ENV_PATTERN", raising=False)
+    monkeypatch.delenv("TRANIBOR_SECRET_ENV_PATTERN", raising=False)
     for platform in (
-        "CHOREGOS_SESSION_SECRET",
-        "CHOREGOS_GATEWAY_MASTER_KEY",
+        "TRANIBOR_SESSION_SECRET",
+        "TRANIBOR_GATEWAY_MASTER_KEY",
         "DATABASE_URL",
         "PGPASSWORD",
         "HOME",
@@ -52,12 +52,12 @@ def test_env_reference_reads_only_connector_variables(monkeypatch: pytest.Monkey
     secrets.check("env:CONNECTOR_JIRA")
     assert secrets.resolve("env:CONNECTOR_JIRA") == "ok"
     # A deployment widens the pattern: its own variables, never the platform's.
-    monkeypatch.setenv("CHOREGOS_SECRET_ENV_PATTERN", r"^(CONNECTOR_|JIRA_)[A-Z0-9_]*$")
+    monkeypatch.setenv("TRANIBOR_SECRET_ENV_PATTERN", r"^(CONNECTOR_|JIRA_)[A-Z0-9_]*$")
     monkeypatch.setenv("JIRA_TOKEN", "t0k")
     assert secrets.resolve("env:JIRA_TOKEN") == "t0k"
-    monkeypatch.setenv("CHOREGOS_SECRET_ENV_PATTERN", r"^.*$")
+    monkeypatch.setenv("TRANIBOR_SECRET_ENV_PATTERN", r"^.*$")
     with pytest.raises(InvalidReference):
-        secrets.check("env:CHOREGOS_SESSION_SECRET")
+        secrets.check("env:TRANIBOR_SESSION_SECRET")
 
 
 def test_an_extension_declares_its_vault() -> None:

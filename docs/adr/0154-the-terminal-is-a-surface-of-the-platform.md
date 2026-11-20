@@ -185,3 +185,16 @@ is still proposed, so the launches of §2 and §7 wait for it.
 §3's five framed panes are replaced by one screen of tabs with a context pane, without frames, by
 [ADR 0187](0187-the-workspace-is-one-screen-and-the-flow-is-live.md) §1; the colours, glyphs, keys and the
 `NO_COLOR` rule of §3 stand.
+
+## Amendment, 2026-11-19: the routes that widen what a run or the platform may do
+
+The product owner (also the security officer) decided that §7's rule covers four more gestures, because each
+widens what a run or the platform may do and a pasted API token could make them: approving or refusing an
+egress request (`approveOrgEgressRequest`, `refuseOrgEgressRequest`), approving a plugin install
+(`approvePluginInstall`), approving a skill version (`approveSkillVersion`) and deciding an assistant's
+knowledge update (`decideAssistantKnowledgeUpdate`). They follow §7 exactly, with the same one-minor-version
+setting (`CHOREGOS_LEGACY_DECISION_ROUTES`: `egress_requests`, `plugin_installs`, `skill_versions`,
+`assistant_knowledge_updates`) and an upgrade note. Left out on purpose: device requests
+(`decideDeviceRequest`), whose approval is already the person's own act on the device's page, and pending memory
+(`decidePendingMemory`, `decideGlobalPendingMemory`), which only changes what an assistant remembers, not what
+a run may do. Finding #1926.

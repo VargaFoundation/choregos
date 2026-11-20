@@ -5,7 +5,7 @@ because the API's lifespan starts it, and it holds against a real Temporal serve
 the server is unreachable, one run of `action-<id>` however many passes come. With the
 orchestrator's workers on the queue (S40-19c), the relayed workflow runs the action's effect once,
 and two replicas that both read the action as `approved` still run it once. In CI's second pass
-(`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`) the same tests run on a migrated PostgreSQL under RLS.
+(`TRANIBOR_TEST_SUITE_ON_POSTGRES=1`) the same tests run on a migrated PostgreSQL under RLS.
 """
 
 from __future__ import annotations
@@ -46,15 +46,15 @@ def noop_effect() -> Iterator[list[str]]:
 async def temporal_server() -> AsyncIterator[Any]:
     """A real Temporal dev server (the `temporal` CLI's, downloaded by the SDK on first use).
 
-    `CHOREGOS_TEST_TEMPORAL_ADDRESS` (with `CHOREGOS_TEST_TEMPORAL_NAMESPACE`) points the tests at a
+    `TRANIBOR_TEST_TEMPORAL_ADDRESS` (with `TRANIBOR_TEST_TEMPORAL_NAMESPACE`) points the tests at a
     server already running instead — the dev cluster's, through a port-forward, in a namespace of
     their own so that the platform's workers never see the test's task queues."""
     from temporalio.client import Client
     from temporalio.testing import WorkflowEnvironment
 
-    address = os.environ.get("CHOREGOS_TEST_TEMPORAL_ADDRESS")
+    address = os.environ.get("TRANIBOR_TEST_TEMPORAL_ADDRESS")
     if address:
-        namespace = os.environ.get("CHOREGOS_TEST_TEMPORAL_NAMESPACE", "default")
+        namespace = os.environ.get("TRANIBOR_TEST_TEMPORAL_NAMESPACE", "default")
         yield WorkflowEnvironment.from_client(await Client.connect(address, namespace=namespace))
         return
     env = await WorkflowEnvironment.start_local()

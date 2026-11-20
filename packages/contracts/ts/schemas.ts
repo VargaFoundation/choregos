@@ -142,7 +142,8 @@ export type Assistant = unknown;
 
 export type ContextPackMemory = {
   id?: string;
-  kind: "decision" | "convention" | "incident" | "ticket_summary" | "run_lesson" | "flaky_test" | "hotspot" | "finding" | "other";
+  /** An open list (ADR 0181): the core's kinds, decision, convention, incident, ticket_summary, run_lesson, flaky_test, hotspot, finding, other, and the kinds an installed extension declares. */
+  kind: string;
   subject: string;
   content: string;
   score?: number;
@@ -314,7 +315,8 @@ export type Event = {
 /** A problem an agent found outside its scope. */
 export type Finding = {
   title: string;
-  type: "perf" | "bug" | "security" | "tech-debt" | "docs" | "flaky-test" | "ux";
+  /** An open list (ADR 0181): the core's types, perf, bug, security, tech-debt, docs, flaky-test, ux, and the types an installed extension declares. The platform refuses any other. */
+  type: string;
   severity: "low" | "medium" | "high" | "critical";
   /** path:line, test output, query… */
   evidence: string;
@@ -344,7 +346,8 @@ export type HumanDecision = {
 
 /** An external event, normalised by an adapter (docs/plan/01 §1.7). */
 export type InboundEvent = {
-  type: "tracker.item.created" | "tracker.item.updated" | "tracker.item.moved" | "tracker.item.commented" | "tracker.item.labeled" | "tracker.item.closed" | "scm.pr.opened" | "scm.pr.synchronized" | "scm.pr.review_submitted" | "scm.pr.merged" | "scm.pr.closed" | "scm.check.completed" | "ci.run.started" | "ci.run.succeeded" | "ci.run.failed" | "cd.app.synced" | "cd.app.degraded" | "cd.rollout.completed" | "cd.rollout.aborted" | "alert.fired" | "alert.resolved" | "human.decision";
+  /** An open list (ADR 0181): the core's types, tracker.item.created, tracker.item.updated, tracker.item.moved, tracker.item.commented, tracker.item.labeled, tracker.item.closed, scm.pr.opened, scm.pr.synchronized, scm.pr.review_submitted, scm.pr.merged, scm.pr.closed, scm.check.completed, ci.run.started, ci.run.succeeded, ci.run.failed, cd.app.synced, cd.app.degraded, cd.rollout.completed, cd.rollout.aborted, alert.fired, alert.resolved, human.decision, and the types an installed extension declares. The platform refuses any other. */
+  type: string;
   /** github, jira, gitlab, tekton, argocd, alertmanager, slack, web, cli */
   source: string;
   /** Unique delivery identifier (deduplication, replay). */
@@ -687,7 +690,7 @@ export type PluginServer = {
   webhook?: {
     path: string;
   };
-  /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
+  /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
   fake?: {
     env: {
       [key: string]: string;
@@ -1284,7 +1287,7 @@ export type StageInput = {
   };
   agent: {
     backend: string;
-    /** The image the run's pod uses instead of the runner image (ADR 0063): the reference the operator's `CHOREGOS_AGENT_IMAGES` maps the agent's image name to, built from the runner image. */
+    /** The image the run's pod uses instead of the runner image (ADR 0063): the reference the operator's `TRANIBOR_AGENT_IMAGES` maps the agent's image name to, built from the runner image. */
     image?: string;
     launch?: {
       command?: Array<string>;
@@ -1469,6 +1472,11 @@ export type StageResult = {
     branch?: string | null;
     commits?: Array<string>;
     pr_url?: string | null;
+    /** Where the step's work can be seen, by relation (ADR 0181 C1): `{rel: change_request, url}` for the change it proposes. It replaces `pr_url`, read until the release the window list names. */
+    links?: Array<{
+      rel: string;
+      url: string;
+    }>;
     transcript_url?: string | null;
     context_pack_url?: string | null;
     reports?: {
@@ -1731,7 +1739,7 @@ export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSy
 
 export type WorkflowAgentActor = {
   type: "agent";
-  /** The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name. */
+  /** The agent's role. The package's roles — triage, refine, plan, implement, verify, review, fix_ci, address_review, release_notes, verify_prod, brief, deliver, custom — keep their meaning; a business names its own (`sourcing`, `instruction_dossier`), and the playbook is resolved by the role's name. */
   role: string;
   /** profile:<name>, profile:by_size, or a direct LiteLLM identifier. */
   model?: string;
@@ -1744,6 +1752,8 @@ export type WorkflowAgentActor = {
   playbook?: string;
   /** A registry agent (ADR 0033): `slug`, or `slug@version`. Its version — the project's pinned one, otherwise the latest — sets the instructions, model, limits and budget; its instructions take precedence over the playbook. */
   agent?: string;
+  /** The connector kinds the agent works through, which the project must therefore connect (ADR 0181 C1): a workflow declares them instead of the platform guessing from the role's name. */
+  needs?: Array<string>;
 };
 
 export type WorkflowHumanActor = {
@@ -1766,7 +1776,7 @@ export type WorkflowJobActor = {
   role: string;
   /** argv, never a shell line. */
   command: Array<string>;
-  /** A job image's name, as the platform maps it (CHOREGOS_JOB_IMAGES); absent: the runner image. */
+  /** A job image's name, as the platform maps it (TRANIBOR_JOB_IMAGES); absent: the runner image. */
   image?: string;
   max_minutes?: number;
 };
@@ -1824,7 +1834,8 @@ export type WorkflowActionEffect = {
 
 export type WorkflowActionApproval = {
   approvers?: Array<{
-    role?: "developer" | "release_captain" | "project_owner" | "org_admin";
+    /** the least rank an approver holds: `contributor`, `approver`, `project_owner` or `org_admin`. `developer` and `release_captain` are their former names, read until the release the window list names (ADR 0181 C1) */
+    role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
     /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052) */
     group?: string;
     min?: number;

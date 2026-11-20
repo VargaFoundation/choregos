@@ -7,19 +7,19 @@ from tranibor_adapters import deployment_default_type
 
 
 def test_the_runtime_is_the_deployment_s_executor(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "k8s_job")
     assert deployment_default_type("runtime") == "k8s_job"
 
 
 def test_the_gateway_is_the_deployment_s_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_GATEWAY_TYPE", "litellm")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_TYPE", "litellm")
     assert deployment_default_type("gateway") == "litellm"
 
 
 def test_the_memory_follows_its_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_MEMORY_URL", raising=False)
+    monkeypatch.delenv("TRANIBOR_MEMORY_URL", raising=False)
     assert deployment_default_type("memory") == "lexical"
-    monkeypatch.setenv("CHOREGOS_MEMORY_URL", "http://ecphoria:8432")
+    monkeypatch.setenv("TRANIBOR_MEMORY_URL", "http://ecphoria:8432")
     assert deployment_default_type("memory") == "ecphoria"
 
 

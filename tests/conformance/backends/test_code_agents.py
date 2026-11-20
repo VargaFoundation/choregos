@@ -15,19 +15,22 @@ observable is a deliverable the SDK writes through the guard.
 | max_turns | the agent's first turn made no more calls (tool and model calls) than `max_turns` |
 | cost_at_gateway | the run's key is in the agent's environment; the gateway saw no other key |
 
-The agents under test come from `CHOREGOS_CONFORMANCE_CODE_AGENTS`, JSON `{name: argv}` or
+The agents under test come from `TRANIBOR_CONFORMANCE_CODE_AGENTS`, JSON `{name: argv}` or
 `{name: {"image": ref, "command": argv}}` (the agent then runs in that image, through `docker run -i`);
 without it, the plain example runs. `make conformance-agent IMAGE=<ref>` sets it for one image.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
+import socket
+import subprocess
 import sys
 import threading
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -38,6 +41,7 @@ from tranibor_contracts import StageInput
 from tranibor_runner.acp import AcpClient, AgentUnreachableError
 from tranibor_runner.acp.guard import TurnGuard
 from tranibor_runner.backends import get_backend
+from tranibor_runner.launcher import Launcher
 from tranibor_runner.result import load_result
 
 from .test_acp_conformance import CHECKS, ConformanceResult
@@ -53,7 +57,7 @@ DEFAULT_AGENTS: dict[str, Any] = {
 
 
 def configured_agents() -> dict[str, Any]:
-    raw = os.environ.get("CHOREGOS_CONFORMANCE_CODE_AGENTS")
+    raw = os.environ.get("TRANIBOR_CONFORMANCE_CODE_AGENTS")
     return json.loads(raw) if raw else DEFAULT_AGENTS
 
 
@@ -148,15 +152,21 @@ def code_stage_input(command: list[str], gateway_url: str, workspace: Path) -> S
     )
 
 
-async def run_code_suite(name: str, spec: Any, gateway: FakeGateway, workspace: Path) -> ConformanceResult:
-    """The seven checks against one code agent (see the module's table)."""
+async def run_code_suite(
+    name: str, spec: Any, gateway: FakeGateway, workspace: Path, launcher: Launcher | None = None
+) -> ConformanceResult:
+    """The seven checks against one code agent (see the module's table). With `launcher`, the agent is
+    started through it (ADR 0146 §10): the launcher runs where the agent lives, its image or here."""
     result = ConformanceResult(backend=f"code:{name}")
     argv, image = (spec["command"], spec["image"]) if isinstance(spec, dict) else (list(spec), None)
     stage_input = code_stage_input(argv, gateway.url, workspace)
     backend = get_backend("code")
     plan = backend.launch_plan(stage_input, workspace)
     env = {**plan.env, **backend.model_env(stage_input.model, stage_input.gateway_key)}
-    command = container_command(image, plan.command, workspace, env) if image else plan.command
+    if launcher is not None:
+        command = plan.command
+    else:
+        command = container_command(image, plan.command, workspace, env) if image else plan.command
     outputs = workspace / ".choregos" / "outputs"
     result_path = workspace / ".choregos" / "result.json"
     deny_writes = False
@@ -176,7 +186,9 @@ async def run_code_suite(name: str, spec: Any, gateway: FakeGateway, workspace: 
 
     # The runner's own guard counts the agent's calls, as it does in a run.
     guard = TurnGuard(max_turns=stage_input.budget.max_turns)
-    client = AcpClient(command, cwd=str(workspace), env=env, on_permission=on_permission, guard=guard)
+    client = AcpClient(
+        command, cwd=str(workspace), env=env, on_permission=on_permission, guard=guard, launcher=launcher
+    )
     try:
         async with client:
             info = await client.initialize()
@@ -246,6 +258,62 @@ async def test_code_agent_passes_all_checks(name: str, gateway: FakeGateway, tmp
     workspace = tmp_path / name
     workspace.mkdir()
     result = await run_code_suite(name, spec, gateway, workspace)
+    assert result.ok, result.failed
+    assert set(result.passed) == set(CHECKS)
+
+
+@contextlib.asynccontextmanager
+async def launcher_for(spec: Any, workspace: Path) -> AsyncIterator[Launcher]:
+    """A launcher where the agent lives: in its image, as the agent's container of a pod is (uid 1001,
+    read-only root, the workspace at the same path), or here, for an agent run from its source."""
+    port = _free_port()
+    if isinstance(spec, dict):
+        workspace.chmod(0o777)  # uid 1001 writes `.choregos/` there, as the pod's group lets it
+        name = f"choregos-conformance-launcher-{port}"
+        started = subprocess.run(
+            [
+                "docker", "run", "-d", "--rm", "--name", name, "--network=host",
+                "--user", "1001:1000", "--read-only", "--tmpfs", "/tmp", "-e", "HOME=/tmp",
+                "-v", f"{workspace}:{workspace}", spec["image"], "launcher", "--port", str(port),
+            ],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        assert started.returncode == 0, started.stderr
+        stop = ["docker", "rm", "-f", name]
+    else:
+        process = subprocess.Popen([sys.executable, "-m", "tranibor_runner.launcher", str(port)])
+        stop = []
+    launcher = Launcher("127.0.0.1", port)
+    try:
+        assert await launcher.wait_ready(60), "the launcher never listened"
+        yield launcher
+    finally:
+        if stop:
+            subprocess.run(stop, capture_output=True, check=False)
+        else:
+            process.terminate()
+            process.wait(10)
+
+
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+@pytest.mark.parametrize("name", sorted(configured_agents()))
+async def test_code_agent_passes_all_checks_behind_a_launcher(
+    name: str, gateway: FakeGateway, tmp_path: Path
+) -> None:
+    """ADR 0146 §10 (S65-04k): under `container` a code agent's image is the agent's container, and the
+    runner starts the agent through the launcher there. The same seven checks, in that shape."""
+    spec = configured_agents()[name]
+    if isinstance(spec, dict) and shutil.which("docker") is None:
+        pytest.skip("docker is needed to run an agent in its image")
+    workspace = tmp_path / name
+    workspace.mkdir()
+    async with launcher_for(spec, workspace) as launcher:
+        result = await run_code_suite(name, spec, gateway, workspace, launcher=launcher)
     assert result.ok, result.failed
     assert set(result.passed) == set(CHECKS)
 

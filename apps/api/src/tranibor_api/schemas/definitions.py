@@ -53,6 +53,9 @@ class WorkflowCatalogueEntryDto(Dto):
     summary: str
     tags: list[str]
     requires: list[WorkflowCatalogueRequirementDto]
+    #: It requires a workspace its steps read and write (an `scm` today, ADR 0181 C1).
+    needs_workspace: bool = False
+    #: The former name of `needs_workspace`, until the release `tranibor_contracts.window` names.
     needs_repository: bool
     groups: list[str]
     agents: list[WorkflowCatalogueAgentDto]
@@ -371,7 +374,7 @@ class ModelCatalogueGateway(Dto):
     type: str
     capabilities: list[str] = Field(default_factory=list)
     #: Where it is set: the organisation's own `gateway` connector, or the deployment's environment
-    #: (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no screen changes.
+    #: (`TRANIBOR_GATEWAY_TYPE`, `TRANIBOR_GATEWAY_URL`), which no screen changes.
     source: Literal["organisation", "deployment"] = "deployment"
     #: The address the platform calls. The deployment's is an operator's internal address: only a
     #: platform administrator reads it; the organisation's own is shown to its members.

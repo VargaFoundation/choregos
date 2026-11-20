@@ -1,10 +1,10 @@
 """Every migration, down and up again, on a real PostgreSQL (S40-22c).
 
 `test_migrations.py` plays the round trip on SQLite only, and the PostgreSQL suite of the CI
-(`CHOREGOS_TEST_SUITE_ON_POSTGRES`) only ever goes up. A `downgrade` that SQLite accepts can fail
+(`TRANIBOR_TEST_SUITE_ON_POSTGRES`) only ever goes up. A `downgrade` that SQLite accepts can fail
 on PostgreSQL (an enum type left behind, a policy that still names a dropped column, a batch
 operation that does not exist there): nothing ran one before this test. It runs whenever
-`CHOREGOS_TEST_DATABASE_URL` names a PostgreSQL, as the CI's `python` job does.
+`TRANIBOR_TEST_DATABASE_URL` names a PostgreSQL, as the CI's `python` job does.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: p
     from tranibor_api.migrate import configuration
 
     await _prepare_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     config = configuration()
@@ -310,7 +310,7 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
     from tranibor_api.migrate import configuration
 
     await _prepare_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     config = configuration()
@@ -373,7 +373,7 @@ async def _migrate_as_the_job(monkeypatch: pytest.MonkeyPatch) -> Any:
     from tranibor_api.migrate import configuration
 
     await _prepare_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     return configuration()

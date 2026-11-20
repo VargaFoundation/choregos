@@ -100,6 +100,24 @@ alarm). Both set and different: refused, that is a contradiction.
 {{- end -}}
 
 {{/*
+Where every run's agent runs (ADR 0146): `container` (the default since S65-04m) or `process`. One value
+for the API (`/readiness`),
+the workers (each run's executor) and the warm pool's template, as `CHOREGOS_RUNNER_AGENT_ISOLATION`.
+`runner.sandbox.agentIsolation`, where it lived while only the warm pool had the agent's container, is
+refused with where it went: a value silently ignored would leave the agent beside the runner.
+*/}}
+{{- define "choregos.agentIsolation" -}}
+{{- $value := (.Values.global.runner | default dict).agentIsolation | default "container" -}}
+{{- if not (has $value (list "process" "container")) -}}
+{{- fail (printf "global.runner.agentIsolation=%q: expected process or container (ADR 0146)" $value) -}}
+{{- end -}}
+{{- with .Values.runner -}}{{- with .sandbox -}}{{- if hasKey . "agentIsolation" -}}
+{{- fail "choregos-orchestrator.runner.sandbox.agentIsolation moved to global.runner.agentIsolation (S65-04d): one setting for every executor, the API and the workers; set it there and remove this one" -}}
+{{- end -}}{{- end -}}{{- end -}}
+{{- $value -}}
+{{- end -}}
+
+{{/*
 The namespace pattern the runs go to. Empty (the default) follows the executor: the release
 namespace for `agent_sandbox`, whose SandboxTemplate lives there, `proj-{slug}-runners` otherwise.
 An explicit value always wins.
@@ -116,7 +134,7 @@ proj-{slug}-runners
 
 {{/* Common environment variables: 12-factor configuration, secrets by reference. */}}
 {{- define "choregos.commonEnv" -}}
-{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_EGRESS_MODE" "CHOREGOS_EGRESS_CEILING" "CHOREGOS_EGRESS_PLATFORM_CHANGE" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" "CHOREGOS_EXECUTOR_KIND" "CHOREGOS_RUNNER_RUNTIME_CLASS" "CHOREGOS_EXECUTORS_ALLOWED" }}
+{{- $poses := list "CHOREGOS_ENV" "CHOREGOS_EDITION" "CHOREGOS_LOG_LEVEL" "CHOREGOS_FAKES" "CHOREGOS_EGRESS_MODE" "CHOREGOS_EGRESS_CEILING" "CHOREGOS_EGRESS_PLATFORM_CHANGE" "CHOREGOS_TEMPORAL_ADDRESS" "CHOREGOS_TEMPORAL_NAMESPACE" "CHOREGOS_GATEWAY_URL" "CHOREGOS_MEMORY_URL" "CHOREGOS_MEMORY_TOKEN" "CHOREGOS_OBJECT_STORE_URL" "CHOREGOS_OBJECT_STORE_ENDPOINT" "CHOREGOS_OBJECT_STORE_REGION" "CHOREGOS_OBJECT_STORE_ACCESS_KEY" "CHOREGOS_OBJECT_STORE_SECRET_KEY" "CHOREGOS_PUBLIC_URL" "CHOREGOS_API_URL" "CHOREGOS_DB_POOL_SIZE" "CHOREGOS_DB_MAX_OVERFLOW" "CHOREGOS_DB_POOL_TIMEOUT_S" "CHOREGOS_DATABASE_PASSWORD" "CHOREGOS_DATABASE_URL" "CHOREGOS_SECRET_ENV_PATTERN" "CHOREGOS_EXECUTOR_KIND" "CHOREGOS_RUNNER_RUNTIME_CLASS" "CHOREGOS_EXECUTORS_ALLOWED" "CHOREGOS_RUNNER_AGENT_ISOLATION" }}
 {{- /* Before S40-20b the endpoint went through `extraEnv`: still accepted, unless the chart sets it. */}}
 {{- if (.Values.global.tracing | default dict).otlpEndpoint }}
 {{- $poses = append $poses "OTEL_EXPORTER_OTLP_ENDPOINT" }}
@@ -184,6 +202,10 @@ proj-{slug}-runners
 {{- end }}
 - name: CHOREGOS_EXECUTORS_ALLOWED
   value: {{ (.Values.global.runner | default dict).allowedExecutors | default list | join "," | quote }}
+# Where every run's agent runs (ADR 0146): the API judges `/readiness` with it, the workers hand it to
+# each run's executor, which refuses a run it cannot isolate.
+- name: CHOREGOS_RUNNER_AGENT_ISOLATION
+  value: {{ include "choregos.agentIsolation" . | quote }}
 {{- with (.Values.global.tracing | default dict).otlpEndpoint }}
 # ADR 0018: the collector the traces go to; absent, `configure_tracing` leaves tracing off.
 - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -400,9 +422,15 @@ right — in the parent chart only.
 {{- end -}}
 {{- end -}}
 
+{{- /* The embedded Temporal's Service name: `global.temporal.serviceName` (global, so the API and the
+workers, which render the address from their own values, see it too), or `<release>-temporal`. */ -}}
+{{- define "choregos.temporalServiceName" -}}
+{{- (.Values.global.temporal | default dict).serviceName | default (printf "%s-temporal" .Release.Name) -}}
+{{- end -}}
+
 {{- define "choregos.temporalAddress" -}}
 {{- if .Values.global.temporal.embedded -}}
-{{ .Release.Name }}-temporal:7233
+{{ include "choregos.temporalServiceName" . }}:7233
 {{- else -}}
 {{ .Values.global.temporal.address }}
 {{- end -}}

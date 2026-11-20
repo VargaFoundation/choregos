@@ -67,7 +67,7 @@ def gateway(supplier: FakeMcpServer, monkeypatch: pytest.MonkeyPatch) -> FakeMcp
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 
@@ -199,7 +199,7 @@ async def test_a_listed_host_may_be_private_and_plain_http(
 
     endpoint = "http://gw.mcp.svc:8080/{server}/mcp"
     assert (await client.put(URL, json=_body(endpoint=endpoint))).status_code == 422
-    monkeypatch.setenv("CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS", '["GW.mcp.svc"]')
+    monkeypatch.setenv("TRANIBOR_MCP_GATEWAY_INTERNAL_HOSTS", '["GW.mcp.svc"]')
     reset_settings_cache()
     assert (await client.put(URL, json=_body(endpoint=endpoint))).status_code == 200
     other = "http://other.mcp.svc:8080/{server}/mcp"

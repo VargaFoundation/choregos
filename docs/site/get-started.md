@@ -60,7 +60,7 @@ from a template, connect its repository, open an issue, let agents work, approve
 
 | Symptom | What to do |
 | :-- | :-- |
-| A port is already in use | Set `CHOREGOS_PORT_WEB` or `CHOREGOS_PORT_API` in `.env`, then start again |
+| A port is already in use | Set `TRANIBOR_PORT_WEB` or `TRANIBOR_PORT_API` in `.env`, then start again |
 | The console does not answer after several minutes | Run `docker compose ps`: the one-shot services (the migrations, the seed) have exited, every other one is healthy |
 | You want real agents | Put an `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `.env` and start again; see the [local install in depth](../getting-started.md#fakes-mode-and-a-real-model) |
 

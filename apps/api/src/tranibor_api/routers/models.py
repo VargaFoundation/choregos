@@ -29,7 +29,7 @@ async def _gateway_models() -> list[GatewayModelDto]:
     from tranibor_adapters import build
     from tranibor_adapters.registry import default_gateway_type
 
-    # The deployment's gateway (`CHOREGOS_GATEWAY_TYPE`), not LiteLLM whatever was configured.
+    # The deployment's gateway (`TRANIBOR_GATEWAY_TYPE`), not LiteLLM whatever was configured.
     gateway = build("gateway", default_gateway_type(), {})
     models = await gateway.list_models()
     return [GatewayModelDto.model_validate(m.model_dump()) for m in models]

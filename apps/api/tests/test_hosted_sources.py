@@ -378,14 +378,14 @@ def test_the_build_key_changes_with_every_input_and_only_with_them(monkeypatch: 
         pending_build(_hosted(entry_point=["python", "-u", "main.py"]), zipped).key,
     }
     monkeypatch.setenv(
-        "CHOREGOS_HOSTED_BASE_IMAGES",
+        "TRANIBOR_HOSTED_BASE_IMAGES",
         json.dumps({"python_3_13": "registry.internal/python:3.13@sha256:" + "1" * 64}),
     )
     reset_settings_cache()
     try:
         rebased = pending_build(_hosted(), zipped)
     finally:
-        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        monkeypatch.delenv("TRANIBOR_HOSTED_BASE_IMAGES")
         reset_settings_cache()
     keys.add(rebased.key)
     assert first.key not in keys and len(keys) == 5
@@ -415,12 +415,12 @@ def test_a_dotnet_build_records_and_keys_its_sdk_image(monkeypatch: pytest.Monke
     )
     assert "build_image" not in bundled.provenance, "a bundled zip compiles nothing"
     other = "registry.internal/dotnet/sdk:10.0@sha256:" + "2" * 64
-    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", json.dumps({"dotnet_10_sdk": other}))
+    monkeypatch.setenv("TRANIBOR_HOSTED_BASE_IMAGES", json.dumps({"dotnet_10_sdk": other}))
     reset_settings_cache()
     try:
         rebased = pending_build(_hosted(**dotnet), project)
     finally:
-        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        monkeypatch.delenv("TRANIBOR_HOSTED_BASE_IMAGES")
         reset_settings_cache()
     assert rebased.provenance["build_image"] == other and rebased.key != first.key
 
@@ -443,13 +443,13 @@ def test_an_operator_takes_a_runtime_away_with_an_empty_base_image(
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_sources import SourceRefused, check_against, read_source
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", f'{{"{taken}": ""}}')
+    monkeypatch.setenv("TRANIBOR_HOSTED_BASE_IMAGES", f'{{"{taken}": ""}}')
     reset_settings_cache()
     try:
         with pytest.raises(SourceRefused, match=f"no base image for the {reason}") as refused:
             check_against(read_source(_zip(files)), _source(**source))
     finally:
-        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        monkeypatch.delenv("TRANIBOR_HOSTED_BASE_IMAGES")
         reset_settings_cache()
     builds = str(refused.value).split("the platform builds: ")[1]
     assert taken not in builds and "dotnet_10_sdk" not in builds, "only the runtimes a version can name"
@@ -460,13 +460,13 @@ def test_a_base_image_without_a_digest_is_refused(monkeypatch: pytest.MonkeyPatc
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.services.hosted_sources import SourceRefused, base_image
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", '{"python_3_13": "python:3.13-slim"}')
+    monkeypatch.setenv("TRANIBOR_HOSTED_BASE_IMAGES", '{"python_3_13": "python:3.13-slim"}')
     reset_settings_cache()
     try:
         with pytest.raises(SourceRefused, match="not pinned by digest"):
             base_image("python_3_13")
     finally:
-        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        monkeypatch.delenv("TRANIBOR_HOSTED_BASE_IMAGES")
         reset_settings_cache()
 
 
@@ -585,12 +585,12 @@ async def test_a_zip_runtime_without_a_base_image_is_refused_before_anything_is_
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_HOSTED_BASE_IMAGES", '{"dotnet_10": ""}')
+    monkeypatch.setenv("TRANIBOR_HOSTED_BASE_IMAGES", '{"dotnet_10": ""}')
     reset_settings_cache()
     try:
         refused = await _create(client, _runtime("sha256:" + "a" * 64, runtime="dotnet_10"))
     finally:
-        monkeypatch.delenv("CHOREGOS_HOSTED_BASE_IMAGES")
+        monkeypatch.delenv("TRANIBOR_HOSTED_BASE_IMAGES")
         reset_settings_cache()
     assert refused.status_code == 422, refused.text
     error = refused.json()["errors"][0]

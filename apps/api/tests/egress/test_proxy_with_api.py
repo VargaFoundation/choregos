@@ -272,7 +272,7 @@ async def test_the_proxys_reports_carry_its_key_and_land_when_the_api_requires_i
     """ADR 0145: the API refuses a report made with the egress token alone; the proxy's carry its key."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_REPORT_KEY", "the-proxys-own-key")
+    monkeypatch.setenv("TRANIBOR_EGRESS_REPORT_KEY", "the-proxys-own-key")
     reset_settings_cache()
     headers = await _run(project, "run-edge-key", agent_slug="pip", agent_version=1)
     _, http = edge

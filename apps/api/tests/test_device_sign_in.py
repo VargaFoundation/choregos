@@ -24,7 +24,7 @@ GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 
 @pytest.fixture(autouse=True)
 def _dev_login(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "true")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "true")
     reset_settings_cache()
     yield
     reset_settings_cache()

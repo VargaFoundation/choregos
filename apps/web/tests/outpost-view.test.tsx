@@ -472,14 +472,14 @@ describe("enrolling an instance (ADR 0147 §4, ADR 0148 §13)", () => {
 
   it("a door without a signing key says so, in the API's own words", async () => {
     given({ outpost: outpost({ door_keys: [] }), instances: [] });
-    const words = "the outposts' door has no signing key on this deployment (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`): there is no key to pin, so no instance is enrolled";
+    const words = "the outposts' door has no signing key on this deployment (`TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY`): there is no key to pin, so no instance is enrolled";
     vi.mocked(api.createOutpostEnrolment).mockRejectedValue(new ApiError(409, { detail: words, code: "door_key_missing" }));
     await view();
     fireEvent.click(await screen.findByRole("button", { name: "Create an enrolment token" }));
     const said = await screen.findByTestId("outposts-deployment-refusal");
     expect(said).toHaveTextContent("The outposts' door has no signing key on this deployment");
     expect(said).toHaveTextContent("there is no key to pin, so no instance is enrolled");
-    expect(within(said).getByText("CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY").tagName).toBe("CODE");
+    expect(within(said).getByText("TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY").tagName).toBe("CODE");
     expect(screen.queryByTestId("outpost-enrolment")).toBeNull();
     // The page already said there is nothing to pin.
     expect(screen.getByTestId("outpost-door-keys")).toHaveTextContent("There is no key to pin yet");
@@ -489,7 +489,7 @@ describe("enrolling an instance (ADR 0147 §4, ADR 0148 §13)", () => {
   it("a deployment where outposts are off says that, and not the other", async () => {
     given({ instances: [] });
     vi.mocked(api.createOutpostEnrolment).mockRejectedValue(
-      new ApiError(409, { detail: "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`): its operator turns them on", code: "outposts_disabled" }),
+      new ApiError(409, { detail: "outposts are switched off on this deployment (`TRANIBOR_OUTPOSTS`): its operator turns them on", code: "outposts_disabled" }),
     );
     await view();
     fireEvent.click(await screen.findByRole("button", { name: "Create an enrolment token" }));

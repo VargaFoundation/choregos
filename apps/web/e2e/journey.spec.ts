@@ -153,7 +153,7 @@ test("members: a person appears once; a project has its members; org_admin is no
   await page.goto("/admin/members");
   const membres = page.getByTestId("members");
   await expect(membres.getByTestId("member-marc@acme.dev")).toHaveCount(1);
-  await expect(membres.getByTestId("member-marc@acme.dev")).toContainText("checkout-web · Release captain");
+  await expect(membres.getByTestId("member-marc@acme.dev")).toContainText("checkout-web · Approver");
   await expect(page.getByTestId("additive-roles")).toContainText("cannot take anything away");
   // The scope of an invitation is picked among the projects; a project leaves org_admin out.
   await page.getByLabel("Scope").selectOption("billing-api");
@@ -212,15 +212,13 @@ test("a project's integrations: the project's door, and claude.ai says why it do
   await expect(page.getByText("Not reachable from here yet")).toBeVisible();
 });
 
-test("an ontology proposal is an action: a former link leads there, and says what it touches", async ({
-  page,
-}) => {
-  // A decision link issued before S20-10 (MCP door, email): same identifier, actions page.
+test("an ontology proposal is an action: a former link leads there, and it still reads", async ({ page }) => {
+  // A decision link issued before S20-10 (MCP door, email): same identifier, actions page. The
+  // ontology is gone (ADR 0181, O4-1); the action it persisted is read like any other.
   await page.goto("/p/billing-api/proposals/pr1");
   await expect(page).toHaveURL(/\/p\/billing-api\/actions\/pr1$/);
-  const ontology = page.getByTestId("ontology");
-  await expect(ontology).toContainText("open_infra_pr");
-  await expect(ontology).toContainText("os-reboot-required");
+  await expect(page.getByRole("heading", { name: "open_infra_pr on os-reboot-required" })).toBeVisible();
+  await expect(page.getByText("ontology.open_infra_pr")).toBeVisible();
   await expect(page.getByTestId("decision-rules")).toContainText("within 10 min");
   await expect(page.getByRole("button", { name: "Reject" })).toBeDisabled();
   await page.getByLabel("Reason to reject").fill("the maintenance window is frozen");

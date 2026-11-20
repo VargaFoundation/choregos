@@ -4,7 +4,7 @@
 Any signed-in member reads them: a procedure is the same text a person finds in `docs/procedures/`,
 with the webhook and OAuth callback URLs of THIS platform instead of placeholders. The procedures of
 the plugins installed in the caller's organisations are listed beside them (ADR 0093, S43-04), as a
-deployment's directory (`CHOREGOS_PROCEDURES_EXTRA`) adds its own.
+deployment's directory (`TRANIBOR_PROCEDURES_EXTRA`) adds its own.
 """
 
 from __future__ import annotations

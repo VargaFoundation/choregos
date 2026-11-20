@@ -3,7 +3,7 @@
 
 The CLI's own tests fake the API with respx and check the bodies against `openapi.yaml`: they prove what the
 CLI does with an answer, not that the API gives it. Here `uvicorn tranibor_api.main:app` runs on a local port
-with `CHOREGOS_FAKES=1` and a throwaway SQLite database, exactly as `tools/e2e_live_api.py` starts it for the
+with `TRANIBOR_FAKES=1` and a throwaway SQLite database, exactly as `tools/e2e_live_api.py` starts it for the
 console's live journeys; a person signs in as in development (`?as=<email>`), and `choregos` is invoked as a
 subprocess, as a terminal would. What is faked is what a laptop does not have: Temporal, the tracker, the
 model.
@@ -38,13 +38,13 @@ class Api:
     def env(self, *, profile: str = "session", **extra: str) -> dict[str, str]:
         """The environment of a `choregos` process: its own home and profile, never the developer's."""
         env = {
-            k: v for k, v in os.environ.items() if not k.startswith(("CHOREGOS_", "NO_COLOR", "FORCE_COLOR"))
+            k: v for k, v in os.environ.items() if not k.startswith(("TRANIBOR_", "NO_COLOR", "FORCE_COLOR"))
         }
         env.update(
             HOME=str(self.home), XDG_CONFIG_HOME=str(self.home / ".config"), COLUMNS="120", TERM="dumb"
         )
         env.update(
-            CHOREGOS_API_URL=self.url, CHOREGOS_ORG=ORG, CHOREGOS_CONFIG=str(self.home / f"{profile}.json")
+            TRANIBOR_API_URL=self.url, TRANIBOR_ORG=ORG, TRANIBOR_CONFIG=str(self.home / f"{profile}.json")
         )
         env.update(extra)
         return env
@@ -89,19 +89,19 @@ def api(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Api]:
     home = root / "home"
     home.mkdir()
     url = f"http://127.0.0.1:{port}"
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CHOREGOS_")}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("TRANIBOR_")}
     env.update(
-        CHOREGOS_ENV="test",
-        CHOREGOS_FAKES="1",
-        CHOREGOS_DATABASE_URL=f"sqlite+aiosqlite:///{database}",
-        CHOREGOS_DEV_LOGIN_ENABLED="true",
-        CHOREGOS_DEV_ADMIN_EMAILS=ADMIN,
-        CHOREGOS_BOOTSTRAP_ORG=ORG,
-        CHOREGOS_BOOTSTRAP_ORG_NAME="Northwind",
-        CHOREGOS_BOOTSTRAP_ADMINS=ADMIN,
-        CHOREGOS_PUBLIC_URL=url,
-        CHOREGOS_SESSION_SECRET="cli-api-session-secret-" + "x" * 32,
-        CHOREGOS_EGRESS_MODE="warn",
+        TRANIBOR_ENV="test",
+        TRANIBOR_FAKES="1",
+        TRANIBOR_DATABASE_URL=f"sqlite+aiosqlite:///{database}",
+        TRANIBOR_DEV_LOGIN_ENABLED="true",
+        TRANIBOR_DEV_ADMIN_EMAILS=ADMIN,
+        TRANIBOR_BOOTSTRAP_ORG=ORG,
+        TRANIBOR_BOOTSTRAP_ORG_NAME="Northwind",
+        TRANIBOR_BOOTSTRAP_ADMINS=ADMIN,
+        TRANIBOR_PUBLIC_URL=url,
+        TRANIBOR_SESSION_SECRET="cli-api-session-secret-" + "x" * 32,
+        TRANIBOR_EGRESS_MODE="warn",
     )
     log = (root / "api.log").open("w")
     process = subprocess.Popen(
@@ -208,6 +208,34 @@ def lay_run(
                 RunEvent(run_id=run_id, seq=event["seq"], type=event["type"], payload=event["payload"], ts=ts)
             )
         session.commit()
+
+
+def lay_step(
+    api: Api, console: httpx.Client, project_id: str, title: str, *, kind: str = "approval", user: str = ADMIN
+) -> tuple[str, str]:
+    """A work item waiting for `user` on a human step, as the interpreter leaves it on reaching the task:
+    the item through the real route, the `HumanRequest` row the workflow would write. Returns the item's id
+    and the request's id (what `/me/pending` lists)."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_core import utcnow
+
+    made = console.post(f"/api/v1/projects/{project_id}/work-items", json={"title": title, "start": False})
+    assert made.status_code == 201, made.text
+    item_id = str(made.json()["id"])
+    with Session(create_engine(f"sqlite:///{api.database}")) as session:
+        row = HumanRequest(
+            work_item_id=item_id,
+            project_id=project_id,
+            kind=kind,
+            payload={"question": f"{title}?"},
+            requested_at=utcnow(),
+            assignee={"user": user, "group": None},
+        )
+        session.add(row)
+        session.commit()
+        return item_id, str(row.id)
 
 
 def sign_in(api: Api, console: httpx.Client, profile: str = "session") -> None:

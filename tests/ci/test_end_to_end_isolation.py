@@ -22,11 +22,11 @@ E2E = ROOT / "tests" / "e2e"
 
 #: The variables the end-to-end bench sets (`ENVIRONNEMENT_E2E` in its conftest).
 BENCH_VARIABLES = (
-    "CHOREGOS_FAKES",
-    "CHOREGOS_ENV",
-    "CHOREGOS_DEV_LOGIN_ENABLED",
-    "CHOREGOS_DEV_ADMIN_EMAILS",
-    "CHOREGOS_GENERIC_WEBHOOK_SECRET",
+    "TRANIBOR_FAKES",
+    "TRANIBOR_ENV",
+    "TRANIBOR_DEV_LOGIN_ENABLED",
+    "TRANIBOR_DEV_ADMIN_EMAILS",
+    "TRANIBOR_GENERIC_WEBHOOK_SECRET",
 )
 
 PROBE = '''
@@ -40,8 +40,8 @@ def test_probe_259() -> None:
 
 
 def _clean_environment(**poses: str) -> dict[str, str]:
-    """The current process environment, without any `CHOREGOS_*` variable, plus `poses`."""
-    env = {name: value for name, value in os.environ.items() if not name.startswith("CHOREGOS_")}
+    """The current process environment, without any `TRANIBOR_*` variable, plus `poses`."""
+    env = {name: value for name, value in os.environ.items() if not name.startswith("TRANIBOR_")}
     env.update(poses)
     return env
 
@@ -96,19 +96,19 @@ def test_the_bench_gives_the_environment_back_after_its_last_test(tmp_path: path
     (banc / "test_banc_259.py").write_text(
         "import os\n\n"
         "def test_banc_259() -> None:\n"
-        "    assert os.environ['CHOREGOS_GENERIC_WEBHOOK_SECRET'] == 'e2e-webhook-secret'\n"
-        "    assert os.environ['CHOREGOS_DEV_LOGIN_ENABLED'] == 'true'\n"
-        "    assert os.environ['CHOREGOS_ENV'] == 'deja-pose', 'a value already set wins'\n",
+        "    assert os.environ['TRANIBOR_GENERIC_WEBHOOK_SECRET'] == 'e2e-webhook-secret'\n"
+        "    assert os.environ['TRANIBOR_DEV_LOGIN_ENABLED'] == 'true'\n"
+        "    assert os.environ['TRANIBOR_ENV'] == 'deja-pose', 'a value already set wins'\n",
         encoding="utf-8",
     )
     expected: dict[str, str | None] = dict.fromkeys(BENCH_VARIABLES)
-    expected["CHOREGOS_ENV"] = "deja-pose"
+    expected["TRANIBOR_ENV"] = "deja-pose"
     probe = _probe(tmp_path / "apps" / "api" / "tests", expected)
     result = _pytest(
         "tests/e2e",
         str(probe.relative_to(tmp_path)),
         root=tmp_path,
-        env=_clean_environment(CHOREGOS_ENV="deja-pose"),
+        env=_clean_environment(TRANIBOR_ENV="deja-pose"),
     )
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-3000:]
     assert "2 passed" in result.stdout, result.stdout[-3000:]

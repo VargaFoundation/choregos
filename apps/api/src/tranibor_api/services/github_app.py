@@ -307,7 +307,7 @@ async def claim(
         if not app.oauth_enabled:
             raise forbidden(
                 "claiming a GitHub installation needs proof that you manage it: set the App's OAuth client "
-                "(CHOREGOS_GITHUB_APP_CLIENT_ID and CHOREGOS_GITHUB_APP_CLIENT_SECRET), and tick "
+                "(TRANIBOR_GITHUB_APP_CLIENT_ID and TRANIBOR_GITHUB_APP_CLIENT_SECRET), and tick "
                 "'Request user authorization (OAuth) during installation' on the App"
             )
         if not oauth_code:

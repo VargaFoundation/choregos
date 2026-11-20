@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Probes an organisation's MCP gateway with the platform's own MCP client (ADR 0105).
 
-    CHOREGOS_GATEWAY_TOKEN=... uv run python tools/mcp_gateway_probe.py \\
-        'https://gateway.example/{server}/mcp' --server github --token-env CHOREGOS_GATEWAY_TOKEN
+    TRANIBOR_GATEWAY_TOKEN=... uv run python tools/mcp_gateway_probe.py \\
+        'https://gateway.example/{server}/mcp' --server github --token-env TRANIBOR_GATEWAY_TOKEN
 
 It runs `initialize` and `tools/list` against one server behind the gateway and prints the agreed
 protocol version, the server's identity and the number of tools, as JSON. The token is read from

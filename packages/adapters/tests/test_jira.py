@@ -539,7 +539,7 @@ def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
 
 
 async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_label() -> None:
-    # The factory itself, not `build`: under CHOREGOS_FAKES=1 (the CI) `build` hands out the fake.
+    # The factory itself, not `build`: under TRANIBOR_FAKES=1 (the CI) `build` hands out the fake.
     from tranibor_adapters import _jira_tracker
     from tranibor_contracts import ProjectConfig
 

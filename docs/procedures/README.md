@@ -2,9 +2,9 @@
 
 # Setup procedures
 
-One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
+One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `TRANIBOR_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-68 procedures.
+63 procedures.
 
 ## Connectors
 
@@ -27,11 +27,6 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect a LiteLLM gateway](connector.gateway.litellm.md) | the person who operates the platform | `gateway/litellm` | 2026-10-16 |
 | [Connect an OpenAI-compatible gateway](connector.gateway.openai-compatible.md) | the person who operates the platform | `gateway/openai-compatible` | 2026-10-16 |
 | [Connect Microsoft Entra ID for joiners and leavers](connector.identity.entra.md) | an organisation administrator | `identity/entra` | 2026-10-16 |
-| [Use Alpha Vantage for daily market data](connector.marketdata.alphavantage.md) | a project owner | `marketdata/alphavantage` | 2026-10-25 |
-| [Combine several market data sources](connector.marketdata.composite.md) | a project owner | `marketdata/composite` | 2026-10-26 |
-| [Use Stooq for daily market data](connector.marketdata.stooq.md) | a project owner | `marketdata/stooq` | 2026-10-16 |
-| [Use Tiingo for daily market data](connector.marketdata.tiingo.md) | a project owner | `marketdata/tiingo` | 2026-10-26 |
-| [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-11-12 |
 | [Connect an MCP server through your organisation's MCP gateway](connector.mcp.mcp-gateway.md) | an organisation administrator | `mcp/mcp-gateway` | 2026-10-27 |
 | [Connect an MCP server that lives at an outpost](connector.mcp.mcp-outpost.md) | an organisation administrator | `mcp/mcp-outpost` | 2026-11-14 |

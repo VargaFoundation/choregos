@@ -75,7 +75,7 @@ work builds on it, and ask before naming a **product** as if it were ours.
 | :-- | :-- |
 | `make lint` | ruff, formatting included |
 | `make typecheck` | `mypy --strict` on all Python |
-| `make test` | unit and integration tests (fakes); PostgreSQL tests when `CHOREGOS_TEST_DATABASE_URL` is set |
+| `make test` | unit and integration tests (fakes); PostgreSQL tests when `TRANIBOR_TEST_DATABASE_URL` is set |
 | `make contracts-check` | generated types are current |
 | `make procedures-check` | `docs/procedures/` is what the setup procedures render to |
 | `make docs-cli` then a clean tree | `docs/cli.md` is current |

@@ -22,7 +22,7 @@ def test_the_launch_plan_is_the_versions_argv(tmp_path: Path) -> None:
     stage_input = _stage_input()
     plan = get_backend("code").launch_plan(stage_input, tmp_path)
     assert plan.command == ["python", "-m", "ticket_triager"]
-    assert plan.env["CHOREGOS_MAX_TURNS"] == str(stage_input.budget.max_turns)
+    assert plan.env["TRANIBOR_MAX_TURNS"] == str(stage_input.budget.max_turns)
     assert [server["name"] for server in plan.mcp_servers] == list(stage_input.tools.mcp)
 
 

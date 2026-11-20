@@ -87,15 +87,15 @@ def test_the_wiring_wraps_only_a_sandbox_with_a_known_pool_and_a_named_second_ex
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sandbox = _Sandbox()
-    monkeypatch.delenv("CHOREGOS_CUSTOM_IMAGE_EXECUTOR", raising=False)
-    monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE", POOL)
+    monkeypatch.delenv("TRANIBOR_CUSTOM_IMAGE_EXECUTOR", raising=False)
+    monkeypatch.setenv("TRANIBOR_RUNNER_IMAGE", POOL)
     assert with_custom_image_executor(sandbox) is sandbox, "no second executor named: the refusal stays"
-    monkeypatch.setenv("CHOREGOS_CUSTOM_IMAGE_EXECUTOR", "k8s_job")
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")  # `build` then answers with a fake: no cluster needed here
+    monkeypatch.setenv("TRANIBOR_CUSTOM_IMAGE_EXECUTOR", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")  # `build` then answers with a fake: no cluster needed here
     wrapped = with_custom_image_executor(sandbox)
     assert isinstance(wrapped, RoutingExecutor) and wrapped.pool_image == POOL
     assert isinstance(wrapped.secondary, FakeExecutor)
     jobs = _Jobs()
     assert with_custom_image_executor(jobs) is jobs, "only agent_sandbox is wrapped"
-    monkeypatch.delenv("CHOREGOS_RUNNER_IMAGE")
+    monkeypatch.delenv("TRANIBOR_RUNNER_IMAGE")
     assert with_custom_image_executor(sandbox) is sandbox, "an unknown pool image: an override cannot be told"

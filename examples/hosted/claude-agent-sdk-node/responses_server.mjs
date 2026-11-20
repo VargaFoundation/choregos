@@ -43,7 +43,7 @@ function responseObject(text, status = "completed", error = "") {
     object: "response",
     created_at: Math.floor(Date.now() / 1000),
     status,
-    model: process.env.CHOREGOS_MODEL ?? "",
+    model: process.env.TRANIBOR_MODEL ?? "",
     output: text ? [message] : [],
     error: error ? { code: "server_error", message: error } : null,
   };

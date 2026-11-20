@@ -7,7 +7,7 @@ artifacts and verifies signatures, then calls these pure functions. Every refusa
 `SourceError` whose `check` names the guard that refused (`digest`, `signature`, `core`, …), so
 an install can answer a 422 naming the check.
 
-The configuration (`CHOREGOS_PLUGINS_CONFIG`, a YAML file the chart writes):
+The configuration (`TRANIBOR_PLUGINS_CONFIG`, a YAML file the chart writes):
 
 ```yaml
 sources:
@@ -21,7 +21,7 @@ sources:
 defaultPlugins:
   - {source: tranibor, name: servicenow, version: "^0.1"}
   - {source: tranibor, name: software-delivery, version: "^1.0", preapproved: true}
-offline: /opt/choregos/plugins   # CHOREGOS_PLUGINS_OFFLINE wins over it
+offline: /opt/choregos/plugins   # TRANIBOR_PLUGINS_OFFLINE wins over it
 ```
 
 The offline directory is the source `offline`: every plugin directory or `.tar.gz` directly in it,
@@ -210,7 +210,7 @@ def _source(raw: Any) -> SourceConfig:
 
 
 def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
-    """The configuration a YAML document holds; `offline` (CHOREGOS_PLUGINS_OFFLINE) wins over its own."""
+    """The configuration a YAML document holds; `offline` (TRANIBOR_PLUGINS_OFFLINE) wins over its own."""
     doc = doc or {}
     if not isinstance(doc, dict) or set(doc) - {"sources", "defaultPlugins", "offline"}:
         raise SourceError("config", "the plugins configuration holds sources, defaultPlugins and offline")
@@ -246,7 +246,7 @@ def parse_config(doc: Any, offline: str | None = None) -> PluginsConfig:
 
 
 def load_config(path: str | None, offline: str | None = None) -> PluginsConfig:
-    """`CHOREGOS_PLUGINS_CONFIG` read; no file is an empty configuration (plus the offline directory)."""
+    """`TRANIBOR_PLUGINS_CONFIG` read; no file is an empty configuration (plus the offline directory)."""
     if not path:
         return parse_config({}, offline)
     try:

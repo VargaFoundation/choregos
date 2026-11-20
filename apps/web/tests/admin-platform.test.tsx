@@ -48,9 +48,9 @@ describe("the Platform page", () => {
     show();
     expect(await screen.findByText(/coding agent CLI that the runner image ships/)).toBeInTheDocument();
     expect(screen.getByText(/counted as usable by readiness/)).toBeInTheDocument();
-    expect(screen.getByText("CHOREGOS_ALLOWED_AGENT_BACKENDS")).toBeInTheDocument();
+    expect(screen.getByText("TRANIBOR_ALLOWED_AGENT_BACKENDS")).toBeInTheDocument();
     expect(screen.getByText(/place where an agent stage runs/)).toBeInTheDocument();
-    expect(screen.getByText("CHOREGOS_EXECUTOR_KIND")).toBeInTheDocument();
+    expect(screen.getByText("TRANIBOR_EXECUTOR_KIND")).toBeInTheDocument();
     expect(screen.getByText("global.runner.allowedExecutors")).toBeInTheDocument();
   });
 

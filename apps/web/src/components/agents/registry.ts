@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+import { neutralRole } from "@/lib/roles";
 import type { AgentCredential, AgentResolution, AgentSpec, ApiToken, ImplicitAgent } from "@/lib/types";
 
 /** The scopes that open the MCP door (ADR 0030): a token that carries one is an MCP client. */
@@ -148,7 +149,7 @@ export type Creatable = { org: boolean; personal: boolean; projects: string[] };
 export function creatableScopes(memberships: Array<{ org: string; role: string; project_slug?: string | null }>, org: string): Creatable {
   const mine = memberships.filter((m) => m.org === org);
   const admin = mine.some((m) => m.role === "org_admin" && !m.project_slug);
-  const personal = admin || mine.some((m) => ["developer", "release_captain", "project_owner", "org_admin"].includes(m.role));
+  const personal = admin || mine.some((m) => ["contributor", "approver", "project_owner", "org_admin"].includes(neutralRole(m.role)));
   const projects = mine.filter((m) => m.role === "project_owner" && m.project_slug).map((m) => m.project_slug!);
   return { org: admin, personal, projects: [...new Set(projects)] };
 }

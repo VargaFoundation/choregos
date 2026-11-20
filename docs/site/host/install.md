@@ -64,7 +64,7 @@ For a single-node bench with every dependency embedded, start from the chart's
 
 ```shell
 helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
-  --version 0.27.15 --namespace choregos --create-namespace -f my-values.yaml
+  --version 0.27.16 --namespace choregos --create-namespace -f my-values.yaml
 ```
 
 The chart's version is the product's version; the images
@@ -102,7 +102,7 @@ choregos login --api-url https://choregos.example.com --token chg_... --org acme
 | Symptom | Likely cause |
 | --- | --- |
 | the render fails naming `agent-sandbox` | the agent-sandbox operator's CRDs are missing |
-| the API does not start, naming `CHOREGOS_SESSION_SECRET` | the session secret is missing or shorter than 32 bytes |
+| the API does not start, naming `TRANIBOR_SESSION_SECRET` | the session secret is missing or shorter than 32 bytes |
 | every agent call answers `Signature verification failed` | the orchestrator and the API do not share `run-token-private-key` |
 | sign-in answers `503` | the identity provider's discovery document cannot be read, or names another issuer |
 | sign-in loops back to the login page | the URLs say `https` but the ingress also serves plain HTTP: redirect it |

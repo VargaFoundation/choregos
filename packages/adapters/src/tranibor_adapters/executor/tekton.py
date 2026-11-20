@@ -22,6 +22,7 @@ from tranibor_contracts import ExecutorKind, StageResult
 from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 
 from ..errors import ConfigurationError, UpstreamError
+from .isolation import refuse_unless_separate
 
 TEKTON_API = "/apis/tekton.dev/v1"
 CORE_API = "/api/v1"
@@ -103,6 +104,8 @@ class TektonExecutor:
     """Creates and follows the `PipelineRun`s of agent steps."""
 
     kind = ExecutorKind.TEKTON
+    #: Never `separate_agent` (ADR 0146 §9, S65-04l): under `container` every run is refused at `start`,
+    #: with the reason in `tranibor_core.agent_isolation.WHY_NOT_SEPARATE`.
     capabilities: frozenset[str] = frozenset()
 
     def __init__(
@@ -123,6 +126,7 @@ class TektonExecutor:
 
     async def start(self, spec: StageJobSpec) -> ExecRef:
         """Idempotent: if the PipelineRun already exists, it is reused."""
+        refuse_unless_separate(str(self.kind), self.capabilities, spec)
         if spec.agent_container is not None:
             raise ConfigurationError(
                 "a hosted agent's container runs beside the runner in one pod (ADR 0080), which "
@@ -365,9 +369,9 @@ def _parse_time(value: Any) -> Any:
 
 
 #: The key of a run's Secret that holds its gateway key (#523); the runner gets it as
-#: `CHOREGOS_RUN_GATEWAY_KEY`, next to `CHOREGOS_RUN_TOKEN` from the key `token`.
+#: `TRANIBOR_RUN_GATEWAY_KEY`, next to `TRANIBOR_RUN_TOKEN` from the key `token`.
 GATEWAY_KEY_FIELD = "gateway-key"
-#: The key that holds the access token of a remote agent (ADR 0062): `CHOREGOS_RUN_REMOTE_TOKEN`.
+#: The key that holds the access token of a remote agent (ADR 0062): `TRANIBOR_RUN_REMOTE_TOKEN`.
 REMOTE_TOKEN_FIELD = "remote-token"  # noqa: S105 - a Secret key name, not a secret
 
 

@@ -18,6 +18,7 @@ from tranibor_core.egress import FAMILIES, normalize_host
 from ..audit import record
 from ..config import Settings
 from ..db.models import Organization, OrgEgressRule
+from ..decision_session import EGRESS_REQUESTS, require_person_session
 from ..deps import Config, Db, Me
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
@@ -305,8 +306,17 @@ async def request_org_egress(org: str, body: EgressRequestCreate, session: Db, p
 
 
 async def _decision(
-    org: str, rule_id: str, body: EgressDecision, session: AsyncSession, principal: Me, *, approve: bool
+    org: str,
+    rule_id: str,
+    body: EgressDecision,
+    session: AsyncSession,
+    principal: Me,
+    settings: Settings,
+    *,
+    approve: bool,
 ) -> EgressRule:
+    verb = "approving" if approve else "refusing"
+    require_person_session(principal, f"{verb} an egress request", settings=settings, legacy=EGRESS_REQUESTS)
     _decide(principal, org)
     organisation = await organisation_by_slug(session, org)
     row = await _rule(session, organisation, rule_id)
@@ -342,9 +352,14 @@ async def _decision(
     operation_id="approveOrgEgressRequest",
 )
 async def approve_org_egress_request(
-    org: str, rule_id: RuleId, session: Db, principal: Me, body: EgressDecision | None = None
+    org: str,
+    rule_id: RuleId,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    body: EgressDecision | None = None,
 ) -> EgressRule:
-    return await _decision(org, rule_id, body or EgressDecision(), session, principal, approve=True)
+    return await _decision(org, rule_id, body or EgressDecision(), session, principal, settings, approve=True)
 
 
 @router.post(
@@ -353,6 +368,13 @@ async def approve_org_egress_request(
     operation_id="refuseOrgEgressRequest",
 )
 async def refuse_org_egress_request(
-    org: str, rule_id: RuleId, session: Db, principal: Me, body: EgressDecision | None = None
+    org: str,
+    rule_id: RuleId,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    body: EgressDecision | None = None,
 ) -> EgressRule:
-    return await _decision(org, rule_id, body or EgressDecision(), session, principal, approve=False)
+    return await _decision(
+        org, rule_id, body or EgressDecision(), session, principal, settings, approve=False
+    )

@@ -1,6 +1,6 @@
 """The API and the outposts' door do not start on the fakes in staging and prod (S80-03).
 
-Under `CHOREGOS_FAKES`, without a key, the secret store is an in-memory fake and the egress control only
+Under `TRANIBOR_FAKES`, without a key, the secret store is an in-memory fake and the egress control only
 warns. The refusal is the first thing the start-up does after its logging, as the superuser's is.
 """
 
@@ -18,10 +18,10 @@ def production(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) 
     from tranibor_api.config import reset_settings_cache
 
     environment = str(request.param)
-    monkeypatch.setenv("CHOREGOS_ENV", environment)
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_ENV", environment)
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     # the development sign-in is refused in staging and prod by the settings themselves
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
     reset_settings_cache()
     yield environment
     reset_settings_cache()
@@ -40,7 +40,7 @@ async def test_the_api_refuses_to_start_on_the_fakes(production: str) -> None:
     with pytest.raises(FakesInProductionError) as refused:
         async with main.lifespan(_api()):
             pass
-    assert "CHOREGOS_FAKES" in str(refused.value) and f"CHOREGOS_ENV={production}" in str(refused.value)
+    assert "TRANIBOR_FAKES" in str(refused.value) and f"TRANIBOR_ENV={production}" in str(refused.value)
     assert "the API refuses to start" in str(refused.value)
 
 

@@ -43,7 +43,7 @@ def set_master_key(monkeypatch: Any) -> None:
     """The gateway's master key the callback signs with, for the API under test."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", MASTER_KEY)
+    monkeypatch.setenv("TRANIBOR_GATEWAY_MASTER_KEY", MASTER_KEY)
     reset_settings_cache()
 
 

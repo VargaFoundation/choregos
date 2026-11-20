@@ -99,7 +99,7 @@ async def client_with_extension(
     """The application built AFTER the extension is installed, as when a pod starts."""
     import os
 
-    os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/extension.db"
+    os.environ["TRANIBOR_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/extension.db"
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
     from tranibor_api.db.session import create_all

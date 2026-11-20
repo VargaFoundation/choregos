@@ -13,7 +13,7 @@ It has two sides, and a test picks the one it needs.
   platform carries the call and the answer: the outposts' door in the platform's own tests, where a
   scripted daemon polls, opens, hands the call here and seals what comes back.
 - **The platform's side**, the port `tranibor_adapters.outpost.port.Rendezvous`: `place`, `wait`,
-  `cancel`, `forget`, in memory. It is what `CHOREGOS_FAKES=1` gives a connector of type
+  `cancel`, `forget`, in memory. It is what `TRANIBOR_FAKES=1` gives a connector of type
   `mcp-outpost` on a deployment that has no key to seal a call's arguments under: no row, no door,
   the same refusals.
 

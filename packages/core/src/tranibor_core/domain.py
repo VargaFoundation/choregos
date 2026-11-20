@@ -7,11 +7,13 @@ They are serialisable (pydantic) because they cross the Temporal activity bounda
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from tranibor_contracts import (
+    MEMORY_KINDS,
     ExecutorKind,
     MemoryKind,
     ReleaseStatus,
@@ -259,9 +261,9 @@ class Window(Model):
 
 
 #: The variable through which an executor gives the runner its run's gateway key (#523).
-RUN_GATEWAY_KEY_ENV = "CHOREGOS_RUN_GATEWAY_KEY"
+RUN_GATEWAY_KEY_ENV = "TRANIBOR_RUN_GATEWAY_KEY"
 #: The variable through which an executor gives the runner the access token of its remote agent (ADR 0062).
-RUN_REMOTE_TOKEN_ENV = "CHOREGOS_RUN_REMOTE_TOKEN"  # noqa: S105 - a variable name, not a secret
+RUN_REMOTE_TOKEN_ENV = "TRANIBOR_RUN_REMOTE_TOKEN"  # noqa: S105 - a variable name, not a secret
 
 
 class AgentContainer(Model):
@@ -291,7 +293,7 @@ class StageJobSpec(Model):
     api_url: str
     run_token: str
     #: The run's gateway key, for the run's Secret only, next to its token (#523): the executor
-    #: hands it to the runner as `CHOREGOS_RUN_GATEWAY_KEY`. Never stored on the `runs` row, never
+    #: hands it to the runner as `TRANIBOR_RUN_GATEWAY_KEY`. Never stored on the `runs` row, never
     #: in a Temporal payload; `stage_input.gateway_key` stays empty.
     gateway_key: str | None = None
     #: The access token of the run's remote agent (ADR 0062), for the run's Secret only, like the
@@ -308,6 +310,12 @@ class StageJobSpec(Model):
     agent_container: AgentContainer | None = None
     #: The runner's arguments: `run` for a step, `serve-session` for a hosted session's pod (S41-11).
     runner_command: list[str] = Field(default_factory=lambda: ["run"])
+    #: Where the step's agent runs (ADR 0146, `tranibor_core.agent_isolation`): `container` asks the
+    #: executor for the agent's own container, and one that cannot start it refuses the run.
+    agent_isolation: Literal["process", "container"] = "process"
+    #: The image of the agent's own container under `container` (ADR 0146 §10): the operator's, for an
+    #: agent written in code (ADR 0063), whose runner is then the platform's image. None: the runner's.
+    agent_image: str | None = None
 
 
 class ExecRef(Model):
@@ -429,8 +437,27 @@ class Provenance(Model):
     ts: datetime = Field(default_factory=utcnow)
 
 
+#: A memory kind: one of the core's `MemoryKind` (returned as the member) or one an extension declared
+#: (`tranibor_contracts.MEMORY_KINDS`, ADR 0181); a stored one is read back with the `stored` context.
+MemoryKindName = Annotated[str, AfterValidator(MEMORY_KINDS.validate)]
+
+
+def _kind_read_back(value: Any) -> Any:
+    """A memory read back from the store keeps its kind, declared or not any more (ADR 0098 §4)."""
+    text = str(value)
+    if text in MEMORY_KINDS.core:
+        return MemoryKind(text)
+    if re.fullmatch(MEMORY_KINDS.pattern, text):
+        return text
+    raise ValueError(f"not a memory kind: {text!r}")
+
+
+#: The kind of a memory read back: any that matches the list's pattern.
+StoredMemoryKind = Annotated[str, AfterValidator(_kind_read_back)]
+
+
 class Fact(Model):
-    kind: MemoryKind
+    kind: MemoryKindName
     subject: str
     content: str
     external_id: str | None = None
@@ -442,7 +469,7 @@ class Fact(Model):
 
 class Memory(Model):
     id: str
-    kind: MemoryKind
+    kind: StoredMemoryKind
     subject: str
     content: str
     score: float | None = None

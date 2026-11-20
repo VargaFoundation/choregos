@@ -10,8 +10,8 @@
 # administrator rights. PowerShell 5.1 or later.
 #
 # Environment, read when set:
-#   CHOREGOS_INSTALL_DIR   the folder to install into (default %LOCALAPPDATA%\Programs\choregos)
-#   CHOREGOS_URL           the instance to install from (default: the one that served this script)
+#   TRANIBOR_INSTALL_DIR   the folder to install into (default %LOCALAPPDATA%\Programs\choregos)
+#   TRANIBOR_URL           the instance to install from (default: the one that served this script)
 #
 # It stops with an error rather than `exit`: run through `iex`, `exit` would close the window.
 
@@ -24,10 +24,13 @@ function Install-Choregos {
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
     $releases = '__CHOREGOS_RELEASES__'
-    if ($env:CHOREGOS_URL) { $InstanceUrl = $env:CHOREGOS_URL }
+    # The former names (CHOREGOS_URL, CHOREGOS_INSTALL_DIR) still work (ADR 0176 R4).
+    if ($env:TRANIBOR_URL) { $InstanceUrl = $env:TRANIBOR_URL } elseif ($env:CHOREGOS_URL) { $InstanceUrl = $env:CHOREGOS_URL }
     $InstanceUrl = $InstanceUrl.TrimEnd('/')
     if (-not $InstallDir) {
-        if ($env:CHOREGOS_INSTALL_DIR) {
+        if ($env:TRANIBOR_INSTALL_DIR) {
+            $InstallDir = $env:TRANIBOR_INSTALL_DIR
+        } elseif ($env:CHOREGOS_INSTALL_DIR) {
             $InstallDir = $env:CHOREGOS_INSTALL_DIR
         } else {
             $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\choregos'

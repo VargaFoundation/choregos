@@ -18,7 +18,7 @@ API = "http://api.test"
 def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "config.json"
     path.write_text(json.dumps({"api_url": API, "token": "chg_x", "org": "acme"}))
-    monkeypatch.setenv("CHOREGOS_CONFIG", str(path))
+    monkeypatch.setenv("TRANIBOR_CONFIG", str(path))
     import tranibor_cli.client as client_module
 
     monkeypatch.setattr(client_module, "CONFIG_PATH", path)

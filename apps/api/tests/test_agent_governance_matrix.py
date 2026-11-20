@@ -228,7 +228,15 @@ def test_a_refusal_on_a_common_agent_points_to_the_fork() -> None:
 def test_the_new_permissions_follow_the_roles() -> None:
     personal = {role for role, perms in ROLE_PERMISSIONS.items() if Permission.AGENT_CREATE_PERSONAL in perms}
     project = {role for role, perms in ROLE_PERMISSIONS.items() if Permission.AGENT_PROJECT_MANAGE in perms}
-    assert personal == {Role.DEVELOPER, Role.RELEASE_CAPTAIN, Role.PROJECT_OWNER, Role.ORG_ADMIN}
+    # Each renamed role under both spellings (ADR 0181 C1).
+    assert personal == {
+        Role.CONTRIBUTOR,
+        Role.DEVELOPER,
+        Role.APPROVER,
+        Role.RELEASE_CAPTAIN,
+        Role.PROJECT_OWNER,
+        Role.ORG_ADMIN,
+    }
     assert project == {Role.PROJECT_OWNER, Role.ORG_ADMIN}
 
 

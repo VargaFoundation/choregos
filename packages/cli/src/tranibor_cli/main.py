@@ -32,6 +32,7 @@ from .client import ApiError, Client, NoOrganisationError, Profile
 from .decide import decide_app
 from .device_login import DeviceSignInError
 from .knowledge import knowledge_app
+from .neutral_names import change_request_of, neutral_role
 from .outposts import outposts_app
 from .plugins import plugin_app
 from .self_update import self_app
@@ -208,13 +209,13 @@ def _organisation(profile: Profile, org: str | None) -> str:
 def login(
     api_url: Annotated[
         str | None,
-        typer.Option(help="The instance's address (default: the profile's or CHOREGOS_API_URL, else asked)"),
+        typer.Option(help="The instance's address (default: the profile's or TRANIBOR_API_URL, else asked)"),
     ] = None,
     token: Annotated[
         str, typer.Option(help="An API token to save instead of signing in with your browser (scripts, CI)")
     ] = "",
     org: Annotated[
-        str, typer.Option(help="Default organisation slug (else --org per command or CHOREGOS_ORG)")
+        str, typer.Option(help="Default organisation slug (else --org per command or TRANIBOR_ORG)")
     ] = "",
     fresh: Annotated[
         bool,
@@ -312,10 +313,10 @@ def _choose_organisation(http: Client) -> str:
 
 
 def _known_instance() -> str:
-    """The instance this CLI already talks to: the saved profile's, else `CHOREGOS_API_URL`; "" when none."""
+    """The instance this CLI already talks to: the saved profile's, else `TRANIBOR_API_URL`; "" when none."""
     if client_module.CONFIG_PATH.exists():
         return Profile.load().api_url
-    return os.environ.get("CHOREGOS_API_URL", "")
+    return os.environ.get("TRANIBOR_API_URL", "")
 
 
 def _browser_reachable() -> bool:
@@ -378,7 +379,8 @@ def whoami() -> None:
     me = client().get("/me")
     table = Table("organisation", "project", "role", title=me["email"])
     for membership in me["memberships"]:
-        table.add_row(membership["org"], membership.get("project_slug") or "—", membership["role"])
+        role = neutral_role(membership["role"])
+        table.add_row(membership["org"], membership.get("project_slug") or "—", role)
     console.print(table)
 
 
@@ -403,7 +405,7 @@ def orgs_create(slug: str, name: Annotated[str | None, typer.Option()] = None) -
 @secrets_app.command("rewrap")
 def secrets_rewrap() -> None:
     """Re-wrap every sealed secret under the active key, after a key rotation (the new key first in
-    CHOREGOS_SECRETS_KEKS, the API restarted). The values are not read out nor changed."""
+    TRANIBOR_SECRETS_KEKS, the API restarted). The values are not read out nor changed."""
     result = client().post("/platform/secrets/rewrap")
     console.print(f"[green]✓[/green] {result['rewrapped']} secret(s) re-wrapped under the active key")
 
@@ -417,7 +419,7 @@ def identity_relink(
 ) -> None:
     """Plan a change of identity provider (a dry run, ADR 0164): which accounts a re-link window moves to
     the new provider's subject at their first sign-in, which it refuses (two accounts, one address), and
-    whether the deployment's window (CHOREGOS_OIDC_RELINK_UNTIL) is open. Changes nothing."""
+    whether the deployment's window (TRANIBOR_OIDC_RELINK_UNTIL) is open. Changes nothing."""
     plan = client().get("/platform/identity/relink", params={"issuer": issuer} if issuer else None)
     if as_json:
         typer.echo(json.dumps(plan, indent=2))
@@ -688,7 +690,7 @@ def items_list(project: str, state: Annotated[str | None, typer.Option()] = None
             item.get("state_display") or item["state"],
             item.get("size") or "—",
             pricing.text(money.amount(totals)),
-            item.get("pr_url") or "—",
+            change_request_of(item) or "—",
         )
     console.print(table)
 

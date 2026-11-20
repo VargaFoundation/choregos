@@ -267,7 +267,7 @@ describe("the Models page", () => {
     show();
     const facts = await screen.findByTestId("gateway-facts");
     expect(facts).toHaveTextContent("http://litellm.choregos-gateway:4000");
-    expect(within(facts).getByTestId("gateway-source")).toHaveTextContent("The deployment's environment (CHOREGOS_GATEWAY_TYPE, CHOREGOS_GATEWAY_URL)");
+    expect(within(facts).getByTestId("gateway-source")).toHaveTextContent("The deployment's environment (TRANIBOR_GATEWAY_TYPE, TRANIBOR_GATEWAY_URL)");
   });
 
   it("without the address (not a platform administrator), says who knows it", async () => {

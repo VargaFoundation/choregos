@@ -76,13 +76,13 @@ def test_an_extension_outside_the_tree_registers_its_connector(
 ) -> None:
     """The core is not modified: the package declares itself, the platform loads it.
 
-    An explicit `CHOREGOS_FAKES=0`: the API suite sets `1`, and `build()` then returns a fake
+    An explicit `TRANIBOR_FAKES=0`: the API suite sets `1`, and `build()` then returns a fake
     whatever the type asked for. Without this zero, the test passes alone and turns red in a
     group; the trap already cost twice today.
     """
     from tranibor_adapters import available, build, load_extensions
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
     assert "in-house" not in available("tracker"), "the test would start from an already polluted state"
     _install(temporary_path, "extension_example", EXTENSION)

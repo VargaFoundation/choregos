@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from tranibor_contracts import HostedCall, StageInput
+from tranibor_contracts.env import with_legacy
 
 from .domain import AgentContainer
 
@@ -68,8 +69,11 @@ def kubernetes_version(version: str | Mapping[str, Any] | None) -> tuple[int, in
     return (int(matched[1]), int(matched[2])) if matched else None
 
 
-def native_sidecars_refusal(version: str | Mapping[str, Any] | None) -> str | None:
-    """Why a hosted container cannot run on a cluster of this version; `None` when it can."""
+def native_sidecars_refusal(
+    version: str | Mapping[str, Any] | None, what: str = "a hosted agent"
+) -> str | None:
+    """Why a native sidecar (`what`: a hosted agent's container, or the agent's own under ADR 0146)
+    cannot run on a cluster of this version; `None` when it can."""
     parsed = kubernetes_version(version)
     shown = version.get("gitVersion") if isinstance(version, Mapping) else version
     wanted = ".".join(map(str, NATIVE_SIDECARS_MIN))
@@ -77,7 +81,7 @@ def native_sidecars_refusal(version: str | Mapping[str, Any] | None) -> str | No
         return f"{UNSUPPORTED_CLUSTER}: the cluster's Kubernetes version `{shown}` cannot be read"
     if parsed < NATIVE_SIDECARS_MIN:
         return (
-            f"{UNSUPPORTED_CLUSTER}: a hosted agent runs as a native sidecar, which needs Kubernetes "
+            f"{UNSUPPORTED_CLUSTER}: {what} runs as a native sidecar, which needs Kubernetes "
             f"{wanted} or later; this cluster runs {parsed[0]}.{parsed[1]}"
         )
     return None
@@ -101,30 +105,32 @@ def sidecar_env(
     servers = sorted(mcp_servers)
     model_port, mcp_port, connect_port = ports
     proxy = loopback_url(connect_port)
-    return {
-        **hosted.env,
-        "PORT": str(hosted.port),
-        "CHOREGOS_RUN_ID": run_id,
-        "CHOREGOS_AGENT_SLUG": hosted.agent_slug,
-        "CHOREGOS_AGENT_VERSION": str(hosted.agent_version),
-        "CHOREGOS_MODEL": model,
-        # One streamable-HTTP endpoint per server: `<CHOREGOS_MCP_URL><name>`.
-        "CHOREGOS_MCP_URL": f"{loopback_url(mcp_port)}/mcp/",
-        "CHOREGOS_MCP_SERVERS": ",".join(servers),
-        "OPENAI_BASE_URL": f"{loopback_url(model_port)}/v1",
-        "OPENAI_API_KEY": LOOPBACK_KEY,
-        "ANTHROPIC_BASE_URL": loopback_url(model_port),
-        "ANTHROPIC_API_KEY": LOOPBACK_KEY,
-        "HTTP_PROXY": proxy,
-        "HTTPS_PROXY": proxy,
-        "http_proxy": proxy,
-        "https_proxy": proxy,
-        "NO_PROXY": f"{LOOPBACK_HOST},localhost",
-        "no_proxy": f"{LOOPBACK_HOST},localhost",
-        # Where the copy of the working tree is, when the version asked for it (S41-18).
-        **({"CHOREGOS_WORKSPACE": SHARED_WORKSPACE_AGENT} if hosted.workspace != "none" else {}),
-        **foundry_env(hosted, run_id=run_id, model=model, model_port=model_port),
-    }
+    return with_legacy(
+        {
+            **hosted.env,
+            "PORT": str(hosted.port),
+            "TRANIBOR_RUN_ID": run_id,
+            "TRANIBOR_AGENT_SLUG": hosted.agent_slug,
+            "TRANIBOR_AGENT_VERSION": str(hosted.agent_version),
+            "TRANIBOR_MODEL": model,
+            # One streamable-HTTP endpoint per server: `<TRANIBOR_MCP_URL><name>`.
+            "TRANIBOR_MCP_URL": f"{loopback_url(mcp_port)}/mcp/",
+            "TRANIBOR_MCP_SERVERS": ",".join(servers),
+            "OPENAI_BASE_URL": f"{loopback_url(model_port)}/v1",
+            "OPENAI_API_KEY": LOOPBACK_KEY,
+            "ANTHROPIC_BASE_URL": loopback_url(model_port),
+            "ANTHROPIC_API_KEY": LOOPBACK_KEY,
+            "HTTP_PROXY": proxy,
+            "HTTPS_PROXY": proxy,
+            "http_proxy": proxy,
+            "https_proxy": proxy,
+            "NO_PROXY": f"{LOOPBACK_HOST},localhost",
+            "no_proxy": f"{LOOPBACK_HOST},localhost",
+            # Where the copy of the working tree is, when the version asked for it (S41-18).
+            **({"TRANIBOR_WORKSPACE": SHARED_WORKSPACE_AGENT} if hosted.workspace != "none" else {}),
+            **foundry_env(hosted, run_id=run_id, model=model, model_port=model_port),
+        }
+    )
 
 
 def foundry_env(hosted: HostedCall, *, run_id: str, model: str, model_port: int) -> dict[str, str]:

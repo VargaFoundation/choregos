@@ -90,15 +90,15 @@ async def test_without_a_policy_in_context_enforce_fails_closed_and_warn_passes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     inner = Recorder()
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     with pytest.raises(EgressRefusedError) as refused:
         await _get("https://allowed.test/x", inner)
     assert refused.value.reason == "no_policy_in_context" and inner.seen == []
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "warn")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "warn")
     with structlog.testing.capture_logs() as logs:
         assert (await _get("https://allowed.test/x", inner)).status_code == 200
     assert "egress.would_refuse" in [e["event"] for e in logs], "warn logs what it would refuse"
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "off")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "off")
     assert (await _get("https://allowed.test/y", inner)).status_code == 200
 
 
