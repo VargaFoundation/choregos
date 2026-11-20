@@ -1,11 +1,67 @@
+# `dev`: `temporal server start-dev` on SQLite, one process, a bench. `server`: `temporalio/auto-setup`,
+# the four services in one pod, persistence on PostgreSQL (`database.*`), the production tier (ADR 0195).
+mode: dev
 image:
   repository: temporalio/temporal
   tag: "1.9.1"
+server:
+  image:
+    repository: temporalio/auto-setup
+    tag: "1.29.1"
+  # IMMUTABLE once the database is initialised: choose it before the first start.
+  numHistoryShards: 4
 persistence:
   enabled: true
   size: 1Gi
   storageClass: ""
-# The Temporal UI, served by the same binary. No Ingress: `kubectl port-forward`.
+  # Adopt a volume that already holds the data (a claim the operator created, or the one a previous
+  # deployment named). The chart then renders no claim of its own and never touches this one.
+  existingClaim: ""
+# `server` mode only. Empty host / user / secret: the umbrella's `global.database` (the embedded one,
+# or the operator's).
+database:
+  host: ""
+  port: 5432
+  user: ""
+  # `{name, key}` of the Secret holding the password. Empty: the one the chart derives from `global.database`.
+  passwordSecret: {}
+  name: temporal
+  visibilityName: temporal_visibility
+  # `true` when the databases already exist (created by the operator's PostgreSQL); the server then
+  # only creates and migrates the schemas.
+  skipCreate: false
+  tls:
+    enabled: false
+    verifyHost: false
+# TLS on the frontend (ADR 0183). `dev` mode puts an nginx relay in front of the plain frontend (start-dev
+# cannot serve TLS); `server` mode serves it itself, between its own services as well.
+tls:
+  enabled: false
+  # The Secret of the SERVER certificate (tls.crt, tls.key, ca.crt). Empty: `<service>-tls`.
+  serverSecretName: ""
+  # What the clients mount (`global.temporal.tls.secretName`). Only rendered with `certManager.enabled`.
+  clientSecretName: ""
+  # The name the clients verify; it must be in the certificate. Empty: the Service name.
+  serverName: ""
+  certManager:
+    # Render the chain: self-signed issuer -> CA -> server and client certificates. Off: bring the Secrets.
+    enabled: false
+    # Names the issuers and the CA (`<prefix>-selfsigned`, `<prefix>-ca`). Empty: the Service name.
+    namePrefix: ""
+    caCommonName: choregos-temporal-ca
+    duration: 2160h
+    renewBefore: 720h
+    caDuration: 87600h
+    # Names the server certificate carries, besides the Service's short, namespace and `.svc` forms.
+    extraDnsNames: []
+  relay:
+    image:
+      repository: nginxinc/nginx-unprivileged
+      tag: 1.29-alpine
+    resources:
+      requests: { cpu: 10m, memory: 16Mi }
+      limits: { cpu: 200m, memory: 64Mi }
+# The Temporal UI, served by the same binary (`dev`). No Ingress: `kubectl port-forward`.
 ui:
   enabled: true
 resources:

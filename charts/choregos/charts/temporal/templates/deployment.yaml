@@ -1,8 +1,23 @@
 {{- $name := printf "%s-temporal" .Release.Name }}
+{{- $svc := include "choregos-temporal.name" . }}
+{{- $server := eq .Values.mode "server" }}
+{{- $tls := .Values.tls.enabled }}
+{{- $db := .Values.database }}
+{{- if not (has .Values.mode (list "dev" "server")) }}
+{{- fail (printf "temporal.mode=%s unknown: `dev` (start-dev, SQLite) or `server` (auto-setup, PostgreSQL)." .Values.mode) }}
+{{- end }}
+{{- if and $tls (not $server) (not .Values.ui.enabled) }}
+{{- fail "temporal.tls.enabled in dev mode needs temporal.ui.enabled=true: the readiness probe of the plain frontend (127.0.0.1 only, behind the relay) is the UI port." }}
+{{- end }}
 {{- /*
-`server start-dev`: a single process, SQLite, no migration to run. This is the Temporal
-of Choregos' cluster bench (tests/cluster) — enough to run real workflows,
-not for production, where Temporal is deployed with its own database and its four services.
+`dev`: `server start-dev`, a single process, SQLite, no migration to run. This is the Temporal of
+Choregos' cluster bench (tests/cluster) — enough to run real workflows, not for production.
+With `tls.enabled`, start-dev (no TLS option in the CLI) listens on 127.0.0.1:7234 only and an nginx
+relay holds the pod's port 7233 with the frontend certificate (ADR 0183).
+
+`server` (ADR 0195): `temporalio/auto-setup`, the four services in ONE pod, persistence on PostgreSQL
+(`database.*`), the schemas created and migrated at start. One replica: a restart cuts the workflows
+for about 30 s and the clients resume alone. The data lives in the database, never in this pod.
 */}}
 apiVersion: apps/v1
 kind: Deployment
@@ -11,7 +26,8 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  # A single writer on the SQLite file: never two pods at the same time.
+  # dev: a single writer on the SQLite file. server: two servers on the same shards would fight for
+  # their owners. Never two pods at the same time.
   strategy: { type: Recreate }
   selector:
     matchLabels:
@@ -23,6 +39,10 @@ spec:
         app.kubernetes.io/name: choregos-temporal
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: temporal
+      {{- if and $tls (not $server) }}
+      annotations:
+        checksum/relay: {{ include (print $.Template.BasePath "/relay-config.yaml") . | sha256sum }}
+      {{- end }}
     spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       securityContext:
@@ -32,48 +52,151 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: temporal
+          {{- if $server }}
+          image: {{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}
+          env:
+            - { name: DB, value: postgres12 }
+            - { name: DB_PORT, value: {{ $db.port | quote }} }
+            - { name: POSTGRES_SEEDS, value: {{ $db.host | default (include "choregos.databaseHost" .) | quote }} }
+            - { name: POSTGRES_USER, value: {{ $db.user | default .Values.global.database.user | quote }} }
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ ($db.passwordSecret).name | default (include "choregos.databasePasswordSecret" .) }}
+                  key: {{ ($db.passwordSecret).key | default "password" }}
+            - { name: DBNAME, value: {{ $db.name | quote }} }
+            - { name: VISIBILITY_DBNAME, value: {{ $db.visibilityName | quote }} }
+            - { name: SKIP_DB_CREATE, value: {{ $db.skipCreate | quote }} }
+            {{- if $db.tls.enabled }}
+            # The server's own variables, then the schema tool's (auto-setup.sh reads others): without
+            # the second pair the schema step connects in clear and a TLS-only PostgreSQL refuses it.
+            - { name: SQL_TLS_ENABLED, value: "true" }
+            - { name: SQL_HOST_VERIFICATION, value: {{ $db.tls.verifyHost | quote }} }
+            - { name: POSTGRES_TLS_ENABLED, value: "true" }
+            - { name: POSTGRES_TLS_DISABLE_HOST_VERIFICATION, value: {{ not $db.tls.verifyHost | quote }} }
+            {{- end }}
+            - { name: NUM_HISTORY_SHARDS, value: {{ .Values.server.numHistoryShards | quote }} }
+            - { name: BIND_ON_IP, value: 0.0.0.0 }
+            - name: TEMPORAL_BROADCAST_ADDRESS
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            {{- if $tls }}
+            # The frontend AND the internal traffic (history, matching, worker) with the same
+            # certificate; the name verified is the Service's, which the certificate carries, not the
+            # pod IP. No mutual TLS: the clients prove the server, not the reverse. Re-read hourly:
+            # cert-manager renews the Secret and nobody restarts the pod.
+            - { name: TEMPORAL_TLS_SERVER_CA_CERT, value: /etc/temporal-tls/ca.crt }
+            - { name: TEMPORAL_TLS_SERVER_CERT, value: /etc/temporal-tls/tls.crt }
+            - { name: TEMPORAL_TLS_SERVER_KEY, value: /etc/temporal-tls/tls.key }
+            - { name: TEMPORAL_TLS_FRONTEND_CERT, value: /etc/temporal-tls/tls.crt }
+            - { name: TEMPORAL_TLS_FRONTEND_KEY, value: /etc/temporal-tls/tls.key }
+            - { name: TEMPORAL_TLS_INTERNODE_SERVER_NAME, value: {{ .Values.tls.serverName | default $svc | quote }} }
+            - { name: TEMPORAL_TLS_FRONTEND_SERVER_NAME, value: {{ .Values.tls.serverName | default $svc | quote }} }
+            - { name: TEMPORAL_TLS_REFRESH_INTERVAL, value: 1h }
+            # The bootstrap script's CLI (health, the default namespace) speaks TLS too.
+            - { name: TEMPORAL_TLS, value: "true" }
+            - { name: TEMPORAL_TLS_CA, value: /etc/temporal-tls/ca.crt }
+            - { name: TEMPORAL_TLS_SERVER_NAME, value: {{ .Values.tls.serverName | default $svc | quote }} }
+            {{- end }}
+          {{- else }}
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
           args:
             - server
             - start-dev
             - --ip
-            - 0.0.0.0
+            - {{ ternary "127.0.0.1" "0.0.0.0" $tls }}
+            {{- if $tls }}
+            - --port
+            - "7234"
+            {{- end }}
             - --namespace
             - {{ .Values.global.temporal.namespace | quote }}
             - --db-filename
             - /data/temporal.db
             {{- if .Values.ui.enabled }}
+            {{- if $tls }}
+            - --ui-ip
+            - 0.0.0.0
+            {{- end }}
             - --ui-port
             - "8233"
             {{- else }}
             - --headless
             {{- end }}
+          {{- end }}
           ports:
+            {{- if or $server (not $tls) }}
             - { name: grpc, containerPort: 7233 }
-            {{- if .Values.ui.enabled }}
+            {{- end }}
+            {{- if and (not $server) .Values.ui.enabled }}
             - { name: ui, containerPort: 8233 }
             {{- end }}
           readinessProbe:
+            {{- if and $tls (not $server) }}
+            tcpSocket: { port: ui }
+            {{- else }}
             tcpSocket: { port: grpc }
+            {{- end }}
+            {{- if $server }}
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            {{- else }}
             periodSeconds: 5
+            {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: ["ALL"] }
+          {{- if or (not $server) $tls }}
           volumeMounts:
+            {{- if not $server }}
             - { name: data, mountPath: /data }
+            {{- end }}
+            {{- if and $server $tls }}
+            # No subPath: the kubelet updates a mounted Secret when cert-manager renews it.
+            - { name: tls, mountPath: /etc/temporal-tls, readOnly: true }
+            {{- end }}
+          {{- end }}
+        {{- if and $tls (not $server) }}
+        - name: tls-relay
+          image: {{ .Values.tls.relay.image.repository }}:{{ .Values.tls.relay.image.tag }}
+          ports:
+            - { name: grpc, containerPort: 7233 }
+          readinessProbe:
+            tcpSocket: { port: grpc }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.tls.relay.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: relay-config, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf, readOnly: true }
+            # No subPath: the kubelet updates a mounted Secret when cert-manager renews it.
+            - { name: tls, mountPath: /etc/temporal-tls, readOnly: true }
+        {{- end }}
+      {{- if or (not $server) $tls }}
       volumes:
+        {{- if not $server }}
         - name: data
           {{- if .Values.persistence.enabled }}
-          persistentVolumeClaim: { claimName: {{ $name }} }
+          persistentVolumeClaim: { claimName: {{ include "choregos-temporal.claim" . }} }
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- end }}
+        {{- if and $tls (not $server) }}
+        - name: relay-config
+          configMap: { name: {{ $name }}-tls-relay }
+        {{- end }}
+        {{- if $tls }}
+        - name: tls
+          secret: { secretName: {{ include "choregos-temporal.serverSecret" . }} }
+        {{- end }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $name }}
+  name: {{ $svc }}
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   selector:
@@ -81,15 +204,15 @@ spec:
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - { name: grpc, port: 7233, targetPort: grpc }
-    {{- if .Values.ui.enabled }}
+    {{- if and (not $server) .Values.ui.enabled }}
     - { name: ui, port: 8233, targetPort: ui }
     {{- end }}
-{{- if .Values.persistence.enabled }}
+{{- if and (not $server) .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ $name }}
+  name: {{ include "choregos-temporal.claim" . }}
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   accessModes: [ReadWriteOnce]

@@ -428,6 +428,9 @@ global:
       timeoutSeconds: 10
   temporal:
     embedded: false
+    # The embedded Temporal's Service name, hence the address clients dial. Empty: `<release>-temporal`.
+    # An operator whose clients already dial another name keeps it here (ADR 0195).
+    serviceName: ""
     address: temporal-frontend.choregos-temporal.svc:7233
     namespace: default
     # TLS to the Temporal frontend, for the API and every worker (ADR 0183). Off by default: dev,
