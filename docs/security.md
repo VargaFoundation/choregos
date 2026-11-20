@@ -38,7 +38,7 @@ organisations must assume **a member of one will try to read another**.
 | lying about evidence | the runner **runs** the tests and overwrites declared evidence; gates read the diff, not the prose | `dod.py`, `result.py`, `gates/` |
 | reading another organisation | PostgreSQL row-level security, **fail-closed**: every session declares the organisations it may see, an undeclared session sees nothing | `db/session.py`, `deps.py`, migrations `b2d4f6a8c0e1` and `c3e5a7f9b1d4` |
 | reading another organisation's audit trail | `audit_log` carries an organisation and is under the same policy; `GET /audit` additionally restricts to the organisations where the caller really holds `audit:read` — being a member is not enough. Platform-level rows (`org_id IS NULL`: logins, API tokens) are returned only when that right covers every organisation of the instance | `routers/admin.py`, `audit.py`, migration `c3e5a7f9b1d4` |
-| changing or erasing the audit trail after the fact | on PostgreSQL the log is a hash chain per organisation (and one for the platform's entries) that the database links at every insert, whoever writes; `UPDATE` and `TRUNCATE` are revoked from the API's role and refused by a trigger, and an entry is deleted only by its organisation's own deletion; `choregos-admin audit verify` reports the first altered, missing, forked or unlinked entry, and checkpoints signed with a key kept outside the database see a rewrite of the whole chain ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md); [below](#the-audit-log-as-evidence)) | migration `e2a4c6b8d0f3`, `audit_chain.py`, `admin_cli.py`, `apps/api/tests/test_audit_chain_postgres.py`, `apps/api/tests/test_audit_chain.py` |
+| changing or erasing the audit trail after the fact | on PostgreSQL the log is a hash chain per organisation (and one for the platform's entries) that the database links at every insert, whoever writes; `UPDATE` and `TRUNCATE` are revoked from the API's role and refused by a trigger, and an entry is deleted only by its organisation's own deletion; `choregos-admin audit verify` reports the first altered, missing, forked or unlinked entry, and checkpoints signed with a key kept outside the database see a rewrite of the whole chain; an opt-in export ships every chain to a SIEM with the hashes the receiver verifies ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md), [ADR 0196](adr/0196-the-audit-chains-are-shipped-to-a-siem-from-a-durable-cursor.md); [below](#the-audit-log-as-evidence)) | migration `e2a4c6b8d0f3`, `audit_chain.py`, `admin_cli.py`, `apps/api/tests/test_audit_chain_postgres.py`, `apps/api/tests/test_audit_chain.py`, `audit_export/`, `apps/api/tests/test_audit_export.py` |
 | a governed action running without a kept approval, or an approval never run | its workflow starts only after the approval commits, a relay in every API replica starts an action left `approved` (every `TRANIBOR_ACTION_RELAY_INTERVAL_S`, 30 s by default; two API processes relaying it still run it once, S40-23j), and the workflow's first activity runs nothing for an action that is not `approved` (a failed commit, a hand-made start, a finished action); an audit row and an event commit with the change they record, or not at all ([ADR 0085](adr/0085-the-approved-row-is-the-outbox-of-a-governed-action.md)) | `db/session.py`, `services/action_relay.py`, `activities/actions.py` |
 | an extension running code in the console | an extension's screens are **data** — forms, tables, actions, secrets shown once — rendered by the console's own blocks; the CSP stays `script-src 'self'`; a section naming a path no route serves stops start-up | `extensions.py`, `routers/ui.py`, `main.py`, ADR 0032 |
 | an organisation left without an administrator | the last `org_admin` of an organisation cannot be removed (409) | `routers/admin.py` |
@@ -991,8 +991,23 @@ not linking to the one before, outside the chain (inserted with the trigger off)
 vouched for, or entries deleted from the end. A checkpoint whose signature does not verify, or whose key is
 not among the `--trust` keys, fails the verdict too.
 
-Not yet: an export to a SIEM, a retention rule for the log, checkpoints signed on a schedule, the chain
-in `GET /audit`, and a migration role distinct from the API's own (each its own story).
+### Shipping the log to a SIEM
+
+([ADR 0196](adr/0196-the-audit-chains-are-shipped-to-a-siem-from-a-durable-cursor.md), S80-05b.) Off by
+default. Switched on (`global.auditExport`, [deployment](deployment.md#siem-export-of-the-audit-log)), every
+API replica runs a loop that ships each chain, the platform's too, to one sink: an HTTPS JSON endpoint
+(Splunk HEC, Elasticsearch or OpenSearch `_bulk`, a generic webhook) or syslog over TLS (RFC 5424, optionally
+CEF). Each event carries its `seq`, its `prev_hash` and its `hash`, and `canonical`, the text the hash
+covers, so the receiver checks the chain with SHA-256 alone and sees a missing, reordered or altered entry
+without calling the platform. The guarantee is **in order per chain and at least once** from a cursor kept in
+the database; a receiver tells a repeat by its `seq`. A copy outside the database is what a rewrite by
+whoever holds the database cannot reach, as a signed checkpoint is, but only for entries the sink already
+has: the export narrows the window, it does not close it. Syslog over TLS has no acknowledgement of the
+receiver's: a message in flight when the connection breaks can be lost, and the receiver sees the missing
+`seq`. The token is read from a Secret by reference.
+
+Not yet: a retention rule for the log, checkpoints signed on a schedule, the chain in `GET /audit`, and a
+migration role distinct from the API's own (each its own story).
 
 ## Secrets
 

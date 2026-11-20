@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from tranibor_core.images import check_image_map
 from tranibor_core.mcp import RESULT_CEILING_BYTES, RESULT_MAX_BYTES
@@ -524,6 +524,40 @@ class Settings(BaseSettings):
     action_relay_interval_s: float = 30.0
     #: Seconds between two passes of the assistants' retention purge (S63-16): daily.
     assistant_retention_interval_s: float = 86400.0
+    #: The SIEM export of the audit log (S80-05b, ADR 0196): off by default. On, every API replica runs one
+    #: loop that ships each audit chain, in order of `seq` and at least once, to the one sink below.
+    audit_export: bool = False
+    #: `https` (a JSON POST: Splunk HEC, Elastic or OpenSearch `_bulk`, or a generic webhook, by
+    #: `audit_export_format`), `syslog` (RFC 5424 over TLS) or `fake` (in memory, `TRANIBOR_FAKES=1` only).
+    audit_export_sink: Literal["https", "syslog", "fake"] = "https"
+    #: The sink's name, the key of its cursors: another name ships every chain again from entry 1.
+    audit_export_name: str = "siem"
+    #: `https`: `webhook`, `splunk-hec` or `elastic-bulk`. `syslog`: `rfc5424` or `cef`.
+    audit_export_format: str = ""
+    audit_export_url: str = ""
+    #: The token the receiver wants, from a Secret (`valueFrom.secretKeyRef`), never a plain value.
+    audit_export_token: SecretStr = SecretStr("")
+    #: The header that carries it and the scheme before it: `Authorization` and `Bearer` by default,
+    #: `Splunk` for HEC, `ApiKey` for Elastic; an empty scheme sends the bare token (`X-Api-Key: <token>`).
+    audit_export_header: str = "Authorization"
+    audit_export_scheme: str = "Bearer"
+    #: Splunk's `index` or Elastic's index (empty: the receiver's default, `choregos-audit` for Elastic).
+    audit_export_index: str = ""
+    #: A PEM bundle that signs the receiver's certificate, when it is not in the system's roots.
+    audit_export_ca_file: str = ""
+    audit_export_syslog_host: str = ""
+    audit_export_syslog_port: int = 6514
+    #: The organisations whose chain is exported, by slug (JSON list); empty: all of them.
+    audit_export_orgs: list[str] = Field(default_factory=list)
+    #: The platform's chain (sign-ins, tokens) is exported too.
+    audit_export_platform: bool = True
+    #: Each event also carries `canonical`, the text the hash covers, so a receiver verifies the chain
+    #: without re-rendering the payload (a number does not survive every language's floating point).
+    audit_export_canonical: bool = True
+    #: A label for the deployment, put on every event (`source`).
+    audit_export_source: str = "choregos"
+    audit_export_interval_s: float = 10.0
+    audit_export_batch: int = 500
     #: Tempo's query address, read by the nightly ledger-vs-trace job (`trace_drift.py`, ADR 0018
     #: point 3). Empty: the job refuses to run.
     tempo_url: str = ""

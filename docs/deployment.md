@@ -1204,6 +1204,57 @@ read-only root filesystem, no capability), and only its state and its audit log 
 (`tests/charts/test_outpost_chart.py`). An instance that exits with code 3 (the door no longer
 serves its protocol) or 4 (revoked) restarts in a loop on purpose: the chart's notes say so.
 
+## SIEM export of the audit log
+
+([ADR 0196](adr/0196-the-audit-chains-are-shipped-to-a-siem-from-a-durable-cursor.md), S80-05b.) The audit
+log's hash chains ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md)) can be shipped
+to a SIEM. It is off, and PostgreSQL only (SQLite keeps no chain). One sink per deployment; each API replica
+runs the loop, a lock on the chain's cursor lets one of them ship a chain at a time.
+
+```yaml
+global:
+  auditExport:
+    enabled: true
+    sink: https                  # https | syslog
+    format: splunk-hec           # https: webhook | splunk-hec | elastic-bulk; syslog: rfc5424 | cef
+    url: https://splunk.example:8088/services/collector/event
+    index: audit                 # Splunk's index, or the Elastic index (default choregos-audit)
+    token:
+      secretRef: siem-token      # a Secret you create; the token is read by reference, never written here
+      key: audit-export-token
+      scheme: Splunk             # Authorization: Splunk <token>; Elastic wants ApiKey, a webhook Bearer
+    egress:
+      cidrs: [10.20.0.0/24]      # with networkPolicies.enabled: the API may reach the sink, and only it
+```
+
+A syslog sink: `sink: syslog`, `syslog: {host: siem.example, port: 6514}`, `format: cef` for CEF. A CA that
+is not in the system's roots is a path in the API pod (`caFile`, mounted with
+[`choregos-api.extraVolumes`](#extra-volumes-for-the-api)). `organisations: [a, b]` limits the export to
+those slugs (default: every organisation) and `platform: false` leaves the platform's chain out (sign-ins,
+tokens).
+
+What a receiver gets: one event per entry, in the order of `seq` within its chain, **at least once**.
+Every event carries `org`, `org_id`, `seq`, `prev_hash`, `hash`, the entry's fields and `canonical`; keep the
+last `hash` of each chain and check `sha256(prev_hash + canonical) == hash` and `prev_hash == the last hash`.
+A repeat has the same `seq` and `hash`. Elastic and OpenSearch documents are named `<org id>:<seq>`, so a
+repeat overwrites its first copy. Splunk HEC and a webhook can show a repeat: deduplicate on `(org_id, seq)`.
+
+Operating it. The cursors are the rows of `audit_export_cursors`, one per sink name and chain. Changing
+`name` ships everything again from entry 1; deleting a cursor does the same for its chain. A receiver that is
+down stretches the wait between passes (doubling, to five minutes) and nothing is lost: the cursor stays.
+`/metrics` carries `choregos_audit_export_lag_entries{sink}` (entries written and not yet accepted, the same
+on every replica), `choregos_audit_export_progress_timestamp_seconds{sink}` (when a cursor last moved),
+`choregos_audit_export_events_total` and `choregos_audit_export_failures_total` (per process). Logs:
+`audit.export.shipped`, `audit.export.failed`, `audit.export.pass_failed` and
+`audit.export.chain_discontinuity` (the entry after a cursor does not follow the one the cursor stands on).
+With `monitoring.alerts` on, the alert `ChoregosAuditExportStalled` fires when entries wait and no cursor has
+moved for half an hour.
+A setting the API cannot build a sink from (a plain `http://` URL, an unknown format) stops it at start.
+
+Not part of this: a retention rule for the log, checkpoints signed on a schedule, a migration role distinct
+from the API's own, and the chain in `GET /audit`. Against a real Splunk, Elastic or syslog server nothing
+here has been run yet: the sinks are tested against simulated receivers.
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
