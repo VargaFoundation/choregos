@@ -25,6 +25,7 @@ def test_the_entry_point_is_declared_under_the_group() -> None:
 
 def test_unconfigured_it_changes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TRANIBOR_VAULT_ADDR", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)  # the suite may set it: the default is then the fake
     register()
     assert type(get_secret_store()) is SealedDbSecretStore
 

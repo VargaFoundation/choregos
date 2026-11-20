@@ -105,6 +105,39 @@ def test_one_transient_5xx_is_retried(vault: FakeVault, wrapper: VaultTransitKey
     assert wrapper.wrap(os.urandom(32), AAD)[2] == "choregos-v1"
 
 
+def test_a_vault_that_never_answers_is_an_unavailable_store(
+    monkeypatch: pytest.MonkeyPatch, wrapper: VaultTransitKeyWrapper
+) -> None:
+    """A timeout used to escape as `concurrent.futures.TimeoutError`: a 500, not the 409 of the others."""
+    import asyncio
+
+    from tranibor_vault_transit import wrapper as module
+
+    monkeypatch.setattr(module, "CALL_TIMEOUT_S", 0.05)
+
+    async def never(*_: object, **__: object) -> None:
+        await asyncio.sleep(5)
+
+    monkeypatch.setattr(wrapper, "awrap", never)
+    with pytest.raises(SecretStoreUnavailable, match="no answer within"):
+        wrapper.wrap(os.urandom(32), AAD)
+
+
+def test_an_answer_that_is_not_json_is_an_unavailable_store(wrapper: VaultTransitKeyWrapper) -> None:
+    import httpx
+
+    client = VaultTransitClient(
+        "https://v",
+        TokenAuth(token="t"),
+        "choregos",
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, text="<html>proxy</html>")),
+    )
+    broken = VaultTransitKeyWrapper(client)
+    with pytest.raises(SecretStoreUnavailable, match="carries no data"):
+        broken.wrap(os.urandom(32), AAD)
+    broken.close()
+
+
 def test_a_missing_key_is_named(vault: FakeVault, client: VaultTransitClient) -> None:
     other = VaultTransitClient("https://v", TokenAuth(token="hvs.static"), "nokey", transport=vault.transport)
     wrapper = VaultTransitKeyWrapper(other)

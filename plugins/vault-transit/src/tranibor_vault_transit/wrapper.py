@@ -22,6 +22,7 @@ call. `put` and `get_many` therefore hold the API's event loop for one Vault rou
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import re
 import threading
 import time
@@ -42,6 +43,7 @@ MAX_KEY_NAME = 24
 _KEK_ID = re.compile(r"^(?P<key>[A-Za-z0-9_-]+)-v(?P<version>[0-9]+)$")
 _CIPHERTEXT = re.compile(r"^vault:v(?P<version>[0-9]+):")
 CALL_TIMEOUT_S = 30.0
+_TIMED_OUT = f"Vault transit: no answer within {CALL_TIMEOUT_S:.0f} seconds"
 
 
 class _Loop:
@@ -60,12 +62,19 @@ class _Loop:
             return self._loop
 
     def run(self, coroutine: Coroutine[Any, Any, T]) -> T:
-        return asyncio.run_coroutine_threadsafe(coroutine, self._started()).result(CALL_TIMEOUT_S)
+        try:
+            return asyncio.run_coroutine_threadsafe(coroutine, self._started()).result(CALL_TIMEOUT_S)
+        except concurrent.futures.TimeoutError:
+            raise SecretStoreUnavailable(_TIMED_OUT) from None
 
     async def run_async(self, coroutine: Coroutine[Any, Any, T]) -> T:
         """From another event loop: awaits without blocking it."""
         future = asyncio.run_coroutine_threadsafe(coroutine, self._started())
-        return await asyncio.wait_for(asyncio.wrap_future(future), CALL_TIMEOUT_S)
+        try:
+            return await asyncio.wait_for(asyncio.wrap_future(future), CALL_TIMEOUT_S)
+        except TimeoutError:
+            future.cancel()
+            raise SecretStoreUnavailable(_TIMED_OUT) from None
 
     def close(self) -> None:
         with self._lock:

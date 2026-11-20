@@ -87,7 +87,10 @@ class VaultTransitClient:
                 continue
             if response.status_code >= 400:
                 raise VaultError(_message(response), response.status_code)
-            data = (response.json() or {}).get("data")
+            try:
+                data = (response.json() or {}).get("data")
+            except (ValueError, AttributeError):
+                data = None
             if not isinstance(data, dict):
                 raise VaultError("Vault's answer carries no data", response.status_code)
             return data
@@ -107,7 +110,10 @@ class VaultTransitClient:
         body: dict[str, Any] = {"ciphertext": ciphertext}
         _add_context(body, context)
         data = await self._call("POST", f"decrypt/{self.key}", body)
-        return base64.b64decode(_text(data, "plaintext"))
+        try:
+            return base64.b64decode(_text(data, "plaintext"), validate=True)
+        except ValueError:
+            raise VaultError("Vault's `plaintext` is not base64") from None
 
     async def latest_version(self) -> int:
         data = await self._call("GET", f"keys/{self.key}")

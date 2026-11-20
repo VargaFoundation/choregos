@@ -15,6 +15,7 @@ from tranibor_api.db.models import OrgSecret
 from tranibor_api.secret_store import SealedDbSecretStore, parse_keyring
 from tranibor_core.secrets import SecretNotFound
 from tranibor_vault_transit import (
+    TokenAuth,
     VaultTransitClient,
     VaultTransitKeyWrapper,
     VaultTransitSecretStore,
@@ -122,3 +123,31 @@ async def test_the_store_is_available_without_the_env_key(
 ) -> None:
     monkeypatch.delenv("TRANIBOR_SECRETS_KEKS", raising=False)
     assert store.available() and store.key_wrapper() is not None
+
+
+async def test_a_derived_key_rotates_and_opens_with_the_row_bound_as_context(
+    sessions: async_sessionmaker[AsyncSession],
+) -> None:
+    """Vault's `rewrap` and `decrypt` of a `derived=true` key need the row's context every time: a rewrap
+    that dropped it would fail on a real Vault, and here on the fake."""
+    vault = FakeVault(derived=True)
+    vault.create_key("choregos")
+    vault.allow_token("hvs.static")
+    client = VaultTransitClient(
+        "https://vault.test:8200", TokenAuth(token="hvs.static"), "choregos", transport=vault.transport
+    )
+    bound = VaultTransitKeyWrapper(client, bind_context=True)
+    store = VaultTransitSecretStore(bound)
+    try:
+        async with sessions() as session:
+            await store.put(session, ORG, NAME, "bound-value", None)
+            await session.commit()
+        vault.rotate("choregos")
+        async with sessions() as session:
+            assert await store.rewrap(session) == 1
+            await session.commit()
+        async with sessions() as session:
+            assert await store.get_many(session, ORG, [NAME]) == {NAME: "bound-value"}
+            assert (await session.execute(select(OrgSecret))).scalar_one().kek_id == "choregos-v2"
+    finally:
+        bound.close()
