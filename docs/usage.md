@@ -3743,7 +3743,11 @@ finds them and opens none twice. Each child signals its parent as it closes, and
 re-reads its children every 30 minutes in case a signal is lost; its status says how many are still
 open. The join writes `documents.children` on the parent: the count per state, and each child's key,
 title, final state and fields. A list that cannot be read, too long, or a child its workflow refuses,
-follows `on_fail`. Children need the internal tracker; the local mode stops at a fan-out.
+follows `on_fail`. Children are held in the platform whatever the project's tracker
+([ADR 0199](adr/0199-a-fan-outs-children-are-the-platforms.md)): on a project whose tracker keeps its
+items elsewhere (Jira, GitHub, GitLab, a plugin's server), nothing is filed there for a child, and its
+state, status and comments are not written there; the parent's item is. The local mode stops at a
+fan-out.
 
 ## 6. Read what came out
 

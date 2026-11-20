@@ -6093,3 +6093,14 @@ stories:
       - "webhook.forward_authorization: true on a server declaration forwards the Authorization header to that server's tracker_parse_event, and to no other"
       - "the header is never logged nor stored"
     notes: "For senders that sign with a bearer token in Authorization."
+  - id: S84-04
+    title: "fix(orchestrator): a fan-out's children are the platform's, whatever the project's tracker (ADR 0199)"
+    stream: S84
+    sprint: 1
+    priority: 4
+    size: S
+    depends_on: [S38-12]
+    acceptance:
+      - "spawn_children opens each child under <parent>.<rank> in the platform; an external tracker receives nothing, and a replay finds the children"
+      - "a child's tracker writes (state, status, fields, comments, close) go nowhere when the project's tracker keeps its items elsewhere; the internal tracker still receives them"
+    notes: "Before: children of an external tracker's project were filed there under the tracker's key, so a replay could not find them; a tracker that cannot create items (a plugin's) refused every child."
