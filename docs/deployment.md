@@ -295,8 +295,8 @@ What the platform puts in the manifest, derived from the instance and the adapte
 
 | Manifest key | Value |
 | :-- | :-- |
-| `default_permissions` | Repository: `contents` write, `issues` write, `pull_requests` write, `checks` write, `metadata` read, `statuses` read; organisation: `organization_projects` write |
-| `default_events` | `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run` (`installation` and `installation_repositories` are delivered to every App; nobody subscribes to them) |
+| `default_permissions` | Repository: `contents` write, `issues` write, `pull_requests` write, `checks` write, `metadata` read, `statuses` read, `actions` write; organisation: `organization_projects` write |
+| `default_events` | `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run` (`installation` and `installation_repositories` are delivered to every App; nobody subscribes to them) |
 | `hook_attributes.url` | `<api_url>/api/v1/webhooks/github` |
 | `callback_urls` | `<api_url>/api/v1/github/setup`: where GitHub sends a person after an installation |
 | `request_oauth_on_install` | `true`: the person who installs authorises the App, the proof a claim needs on an instance with several organisations (no Setup URL then: GitHub uses the callback URL) |
@@ -2144,7 +2144,8 @@ the chart already assumes.
 ### Webhook secrets
 
 `TRANIBOR_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `TRANIBOR_GENERIC_WEBHOOK_SECRET` is
-the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
+the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, Jenkins (`…/api/v1/webhooks/jenkins`, the secret in
+`X-Choregos-Secret` or `?token=`) and **Tekton since
 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
 the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (the former spelling was removed in 0.24.0,
 see "Upgrading to 0.24"). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its

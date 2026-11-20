@@ -99,6 +99,27 @@ class GitHubClient:
                 return response.json()
         raise UpstreamError("github", f"{method} {path}: quota exhausted after {MAX_RETRIES} attempts")
 
+    async def request_text(self, path: str, *, repo: str | None = None) -> str:
+        """A plain-text body (a job's log). GitHub answers 302 to a short-lived storage URL: it is
+        followed WITHOUT the installation token, which belongs to GitHub only."""
+        url = path if path.startswith("http") else f"{self.base_url}{path}"
+        token = await self._token(repo)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        response = await self._client.request("GET", url, headers=headers)
+        if response.is_redirect and response.headers.get("location"):
+            response = await self._client.request("GET", response.headers["location"])
+        if response.status_code >= 400:
+            raise UpstreamError(
+                "github",
+                f"GET {path} → {response.status_code} : {response.text[:300]}",
+                status_code=response.status_code,
+            )
+        return response.text
+
     @staticmethod
     def _retry_after(response: httpx.Response, attempt: int) -> float:
         header = response.headers.get("retry-after")

@@ -6057,3 +6057,14 @@ stories:
       - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
       - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
     notes: "ADR 0190, follow-up"
+  - id: S13-10
+    title: "feat(adapters): Jenkins and GitHub Actions CI adapters (trigger, follow to the result, rerun, inbound events)"
+    stream: S13
+    sprint: 8
+    priority: 3
+    size: L
+    depends_on: [S13-04]
+    acceptance:
+      - "ci/jenkins: a parameterised or multibranch job is triggered with a CSRF crumb and an API token, its queue item is followed to the build, result and console URL are read, and Notification-plugin and flat payloads arrive at /webhooks/jenkins under the shared secret"
+      - "ci/github-actions: a workflow is dispatched on a ref with inputs, the run it started is found, run and job conclusions are read, failed jobs are rerun, and workflow_run deliveries arrive through the GitHub App webhook"
+      - "Both types are registered with specs, setup procedures and egress; the App asks for actions:write and the workflow_run event"

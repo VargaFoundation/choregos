@@ -675,6 +675,110 @@
   },
   {
     "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "description": "the controller, https://jenkins.example.com",
+          "type": "string"
+        },
+        "crumb": {
+          "default": true,
+          "type": "boolean"
+        },
+        "job": {
+          "description": "the job's path, folder/app; the multibranch folder when `multibranch`",
+          "type": "string"
+        },
+        "multibranch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "build parameters sent with every trigger",
+          "type": "object"
+        },
+        "ref_parameter": {
+          "default": "BRANCH",
+          "description": "the build parameter that receives the ref (unused by a multibranch job)",
+          "type": "string"
+        },
+        "user": {
+          "description": "the user the API token belongs to",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "job",
+        "user"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Jenkins",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "jenkins"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "api_url": {
+          "default": "https://api.github.com",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "workflow_dispatch inputs sent with every trigger",
+          "type": "object"
+        },
+        "repo": {
+          "description": "owner/repo, picked among the repositories the App can see",
+          "format": "github-repo",
+          "type": "string"
+        },
+        "workflow": {
+          "description": "the workflow file (ci.yml) to dispatch and to read; empty reads them all",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitHub Actions",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "github-actions"
+  },
+  {
+    "capabilities": [
       "cd"
     ],
     "config_schema": {

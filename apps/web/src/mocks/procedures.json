@@ -824,6 +824,80 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.ci.github-actions",
+    "title": "Dispatch and follow GitHub Actions workflows",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/github-actions"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The same **GitHub App** as the `scm` connector: no other credential. See \"Use GitHub for branches, pull\n  requests and checks\". The App must have the `actions` permission and the `workflow_run` event.\n- A workflow with `on: workflow_dispatch` (and its `inputs`) on the default branch, to be dispatched.\n  Reading the runs of pull requests needs nothing more."
+      },
+      {
+        "key": "at",
+        "title": "At GitHub",
+        "markdown": "1. In the App's settings, grant **Actions: Read and write** (to dispatch, rerun and read), and subscribe to\n   **Workflow run**. An App created from the console after this version already has both; an App created\n   earlier must be updated, and its installations must accept the new permission.\n2. The webhook is the App's own: `https://choregos.example.com/api/v1/webhooks/github`. No second webhook."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- `actions`: write. Without it the platform still works, minus this connector's dispatch, rerun and reads: a\n  token is asked again without the permission when the installation lacks it, and GitHub then answers 403."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **CI**, type **GitHub Actions**.\n2. `repo`, and `workflow` (the file name, for example `ci.yml`). `inputs`: the dispatch inputs, if the\n   workflow declares any."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the workflow and answers `ok`. Then dispatch it on a branch: the run\nappears, its jobs follow, and `workflow_run` deliveries move the work item."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `403` on dispatch or rerun: the App lacks `actions: write`, or the installation has not accepted it.\n- `422` on dispatch: the workflow has no `workflow_dispatch` trigger on that ref, or an input is unknown or\n  missing.\n- \"started no run that could be found\": the dispatch was accepted but no new run of that workflow appeared on\n  that ref in time. Look at the Actions tab.\n- Status stays `unknown`: no workflow ran on that commit."
+      }
+    ],
+    "values": {
+      "webhook_url:github": "https://choregos.example.com/api/v1/webhooks/github"
+    },
+    "egress": [
+      "api.github.com"
+    ],
+    "fields": {
+      "repo": "owner/repo, picked from the repositories the App's installations show",
+      "workflow": "the workflow file to dispatch and read, for example ci.yml; empty reads every workflow",
+      "inputs": "workflow_dispatch inputs sent with every trigger",
+      "api_url": "https://api.github.com, or your GitHub Enterprise Server API"
+    },
+    "vendor_docs": [
+      {
+        "title": "GitHub Actions workflow runs API",
+        "url": "https://docs.github.com/en/rest/actions/workflow-runs"
+      },
+      {
+        "title": "Create a workflow dispatch event",
+        "url": "https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event"
+      },
+      {
+        "title": "The workflow_dispatch event",
+        "url": "https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#workflow_dispatch"
+      },
+      {
+        "title": "The workflow_run webhook event",
+        "url": "https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.ci.gitlab",
     "title": "Read pipeline status from GitLab CI",
     "version": 1,
@@ -888,6 +962,82 @@
       {
         "title": "GitLab webhooks",
         "url": "https://docs.gitlab.com/user/project/integrations/webhooks/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.ci.jenkins",
+    "title": "Trigger and follow builds on Jenkins",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/jenkins"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Jenkins controller the platform can reach, and a job that builds the project. A plain job should be\n  **parameterised** (a string parameter for the branch); a multibranch job is built on the branch itself.\n- A Jenkins user for the platform, allowed to build and read that job (`Job/Build`, `Job/Read`).\n- For notifications, the platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever\n  operates Tranibor."
+      },
+      {
+        "key": "at",
+        "title": "At Jenkins",
+        "markdown": "1. Create a user for the platform, then **Configure, API Token, Add new Token**. Copy it when it is shown.\n2. Optional, to be told when a build starts and ends instead of polling: install the **Notification plugin** and\n   add the endpoint `https://choregos.example.com/api/v1/webhooks/jenkins?token=<the shared webhook secret>` (format JSON, protocol HTTP,\n   events Job Started and Job Completed). A pipeline can instead post `{\"job\", \"build_number\", \"result\",\n   \"sha\", \"branch\", \"project\", \"work_item\"}` to that URL with the `X-Choregos-Secret` header.\n3. Name the commit in the build so the platform can find a commit's build: a pipeline that checks out a\n   revision records it (the SCM revision is read), or pass the commit as a build parameter."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The user needs `Overall/Read`, `Job/Read` and `Job/Build` on the job, and nothing else.\n- An API token needs no CSRF crumb on a recent Jenkins; the connector still asks for one and goes without\n  when the controller has none (`crumb: false` skips the request)."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **CI**, type **Jenkins**.\n2. `base_url`, `job` (for example `team/app`), `user`. Tick `multibranch` for a multibranch folder: the\n   branch is then the last segment of the job path.\n3. `token`: the API token, in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the job and answers `ok`. Then trigger a build and watch it leave the\nqueue and finish."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or `403`: the user or token is wrong, or the user may not build the job. A `403` mentioning the crumb:\n  the controller wants a crumb and `crumb` is off.\n- `404` on the job: check the path; a folder is `folder/app`, never `/job/folder/job/app`.\n- A trigger answered `400` or `500`: the job is not parameterised and `ref_parameter` is set, or a required\n  parameter is missing from `parameters`.\n- Status stays `unknown`: no recent build recorded the commit. Only the last builds of the job are read.\n- Notifications ignored with `401`: the token in the URL is not the platform's shared webhook secret."
+      }
+    ],
+    "values": {
+      "webhook_url:jenkins": "https://choregos.example.com/api/v1/webhooks/jenkins"
+    },
+    "egress": [],
+    "fields": {
+      "base_url": "your Jenkins controller, for example https://jenkins.example.com",
+      "job": "the job's path (folder/app), or the multibranch folder",
+      "user": "the Jenkins user the API token belongs to",
+      "multibranch": "true when `job` is a multibranch pipeline, built branch by branch",
+      "ref_parameter": "the build parameter that receives the branch or tag (BRANCH by default)",
+      "parameters": "build parameters sent with every trigger",
+      "crumb": "true to ask for a CSRF crumb before a trigger (the default)",
+      "token": "the user's API token, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Jenkins remote access API",
+        "url": "https://www.jenkins.io/doc/book/using/remote-access-api/"
+      },
+      {
+        "title": "Jenkins CSRF protection",
+        "url": "https://www.jenkins.io/doc/book/security/csrf-protection/"
+      },
+      {
+        "title": "Jenkins Notification plugin",
+        "url": "https://plugins.jenkins.io/notification/"
+      },
+      {
+        "title": "Jenkins multibranch pipelines",
+        "url": "https://www.jenkins.io/doc/book/pipeline/multibranch/"
       }
     ],
     "origin": "shipped"
@@ -2748,7 +2898,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\nOrganization permissions, only if the same App serves the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents edit `.github/workflows`."
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n- `actions`: write\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\n`actions` lets the platform dispatch, rerun and read GitHub Actions workflows (the `github-actions` CI\nconnector); an App without it keeps working, minus that connector.\n\nOrganization permissions, only if the same App serves the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run`.\n\nAdd `workflows: write` only if agents edit `.github/workflows`."
       },
       {
         "key": "in_choregos",
@@ -2946,7 +3096,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Tranibor GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n- `actions`: write\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\n`actions` lets the platform dispatch, rerun and read GitHub Actions workflows (the `github-actions` CI\nconnector); an App without it keeps working, minus that connector.\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Tranibor GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",
