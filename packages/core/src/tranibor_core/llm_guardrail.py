@@ -343,6 +343,14 @@ class StreamGuard:
                     self._add(("chat", index, field), _Slot(owner, text, write))
             for number, block in enumerate(getattr(delta, "thinking_blocks", None) or []):
                 self._feed_thinking(owner, ("chat", index, "thinking", number), block)
+            # An Anthropic model's delta also carries the provider's own thinking blocks, as Anthropic
+            # streamed them: the raw thinking, a few characters a chunk, and the signature at the end
+            # (LiteLLM 1.105.5 and 1.108.12, S40-16j). A channel of its own, or the secret it holds
+            # leaves in pieces no single chunk shows whole.
+            extra = getattr(delta, "provider_specific_fields", None)
+            if isinstance(extra, dict):
+                for number, block in enumerate(extra.get("thinking_blocks") or []):
+                    self._feed_thinking(owner, ("chat", index, "provider_thinking", number), block)
             calls: list[tuple[tuple[Any, ...], Any]] = [
                 (("chat", index, "function_call"), getattr(delta, "function_call", None))
             ]

@@ -393,6 +393,46 @@ def _chat_reasoning_stream() -> list[SimpleNamespace]:
     return chunks + _chat_stream()
 
 
+def _provider_thinking_stream() -> list[SimpleNamespace]:
+    """The shape LiteLLM streams an Anthropic model's thinking in on the chat route (1.105.5 and
+    1.108.12): the masked-by-us copy in `thinking_blocks`, and the provider's raw pieces in
+    `provider_specific_fields`, the signature last."""
+
+    def chunk(piece: str, signature: str | None = None) -> SimpleNamespace:
+        raw: dict[str, Any] = {"type": "thinking", "thinking": piece, "index": 0}
+        if signature:
+            raw["signature"] = signature
+        delta = SimpleNamespace(
+            reasoning_content=piece,
+            thinking_blocks=[{"type": "thinking", "thinking": piece, "index": 0}],
+            provider_specific_fields={"thinking_blocks": [raw]},
+        )
+        return SimpleNamespace(choices=[SimpleNamespace(index=0, delta=delta, finish_reason=None)])
+
+    return [chunk(piece) for piece in _pieces(_REASONING, 6)] + [chunk("", _OPAQUE)] + _chat_stream()
+
+
+@pytest.mark.asyncio
+async def test_the_provider_s_own_streamed_thinking_is_masked_and_unsigned_too() -> None:
+    """S40-16j: the guard masked `thinking_blocks` and let the provider's copy of the same thinking
+    through, a few characters a chunk — the secret left whole, in pieces, with its signature."""
+    chunks = await _streamed(_provider_thinking_stream(), _MARKED)
+    assert len(chunks) == len(_provider_thinking_stream())
+    extras = [getattr(chunk.choices[0].delta, "provider_specific_fields", None) or {} for chunk in chunks]
+    raw = [block for extra in extras for block in extra.get("thinking_blocks") or []]
+    assert "".join(block["thinking"] for block in raw) == _MASKED_REASONING
+    assert not any("signature" in block for block in raw), "the provider's signature of masked thinking"
+
+
+@pytest.mark.asyncio
+async def test_the_provider_s_own_streamed_thinking_reaches_an_unmarked_key_signed() -> None:
+    chunks = await _streamed(_provider_thinking_stream(), None)
+    extras = [getattr(chunk.choices[0].delta, "provider_specific_fields", None) or {} for chunk in chunks]
+    raw = [block for extra in extras for block in extra.get("thinking_blocks") or []]
+    assert "".join(block["thinking"] for block in raw) == _REASONING
+    assert raw[-1]["signature"] == _OPAQUE
+
+
 @pytest.mark.asyncio
 async def test_a_streamed_chat_reasoning_is_masked_though_each_secret_straddles_chunks() -> None:
     chunks = await _streamed(_chat_reasoning_stream(), _MARKED)
