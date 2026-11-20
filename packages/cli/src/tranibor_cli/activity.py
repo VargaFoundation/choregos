@@ -436,16 +436,21 @@ def _when(value: Any) -> datetime | None:
 
 
 def elapsed(entry: dict[str, Any], now: datetime) -> str:
-    """Since it started, to its end or to now: `12s`, `4m12s`, `1h03m`."""
+    """Since it started, to its end or to now: `12s`, `4m12s`, `1h03m`. A queued entry has not ended, whatever
+    a previous attempt left in `ended_at`: it shows how long it has waited, to now (`waiting 2h04m`)."""
     started = _when(entry.get("started_at"))
     if started is None:
         return DASH
-    seconds = max(0, int(((_when(entry.get("ended_at")) or now) - started).total_seconds()))
+    queued = entry.get("status") == "queued"
+    end = None if queued else _when(entry.get("ended_at"))
+    seconds = max(0, int(((end or now) - started).total_seconds()))
     if seconds < 60:
-        return f"{seconds}s"
-    if seconds < 3600:
-        return f"{seconds // 60}m{seconds % 60:02d}s"
-    return f"{seconds // 3600}h{seconds % 3600 // 60:02d}m"
+        text = f"{seconds}s"
+    elif seconds < 3600:
+        text = f"{seconds // 60}m{seconds % 60:02d}s"
+    else:
+        text = f"{seconds // 3600}h{seconds % 3600 // 60:02d}m"
+    return f"waiting {text}" if queued else text
 
 
 def _count(tokens: Any) -> str:
