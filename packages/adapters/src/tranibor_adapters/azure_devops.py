@@ -113,7 +113,7 @@ class AzureDevOpsClient(RestClient):
             # A refused PAT is not a 401 on some servers: it is a 203 and the HTML of the sign-in page.
             raise UpstreamError(
                 self.service,
-                f"203 sur {method} {path} : Azure DevOps answered a page, not JSON "
+                f"203 on {method} {path}: Azure DevOps answered a page, not JSON "
                 "(a sign-in page means the token is wrong, expired or revoked)",
                 status_code=203,
             ) from page

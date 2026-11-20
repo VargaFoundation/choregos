@@ -121,3 +121,34 @@ def test_boards_egress_follows_the_login_url_and_skips_the_identity_host() -> No
     cfg = {**ENTRA, "login_url": "https://login.sovereign.example"}
     assert azure_boards_egress(cfg) == [("dev.azure.com", 443), ("login.sovereign.example", 443)]
     assert ("vssps.dev.azure.com", 443) in azure_devops.azure_egress(CFG)
+
+
+@pytest.mark.parametrize("service", ["azure-boards", "azure-repos", "azure-pipelines"])
+async def test_a_sign_in_page_names_the_service_that_asked(service: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(203, text="<html>sign in</html>")
+
+    client = azure_devops.azure_client(CFG, service=service)
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    with pytest.raises(UpstreamError) as refused:
+        await client.request("GET", "/x")
+    assert refused.value.service == service
+    assert refused.value.status_code == 203
+
+
+async def test_the_pat_is_sent_as_basic_with_an_empty_user_and_never_replayed_on_a_redirect() -> None:
+    import base64
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(302, headers={"Location": "https://evil.example/steal"})
+
+    client = azure_devops.azure_client(CFG, service="azure-repos")
+    assert client._client.follow_redirects is False  # the client the builder makes follows nothing
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=False)
+    await client.request("GET", "/x")
+    assert [r.url.host for r in seen] == ["dev.azure.com"]
+    assert seen[0].headers["Authorization"] == "Basic " + base64.b64encode(b":x").decode()
+    assert seen[0].url.params["api-version"] == "7.1"
