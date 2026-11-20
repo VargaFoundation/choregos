@@ -1132,7 +1132,6 @@ stories:
     depends_on: []
     acceptance:
       - "Example files in templates/*/optional/; disabled by default"
-
   # ───────────── S14 — Governed change on a data platform (ADR 0028, 2026-10-02) ─────────────
   - id: S14-01
     title: "Catalogue entries for a data platform (graal first): create_job, run_job, schedule_job called by the platform on the agent's behalf"
@@ -6057,3 +6056,14 @@ stories:
       - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
       - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
     notes: "ADR 0190, follow-up"
+  - id: S13-08
+    title: "Azure DevOps Repos SCM adapter and Azure Pipelines CI adapter (PAT or Entra service principal, service hooks for pull requests and builds, ci_green from Azure Pipelines results)"
+    stream: S13
+    sprint: 5
+    priority: 8
+    size: L
+    depends_on: [S13-05]
+    acceptance:
+      - "A work item's pull request opens, is judged at its head commit and is completed at that commit on Azure Repos; a head that moved is refused"
+      - "ci_green reads Azure Pipelines results (policies, statuses, builds of the head commit); a partially succeeded build is not green by default"
+      - "A run can be queued with parameters on a branch or commit and its state and logs read; build and pull request service hooks reach the right project"

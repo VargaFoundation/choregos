@@ -730,6 +730,31 @@ verify that a server honours the key: the statement is the administrator's.
 - **An outpost does not keep data where it is.** A tool's result travels to Tranibor, is bounded and
   screened there, and is read by a model.
 
+## Azure DevOps Repos and Azure Pipelines, as connectors (S13-08)
+
+Two connector types put a team project's code and builds under the platform's gates: `scm/azure-repos` (Git
+repositories, pull requests, votes, completion) and `ci/azure-pipelines` (queueing a run, its state, its
+logs). They speak the REST API 7.1 and work on Azure DevOps Services (`https://dev.azure.com/<organisation>`)
+and on an Azure DevOps Server 2022 collection; the credential is a **personal access token** or, on the
+Services, a **Microsoft Entra service principal** (`auth: entra`). The setup procedures are
+[Azure Repos](procedures/connector.scm.azure-repos.md) and [Azure Pipelines](procedures/connector.ci.azure-pipelines.md).
+
+- **What is merged is what was judged** ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)). A pull
+  request is *completed* at the commit the gates judged (`lastMergeSourceCommit`), with the connector's merge
+  strategy; auto-complete is never set and no branch policy is bypassed. A head that moved is a `HeadMoved`.
+- **`ci_green` reads Azure Pipelines.** The pull request's checks are its statuses of the current iteration,
+  its Build and Status branch policies, and the builds of its source branch at its head commit. A build that
+  *partially succeeded* is **red** unless the connector says `partially_succeeded: neutral`.
+- **A run gets no per-run token.** Azure DevOps cannot make a scoped, short-lived credential: a run clones and
+  pushes with the connector's separate `run_token` (a PAT limited to *Code: Read & write*), and without one the
+  connector refuses to mint a token. The connector's own credential never reaches a run.
+- **Service hooks** go to `POST /api/v1/webhooks/azure-devops` (pull request created and updated, build
+  completed, run state changed), authenticated by the platform's shared webhook secret as the password of the
+  subscription's basic authentication. A delivery reaches the project whose connector holds the team project,
+  then the repository.
+- **Not proven against a live organisation.** Everything above is tested against a scripted server written from
+  Microsoft's reference; the status row of S13-08 lists what a real organisation may still change.
+
 ## Limits
 
 - 120 calls a minute per token, per API replica (HTTP 429 with `Retry-After` beyond).
