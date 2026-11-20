@@ -1137,6 +1137,16 @@ migration role distinct from the API's own (each its own story).
   built with a wrapper); core ships no KMS client. The wrapper's `kek_id` is stored in `org_secrets`
   and is at most 32 characters; `rewrap` moves the rows whose `kek_id` differs from the wrapper's
   active id.
+  The repository ships one: `plugins/vault-transit`, a Vault Transit wrapper (an extension, not part of
+  the core: the core imports no Vault client, `tests/architecture/test_core_ships_no_vault_client.py`).
+  The data key is wrapped by transit `encrypt` and the KEK never leaves Vault; a rotation is
+  `transit/keys/<key>/rotate` then `choregos admin secrets rewrap`, which uses transit `rewrap` so the data
+  keys are never in the platform's memory; the API authenticates with its pod's service account (Vault
+  Kubernetes auth) or a token. It is proved against a simulated Vault only, and `put`/`get_many` block the
+  API's event loop for one Vault round trip per secret (the seam is synchronous). Setup:
+  [Deployment](deployment.md#connector-secrets-sealed-under-vault-transit). The **platform's own** secrets
+  (session key, run-token key, GitHub App key) are a different path: they come from Vault through the
+  External Secrets Operator, [Deployment](deployment.md#platform-secrets-from-vault-external-secrets-operator).
 - GitHub App installations are tenant boundaries ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
   one App serves the deployment, so a token for `owner/repo` is minted only through an installation
   **claimed** by the organisation of the connector or run. With several organisations the claim needs

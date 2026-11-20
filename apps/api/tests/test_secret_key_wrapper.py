@@ -133,3 +133,29 @@ async def test_rewrap_moves_rows_to_the_wrapper(app: Any, org: str) -> None:
             await SealedDbSecretStore(wrapper=EnvKeyWrapper(ring)).get_many(
                 session, org_id, ["connector/a/b"]
             )
+
+
+async def test_the_rewrap_endpoint_runs_under_the_store_an_extension_set(
+    client: Any, admin: str, org: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`POST /platform/secrets/rewrap` used to build `SealedDbSecretStore()` itself, so a wrapper set
+    through `set_secret_store` (Vault transit, a KMS) was ignored by the rotation it exists for."""
+    from sqlalchemy import select
+    from tranibor_api.db.models import OrgSecret
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.secret_store import set_secret_store
+
+    monkeypatch.delenv(ENV_KEKS, raising=False)
+    org_id = await _org_id()
+    ring = _ring("k1")
+    async with session_scope() as session:
+        await SealedDbSecretStore(keyring=ring).put(session, org_id, "connector/a/b", "move-me", None)
+    kms = FakeKms()
+    set_secret_store(SealedDbSecretStore(wrapper=_Migrating(EnvKeyWrapper(ring), kms)))
+    try:
+        done = await client.post("/api/v1/platform/secrets/rewrap")
+    finally:
+        set_secret_store(None)
+    assert done.status_code == 200 and done.json() == {"rewrapped": 1}, done.text
+    async with session_scope() as session:
+        assert (await session.execute(select(OrgSecret))).scalar_one().kek_id == kms.active_id
