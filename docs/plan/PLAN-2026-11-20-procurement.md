@@ -1551,3 +1551,12 @@ rewritten story.
   `registration_number` answers `not_supported` there and the onboarding workflow, which sends it, is
   refused on Odoo 20 until a follow-up maps Odoo 20's per-country identifiers (a story of the agents
   repository, after S84-14 has shown what a live Odoo 20 holds).
+- **PA-11, the assistant.** An assistant may wrap only a conversational agent (`prompt` or `hosted`): the
+  core's installer refuses `request-qualifier`, an `acp` agent built for a work item. The assistant wraps a
+  new agent, `purchasing-desk` (`runtime: prompt`, the server's two read operations, no memory), and
+  `request-qualifier` is unchanged. A launch's name is `snake_case` (`purchase_request`), and its
+  `input_schema` holds the requester's fields only, every field the workflow requires among them; the
+  buyer's fields stay out of a conversation. The plan's PA-11 block predates this and is read with it.
+- **S84-16 is opt-in.** `identifiers: skip` is off by default: the rule that reads `FA-0012` as a
+  reference also lets `EUR-99999` through, so only a workflow that needs it (purchase-request) turns it
+  on, and says where the hole stays open.
