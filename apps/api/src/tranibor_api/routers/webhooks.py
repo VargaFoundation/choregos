@@ -1013,7 +1013,8 @@ def _azure_delivery_id(payload: dict[str, Any], body: bytes) -> str:
     event = str(payload.get("id") or "")
     if event:
         return event
-    subscription, notification = str(payload.get("subscriptionId") or ""), str(payload.get("notificationId") or "")
+    subscription = str(payload.get("subscriptionId") or "")
+    notification = str(payload.get("notificationId") or "")
     if subscription and notification:
         return f"{subscription}:{notification}"
     return body_digest(body)
