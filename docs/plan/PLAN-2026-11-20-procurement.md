@@ -1541,3 +1541,13 @@ rewritten story.
 - **Lot 2 started before R1** on the stories that need no published archive: S84-12, PA-05, then PA-06
   to PA-10. S84-10, S84-11, S84-13 and S84-14 wait for a signed, published archive. PA-06 takes the
   plan's default backend, Odoo, until the owner names another.
+- **2026-11-20, lot 2 before R1.** Delivered on the branches: S84-12, PA-05 to PA-09; S84-16 and S84-17
+  opened for two findings (an identifier read as an amount; a contract decided last month listed again).
+  Lot 2's workflows live in a second template, `procurement-operations`, which requires the connector
+  `purchasing`; `procurement-sourcing` needs none. Supplier onboarding is approved by two members of
+  `supplier-data`: the core's `separation_of_duties` keeps out only the action's proposer, the platform
+  here. PA-06 read Odoo's sources: the backend serves Odoo 19 and 20 through the JSON-2 API; an agreement
+  and a contract are the same record there; **Odoo 20 has no `company_registry` on a partner**, so
+  `registration_number` answers `not_supported` there and the onboarding workflow, which sends it, is
+  refused on Odoo 20 until a follow-up maps Odoo 20's per-country identifiers (a story of the agents
+  repository, after S84-14 has shown what a live Odoo 20 holds).
