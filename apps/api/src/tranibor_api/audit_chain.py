@@ -27,11 +27,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import Text, cast, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import PUBLIC_KEY, ed25519_public_key
-from .db.models import AuditChainHead, AuditCheckpoint, Organization
+from .db.models import AuditChainHead, AuditCheckpoint, AuditLog, Organization
 
 #: The first element of an entry's canonical form; a new form gets a new tag, never a new meaning.
 VERSION = "choregos.audit/1"
@@ -433,6 +433,36 @@ async def _links(session: AsyncSession, chain: str) -> AsyncIterator[Link]:
             return
         last = rows[-1]
         after = (int(last.seq or 0), last.id)
+
+
+async def links_after(session: AsyncSession, chain: str, after: int, limit: int) -> list[Link]:
+    """The chain's next `limit` entries after place `after`, in the order of `seq`: what an exporter reads
+    (ADR 0196). Entries outside the chain (`seq IS NULL`) are not returned. The payload is
+    `CAST(payload AS TEXT)`, which PostgreSQL renders as `payload::text` does, so `canonical` of the result
+    is the text the hash covers. The session must see the chain: the platform's scope (`*`)."""
+    owner = AuditLog.org_id.is_(None) if chain == PLATFORM else AuditLog.org_id == chain
+    rows = (
+        await session.execute(
+            select(
+                AuditLog.id,
+                AuditLog.org_id,
+                AuditLog.seq,
+                AuditLog.ts,
+                AuditLog.actor_kind,
+                AuditLog.actor_id,
+                AuditLog.action,
+                AuditLog.target_type,
+                AuditLog.target_id,
+                cast(AuditLog.payload, Text).label("payload"),
+                AuditLog.prev_hash,
+                AuditLog.hash,
+            )
+            .where(owner, AuditLog.seq.is_not(None), AuditLog.seq > after)
+            .order_by(AuditLog.seq, AuditLog.id)
+            .limit(limit)
+        )
+    ).mappings()
+    return [Link(**row) for row in rows]
 
 
 async def stored_checkpoints(session: AsyncSession, chain: str) -> list[Checkpoint]:
