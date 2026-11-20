@@ -67,10 +67,12 @@ def test_the_prose_that_is_checked_is_not_empty() -> None:
     assert len(names) > 100
 
 
-def test_the_readme_and_the_notice_name_the_former_name_once_and_say_the_new_one() -> None:
+def test_the_readme_says_the_new_name_and_the_notice_keeps_the_former_one() -> None:
+    # The README is the repository's front page: it names Tranibor and its publisher only. The
+    # former name is kept where history belongs: NOTICE, the trademark page, ADR 0176.
     readme = (ROOT / "README.md").read_text()
     assert readme.startswith("# Tranibor\n")
-    assert "Formerly Choregos" in readme
+    assert "choregos" not in readme.lower()
     assert (ROOT / "NOTICE").read_text().startswith("Tranibor (formerly Choregos)\n")
 
 

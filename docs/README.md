@@ -1,12 +1,9 @@
-# Tranibor — English documentation
+# Tranibor documentation
 
 Tranibor is a delivery platform for agent work. A request comes in as a ticket, agents move
 it through a workflow you declare, and every step is bounded, evidenced and auditable.
 
-> Since 2026-09-24 this documentation is the **reference**, in English; the earlier French
-> guides were deleted in 0.21 (ADR 0098). Since 2026-10-12 `docs/plan/` and the code are written in English
-> too (ADR 0046); their older parts are still French until they are renamed. Where a page and
-> the code disagree, the code wins — and the page is a bug.
+> Where a page and the code disagree, the code wins — and the page is a bug.
 
 | Page | What it covers |
 | :-- | :-- |
@@ -15,7 +12,7 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Deployment](deployment.md) | Helm chart, dependencies, secrets, identity, the first organisation, a single-node bench |
 | [Agents written in code](code-agents.md) | The Python SDK, the image, the registry entry, conformance, two examples |
 | [Prompt, voice and hosted agents](hosted-agents.md) | Foundry's three agent kinds: what a version may say, what runs today (the contract only) |
-| [Writing a plugin](plugins.md) | The plugin format (ADR 0093): layout, what `choregos plugin validate` checks, pack and index |
+| [Writing a plugin](plugins.md) | The plugin format (ADR 0093): layout, what `tranibor plugin validate` checks, pack and index |
 | [Plugins, extensions and editions](site/build/plugins-and-trades.md) | One unit per trade, the plugin; its content and its extension; extension seams; editions; what leaves the core before 1.0 (ADR 0181) |
 | [Usage](usage.md) | Onboarding a project, writing a workflow, tools, policy, reading a run, day-2 knobs |
 | [Development](development.md) | The three levels of a dev environment, the tests that touch the real world, pitfalls |

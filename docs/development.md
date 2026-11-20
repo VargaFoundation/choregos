@@ -41,6 +41,19 @@ For the real API, workers and Temporal, use the [local install](getting-started.
 Keycloak, Ecphoria — for whoever runs the API and the workers against them by hand; `make api` does
 not.
 
+A port already taken (a Postgres on 5432, a Keycloak on 8080) is overridden rather than edited in
+the compose file: `TRANIBOR_PORT_{POSTGRES,TEMPORAL,TEMPORAL_UI,LITELLM,KEYCLOAK,MINIO,MINIO_CONSOLE,ECPHORIA}`
+for the stack, `TRANIBOR_PORT` for the API, `PORT` for the console.
+
+```bash
+TRANIBOR_PORT_POSTGRES=15432 TRANIBOR_PORT_KEYCLOAK=18080 docker compose -f dev/compose.yaml up -d
+TRANIBOR_FAKES=1 uv run uvicorn tranibor_api.main:app --port 8001
+PORT=3001 pnpm -C apps/web dev
+```
+
+The Ecphoria image is pulled from `ghcr.io/graalsystems/ecphoria`. While that package is private,
+log in once before the first `up`: `echo "$GITHUB_TOKEN" | docker login ghcr.io -u <user> --password-stdin`.
+
 Development accounts (Keycloak, realm `choregos`): `augustin` / `choregos` (owner),
 `marie` / `choregos` (release captain). Locally, `/auth/login?as=<email>` opens a session
 without the IdP — **only** when `TRANIBOR_DEV_LOGIN_ENABLED=true` (the chart sets it through
