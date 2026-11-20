@@ -183,7 +183,7 @@ function BoardColumn({
       <header className="flex h-8 items-center gap-2 border-b border-line" title={column.state}>
         <Dot tone={toneOfState(column.state, column.kind)} />
         <h3 className={cn(LEGENDE, "truncate")}>{column.display}</h3>
-        <span className="ml-auto rounded-full bg-surface-muted px-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
+        <span className="ml-auto rounded-pill bg-surface-muted px-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
           {column.items.length}
         </span>
       </header>

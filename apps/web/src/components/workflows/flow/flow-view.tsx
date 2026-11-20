@@ -156,7 +156,7 @@ function Token({
           aria-label={`${card.key}, ${card.title}${detail ? `, ${detail}` : ""}`}
           data-testid="flow-token"
           className={cn(
-            "relative flex size-full items-center gap-1.5 rounded-full border px-2.5 font-mono text-xs font-medium no-underline shadow-sm",
+            "relative flex size-full items-center gap-1.5 rounded-pill border px-2.5 font-mono text-xs font-medium no-underline shadow-sm",
             tone,
             card.status === "failed" && "flow-flash",
             arrived && "live-arrived",
@@ -265,7 +265,7 @@ function Stage({
             )}
             <span
               data-testid="flow-count"
-              className="shrink-0 rounded-full bg-surface-sunken px-1.5 py-px font-medium tabular-nums text-ink-muted"
+              className="shrink-0 rounded-pill bg-surface-sunken px-1.5 py-px font-medium tabular-nums text-ink-muted"
             >
               {count}
             </span>
@@ -277,7 +277,7 @@ function Stage({
       </button>
       {overflow > 0 && (
         <span
-          className="absolute z-10 flex items-center justify-center rounded-full border border-line bg-surface-sunken text-xs font-medium text-ink-muted"
+          className="absolute z-10 flex items-center justify-center rounded-pill border border-line bg-surface-sunken text-xs font-medium text-ink-muted"
           style={{
             left: station.x + PAD + ((MAX_TOKENS - 1) % cols) * (token.w + TOKEN_GAP),
             top: station.y + HEAD_H + 6 + Math.floor((MAX_TOKENS - 1) / cols) * (token.h + TOKEN_GAP),

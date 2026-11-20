@@ -281,7 +281,7 @@ function GeneralForm({
           <span className="text-xs text-ink-muted">Environments</span>
           <ul className="flex flex-wrap gap-2" aria-label="Environments">
             {envs.map((env) => (
-              <li key={env} className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-0.5 text-xs">
+              <li key={env} className="inline-flex items-center gap-1 rounded-pill border border-line px-2.5 py-0.5 text-xs">
                 {env}
                 <button type="button" aria-label={`Remove environment ${env}`} onClick={() => setEnvs(envs.filter((e) => e !== env))}>
                   ×

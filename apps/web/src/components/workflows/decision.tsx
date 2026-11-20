@@ -13,7 +13,7 @@ export function DecisionChip({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-4 font-medium",
+        "inline-flex items-center gap-1 rounded-pill border px-2 py-0.5 text-xs leading-4 font-medium",
         HUE_CLASSES[DECISION_HUE].pill,
         className,
       )}

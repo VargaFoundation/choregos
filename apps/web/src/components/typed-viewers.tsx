@@ -22,7 +22,7 @@ function Meter({ artifact }: { artifact: Artifact }) {
       aria-valuemax={display.max}
       aria-valuenow={value}
       aria-valuetext={metricText(value, display.unit)}
-      className="h-1.5 w-48 overflow-hidden rounded-full bg-surface-muted"
+      className="h-1.5 w-48 overflow-hidden rounded-pill bg-surface-muted"
     >
       <div className="h-full bg-accent" style={{ width: `${Math.min(Math.max(share, 0), 100)}%` }} />
     </div>

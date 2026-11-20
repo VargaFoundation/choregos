@@ -41,7 +41,7 @@ export function WorkflowChip({
     </>
   );
   const classes = cn(
-    "inline-flex max-w-full items-center gap-1.5 rounded-full border font-medium whitespace-nowrap",
+    "inline-flex max-w-full items-center gap-1.5 rounded-pill border font-medium whitespace-nowrap",
     hue.pill,
     size === "md" ? "px-3 py-1 text-sm" : "px-2 py-0.5 text-xs leading-4",
     href && "no-underline hover:brightness-110",

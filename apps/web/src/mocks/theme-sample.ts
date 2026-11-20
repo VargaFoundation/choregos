@@ -20,7 +20,7 @@ export const SAMPLE_THEME: ServedTheme = {
     },
     dark: { accent: "#1f7a5a", "accent-hover": "#18654a", "accent-strong": "#5fd3a6", focus: "#5fd3a6" },
   },
-  radius: { control: 2, surface: 4 },
+  radius: { control: 2, surface: 4, pill: 0 },
   fonts: {
     title: {
       family: "Sample Serif",

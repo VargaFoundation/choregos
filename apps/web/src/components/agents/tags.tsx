@@ -36,7 +36,7 @@ export function tagProblem(tag: string, existing: readonly string[]): string | n
   return null;
 }
 
-const CHIP = "inline-flex items-center gap-1 rounded-full border border-line bg-surface-muted px-2 py-0.5 text-xs text-ink-muted";
+const CHIP = "inline-flex items-center gap-1 rounded-pill border border-line bg-surface-muted px-2 py-0.5 text-xs text-ink-muted";
 
 /** The chips of an agent; with `link`, each opens the registry filtered by that tag. */
 export function TagList({ tags, link = false }: { tags?: readonly string[] | null; link?: boolean }) {
@@ -157,7 +157,7 @@ export function TagFilter({
   const counts = new Map<string, number>();
   for (const agent of agents) for (const tag of agent.tags ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1);
   const chip = (active: boolean) =>
-    `rounded-full border px-3 py-1 text-xs ${active ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`;
+    `rounded-pill border px-3 py-1 text-xs ${active ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`;
   const all = [...new Set([...counts.keys(), ...value])].sort();
   if (all.length === 0) return null;
   return (

@@ -84,6 +84,16 @@ describe("the CSS of a served theme (S39-03b)", () => {
     expect(themeCss(theme({ radius: { control: 99, surface: -1 } }))).toBe("");
   });
 
+  it("emits the pill radius on its own variable, bounded to 0..999 (S39-03d)", () => {
+    expect(themeCss(theme({ radius: { pill: 0 } }))).toContain("--radius-pill:0px");
+    expect(themeCss(theme({ radius: { pill: 999 } }))).toContain("--radius-pill:999px");
+    // Absent, or out of bounds: the default round pill stays, and the other radii are not touched.
+    expect(themeCss(theme({ radius: { control: 2 } }))).not.toContain("--radius-pill");
+    expect(themeCss(theme({ radius: { pill: 1000 } }))).toBe("");
+    expect(themeCss(theme({ radius: { pill: -1 } }))).toBe("");
+    expect(themeCss(theme({ radius: { pill: 0 } }))).not.toContain("--radius-sm");
+  });
+
   it("sets the sans font in front of Geist, which stays as the fallback", () => {
     const css = themeCss(
       theme({
