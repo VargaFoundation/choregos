@@ -2,7 +2,7 @@
 
 - **Status**: accepted, 2026-11-20 (the project lead's request of the same day; written by story S13-07,
   which delivers point 1 to 4; S13-08 delivers point 5 and amends this page)
-- **Concerns**: `packages/adapters` (`tracker/azure_boards*.py`, `tracker/azure_html.py`,
+- **Concerns**: `packages/adapters` (`azure_devops.py`, `tracker/azure_boards*.py`, `tracker/azure_html.py`,
   `fakes/azure_boards.py`, `specs.py`, `builtins.py`), `apps/api/src/tranibor_api/routers/webhooks.py`,
   `docs/procedures` (`connector.tracker.azure-boards`), `docs/plan/BLOCKERS.md` (the frozen S13-05 note)
 
@@ -27,14 +27,24 @@ connectors can serve both; they differ in the credential and in the address.
    `tenant_id` + `client_id` + the sealed `client_secret`, Services only). Secrets are fields of the
    connector, sealed, never a key of `config`. One client class (`AzureDevOpsClient`) puts the `api-version`
    (7.1) on every call and the credential on every request; the other connectors of the family reuse it.
-2. **The Entra exchange is its own small class.** `identity/entra.py` fetches Graph tokens only (the scope is
-   its own). The tracker's `EntraClientCredentials` asks the same v2.0 token endpoint with the same grant for
-   the Azure DevOps resource (`499b84ac-1321-427f-aa17-267ca6975798/.default`), caches the token until a
-   minute before it expires, and refuses nothing silently: a refused principal raises an `UpstreamError`
-   naming the endpoint. They are two classes because the resource, the cache and the failure differ, not
-   because the exchange does; folding them into one is a refactor for when a third caller exists.
-   `auth: entra` on a host that is not `dev.azure.com` or `*.visualstudio.com` is refused when the
-   connector is saved (a Server has no Entra sign-in for an application).
+2. **One Entra exchange, one client module.** `identity/entra.py` fetches Graph tokens only (its scope is
+   its own). Azure DevOps has `EntraClientCredentials`, which asks the same v2.0 token endpoint with the same
+   grant for the Azure DevOps resource (`499b84ac-1321-427f-aa17-267ca6975798/.default`), caches the token
+   until a minute before it expires, and refuses nothing silently: a refused principal raises an
+   `UpstreamError` naming the endpoint and the connector's own service (`azure-boards`, `azure-repos` or
+   `azure-pipelines`). It lives, with `AzureDevOpsClient`, `azure_client` (the one builder of the client from
+   a connector's configuration), `check_azure_devops` (the one configuration check, wrapped by
+   `check_azure_boards`, `check_azure_repos` and `check_azure_pipelines`), `azure_egress` and
+   `shared_secret_of`, in **`tranibor_adapters/azure_devops.py`**. S13-07 and S13-08 were built in parallel
+   and first carried two copies; they were folded into this module (S13-08 follow-up), and
+   `tests/test_azure_one_client.py` fails if a second client class, token class or secret reader returns.
+   The folded client takes, from the two copies, the better of each piece: the `203` sign-in page of a
+   refused PAT becomes a named `UpstreamError` for Boards too; the Entra login host of the egress follows the
+   connector's `login_url`; the shared `RestClient` supplies the retry on 429/500/502/503/504 (`Retry-After`
+   honoured, 30 s cap) and never follows a redirect, so a credential is not replayed elsewhere. `auth: entra`
+   on a host that is not `dev.azure.com` or `*.visualstudio.com` is refused when the connector is saved (a
+   Server has no Entra sign-in for an application). Boards' egress stays without `vssps.dev.azure.com`,
+   which only Repos calls.
 3. **The Boards tracker implements Jira's capabilities with Azure's mechanics.** Reads: a WIQL query
    (`POST wit/wiql`) within the team project, the optional `area_path` (`UNDER`), the `agent-ready` tag or
    the connector's `candidates_wiql` or a start rule, never a work item whose state category is Completed or
@@ -62,10 +72,12 @@ connectors can serve both; they differ in the credential and in the address.
    nothing twice. A tracker move carries a `status_category` only for the state names the four standard
    processes share; a team's own state carries none, and an item that ended is then never brought back by
    such a move (the safe side). Adding the route is a `contract(openapi)` change (a separate commit).
-5. **Repos and Pipelines (S13-08) are left to that story.** It adds `scm/azure-repos` and `ci/azure-pipelines`
-   on the same `AzureDevOpsClient`, the same two credentials and the `project` of point 1, with the service
-   hooks for pull requests and builds on a route of their own, and it records here what it decided. Nothing
-   of S13-08 is built or promised by this page's other points.
+5. **Repos and Pipelines (S13-08)** add `scm/azure-repos` and `ci/azure-pipelines` on the same
+   `AzureDevOpsClient`, the same two credentials and the `project` of point 1, with the service hooks for
+   pull requests and builds on a route of their own, `/api/v1/webhooks/azure-devops`. The two routes stay
+   separate: Boards hooks are routed by team project, area path and tags to a tracker, Repos and Pipelines
+   hooks by team project and repository to an SCM or CI connector, and merging them would be a contract
+   change with no gain. Both read the shared secret with the one `shared_secret_of`.
 
 ## Consequences
 

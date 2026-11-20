@@ -8,9 +8,10 @@ Basic with an empty user name, the only one a Server accepts) or, on the Service
 Entra service principal** through the client credentials grant, fetched here for the Azure DevOps
 resource and refreshed a minute before it expires.
 
-The Boards tracker (S13-07) carries the same two classes in `tracker/azure_boards.py`; they are two
-copies of one idea only until both stories are on the same branch, and the first merge folds them (the
-page of ADR 0198 says so). Nothing here imports the tracker.
+This is the one Azure DevOps client of the three connector types (Boards, Repos, Pipelines): the REST
+client, the Entra client credentials, the PAT handling, the configuration checks, the egress hosts and the
+service hook's shared secret live here and nowhere else (ADR 0198; `tests/test_azure_one_client.py`). The
+Boards tracker imports this module; nothing here imports the tracker.
 """
 
 from __future__ import annotations
@@ -179,6 +180,10 @@ def check_azure_repos(cfg: Mapping[str, Any]) -> None:
     _check_partial(cfg)
 
 
+def check_azure_boards(cfg: Mapping[str, Any]) -> None:
+    check_azure_devops(cfg)
+
+
 def check_azure_pipelines(cfg: Mapping[str, Any]) -> None:
     check_azure_devops(cfg)
     _check_partial(cfg)
@@ -193,15 +198,16 @@ def _check_partial(cfg: Mapping[str, Any]) -> None:
 MERGE_STRATEGIES = ("squash", "noFastForward", "rebase", "rebaseMerge")
 
 
-def azure_egress(config: Mapping[str, Any]) -> list[tuple[str, int]]:
-    """The organisation's (or the Server's) host; the identity host (`vssps.dev.azure.com`, where reviewers
-    are resolved) and the Entra login host for a service principal on the Services."""
+def azure_egress(config: Mapping[str, Any], *, identities: bool = True) -> list[tuple[str, int]]:
+    """The organisation's (or the Server's) host; the identity host (`vssps.dev.azure.com`, where Repos
+    resolves reviewers; `identities=False` for Boards, which never calls it) and the Entra login host
+    for a service principal on the Services."""
     from tranibor_core.egress import hosts_of_config
 
     hosts = hosts_of_config(dict(config))
     host = (urlsplit(str(config.get("base_url") or "")).hostname or "").lower()
     extra: list[str] = []
-    if host == "dev.azure.com":
+    if identities and host == "dev.azure.com":
         extra.append("vssps.dev.azure.com")
     if config.get("auth") == "entra":
         extra.append(
@@ -211,6 +217,10 @@ def azure_egress(config: Mapping[str, Any]) -> list[tuple[str, int]]:
         if (name, 443) not in hosts:
             hosts.append((name, 443))
     return hosts
+
+
+def azure_boards_egress(config: Mapping[str, Any]) -> list[tuple[str, int]]:
+    return azure_egress(config, identities=False)
 
 
 def shared_secret_of(headers: Mapping[str, str]) -> str:

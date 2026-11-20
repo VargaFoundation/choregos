@@ -13,7 +13,9 @@ from typing import Any
 
 from tranibor_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATTERN
 
+from .azure_devops import azure_boards_egress as _azure_boards_egress
 from .azure_devops import azure_egress as _azure_egress
+from .azure_devops import check_azure_boards as _check_azure_boards
 from .azure_devops import check_azure_pipelines as _check_azure_pipelines
 from .azure_devops import check_azure_repos as _check_azure_repos
 from .errors import AdapterError, ConfigurationError
@@ -38,51 +40,6 @@ def _atlassian_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
     if config.get("auth") == "scoped" and ("api.atlassian.com", 443) not in hosts:
         hosts.append(("api.atlassian.com", 443))
     return hosts
-
-
-def _azure_boards_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
-    """The organisation's (or the Server's) host, plus the Entra login host for a service principal."""
-    from tranibor_core.egress import hosts_of_config
-
-    hosts = hosts_of_config(config)
-    if config.get("auth") == "entra" and ("login.microsoftonline.com", 443) not in hosts:
-        hosts.append(("login.microsoftonline.com", 443))
-    return hosts
-
-
-def _check_azure_boards(cfg: dict[str, Any]) -> None:
-    """The collection to call, and the credential that fits it: a personal access token anywhere, an Entra
-    service principal on the Azure DevOps Services only (Server 2022 has no Entra sign-in for an app)."""
-    from urllib.parse import urlsplit
-
-    from .registry import fakes_enabled
-
-    url = str(cfg.get("base_url") or "").strip()
-    try:
-        parts = urlsplit(url)
-        parts.port  # noqa: B018 - raises ValueError on a port out of range
-    except ValueError as invalid:
-        raise ConfigurationError("`base_url` is not a valid address") from invalid
-    if parts.scheme not in ({"https", "http"} if fakes_enabled() else {"https"}) or not parts.hostname:
-        raise ConfigurationError(
-            "`base_url` must be the https address of the organisation or the collection "
-            "(https://dev.azure.com/<organisation>)"
-        )
-    if not str(cfg.get("project") or "").strip():
-        raise ConfigurationError("`project` is required: the Azure DevOps team project")
-    auth = cfg.get("auth", "pat")
-    if auth not in {"pat", "entra"}:
-        raise ConfigurationError("`auth` is `pat` (a personal access token) or `entra` (a service principal)")
-    if auth == "entra":
-        for field in ("tenant_id", "client_id"):
-            if not str(cfg.get(field) or "").strip():
-                raise ConfigurationError(f"`auth: entra` needs `{field}`")
-        host = (parts.hostname or "").lower()
-        if host != "dev.azure.com" and not host.endswith(".visualstudio.com") and not fakes_enabled():
-            raise ConfigurationError(
-                "`auth: entra` works on Azure DevOps Services (dev.azure.com) only: "
-                "Azure DevOps Server takes a personal access token"
-            )
 
 
 def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:

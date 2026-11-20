@@ -94,23 +94,11 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
 def _azure_boards_tracker(cfg: dict[str, Any]) -> Any:
     """Azure DevOps Boards: a personal access token as Basic, or an Entra service principal's token, the
     secrets from the vault, never from the repository."""
-    from .specs import _check_azure_boards
-    from .tracker.azure_boards import AzureBoardsTracker, AzureDevOpsClient, EntraClientCredentials
+    from .azure_devops import azure_client, check_azure_boards
+    from .tracker.azure_boards import AzureBoardsTracker
 
-    _check_azure_boards(cfg)
-    entra = (
-        EntraClientCredentials(
-            str(cfg["tenant_id"]),
-            str(cfg["client_id"]),
-            str(cfg.get("client_secret") or ""),
-            login_url=str(cfg.get("login_url") or "https://login.microsoftonline.com"),
-        )
-        if cfg.get("auth") == "entra"
-        else None
-    )
-    client = AzureDevOpsClient(
-        cfg["base_url"], pat=None if entra else str(cfg.get("pat") or ""), entra=entra, service="azure-boards"
-    )
+    check_azure_boards(cfg)
+    client = azure_client(cfg, service="azure-boards")
     return AzureBoardsTracker(
         client,
         cfg["project"],
