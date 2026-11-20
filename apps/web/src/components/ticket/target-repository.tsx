@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { canControlItems } from "@/lib/memberships";
 import { primaryName, repositoryNames } from "@/lib/repositories";
 import type { WorkItemDto } from "@/lib/types";
+import { workspaceFixed, workspaceOf } from "@/lib/neutral-names";
 
 /**
  * The repository a ticket works on (ADR 0124), in its facts: the one its `fields.repository` names, or
@@ -21,7 +22,7 @@ export function TargetRepository({
   onDone,
 }: {
   slug: string;
-  item: Pick<WorkItemDto, "id" | "repository" | "repository_fixed" | "closed_at">;
+  item: Pick<WorkItemDto, "id" | "workspace" | "workspace_fixed" | "repository" | "repository_fixed" | "closed_at">;
   onDone: () => unknown;
 }) {
   const id = useId();
@@ -30,19 +31,21 @@ export function TargetRepository({
   const [chosen, setChosen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (!item.repository) return null;
+  const current = workspaceOf(item);
+  const fixed = workspaceFixed(item);
+  if (!current) return null;
 
   const config = project.data?.config;
   const names = repositoryNames(config);
   const primary = primaryName(config);
   const settable =
-    !item.repository_fixed &&
+    !fixed &&
     !item.closed_at &&
     names.length > 1 &&
     project.data !== undefined &&
     me.data !== undefined &&
     canControlItems(me.data.memberships ?? [], project.data.org, project.data.slug);
-  const target = chosen ?? item.repository;
+  const target = chosen ?? current;
 
   async function save() {
     setBusy(true);
@@ -79,7 +82,7 @@ export function TargetRepository({
                 </option>
               ))}
             </Select>
-            {target !== item.repository && (
+            {target !== current && (
               <Button size="sm" onClick={() => void save()} disabled={busy}>
                 Set the repository
               </Button>
@@ -87,9 +90,9 @@ export function TargetRepository({
           </span>
         ) : (
           <span>
-            <span className="font-mono">{item.repository}</span>
-            {item.repository === primary && names.length > 1 && <span className="text-ink-muted"> (primary)</span>}
-            {item.repository_fixed && names.length > 1 && (
+            <span className="font-mono">{current}</span>
+            {current === primary && names.length > 1 && <span className="text-ink-muted"> (primary)</span>}
+            {fixed && names.length > 1 && (
               <span className="block text-xs text-ink-muted">Fixed: a step already worked on it.</span>
             )}
           </span>

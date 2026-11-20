@@ -26,7 +26,7 @@ Optional but recommended in production: a model gateway (LiteLLM), a memory serv
 
 ```bash
 helm upgrade --install choregos oci://ghcr.io/graalsystems/charts/choregos \
-  --version 0.27.15 --namespace choregos --create-namespace \
+  --version 0.27.16 --namespace choregos --create-namespace \
   -f my-values.yaml
 ```
 
@@ -384,7 +384,7 @@ reference: they name an image, and the operator maps names to references.
 ```yaml
 global:
   images:
-    jobs:   { quant: harbor.example.com/choregos/quant@sha256:… }
+    jobs:   { investment-research: ghcr.io/graalsystems/tranibor-investment-research@sha256:… }
     agents: { ticket-triager: harbor.example.com/agents/ticket-triager@sha256:… }
     requireDigest: true     # the default: a tag-only reference stops the API and the workers at start-up
 ```
@@ -554,6 +554,12 @@ A project that names its own `agent` or `models` keeps them. When a runner pod d
 report — an image it cannot pull, a backend it cannot reach — the run says so: the runner's exit
 code and what it means (`30`: agent backend unreachable, `50`: a skill missing or with a wrong
 digest, `60`: an input that does not match its digest, `80`: the context reduction the policy requires did not start, `90`: confinement required and the kernel cannot confine the agent, ADR 0094, `120`: the fakes are on in staging or prod…), or why the container never started.
+An agent that fails before its first prompt is reported by the runner itself, with exit `30` and a
+failed result whose reason says how: `agent_unreachable` (it could not be started, or did not answer
+`initialize`), `agent_exited` (its process ended first: said when it ends, with its exit code, not after
+the 60 s `initialize` timeout) or `agent_session_refused` (it answered `session/new` with an error); the
+run's journal holds a `run.failed` event with the phase (`start`, `initialize`, `session`), the reason and
+the agent's last error lines (#1986).
 
 ## Theme
 
@@ -1671,16 +1677,22 @@ Roles come from **groups**, and a group names its organisation:
 |---|---|
 | `choregos:<org>:org-admins` | `org_admin` on `<org>` |
 | `choregos:<org>:product-owners` | `project_owner` |
-| `choregos:<org>:release-captains` | `release_captain` |
-| `choregos:<org>:developers` | `developer` |
+| `choregos:<org>:approvers` (formerly `release-captains`) | `approver` (formerly `release_captain`) |
+| `choregos:<org>:contributors` (formerly `developers`) | `contributor` (formerly `developer`) |
 | `choregos:<org>:viewers` | `viewer` |
+
+`approvers` and `contributors` are the neutral names of `release-captains` and `developers`
+([ADR 0181](adr/0181-the-contracts-speak-no-trade.md) round C1). Until 0.30.0 both spellings give
+the same role, and the API may answer either `approver` or `release_captain`, `contributor` or
+`developer`; rename the groups at the identity provider before upgrading to 0.30.0, which reads only
+the new ones.
 
 The same claim carries an organisation's **human groups** (ADR 0052): a workflow's
 `group: architects` is matched by a member carrying `architects` or `choregos:<org>:architects`
 (the one mapper prefix `choregos:<org>:` serves roles and human groups). A group namespaced for
 another organisation never counts. The groups are stored as sent.
 
-Unprefixed groups (`developers`, `org-admins`) apply only when `global.oidc.defaultOrg`
+Unprefixed groups (`contributors`, `org-admins`) apply only when `global.oidc.defaultOrg`
 names the organisation they belong to; otherwise they are ignored. Before 2026-09-24 a
 group granted its role on **every** organisation of the instance.
 
@@ -2015,7 +2027,7 @@ scenario against it.
 
 ```bash
 curl -s https://<api-host>/edition
-{"edition":"community","features":[],"version":"0.27.15","publisher":null,"edition_version":null}
+{"edition":"community","features":[],"version":"0.27.16","publisher":null,"edition_version":null}
 ```
 
 `version` is the core's. `publisher` and `edition_version` are announced by the edition's plugin:
@@ -2118,6 +2130,61 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading past 0.27.16: the investment research template and its job image
+
+**The investment research template and `choregos-quant` left the core** (S83-07,
+[ADR 0181](adr/0181-the-contracts-speak-no-trade.md) O4-3), after the connectors (below). The
+template, its two agents, two skills and evals are the `investment-research` plugin's content
+(0.1.0, published in the `tranibor` source and shipped offline in the API image); `choregos-quant` is in
+the plugin's own job image, and the runner image no longer carries it. A deployment that runs
+investment research campaigns:
+
+1. **Maps the job image.** Each release publishes and signs
+   `ghcr.io/graalsystems/tranibor-investment-research:<version>`, built FROM that release's runner image.
+   Map it under the name the template's job steps use, at the release's version, pinned by digest:
+
+   ```yaml
+   global:
+     images:
+       jobs: { investment-research: ghcr.io/graalsystems/tranibor-investment-research@sha256:… }
+   ```
+
+   Without it a campaign's first job step fails with `job_image_unknown`, without a retry. Move the
+   digest with every upgrade, as the runner's: the job image carries that release's runner.
+2. **Installs the plugin** in each organisation that runs campaigns (**Plugins** in the sidebar, or
+   `defaultPlugins` in `global.plugins`), from the `offline` source the API image carries or from the
+   `tranibor` source. A new project names the template
+   `plugin:investment-research/investment-research`.
+3. **Republishes the `campaign` workflow of an existing project.** A project born of the core's former
+   template keeps the workflows it published, whose job steps name no image: they would run in the
+   runner image, which no longer has `choregos-quant`, and fail. Publish the plugin's `campaign.yaml`
+   over it (`PUT /projects/{id}/workflows/campaign` with `source: template`, or `choregos workflow
+   push`), or add `image: investment-research` to its three job actors. Its readiness no longer compares
+   its workflows with a template: the core does not ship it any more.
+
+Nothing to do for a deployment that never used it: the runner image is one command lighter.
+
+## Upgrading past 0.27.15: investment research is a plugin
+
+**The `marketdata` connector family left the core** (S83-08,
+[ADR 0181](adr/0181-the-contracts-speak-no-trade.md) O4-4). Its types (`stooq`, `yahoo`, `alphavantage`,
+`tiingo`, `composite`) and their fake are now the extension of the `investment-research` plugin: the
+distribution `tranibor-investment-research` (`plugins/investment-research/` of the core's repository, its
+wheel attached to each release), loaded from the `choregos.plugins` entry point by the API and the
+workers ([Plugins, extensions and editions](site/build/plugins-and-trades.md)).
+
+- **With the published images, nothing to do for the connectors**: the API and worker images install the
+  extension, under the same kind, type names, configuration and secrets, so the organisation connectors
+  already declared keep validating and serving. An image built from the source must install it too
+  (`uv sync --all-packages` does, as `docker/api.Dockerfile`); without it building a `marketdata` connector fails
+  with `no adapter … for marketdata`.
+- **The five `connector.marketdata.*` setup procedures are the plugin's.** The core no longer serves them:
+  an organisation that uses these connectors installs the `investment-research` plugin from the
+  `tranibor` source (**Plugins** in the sidebar, or `defaultPlugins` in `global.plugins`), which brings
+  them back under the same ids.
+- A test or a demo that scripted the fake as `tranibor_adapters.FAKE_MARKETDATA` scripts
+  `tranibor_investment_research.marketdata.fake.FAKE`.
+
 ## Upgrading past 0.27.15: the agent's isolation is one setting
 
 **`choregos-orchestrator.runner.sandbox.agentIsolation` moved to `global.runner.agentIsolation`**
@@ -2138,6 +2205,35 @@ runner's own container then requests `choregos-orchestrator.runner.ownResources`
 CPU and 2Gi; the warm pool's template too) and the agent's takes `runner.limits` and the run's requests, as
 the single container did: a namespace quota sees 1.25 CPU and 2.5Gi requested per run instead of 1 and 2Gi,
 and a LimitRange judges each container. `tekton` and `aca` refuse `container`.
+
+## Upgrading to 0.28
+
+**The ontology is removed** ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), O4-1). The trial plugin
+`tranibor-ontology` (formerly `choregos-ontology`), its compatibility shim, its console card, its MCP tools and
+the `ontology:` extension of the `joiners-leavers` template are gone. It was off unless
+`CHOREGOS_ONTOLOGY_TRIAL` was set, so an installation that never set it sees no change.
+
+| What | What happens | What to do |
+| :-- | :-- | :-- |
+| `CHOREGOS_ONTOLOGY_TRIAL` | No longer read. | Remove it from `global.extraEnv` (or `.env`) **with or after** the upgrade, never before: on 0.27, removing it where the branch was applied leaves `onto0003` in `alembic_version` with no revision to read it, and the migration Job fails. |
+| Its tables `ontology_versions`, `managed_objects` (and `action_proposals`, left by `onto0002`) | The core migration `b4d6f8a0c2e5` drops them when they exist; their RLS policies and indexes go with them. Their content is not kept. | Export them first if you need what they hold. |
+| Its rows in `alembic_version` (`onto0001` to `onto0003`) | The migration Job forgets them before anything else (Alembic could not read the table otherwise) and logs `retired_revisions_forgotten`. `python -m tranibor_api.migrate heads` shows the core's head only. | Nothing. |
+| Actions it persisted (`origin: ontology`, effects `ontology.effet` / `ontology.preuve`, `params.ontologie`) <!-- lang: fr-ok --> | Read as before: the API, the console's action page and the audit log still show them, and the contract keeps `ontology` as an `origin` it reads and never writes. | One still pending can be rejected; approved, it fails on its effect, which nothing declares any more. |
+| A plugin of your own that declared a template installer, tools for people or effects | The extension seam it used stays: nothing of it was specific to the ontology. | Nothing. |
+
+The downgrade of `b4d6f8a0c2e5` does not create the tables again.
+
+**Neutral names beside the former ones** ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), round C1).
+Every former name is listed, with the release that removes it, in `tranibor_contracts.window`: those of C1
+leave in **0.30.0** (not before 2026-12-07).
+
+| What | What happens | What to do |
+| :-- | :-- | :-- |
+| The roles `developer`, `release_captain` | `contributor` and `approver` are their neutral names: a request may send either, both hold the same permissions, and a membership keeps the spelling its row holds. Writers switch to the new spelling in 0.29.0; 0.30.0 rewrites the remaining rows. | A script or a values file that names a role: switch it before 0.30.0. |
+| The role groups `developers`, `release-captains` | `contributors` and `approvers` give the same roles. | Rename the groups at the identity provider before 0.30.0. |
+| `WorkItem.pr_url`, `repository`, `repository_fixed`; `ProcessStep.writes_branch`; `WorkflowCatalogueEntry.needs_repository`; `ArtifactFlow.in_pull_request`; `first_pass_merge_rate` | Served beside `links` (`rel: change_request`), `workspace`, `workspace_fixed`, `writes_workspace`, `needs_workspace`, `in_change_request`, `first_pass_acceptance_rate`. | A client of the REST API reads the new names before 0.30.0. |
+| A step result's `artifacts.pr_url` | Read beside `artifacts.links`. | Nothing. |
+| The OpenAPI title | "Tranibor API". | Nothing. |
 
 ## Upgrading past 0.27.13: the egress gate
 

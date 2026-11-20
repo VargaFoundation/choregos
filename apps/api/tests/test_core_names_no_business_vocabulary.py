@@ -10,8 +10,10 @@ or an underscore): the core's messages and prompts must not name the business ei
 
 To see it fail, add a business word to any identifier of the core, for instance `def isin_of(...)` in
 `apps/api/src/tranibor_api/services/assistants.py`: the test names the file, the line and the word. To
-allow a word that is legitimately there (a connector of S38, say), add the file to `ALLOWED` with the reason:
-the allowlist is checked both ways, so an entry that no longer matches anything fails too.
+allow a word that is legitimately there, add the file to `ALLOWED` with the reason: the allowlist is checked
+both ways, so an entry that no longer matches anything fails too. A trade's code belongs in its plugin's
+extension (ADR 0181, `plugins/<name>/`), which this guard does not read: the `marketdata` connectors
+(S83-08) and the `quant` engine (S83-07) left the core for `investment-research`'s, and the list is empty.
 """
 
 from __future__ import annotations
@@ -35,18 +37,7 @@ VOCABULARY = {
     "securities",
 }
 #: file -> reason. Each entry names a word the file legitimately carries.
-ALLOWED: dict[str, str] = {
-    "packages/adapters/src/tranibor_adapters/marketdata": (
-        "S38's market-data connectors (Tiingo, composite) are a product feature, not of assistants"
-    ),
-    "packages/adapters/src/tranibor_adapters/fakes/marketdata.py": "the fake of the S38 market-data provider",
-    "packages/adapters/src/tranibor_adapters/fakes/scenes.py": "the S38 scene that builds the fake provider",
-    "packages/adapters/src/tranibor_adapters/families.py": "the operations of the S38 `marketdata` family",
-    "packages/adapters/src/tranibor_adapters/__init__.py": "exports the S38 fake `FAKE_MARKETDATA`",
-    "packages/adapters/src/tranibor_adapters/specs.py": "registers the S38 `marketdata` connector type",
-    "packages/adapters/src/tranibor_adapters/builtins.py": "registers the S38 `marketdata` connector type",
-    "packages/quant/src/tranibor_quant": "S38's research tooling reads market data through the S38 connector",
-}
+ALLOWED: dict[str, str] = {}
 
 
 def _words(name: str) -> list[str]:

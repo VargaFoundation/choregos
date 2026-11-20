@@ -52,6 +52,9 @@ class GeminiCliBackend(Backend):
     name: ClassVar[str] = "gemini-cli"
     skills_dir: ClassVar[str | None] = ".gemini/skills"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
+    #: Gemini only (#1990): through LiteLLM's Gemini adapter another family refuses its turns as soon
+    #: as it calls one tool twice (`tranibor_core.models.BACKEND_MODEL_CONSTRAINT_REASONS`).
+    model_constraint: ClassVar[tuple[str, ...]] = ("gemini",)
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
         # `--acp` since gemini-cli 0.39; `--experimental-acp` is deprecated and prints a
@@ -64,7 +67,11 @@ class GeminiCliBackend(Backend):
         }
         return LaunchPlan(
             command=command,
-            env=dict(stage_input.agent.launch.env),
+            # gemini-cli ignores the workspace's `.gemini/settings.json`, its `mcpServers` with it, in a
+            # folder it does not trust, and over ACP nobody is there to trust it: measured on 0.60.0
+            # (S65-04a), not one request reached the step's MCP server; with this variable the server was
+            # listed and called. The workspace is the run's own clone. The step's `launch.env` comes last.
+            env={"GEMINI_CLI_TRUST_WORKSPACE": "true", **stage_input.agent.launch.env},
             files={
                 ".gemini/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
                 **stage_input.agent.launch.files,
@@ -73,6 +80,7 @@ class GeminiCliBackend(Backend):
         )
 
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
+        self.validate_model(model)
         return {
             "GOOGLE_GEMINI_BASE_URL": model.base_url,
             "GEMINI_API_KEY": key or "",
@@ -132,6 +140,8 @@ class GooseBackend(Backend):
 # `OPENCODE_DISABLE_DEFAULT_PLUGINS` skips opencode's built-in npm plugins (copilot/codex auth);
 # on 1.18.31 they asked for nothing, so the flag is belt and braces for a bump.
 OPENCODE_CONFIG_HOME = "/opt/choregos/xdg-config"
+#: The loopback port of opencode's own server (its `serve` default); no listener of the pod uses it.
+OPENCODE_SERVER_PORT = 4096
 
 OPENCODE_OFFLINE_ENV: dict[str, str] = {
     "OPENCODE_DISABLE_MODELS_FETCH": "1",
@@ -160,7 +170,12 @@ class OpenCodeBackend(Backend):
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
-        command = list(stage_input.agent.launch.command) or ["opencode", "acp"]
+        # `opencode acp` serves its sessions from an HTTP server of its own, on loopback, and connects to
+        # it: on a random port by default, which the confinement's port rule refuses (ADR 0094), and
+        # `session/new` failed with "OpenCode service failure" (S65-04a, 1.18.31 under Landlock ABI 7).
+        # The default command names the port, and the plan declares it.
+        custom = list(stage_input.agent.launch.command)
+        command = custom or ["opencode", "acp", "--port", str(OPENCODE_SERVER_PORT)]
         config = {
             "$schema": "https://opencode.ai/config.json",
             "provider": {
@@ -198,6 +213,7 @@ class OpenCodeBackend(Backend):
                 **stage_input.agent.launch.files,
             },
             mcp_servers=self.mcp_servers(stage_input),
+            local_ports=() if custom else (OPENCODE_SERVER_PORT,),
         )
 
     @staticmethod

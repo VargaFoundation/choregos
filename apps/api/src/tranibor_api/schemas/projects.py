@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from tranibor_contracts import ProjectConfig
 
 from .base import Dto, PageMeta
@@ -17,8 +17,18 @@ class ProjectStats(Dto):
     cost_month_eur: float = 0.0
     budget_month_eur: float | None = None
     trains_pending: int = 0
+    #: The share of the work items accepted without a rework loop (ADR 0181 C1).
+    first_pass_acceptance_rate: float | None = None
+    #: Its former name, served beside it until the release `tranibor_contracts.window` names.
     first_pass_merge_rate: float | None = None
     cycle_time_p50_hours: float | None = None
+
+    @model_validator(mode="after")
+    def _both_names(self) -> ProjectStats:
+        if self.first_pass_acceptance_rate is None:
+            self.first_pass_acceptance_rate = self.first_pass_merge_rate
+        self.first_pass_merge_rate = self.first_pass_acceptance_rate
+        return self
 
 
 class ProjectDto(Dto):

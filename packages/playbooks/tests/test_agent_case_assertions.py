@@ -267,10 +267,11 @@ def test_e2_s_top_five_is_what_the_trace_holds() -> None:
 
 
 def test_e6_s_volatilities_are_what_the_bars_give() -> None:
-    from tranibor_adapters.fakes.marketdata import FakeMarketData
+    from tranibor_adapters.fakes.scenes import scene
 
     case = load_case(AGENT_CASES_DIR / "marketdata-volatility.yaml")
-    market = FakeMarketData()
+    # The scene's fake, declared by the `investment-research` extension (ADR 0181 O4-4).
+    market = scene("marketdata").fake
 
     async def volatility(symbol: str) -> float:
         bars = (

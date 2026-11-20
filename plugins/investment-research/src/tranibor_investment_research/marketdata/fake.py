@@ -1,0 +1,146 @@
+# SPDX-License-Identifier: Apache-2.0
+"""The fake of the `marketdata` family (ADR 0005): deterministic synthetic bars, scriptable.
+
+Bars are a geometric random walk seeded by the symbol (`random.Random(seed)`, the seed a SHA-256
+of the symbol — never Python's per-process `hash`), over business days only. The walk always
+starts at the same anchor day, so a date has the same bar whatever window is asked: two calls, two
+processes, two machines give the same numbers.
+
+Scripting: `fixtures[symbol]` replaces the synthetic bars of a symbol, `instruments[symbol]` its
+description, `errors[symbol]` makes it raise, `cross_checks[symbol]` adds the cross-check a
+`composite` would report (`{source, common_days, max_rel_diff, diverging_days}`); `calls` records
+every call (name and arguments).
+Used under `CHOREGOS_FAKES=1`, by the tests, the e2e and the demo.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import math
+import random
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from typing import Any
+
+from .base import (
+    MarketDataError,
+    MarketDataProvider,
+    UnknownSymbol,
+    answer,
+    finish_bars,
+    validate_range,
+    validate_symbol,
+)
+
+#: The first day of every synthetic series (a Monday).
+ANCHOR = date(2000, 1, 3)
+START_PRICE = 100.0
+DAILY_DRIFT = 0.0003
+DAILY_VOL = 0.012
+
+
+def seed_of(symbol: str) -> int:
+    return int.from_bytes(hashlib.sha256(symbol.upper().encode()).digest()[:8], "big")
+
+
+def synthetic_bars(symbol: str, start: date, end: date) -> list[dict[str, Any]]:
+    """The bars of `symbol` between two dates: business days, a walk the window does not change."""
+    rng = random.Random(seed_of(symbol))
+    price = START_PRICE * (0.5 + rng.random())
+    bars: list[dict[str, Any]] = []
+    day = ANCHOR
+    while day <= end:
+        if day.weekday() < 5:
+            open_price = price
+            price = open_price * math.exp(rng.gauss(DAILY_DRIFT, DAILY_VOL))
+            high = max(open_price, price) * (1 + abs(rng.gauss(0, DAILY_VOL / 3)))
+            bas = min(open_price, price) * (1 - abs(rng.gauss(0, DAILY_VOL / 3)))
+            volume = float(rng.randint(100_000, 5_000_000))
+            if day >= start:
+                bars.append(
+                    {
+                        "date": day.isoformat(),
+                        "open": round(open_price, 4),
+                        "high": round(high, 4),
+                        "low": round(bas, 4),
+                        "close": round(price, 4),
+                        "adj_close": round(price, 4),
+                        "volume": volume,
+                    }
+                )
+        day += timedelta(days=1)
+    return bars
+
+
+@dataclass
+class FakeMarketData(MarketDataProvider):
+    name = "fake"
+
+    fixtures: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    instruments: dict[str, dict[str, Any]] = field(default_factory=dict)
+    errors: dict[str, Exception] = field(default_factory=dict)
+    cross_checks: dict[str, dict[str, Any]] = field(default_factory=dict)
+    calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:  # no HTTP client: nothing to open
+        pass
+
+    async def aclose(self) -> None:
+        return None
+
+    def __repr__(self) -> str:
+        return "<FakeMarketData>"
+
+    def _enter(self, operation: str, symbol: str, **arguments: Any) -> str:
+        self.calls.append((operation, {"symbol": symbol, **arguments}))
+        validate_symbol(symbol)
+        error = self.errors.get(symbol)
+        if error is not None:
+            raise error
+        return symbol
+
+    async def get_bars(self, symbol: str, start: str, end: str) -> dict[str, Any]:
+        self._enter("get_bars", symbol, start=start, end=end)
+        first_day, last_day = validate_range(start, end)
+        if symbol in self.fixtures:
+            bars = finish_bars([dict(b) for b in self.fixtures[symbol]], first_day, last_day)
+        else:
+            bars = synthetic_bars(symbol, first_day, last_day)
+        response = answer(symbol, self.name, bars, currency="USD", adjusted=True)
+        if symbol in self.cross_checks:
+            response["cross_check"] = dict(self.cross_checks[symbol])
+        return response
+
+    async def get_instrument(self, symbol: str) -> dict[str, Any]:
+        self._enter("get_instrument", symbol)
+        if symbol in self.instruments:
+            return {"symbol": symbol, "provider": self.name, **self.instruments[symbol]}
+        if symbol.startswith("NOPE"):
+            raise UnknownSymbol(f"fake: unknown symbol {symbol}")
+        return {
+            "symbol": symbol,
+            "name": f"{symbol.upper()} (synthetic)",
+            "type": "stock",
+            "currency": "USD",
+            "exchange": "FAKE",
+            "provider": self.name,
+        }
+
+    async def test(self) -> dict[str, Any]:
+        return {"ok": True, "fake": "FakeMarketData"}
+
+
+__all__ = ["FakeMarketData", "MarketDataError", "seed_of", "synthetic_bars"]
+
+
+#: The process-wide fake of `CHOREGOS_FAKES=1`, scripted by the tests, the e2e and the demo. `None` until
+#: the first build; a test rebinds it here.
+FAKE: FakeMarketData | None = None
+
+
+def shared() -> FakeMarketData:
+    """The process-wide fake, created on first use."""
+    global FAKE  # noqa: PLW0603 - the process-wide fake, rebound by tests as the core's are
+    if FAKE is None:
+        FAKE = FakeMarketData()
+    return FAKE

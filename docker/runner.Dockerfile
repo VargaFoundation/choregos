@@ -12,6 +12,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY packages packages
 COPY compat compat
+# A workspace member (ADR 0181): uv reads every member's metadata, and this image installs none of its code.
+COPY plugins/investment-research/pyproject.toml plugins/investment-research/
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 RUN mkdir -p apps/api/src apps/orchestrator/src \
@@ -161,6 +163,17 @@ RUN set -eux; \
     npm install --ignore-scripts --no-audit --no-fund --save-exact \
       "@opencode-ai/plugin@$(version opencode-plugin)"; \
     test -f node_modules/@opencode-ai/plugin/package.json; \
+    # opencode also writes `.gitignore` and `opencode.jsonc` here at start when they are missing. In its
+    # own container the agent is another uid with a read-only root (ADR 0146), and under Landlock this
+    # directory is no write root in either mode: the write failed and opencode exited before
+    # `initialize` (S65-04a). Started once here, it writes both; with both present it writes nothing
+    # here (measured on 1.18.31 with the directory read-only and owned by another uid).
+    mkdir -p /tmp/opencode-home; \
+    (cd /tmp/opencode-home && HOME=/tmp/opencode-home XDG_CONFIG_HOME=/opt/choregos/xdg-config \
+      OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_LSP_DOWNLOAD=1 \
+      OPENCODE_DISABLE_DEFAULT_PLUGINS=1 timeout 30 opencode acp </dev/null >/dev/null); \
+    test -f .gitignore && test -f opencode.jsonc; \
+    rm -rf /tmp/opencode-home; \
     chown -R 1000:1000 /opt/choregos
 
 # OpenHands is no longer installed (docs/adr/0011-openhands-removed.md). It exposed no
@@ -250,13 +263,13 @@ COPY --from=builder --chown=1000:1000 /app /app
 # dependency only showed at the first agent launched in a cluster, as a `ModuleNotFoundError`
 # (it happened with `pydantic-settings`). Here, the build fails.
 RUN /app/.venv/bin/choregos-runner --help >/dev/null
-# Same for the deterministic backtest engine (a dependency of the runner package): a job stage
-# runs `choregos-quant` with no network, so it must be installed and start here.
-RUN /app/.venv/bin/choregos-quant --help >/dev/null
-# The platform's commands, by name, for whoever calls them so (a Tekton step's `choregos-runner run`,
-# a job's `choregos-quant`), without putting the venv's `python3` in front of the workspace (#713).
+# A job step's command comes from the image the operator maps for it (`CHOREGOS_JOB_IMAGES`, ADR 0056),
+# built FROM this one: the `investment-research` plugin's `choregos-quant` is in its own job image
+# (`plugins/investment-research/Dockerfile`, ADR 0181 O4-3), not here.
+# The platform's commands, by name, for whoever calls them so (a Tekton step's `choregos-runner run`),
+# without putting the venv's `python3` in front of the workspace (#713).
 RUN set -eux; \
-    for command in choregos-runner choregos-quant choregos-tools; do \
+    for command in choregos-runner choregos-tools; do \
       ln -s "/app/.venv/bin/$command" "/usr/local/bin/$command"; \
     done; \
     test "$(command -v python3)" = /usr/local/bin/python3; \

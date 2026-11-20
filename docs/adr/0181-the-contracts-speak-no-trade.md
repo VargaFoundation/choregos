@@ -327,7 +327,8 @@ version 1.
   five surfaces. Each later round shrinks its allowlist, and at 1.0 the allowlist holds nothing on a
   frozen surface.
 - Two corrections fall outside this record, and each has a follow-up:
-  - ADR 0176 point 4 names an image `tranibor-quant` that does not exist;
+  - ADR 0176 point 4 names an image `tranibor-quant` that does not exist (dropped by #1847; since S83-07
+    the plugin's job image is `tranibor-investment-research`, recorded in ADR 0176's amendment);
   - `StageRole` and `playbooks.KNOWN_ROLES` disagree (`brief`, `deliver`).
 - Nothing in `packages/contracts` changes until the decision. Issue #1832 carries the rounds.
 

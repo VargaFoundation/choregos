@@ -140,3 +140,20 @@ def test_a_value_is_one_plugin_s_and_matches_the_pattern(plugin: str) -> None:
 def test_stage_role_has_the_roles_the_playbooks_ship() -> None:
     """`brief` and `deliver` (ADR 0110) were playbook roles the enumeration lacked (ADR 0181)."""
     assert {StageRole.BRIEF.value, StageRole.DELIVER.value} == {"brief", "deliver"}
+
+
+def test_a_stored_document_reads_a_value_nobody_declares_any_more() -> None:
+    """ADR 0098 §4, readers accept: a stored workflow naming a plugin's step effect keeps parsing once
+    the plugin is gone (its interpreter's history replays); a new one naming it is refused."""
+    from tranibor_contracts.open_lists import STORED
+
+    does = {"id": "t", "from": "a", "to": "b", "by": "ci", "does": "close_incident"}
+    assert Transition.model_validate(does, context={STORED: True}).does == "close_incident"
+    with pytest.raises(ValidationError, match="unknown step effect"):
+        Transition.model_validate(does)
+    with pytest.raises(ValidationError, match="unknown step effect"):
+        Transition.model_validate({**does, "does": "Close Incident"}, context={STORED: True})
+    stored = InboundEvent.model_validate(
+        {"type": "scm.pr.opened", "source": "github", "delivery_id": "d"}, context={STORED: True}
+    )
+    assert stored.type is InboundEventType.PR_OPENED

@@ -13,12 +13,12 @@ metadata:
 initial: inbox
 actors:
   triager: { type: agent, role: triage, agent: triager, model: "profile:cheap" }
-  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard", needs: [scm] }
   tester: { type: agent, role: verify, agent: tester, model: "profile:standard" }
-  reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
-  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
-  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
-  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard" }
+  reviewer: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true, needs: [scm] }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard", needs: [scm] }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard", needs: [scm] }
+  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard", needs: [cd] }
   platform: { type: system }
   maintainers: { type: human, group: maintainers, sla_hours: 24 }
 states:
@@ -74,6 +74,7 @@ transitions:
     from: addressing_review
     to: implemented
     by: responder
+    repairs: changes_requested
     inputs: [review_markdown]
     outputs: [review_markdown]
     gates: [scope_respected, no_secrets]
@@ -100,6 +101,7 @@ transitions:
     from: fixing_ci
     to: in_pr
     by: ci_fixer
+    repairs: ci_failed
     gates: [scope_respected, no_secrets]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   - id: t-release

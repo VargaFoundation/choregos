@@ -19,6 +19,7 @@ import {
 import { ApiError, api } from "@/lib/api";
 import type { ConnectorDto, WorkflowCatalogueEntry } from "@/lib/types";
 import { workflowNameError } from "@/lib/workflow-name";
+import { needsWorkspace } from "@/lib/neutral-names";
 
 /**
  * The workflow library (ADR 0111; "catalogue" until S55-04, a word read as French): what this project can adopt — the platform's workflows, the
@@ -117,8 +118,8 @@ function CatalogueCard({
       <div className="space-y-3 text-sm">
         {entry.summary && <p>{entry.summary}</p>}
         <div className="flex flex-wrap gap-2">
-          <Badge tone={entry.needs_repository ? "neutral" : "ok"}>
-            {entry.needs_repository ? "Needs a repository" : "Needs no repository"}
+          <Badge tone={needsWorkspace(entry) ? "neutral" : "ok"}>
+            {needsWorkspace(entry) ? "Needs a repository" : "Needs no repository"}
           </Badge>
           {entry.tags.map((tag) => (
             <Badge key={tag} dot={false}>
@@ -139,7 +140,7 @@ function CatalogueCard({
         {entry.groups.length > 0 && (
           <p className="text-ink-muted">People: {entry.groups.map((g) => `@${g}`).join(", ")}</p>
         )}
-        {entry.needs_repository && !hasRepository && (
+        {needsWorkspace(entry) && !hasRepository && (
           <p className="text-warn">This project names no repository: this workflow could not run here.</p>
         )}
         {missing.length > 0 ? (

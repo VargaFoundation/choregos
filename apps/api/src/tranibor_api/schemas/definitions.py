@@ -53,6 +53,9 @@ class WorkflowCatalogueEntryDto(Dto):
     summary: str
     tags: list[str]
     requires: list[WorkflowCatalogueRequirementDto]
+    #: It requires a workspace its steps read and write (an `scm` today, ADR 0181 C1).
+    needs_workspace: bool = False
+    #: The former name of `needs_workspace`, until the release `tranibor_contracts.window` names.
     needs_repository: bool
     groups: list[str]
     agents: list[WorkflowCatalogueAgentDto]

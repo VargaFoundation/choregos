@@ -47,7 +47,7 @@ global:
   # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
   internalApiUrl: ""
   imageRegistry: ghcr.io/graalsystems
-  imageTag: "0.27.15"
+  imageTag: "0.27.16"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -95,14 +95,14 @@ global:
     agentIsolation: process
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
-  # yet — for example an extension shipped inactive (`CHOREGOS_ONTOLOGY_TRIAL: "1"`) — without forking the
-  # chart. A variable already set by the chart is REFUSED at render time: two values for the same
+  # yet — for example a setting an installed plugin reads (`ACME_PLUGIN_MODE: "strict"`) — without
+  # forking the chart. A variable already set by the chart is REFUSED at render time: two values for the same
   # name, Kubernetes keeps the last one without saying anything, and the chart's setting would be replaced
   # silently. Each entry has exactly one of `value` or `valueFrom` (refused otherwise); a secret is
   # mapped by `valueFrom.secretKeyRef`, never written as a plain `value` (S38-18).
   extraEnv: []
-  #   - name: CHOREGOS_ONTOLOGY_TRIAL
-  #     value: "1"
+  #   - name: ACME_PLUGIN_MODE
+  #     value: "strict"
   # OpenTelemetry GenAI traces (ADR 0018). The collector's OTLP/HTTP endpoint, given as
   # `OTEL_EXPORTER_OTLP_ENDPOINT` to the API, each worker, the migration Job and the embedded
   # gateway, whose callback puts each model call in its run's trace. Empty: tracing off, nothing

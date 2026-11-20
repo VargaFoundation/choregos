@@ -51,6 +51,16 @@ OUTCOME_APPROVED = "approved"
 OUTCOME_REJECTED = "rejected"
 
 
+#: The role guess of a workflow stored before `repairs:` (ADR 0181 C1): which agent role repairs which
+#: outcome. A workflow that declares `repairs:` on any transition is never guessed for. The two roles
+#: are the software-delivery plugin's (C2); the guess stays for the stored versions, which are never
+#: rewritten.
+LEGACY_REPAIR_ROLES: dict[str, str] = {
+    OUTCOME_CI_FAILED: "fix_ci",
+    OUTCOME_CHANGES_REQUESTED: "address_review",
+}
+
+
 class UnknownStateError(KeyError):
     """A work item sits in a state its workflow does not declare (a trial's `trial`, a stale pin).
 
@@ -84,18 +94,33 @@ class WorkflowEngine:
         except KeyError:
             raise UnknownStateError(state, self.wf.metadata.name) from None
 
+    @property
+    def declares_repairs(self) -> bool:
+        """Whether a transition of this workflow declares the outcome it repairs (ADR 0181 C1)."""
+        return any(t.repairs for t in self.wf.transitions)
+
     def select_transition(
-        self, state: str, outcome: str | None = None, outputs: Mapping[str, Any] | None = None
+        self,
+        state: str,
+        outcome: str | None = None,
+        outputs: Mapping[str, Any] | None = None,
+        *,
+        repairs: bool = True,
     ) -> Transition | None:
         """Choose the transition to play from `state`, **deterministically**.
 
         In order of preference:
         1. the transition whose `id` is exactly `outcome` (an incoming event);
-        2. for `ci_failed`, the transition carried by an agent of role `fix_ci`;
-        3. for `changes_requested`, the transition carried by an agent of role `address_review`;
+        2. the transition that declares it repairs `outcome` (`repairs: ci_failed`, ADR 0181 C1);
+        3. for a workflow that declares no `repairs:` (one stored before it existed): for
+           `ci_failed`, the transition carried by an agent of role `fix_ci`, for `changes_requested`,
+           the one carried by an agent of role `address_review`;
         4. otherwise, the first transition declared from this state (leaving out the repair
            transitions, played only on an explicit outcome) whose `when` holds on `outputs`, the
            last stage's outputs (S48-01); a transition without `when` always holds.
+
+        `repairs=False` is the interpreter's answer for a history recorded before the platform read
+        `repairs:` (`workflow.patched`): only the role guess of point 3 then picks a repair.
 
         An "already fixed" exit (`already_fixed_exit`) is never selected here: it is taken only after
         the agent step from the same state measured no change (S22-47).
@@ -103,22 +128,23 @@ class WorkflowEngine:
         candidates = self.wf.transitions_from(state)
         if not candidates:
             return None
+        declared = repairs and self.declares_repairs
         if outcome:
             for t in candidates:
                 if t.id == outcome:
                     return t
-            role = {OUTCOME_CI_FAILED: "fix_ci", OUTCOME_CHANGES_REQUESTED: "address_review"}.get(outcome)
-            if role:
+            if declared:
                 for t in candidates:
+                    if t.repairs == outcome:
+                        return t
+            else:
+                role = LEGACY_REPAIR_ROLES.get(outcome)
+                for t in candidates if role else ():
                     actor = self.wf.actor_of(t)
                     if isinstance(actor, AgentActor) and str(actor.role) == role:
                         return t
-        repair_roles = {"fix_ci", "address_review"}
         for t in candidates:
-            if self._is_already_fixed_exit(t):
-                continue
-            actor = self.wf.actor_of(t)
-            if isinstance(actor, AgentActor) and str(actor.role) in repair_roles:
+            if self._is_already_fixed_exit(t) or self._is_repair(t, declared):
                 continue
             if not when_holds(t.when, outputs):
                 continue
@@ -126,6 +152,13 @@ class WorkflowEngine:
         # Only repair transitions, or conditional ones none of which holds: the validator requires a
         # default (no `when`) beside conditional exits, so a conditional first one is never a fallback.
         return candidates[0] if when_holds(candidates[0].when, outputs) else None
+
+    def _is_repair(self, transition: Transition, declared: bool) -> bool:
+        """A repair transition, played only on its outcome: declared, or guessed from the role."""
+        if declared:
+            return transition.repairs is not None
+        actor = self.wf.actor_of(transition)
+        return isinstance(actor, AgentActor) and str(actor.role) in LEGACY_REPAIR_ROLES.values()
 
     def already_fixed_exit(self, state: str) -> Transition | None:
         """The platform's "already fixed" exit from `state` (S22-47, #539): a `system` transition

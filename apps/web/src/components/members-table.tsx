@@ -25,7 +25,7 @@ export function MembersTable({ project }: { project?: string }) {
   const roles: readonly Role[] = project ? PROJECT_ROLES : ROLES;
   const [invite, setInvite] = useState<{ email: string; role: Role; project: string }>({
     email: "",
-    role: "developer",
+    role: "contributor",
     project: project ?? "",
   });
   const [toRemove, setToRemove] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export function MembersTable({ project }: { project?: string }) {
             void act(
               () => api.addMember(org, { email: invite.email, role: invite.role, project_slug: invite.project || null }),
               `${invite.email} invited as ${ROLE_LABELS[invite.role]}${invite.project ? ` on ${invite.project}` : ""}`,
-            ).then(() => setInvite({ email: "", role: "developer", project: project ?? "" }));
+            ).then(() => setInvite({ email: "", role: "contributor", project: project ?? "" }));
           }}
         >
           <label className="flex min-w-0 flex-col gap-1">

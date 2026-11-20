@@ -55,6 +55,18 @@ BACKEND_API_FORMAT: dict[str, ApiFormat] = {
 # Hard constraints of a backend on the model family.
 BACKEND_MODEL_CONSTRAINTS: dict[str, tuple[str, ...]] = {
     "claude-code": ("claude", "anthropic"),
+    "gemini-cli": ("gemini",),
+}
+
+# Why a backend is held to its family, said with the refusal.
+BACKEND_MODEL_CONSTRAINT_REASONS: dict[str, str] = {
+    # gemini-cli speaks Gemini's API only. On another family, LiteLLM's Gemini adapter (1.105.5 to
+    # 1.110.1, `google_genai/adapters/transformation.py`) names every tool call `call_<function name>`
+    # and ignores the body's ids, so two calls of one tool share an id and Anthropic refuses the turn
+    # (S65-04a: 500 "Found multiple tool_result blocks with id: call_read_file", the step ended
+    # `invalid_result` after minutes, #1990). Refused before the step starts instead.
+    "gemini-cli": "LiteLLM's Gemini adapter gives two calls of one tool the same id, which a "
+    "non-Gemini model refuses (#1990)",
 }
 
 # The ACP backends the runner image ships, in order of preference, and what each can do.
@@ -334,7 +346,7 @@ class ModelResolver:
             self._reject(
                 resolved,
                 f"the backend `{backend}` only accepts {' / '.join(constraints)} models "
-                f"(got `{model}` → `{effective}`)",
+                f"(got `{model}` → `{effective}`)" + _because(backend),
                 allow_unvalidated=False,  # hard constraint: never bypassable
             )
         validated = self.validated_backends.get(model)
@@ -353,6 +365,11 @@ class ModelResolver:
             resolved.warnings.append(message)
             return
         raise ModelResolutionError(message)
+
+
+def _because(backend: str) -> str:
+    reason = BACKEND_MODEL_CONSTRAINT_REASONS.get(backend)
+    return f": {reason}" if reason else ""
 
 
 def estimate_tokens(text: str) -> int:

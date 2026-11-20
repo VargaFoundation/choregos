@@ -377,6 +377,7 @@ async def test_gemini_cli_gets_the_loopback_key_and_address_too(
     """S65-04f remainder: Gemini's own variables carry the loopback key and address, nothing real."""
     port, _ = serving
     step = _step(stage_input, backend="gemini-cli")
+    step.model.provider_model = "gemini/gemini-2.5-pro"  # gemini-cli runs on a Gemini model only (#1990)
     agent_script({"turns": [{"result": valid_result()}]}, step, runner_settings.workspace)
 
     monkeypatch.setenv("HTTPS_PROXY", PROXY_URL)

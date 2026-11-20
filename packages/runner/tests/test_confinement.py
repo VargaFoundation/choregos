@@ -7,6 +7,7 @@ the list, the parent's environment read)."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import shutil
@@ -20,8 +21,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tranibor_contracts import StageInput
+from tranibor_contracts import AgentRef, StageInput
 from tranibor_runner import confine
+from tranibor_runner.backends import get_backend
+from tranibor_runner.backends.base import LaunchPlan
+from tranibor_runner.backends.others import OPENCODE_SERVER_PORT, OpenCodeBackend
 from tranibor_runner.confine import Confinement, assess, connect_ports, wrap
 from tranibor_runner.exits import Exit
 from tranibor_runner.runner import Runner
@@ -285,3 +289,54 @@ async def test_off_launches_the_agent_unconfined(
     assert outcome.exit_code is Exit.OK, outcome.detail
     assert _events(client, "agent.confinement")[0]["mode"] == "off"
     assert json.loads((agent_home(stage_input) / "unasked.json").read_text()) == ["ok"]
+
+
+def test_opencode_names_the_port_of_its_own_server_and_declares_it(
+    stage_input: StageInput, tmp_path: Path
+) -> None:
+    """S65-04a: `opencode acp` connects to an HTTP server of its own on loopback, on a random port by
+    default, which the port rule refused (`session/new`: "OpenCode service failure", 1.18.31, Landlock
+    ABI 7). The default command names the port and the plan declares it; a command of the step's own
+    declares nothing."""
+    plan = get_backend("opencode").launch_plan(
+        stage_input.model_copy(update={"agent": AgentRef(backend="opencode")}), tmp_path
+    )
+    assert plan.command == ["opencode", "acp", "--port", str(OPENCODE_SERVER_PORT)]
+    assert plan.local_ports == (OPENCODE_SERVER_PORT,)
+    assert get_backend("opencode").launch_plan(stage_input, tmp_path).local_ports == ()
+
+
+@pytest.mark.usefixtures("own_tmp")
+async def test_a_port_the_launch_plan_declares_passes_the_port_rule(
+    stage_input: StageInput, runner_settings: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:3128")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
+    declared = OpenCodeBackend.launch_plan
+
+    def with_its_server(self: OpenCodeBackend, step: StageInput, workspace: Path) -> LaunchPlan:
+        return dataclasses.replace(declared(self, step, workspace), local_ports=(OPENCODE_SERVER_PORT,))
+
+    monkeypatch.setattr(OpenCodeBackend, "launch_plan", with_its_server)
+    stage_input.agent.backend = "opencode"
+    outcome, client = await _run(stage_input, runner_settings, {})
+    assert outcome.exit_code is Exit.OK, outcome.detail
+    [event] = _events(client, "agent.confinement")
+    assert event["connect_ports"] is not None and OPENCODE_SERVER_PORT in event["connect_ports"], event
+
+
+def test_gemini_cli_trusts_the_runs_workspace_so_it_reads_its_mcp_servers(
+    stage_input: StageInput, tmp_path: Path
+) -> None:
+    """S65-04a: gemini-cli 0.60.0 drops a workspace's `.gemini/settings.json` (its `mcpServers` with it) in
+    a folder it does not trust, and nobody is there to trust it over ACP: not one request reached the
+    step's MCP server. With `GEMINI_CLI_TRUST_WORKSPACE` the server was listed and called. The step's own
+    `launch.env` still wins."""
+    step = stage_input.model_copy(update={"agent": AgentRef(backend="gemini-cli")})
+    assert get_backend("gemini-cli").launch_plan(step, tmp_path).env["GEMINI_CLI_TRUST_WORKSPACE"] == "true"
+    own = step.model_copy(
+        update={
+            "agent": AgentRef(backend="gemini-cli", launch={"env": {"GEMINI_CLI_TRUST_WORKSPACE": "false"}})
+        }
+    )
+    assert get_backend("gemini-cli").launch_plan(own, tmp_path).env["GEMINI_CLI_TRUST_WORKSPACE"] == "false"
