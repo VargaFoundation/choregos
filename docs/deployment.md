@@ -256,6 +256,99 @@ by default `^CONNECTOR_[A-Z0-9_]+$`, set as `TRANIBOR_SECRET_ENV_PATTERN`. Widen
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.
 
+### Platform secrets from Vault (External Secrets Operator)
+
+The chart's `ExternalSecret` (`global.externalSecrets.enabled`, on by default) builds `global.apiSecretRef`
+from a `ClusterSecretStore` named `global.externalSecrets.storeRef` (default `choregos-cluster-store`),
+reading the properties of the Vault KV v2 secret `choregos/api` (`session-secret`,
+`run-token-private-key`, `github-app-private-key`, and `secrets-keks` when
+`global.secrets.keksInExternalSecret` is on). The store is the operator's, installed with the External
+Secrets Operator; this one reads Vault's KV v2 with the Kubernetes auth method:
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: choregos-cluster-store
+spec:
+  provider:
+    vault:
+      server: https://vault.example.com:8200
+      path: secret            # the KV v2 mount; the chart reads `secret/data/choregos/api`
+      version: v2
+      # namespace: team-a     # Vault Enterprise
+      caProvider: { type: ConfigMap, name: vault-ca, key: ca.crt, namespace: external-secrets }
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: external-secrets
+          serviceAccountRef: { name: external-secrets, namespace: external-secrets }
+```
+
+The Vault side: a policy that reads only the platform's path, bound to the operator's service account.
+
+```bash
+vault policy write choregos-platform - <<'HCL'
+path "secret/data/choregos/*" { capabilities = ["read"] }
+HCL
+vault write auth/kubernetes/role/external-secrets \
+  bound_service_account_names=external-secrets bound_service_account_namespaces=external-secrets \
+  policies=choregos-platform ttl=1h
+vault kv put secret/choregos/api session-secret="$(openssl rand -base64 48)" run-token-private-key=@run-token.pem
+```
+
+The chart renders its `ExternalSecret` with `external-secrets.io/v1beta1`; the store above may be
+`v1` on a recent operator, the two are served together. A missing property fails the whole
+`ExternalSecret` sync, so turn on the optional entries (`keksInExternalSecret`, `sessionSecretPrevious`) only
+once Vault holds them. This path is checked by the chart's rendering tests; no External Secrets Operator
+or Vault ran against it for this page.
+
+### Connector secrets sealed under Vault Transit
+
+Connector secrets typed in the console are sealed with an envelope whose data key is wrapped by a key
+wrapper ([ADR 0103](adr/0103-secret-keks-sit-behind-a-key-wrapper.md)). With `TRANIBOR_SECRETS_KEKS` the
+key-encryption key is in the deployment's environment; to keep it in Vault instead, install the extension
+`plugins/vault-transit` (the distribution `tranibor-vault-transit`) in the API and worker images. The
+core ships no Vault client, and without the extension nothing changes. The wheel is built from this
+repository (`uv build --package tranibor-vault-transit`) and installed in an image derived FROM the
+published API and worker images; the release workflow does not publish it.
+
+```bash
+vault secrets enable transit
+vault write -f transit/keys/choregos type=aes256-gcm96      # name: at most 24 characters
+vault policy write choregos-transit - <<'HCL'
+path "transit/encrypt/choregos" { capabilities = ["update"] }
+path "transit/decrypt/choregos" { capabilities = ["update"] }
+path "transit/rewrap/choregos"  { capabilities = ["update"] }
+path "transit/keys/choregos"    { capabilities = ["read"] }
+HCL
+vault write auth/kubernetes/role/choregos bound_service_account_names=choregos-api,choregos-orchestrator \
+  bound_service_account_namespaces=choregos policies=choregos-transit ttl=1h
+```
+
+Then the API and the workers get the settings (`global.extraEnv`; the same list reaches both):
+
+| Variable | Meaning |
+| :-- | :-- |
+| `TRANIBOR_VAULT_ADDR` | Vault's address; setting it enables the extension, an invalid setting stops the start |
+| `TRANIBOR_VAULT_TRANSIT_KEY` | the transit key, `choregos` above |
+| `TRANIBOR_VAULT_AUTH` | `kubernetes` (default), with `TRANIBOR_VAULT_K8S_ROLE` (and `_K8S_MOUNT`, `_K8S_JWT_PATH`), or `token` with `TRANIBOR_VAULT_TOKEN` or `TRANIBOR_VAULT_TOKEN_FILE` |
+| `TRANIBOR_VAULT_TRANSIT_MOUNT`, `TRANIBOR_VAULT_NAMESPACE`, `TRANIBOR_VAULT_CACERT` | the engine's mount (`transit`), a Vault Enterprise namespace, a CA bundle |
+| `TRANIBOR_VAULT_BIND_CONTEXT` | `true` when the key was created with `derived=true`: Vault itself then refuses a wrapped key moved to another row |
+
+To move an installation that already has sealed secrets, keep `TRANIBOR_SECRETS_KEKS` set while you
+roll out: it becomes the extension's legacy wrapper, so existing rows still open, then run
+`choregos admin secrets rewrap`. It answers the rows moved; run it again for `0`, and only then remove the
+old keyring (the same backup rule as [the rotation runbook](runbooks/secret-rotation.md#connector-secrets-key-secrets-keks)).
+To rotate the Vault key: `vault write -f transit/keys/choregos/rotate`, wait for the API's cache (30 s), run
+`choregos admin secrets rewrap` (it uses transit `rewrap`: the data keys never reach the platform), and raise
+`min_decryption_version` only when it answers `0` and no backup older than the rewrap can be restored.
+
+Know the limits: the key wrapper seam is synchronous, so each `put` and `get_many` holds the API's event
+loop for one Vault round trip per secret (the HTTP client is async, on a private loop); Vault being down makes
+typing and resolving connector secrets fail with `409`, not the rest of the API. Proved against a simulated Vault,
+not a real one.
+
 ## The GitHub App
 
 One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go
