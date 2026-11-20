@@ -472,6 +472,81 @@
     ],
     "config_schema": {
       "properties": {
+        "area_path": {
+          "description": "optional: only the work items under this area path (Project\\Team)",
+          "type": "string"
+        },
+        "auth": {
+          "default": "pat",
+          "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal (client credentials), Azure DevOps Services only",
+          "enum": [
+            "pat",
+            "entra"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+          "type": "string"
+        },
+        "candidates_wiql": {
+          "description": "the WIQL conditions of the work items to take on without a service hook (polled every minute, within the project); empty: the items tagged agent-ready",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "`entra` only: the service principal's application (client) id",
+          "type": "string"
+        },
+        "field_names": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "match_labels": {
+          "description": "when several projects share this team project, the tags that send a work item here; a project without them takes the items no other claims",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project": {
+          "description": "the Azure DevOps team project",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "`entra` only: the Entra tenant (directory) id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure DevOps Boards",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "pat",
+      "client_secret",
+      "webhook_secret"
+    ],
+    "type": "azure-boards"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {
         "plugin": {
           "description": "the installed plugin",
           "type": "string"

@@ -2923,6 +2923,89 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.tracker.azure-boards",
+    "title": "Use Azure DevOps Boards as the board",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/azure-boards"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure DevOps organisation (Azure DevOps Services) or an Azure DevOps Server 2022 collection, and\n  an account **dedicated to Tranibor**: its permissions are what the platform may do in the project,\n  and comments and state changes appear under its name.\n- The team project's name, and the area path if Tranibor should see only one team's work.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor. A service hook does not sign its deliveries, so the platform accepts one only if it carries\n  this secret: as the **password** of the subscription's basic authentication (any user name), or in an\n  `X-Choregos-Secret` header."
+      },
+      {
+        "key": "at",
+        "title": "At Azure DevOps",
+        "markdown": "1. **The credential.**\n   - A **personal access token** (works on the Services and on Server): the dedicated account, **User\n     settings**, **Personal access tokens**, **New token**. Scopes: **Work Items: Read & write** and\n     **Project and Team: Read**, nothing else. Pick the longest expiry offered and **note the date**.\n   - A **Microsoft Entra service principal** (Services only, no licence-bound user, no token to rotate by\n     hand): register an application in Entra, create a client secret, then add the service principal\n     to the organisation (**Organization settings**, **Users**, **Add users**) with the *Basic* access\n     level, and to the project's **Contributors**. Tranibor asks Entra for a token for the Azure DevOps\n     resource with the client credentials grant.\n2. **The project.** Add the account (or the service principal) to the project with a group that holds the\n   permissions below. **A token's scopes give no right on a project by themselves.**\n3. **Service hook.** **Project settings**, **Service hooks**, **Create subscription**, **Web Hooks**.\n   Create one subscription for each of **Work item created**, **Work item updated** and **Work item\n   commented on**, filtered on the area path if you set one. URL: `<api_url>/api/v1/webhooks/azure-boards`.\n   Basic authentication user name: anything; password: the platform's shared webhook secret. Leave\n   *Resource details to send* on **All**. This path has not been exercised against a live organisation\n   from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "On the project, for the dedicated account: **View work items in this node**, **Edit work items in this\nnode**, **Create work items** (if Tranibor files items), **View project-level information**.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nthe REST API 7.1, under the dedicated account: the state, the tags, the status comment, the `Cost (€)`,\n`Size`, `Risk` and `Run` fields, the questions to a person, the close-out. The state is written as it is\n(Azure Boards has no transitions to look for): Tranibor first reads the states of the item's type and\nnames the available ones in the error if the workflow's state is not among them. A state can be\ndesignated by its exact name, by its category (`category:Proposed`, `category:InProgress`,\n`category:Resolved`, `category:Completed`) or by the canonical `To Do`, `In Progress`, `Done`.\n\nThe custom fields must exist in your process (an inherited process: **Organization settings**,\n**Process**, add fields `Cost (€)`, `Size`, `Risk`, `Run`). A field the project does not have is skipped,\nnever a failure."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Azure DevOps Boards**.\n2. `base_url`: `https://dev.azure.com/<organisation>`, or the collection URL of a Server. `project`: the\n   team project. `area_path`: optional. `auth`: `pat` (the default) or `entra`; with `entra`, `tenant_id`\n   and `client_id` too.\n3. `pat`, or `client_secret`: the secret, in the password field (sealed, shown once).\n4. `field_names`: only if your process names the custom fields differently. They are `Cost (€)`, `Size`,\n   `Risk` and `Run`.\n5. Tag a work item `agent-ready`: the platform starts one workflow per work item. A delivery reaches\n   the project whose Azure Boards connector holds the item's team project, whatever the project's slug;\n   two projects on one team project are told apart by the organisation, then `area_path`, then `match_labels`.\n6. Or skip the service hook and the tag: set `candidates_wiql`, for example\n   `[System.Parent] = 1234 AND [System.Tags] CONTAINS 'form-a'`. Every minute the platform runs it within\n   the team project, among the items not Completed or Removed, and starts one workflow per new item.\n7. Nothing to set for what the agents learn about an item: when the platform takes one on it keeps, as\n   `fields.tracker`, the creator, the tags and the **answers**: every non-empty custom field (`Custom.*`),\n   keyed by its display name, as text, each cut at 2000 characters. It is the requester's text, never an\n   instruction."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector. It reads the project with the credential, which proves the token (or the\nservice principal), its scopes and its place in the project at once. Then tag a work item `agent-ready`\nand watch it appear on the board."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: an expired or revoked token, or a service principal that is not a member of the organisation.\n- `403`: the token lacks **Work Items: Read & write** or **Project and Team: Read**, or the account lacks\n  a project permission above.\n- `404` on the project: wrong `project`, or the account is not in the project.\n- `auth: entra` refused on save: Azure DevOps Server has no Entra sign-in for an application, use `pat`.\n- `no state of the type ... is \"X\"`: the workflow names a state your process does not have; the error lists\n  the ones it has. Several states in one category: name the one you want.\n- A service hook answered `401 invalid shared secret`: the subscription's password differs from the\n  platform's shared secret.\n- Nothing starts after tagging: the tag must be exactly `agent-ready`, and the hook must reach this platform.\n- A timeout: the egress allowlist must open `dev.azure.com` (or your Server) and, for a service principal,\n  `login.microsoftonline.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:azure-boards": "https://choregos.example.com/api/v1/webhooks/azure-boards"
+    },
+    "egress": [
+      "dev.azure.com, or your Azure DevOps Server host",
+      "login.microsoftonline.com (service principal)"
+    ],
+    "fields": {
+      "base_url": "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)",
+      "project": "the Azure DevOps team project",
+      "area_path": "optional: only the work items under this area path (Project\\Team)",
+      "auth": "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only",
+      "tenant_id": "`entra` only: the Entra tenant (directory) id",
+      "client_id": "`entra` only: the service principal's application (client) id",
+      "candidates_wiql": "optional: WIQL conditions of the work items the platform takes on by itself, without a service hook",
+      "match_labels": "optional: when several projects share this team project, the tags that send a work item here; the project without them takes the rest",
+      "field_names": "a map of the custom fields Tranibor writes (Cost, Size, Risk, Run) to their names in your process",
+      "pat": "the personal access token, typed once (`auth: pat`)",
+      "client_secret": "the service principal's client secret, typed once (`auth: entra`)",
+      "webhook_secret": "not used by the service-hook endpoint: the platform's shared webhook secret is"
+    },
+    "vendor_docs": [
+      {
+        "title": "Use personal access tokens",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+      },
+      {
+        "title": "Use service principals and managed identities in Azure DevOps",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity"
+      },
+      {
+        "title": "Service hooks events (work item created, updated, commented)",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"
+      },
+      {
+        "title": "Create a web hooks subscription",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.tracker.github-issues",
     "title": "Use GitHub Issues and Projects v2 as the board",
     "version": 3,

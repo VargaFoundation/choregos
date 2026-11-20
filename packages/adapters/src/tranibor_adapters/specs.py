@@ -37,6 +37,51 @@ def _atlassian_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
     return hosts
 
 
+def _azure_boards_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
+    """The organisation's (or the Server's) host, plus the Entra login host for a service principal."""
+    from tranibor_core.egress import hosts_of_config
+
+    hosts = hosts_of_config(config)
+    if config.get("auth") == "entra" and ("login.microsoftonline.com", 443) not in hosts:
+        hosts.append(("login.microsoftonline.com", 443))
+    return hosts
+
+
+def _check_azure_boards(cfg: dict[str, Any]) -> None:
+    """The collection to call, and the credential that fits it: a personal access token anywhere, an Entra
+    service principal on the Azure DevOps Services only (Server 2022 has no Entra sign-in for an app)."""
+    from urllib.parse import urlsplit
+
+    from .registry import fakes_enabled
+
+    url = str(cfg.get("base_url") or "").strip()
+    try:
+        parts = urlsplit(url)
+        parts.port  # noqa: B018 - raises ValueError on a port out of range
+    except ValueError as invalid:
+        raise ConfigurationError("`base_url` is not a valid address") from invalid
+    if parts.scheme not in ({"https", "http"} if fakes_enabled() else {"https"}) or not parts.hostname:
+        raise ConfigurationError(
+            "`base_url` must be the https address of the organisation or the collection "
+            "(https://dev.azure.com/<organisation>)"
+        )
+    if not str(cfg.get("project") or "").strip():
+        raise ConfigurationError("`project` is required: the Azure DevOps team project")
+    auth = cfg.get("auth", "pat")
+    if auth not in {"pat", "entra"}:
+        raise ConfigurationError("`auth` is `pat` (a personal access token) or `entra` (a service principal)")
+    if auth == "entra":
+        for field in ("tenant_id", "client_id"):
+            if not str(cfg.get(field) or "").strip():
+                raise ConfigurationError(f"`auth: entra` needs `{field}`")
+        host = (parts.hostname or "").lower()
+        if host != "dev.azure.com" and not host.endswith(".visualstudio.com") and not fakes_enabled():
+            raise ConfigurationError(
+                "`auth: entra` works on Azure DevOps Services (dev.azure.com) only: "
+                "Azure DevOps Server takes a personal access token"
+            )
+
+
 def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
     """The self-hosted instance's host and port, and nothing else (S40-01k): the organisation's network
     ceiling is checked against what the connector really calls. No `base_url`: no host, and the
@@ -374,6 +419,55 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ),
         ("api_token", "webhook_secret"),
         egress=_atlassian_egress,
+    ),
+    ("tracker", "azure-boards"): ConnectorTypeSpec(
+        "Azure DevOps Boards",
+        ("tracker",),
+        _object_schema(
+            {
+                "base_url": {
+                    "type": "string",
+                    "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the "
+                    "collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+                },
+                "project": {"type": "string", "description": "the Azure DevOps team project"},
+                "area_path": {
+                    "type": "string",
+                    "description": "optional: only the work items under this area path (Project\\Team)",
+                },
+                "auth": {
+                    "type": "string",
+                    "enum": ["pat", "entra"],
+                    "default": "pat",
+                    "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service "
+                    "principal (client credentials), Azure DevOps Services only",
+                },
+                "tenant_id": {
+                    "type": "string",
+                    "description": "`entra` only: the Entra tenant (directory) id",
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "`entra` only: the service principal's application (client) id",
+                },
+                "candidates_wiql": {
+                    "type": "string",
+                    "description": "the WIQL conditions of the work items to take on without a service hook "
+                    "(polled every minute, within the project); empty: the items tagged agent-ready",
+                },
+                "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
+                "match_labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "when several projects share this team project, the tags that send "
+                    "a work item here; a project without them takes the items no other claims",
+                },
+            },
+            ("base_url", "project"),
+        ),
+        ("pat", "client_secret", "webhook_secret"),
+        egress=_azure_boards_egress,
+        check_config=_check_azure_boards,
     ),
     ("tracker", "plugin"): ConnectorTypeSpec(
         "a plugin's server (tracker profile, S43-07)",
