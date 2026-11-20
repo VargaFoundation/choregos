@@ -43,6 +43,7 @@ RESUMES: dict[str, str] = {
     "flag_present": "the change sits behind a feature flag",
     "no_secrets": "no secret leaks into the change",
     "numbers_measured": "every number the step writes was measured by an earlier step",
+    "output_sections": "the Markdown outputs carry their required sections",
     "outputs_present": "the declared outputs are present",
     "output_schema": "the outputs match their declared JSON Schema",
     "outputs_in": "the outputs take an allowed value (a review's verdict, a size)",

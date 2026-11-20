@@ -301,6 +301,7 @@ result and the diff; the others wait for an event.
 | `tool_called` | the tools the step required were really called, read from the ledger |
 | `coverage_delta_min` | test coverage does not drop below the threshold |
 | `docs_updated` | the branch updates the documentation when it changes anything else |
+| `output_sections` | named Markdown outputs carry their required sections, no repository needed: `params.outputs`, `params.ordered` |
 | `markdown_sections` | the documents the branch adds carry their required sections |
 | `adr_number_free` | the number of an ADR the branch adds is not already taken |
 | `already_fixed_proven` | the fix is already on the default branch, on measured evidence |

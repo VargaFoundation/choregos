@@ -7,6 +7,7 @@ Warnings do not prevent saving but are reported to the front end and the CLI.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -96,6 +97,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_retries(wf, report, source)
     _check_gates_have_something_to_check(wf, report, source)
     _check_output_schemas(wf, report, source)
+    _check_output_sections(wf, report, source)
     _check_known_roles(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
@@ -1013,6 +1015,57 @@ def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -
                         [*path, name],
                         source,
                     )
+
+
+def _check_output_sections(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """An `output_sections` guarantee names outputs the transition declares, with patterns that compile.
+
+    An empty `outputs:` would check nothing, and a name the transition does not declare would never be
+    produced: the guarantee would fail on every item, or pass on nothing.
+    """
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            if g.name != "output_sections":
+                continue
+            path: list[str | int] = ["transitions", index, "gates", g_index, "params"]
+            wanted = g.params.get("outputs")
+            if not wanted or not isinstance(wanted, dict):
+                report.error(
+                    "gate.nothing_to_check",
+                    "guarantee `output_sections` without `outputs:` as a parameter of the guarantee "
+                    "(an output's name and its sections): it would have nothing to check",
+                    [*path, "outputs"],
+                    source,
+                )
+                continue
+            patterns = g.params.get("patterns") or {}
+            if not isinstance(patterns, dict):
+                report.error(
+                    "gate.output_sections",
+                    "`patterns:` maps an output's name to its regular expressions",
+                    [*path, "patterns"],
+                    source,
+                )
+                patterns = {}
+            for key, field_name in (*((n, "outputs") for n in wanted), *((n, "patterns") for n in patterns)):
+                if key not in t.outputs:
+                    report.error(
+                        "gate.output_sections",
+                        f"`{key}` in `{field_name}:` is not an output the transition declares in `outputs:`",
+                        [*path, field_name, key],
+                        source,
+                    )
+            for key, expressions in patterns.items():
+                for expression in expressions or []:
+                    try:
+                        re.compile(str(expression))
+                    except re.error as exc:
+                        report.error(
+                            "gate.output_sections",
+                            f"the pattern {str(expression)!r} of `{key}` does not compile: {exc}",
+                            [*path, "patterns", key],
+                            source,
+                        )
 
 
 def _check_known_roles(wf: Workflow, report: ValidationReport, source: Any) -> None:

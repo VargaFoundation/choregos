@@ -467,13 +467,18 @@ def _outputs_in(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     )
 
 
-def _headings(text: str) -> set[str]:
-    """The Markdown headings of a text, without hashes or case: `## Decision Outcome` → `decision outcome`."""
-    return {
+def _heading_list(text: str) -> list[str]:
+    """The Markdown headings of a text in reading order, without hashes or case."""
+    return [
         line.lstrip("#").strip().lower()
         for line in text.splitlines()
         if line.startswith("#") and line.lstrip("#").startswith(" ")
-    }
+    ]
+
+
+def _headings(text: str) -> set[str]:
+    """The Markdown headings of a text, without hashes or case: `## Decision Outcome` → `decision outcome`."""
+    return set(_heading_list(text))
 
 
 @gate("markdown_sections", needs=("scm",))
@@ -509,6 +514,54 @@ def _markdown_sections(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
         "markdown_sections",
         not lacking,
         detail=f"{len(files)} document(s) with their sections" if not lacking else "; ".join(lacking),
+        annotations=lacking,
+    )
+
+
+@gate("output_sections")
+def _output_sections(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
+    """The Markdown outputs of the stage carry their sections: `{outputs: {<name>: [<section>, ...]},
+    patterns: {<name>: [<regex>, ...]}, ordered: false}`.
+
+    `markdown_sections` reads the documents a branch adds, so it needs a repository. A memo that is an
+    OUTPUT of the stage, with no repository behind it, is judged here: each section must be a heading
+    of the text (same reading, any level, case-insensitive), and with `ordered: true` they must appear
+    in the order given.
+    """
+    wanted: dict[str, Any] = dict(params.get("outputs") or {})
+    if not wanted:
+        return GateOutcome(
+            "output_sections", False, detail="no output named: `outputs:` missing on the guarantee"
+        )
+    if ctx.result is None:
+        return GateOutcome("output_sections", False, detail="no stage result")
+    produced = ctx.result.outputs.model_dump(exclude_none=True)
+    patterns: dict[str, Any] = dict(params.get("patterns") or {})
+    ordered = bool(params.get("ordered", False))
+    lacking: list[str] = []
+    for name, sections in wanted.items():
+        text = produced.get(name)
+        if text is None:
+            lacking.append(f"{name}: output absent")
+            continue
+        if not isinstance(text, str):
+            lacking.append(f"{name}: output is not text ({type(text).__name__})")
+            continue
+        headings = _heading_list(text)
+        required = [str(s) for s in sections or []]
+        lacking += [f"{name}: section “{s}” missing" for s in required if s.lower() not in headings]
+        if ordered:
+            found = [s for s in required if s.lower() in headings]
+            positions = [headings.index(s.lower()) for s in found]
+            if positions != sorted(positions):
+                lacking.append(f"{name}: sections out of order, expected {', '.join(required)}")
+        lacking += [
+            f"{name}: {m!r} not found" for m in patterns.get(name) or [] if not re.search(str(m), text)
+        ]
+    return GateOutcome(
+        "output_sections",
+        not lacking,
+        detail=f"{len(wanted)} output(s) with their sections" if not lacking else "; ".join(lacking),
         annotations=lacking,
     )
 
