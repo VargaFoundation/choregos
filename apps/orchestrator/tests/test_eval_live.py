@@ -122,15 +122,15 @@ async def test_a_project_with_memory_on_cannot_run_a_cell_without_it(setup: Fixt
 async def test_the_kill_switch_skips_the_reduced_cells(
     eval_project: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_CONTEXT_REDUCTION", "off")
+    monkeypatch.setenv("TRANIBOR_CONTEXT_REDUCTION", "off")
     reset_settings_cache()
     try:
         reduced = await evals.seed_eval_ticket(_cell("py-rounding-bug", "rtk"))
         plain = await evals.seed_eval_ticket(_cell("py-rounding-bug", "none"))
     finally:
-        monkeypatch.delenv("CHOREGOS_CONTEXT_REDUCTION")
+        monkeypatch.delenv("TRANIBOR_CONTEXT_REDUCTION")
         reset_settings_cache()
-    assert reduced["skipped"] and "CHOREGOS_CONTEXT_REDUCTION" in reduced["reason"]
+    assert reduced["skipped"] and "TRANIBOR_CONTEXT_REDUCTION" in reduced["reason"]
     assert not plain["skipped"]
 
 
@@ -287,12 +287,12 @@ async def test_the_kill_switch_still_wins_at_prepare_time(
     eval_project: Fixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seeded = await evals.seed_eval_ticket(_cell("py-rounding-bug", "rtk+headroom"))
-    monkeypatch.setenv("CHOREGOS_CONTEXT_REDUCTION", "off")
+    monkeypatch.setenv("TRANIBOR_CONTEXT_REDUCTION", "off")
     reset_settings_cache()
     try:
         prepared = await stage_activities.prepare_stage(seeded["plan"])
     finally:
-        monkeypatch.delenv("CHOREGOS_CONTEXT_REDUCTION")
+        monkeypatch.delenv("TRANIBOR_CONTEXT_REDUCTION")
         reset_settings_cache()
     assert "context" not in prepared["stage_input"]
     assert prepared["stage_input"]["repo"]["base_branch"].startswith("choregos-evals/")

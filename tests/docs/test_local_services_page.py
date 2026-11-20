@@ -1,7 +1,7 @@
 """Does `docs/development.md` say what `make api` really starts? (#441)
 
 The page told developers to run `make api` next to `make worker` and expect the two to work
-together. `make api` forces `CHOREGOS_FAKES=1`, which gives the API an in-memory Temporal that
+together. `make api` forces `TRANIBOR_FAKES=1`, which gives the API an in-memory Temporal that
 records workflows and runs none, so nothing the API started ever reached a worker.
 """
 
@@ -27,8 +27,8 @@ def _make_target(name: str) -> str:
 
 
 def test_the_page_says_make_api_runs_on_fakes_and_runs_no_workflow() -> None:
-    assert "CHOREGOS_FAKES=1" in _make_target("api"), "make api changed: rewrite *Local services*"
+    assert "TRANIBOR_FAKES=1" in _make_target("api"), "make api changed: rewrite *Local services*"
     section = _section((ROOT / "docs/development.md").read_text(encoding="utf-8"), "Local services")
-    assert "CHOREGOS_FAKES=1" in section and "FakeTemporal" in section
+    assert "TRANIBOR_FAKES=1" in section and "FakeTemporal" in section
     assert "make worker" not in section, "the API on fakes and real workers never meet"
     assert "docker compose up" in section, "point to the setup that really runs workflows"

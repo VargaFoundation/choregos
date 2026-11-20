@@ -2,7 +2,7 @@
 eval project, judged as the case it is (`agent_case`). The new history replays
 (`tests/replay/histories/evals-live-agent-cases-S57-11a.json`), and the one recorded before it, where each
 agent case was seeded once and skipped, still does (`LIVE_AGENT_CASES`; `tests/replay/test_replay.py`
-replays every archived history). `CHOREGOS_RECORD_HISTORY=1` records the new one again."""
+replays every archived history). `TRANIBOR_RECORD_HISTORY=1` records the new one again."""
 
 from __future__ import annotations
 

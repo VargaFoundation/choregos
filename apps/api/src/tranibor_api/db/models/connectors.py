@@ -170,7 +170,7 @@ class GitHubAppRegistration(Base, PkMixin, TimestampMixin):
     """The deployment's GitHub App, registered from a manifest by a platform administrator (ADR 0167).
 
     At most one row: the instance's App when the deployment's settings name none
-    (`CHOREGOS_GITHUB_APP_ID` wins over it). What GitHub publishes about the App is kept in clear; its
+    (`TRANIBOR_GITHUB_APP_ID` wins over it). What GitHub publishes about the App is kept in clear; its
     private key, webhook secret and OAuth client secret are ONE envelope sealed under the deployment's
     key (ADR 0058), its additional data bound to the platform and to `github-app/<app_id>`, so it opens
     nowhere else. Platform scope only: no organisation reads it."""

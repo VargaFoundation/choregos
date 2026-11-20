@@ -76,7 +76,7 @@ def hosts_to_reach_directly(settings: Any) -> list[str]:
 
 
 def runner_environment(settings: Any, namespace: str) -> dict[str, str]:
-    """The environment of an agent pod: what the deployment passes, its `CHOREGOS_ENV`, plus the egress proxy.
+    """The environment of an agent pod: what the deployment passes, its `TRANIBOR_ENV`, plus the egress proxy.
 
     `git`, `pip`, `npm`, `uv` and the agent read `HTTP_PROXY`/`HTTPS_PROXY`; `NO_PROXY` keeps the
     cluster's traffic (internal API, gateway, memory) direct: the proxy only serves to get out.
@@ -84,13 +84,13 @@ def runner_environment(settings: Any, namespace: str) -> dict[str, str]:
     """
     env = dict(settings.runner_env)
     # Where the run runs: the runner refuses the fakes in staging and prod (S80-03), and it can only
-    # tell from this. The deployment's value wins over one written in `CHOREGOS_RUNNER_ENV`.
+    # tell from this. The deployment's value wins over one written in `TRANIBOR_RUNNER_ENV`.
     environment = str(getattr(settings, "env", "") or "")
     if environment:
         env[ENVIRONMENT_VARIABLE] = environment
     if str(getattr(settings, "runner_egress_auth", "") or "") == "run":
         # The runner adds the run id and token to the proxy URL itself, before any child starts.
-        env["CHOREGOS_EGRESS_AUTH"] = "run"
+        env["TRANIBOR_EGRESS_AUTH"] = "run"
     proxy = str(getattr(settings, "runner_egress_proxy", "") or "").format(namespace=namespace)
     if proxy:
         env.setdefault("HTTP_PROXY", proxy)

@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 import yaml
 from tranibor_adapters.executor import egress_gate
+from tranibor_contracts.env import adopted
 from tranibor_core.egress_gate import GATE_CONTAINER, REPORT_ENV, EgressGate, gate_from_env
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
@@ -84,15 +85,20 @@ def test_the_chart_and_the_executor_build_the_same_gate() -> None:
         assert rendered[key] == built[key], key
     runner = next(c for c in pod["containers"] if c["name"] == "runner")
     assert egress_gate.runner_mount() in runner["volumeMounts"]
-    assert egress_gate.runner_env() in runner["env"]
+    # The chart still names the former variable (R4); the executor emits both.
+    assert {
+        **egress_gate.runner_env(),
+        "name": "CHOREGOS_" + egress_gate.runner_env()["name"].removeprefix("TRANIBOR_"),
+    } in runner["env"]  # compat-ok
     assert egress_gate.volume() in pod["volumes"]
 
 
 def test_the_gate_can_be_turned_off_and_then_leaves_no_trace() -> None:
     pod = _template_pod("--set", "choregos-orchestrator.runner.egressGate.enabled=false")
 
-    assert "initContainers" not in pod
-    assert "volumes" not in pod
+    # The agent's own container (the default since S65-04m) stays; nothing of the gate does.
+    assert [c["name"] for c in pod["initContainers"]] == ["agent"]
+    assert "egress-gate" not in {v["name"] for v in pod["volumes"]}
     runner = next(c for c in pod["containers"] if c["name"] == "runner")
     assert REPORT_ENV not in {e["name"] for e in runner.get("env", [])}
     assert (
@@ -109,7 +115,7 @@ def test_the_executor_is_told_to_gate_its_pods_by_default() -> None:
     assert env["CHOREGOS_RUNNER_EGRESS_GATE"] == "true"
     assert env["CHOREGOS_RUNNER_EGRESS_GATE_TARGET"] == "1.1.1.1:443"
     assert env["CHOREGOS_RUNNER_EGRESS_GATE_DEADLINE"] == "30"
-    assert gate_from_env(env) == EgressGate()
+    assert gate_from_env(adopted(env)) == EgressGate()
 
 
 def test_the_single_node_profile_gates_its_agent_pods() -> None:

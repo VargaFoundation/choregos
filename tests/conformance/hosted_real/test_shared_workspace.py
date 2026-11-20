@@ -54,7 +54,7 @@ ws = pathlib.Path("/tmp/ws")
 (ws / "README.md").write_text("readme\n")
 (ws / ".git" / "config").write_text(
     '[remote "origin"]\n\turl = https://x-access-token:%s@git.example/r.git\n'
-    % os.environ["CHOREGOS_GIT_TOKEN"]
+    % os.environ["TRANIBOR_GIT_TOKEN"]
 )
 shared = pathlib.Path("/hosted-workspace")
 print("EXPORTED", export_tree(ws, shared), flush=True)
@@ -208,7 +208,7 @@ async def test_a_container_changes_what_the_runner_copied_and_holds_no_credentia
         run_token=run_token,
         gateway_key=gateway_key,
         remote_token=remote_token,
-        env={"CHOREGOS_GIT_TOKEN": git_token},
+        env={"TRANIBOR_GIT_TOKEN": git_token},
         agent_container=AgentContainer(image=agent_image, workspace="write"),
         runner_command=["python", "-c", RUNNER],
     )

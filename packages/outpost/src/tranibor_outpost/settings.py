@@ -4,15 +4,15 @@
 Nothing here comes from the platform: the paths, the certificate authority and the outbound proxy
 are the operator's, given on the command line or in the environment.
 
-- **The policy file**: `--policy`, `CHOREGOS_OUTPOST_POLICY`, `/etc/choregos-outpost/policy.yaml`.
-- **The state directory**: `--state-dir`, `CHOREGOS_OUTPOST_STATE_DIR`,
+- **The policy file**: `--policy`, `TRANIBOR_OUTPOST_POLICY`, `/etc/choregos-outpost/policy.yaml`.
+- **The state directory**: `--state-dir`, `TRANIBOR_OUTPOST_STATE_DIR`,
   `/var/lib/choregos-outpost`. It holds `identity/` (the keys) and `journal/` (the call ids), and
   must outlive a restart. `--identity-dir` moves the keys elsewhere, a volume mounted read-only for
   instance.
 - **The certificate authority**: the system's trust store, to which `--ca-file`
-  (`CHOREGOS_OUTPOST_CA_FILE`) adds the authority of an outbound proxy that inspects TLS, or of a
+  (`TRANIBOR_OUTPOST_CA_FILE`) adds the authority of an outbound proxy that inspects TLS, or of a
   private one. Verification is never switched off.
-- **The outbound proxy**: `--proxy` (`CHOREGOS_OUTPOST_PROXY`), else the usual `HTTPS_PROXY` /
+- **The outbound proxy**: `--proxy` (`TRANIBOR_OUTPOST_PROXY`), else the usual `HTTPS_PROXY` /
   `HTTP_PROXY` unless `NO_PROXY` covers the door. It carries the connection to the door only: the
   endpoints are in the outpost's own network and are called directly.
 """

@@ -54,13 +54,13 @@ def instance(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """An instance with its own URLs and a secrets key; no App in the deployment's settings."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_PUBLIC_URL", PUBLIC_URL)
-    monkeypatch.setenv("CHOREGOS_API_URL", API_URL)
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", KEY_1)
+    monkeypatch.setenv("TRANIBOR_PUBLIC_URL", PUBLIC_URL)
+    monkeypatch.setenv("TRANIBOR_API_URL", API_URL)
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", KEY_1)
     for name in (
-        "CHOREGOS_GITHUB_APP_ID",
-        "CHOREGOS_GITHUB_APP_PRIVATE_KEY",
-        "CHOREGOS_GITHUB_WEBHOOK_SECRET",
+        "TRANIBOR_GITHUB_APP_ID",
+        "TRANIBOR_GITHUB_APP_PRIVATE_KEY",
+        "TRANIBOR_GITHUB_WEBHOOK_SECRET",
     ):
         monkeypatch.delenv(name, raising=False)
     reset_settings_cache()
@@ -195,16 +195,16 @@ async def test_only_a_platform_administrator_reads_or_starts_it(client: AsyncCli
 async def test_the_deployments_app_wins_and_the_console_creates_none(
     client: AsyncClient, admin: str, conversion: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "777")
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", PEM)
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "777")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_PRIVATE_KEY", PEM)
     _settings_again()
     status = (await client.get("/api/v1/platform/github-app")).json()
     assert status["source"] == "deployment"
     assert status["app_id"] == "777"
-    assert "CHOREGOS_GITHUB_APP_ID" in status["blocked_by"]
+    assert "TRANIBOR_GITHUB_APP_ID" in status["blocked_by"]
     refused = await client.post("/api/v1/platform/github-app/manifest", json={"name": "x", "public": False})
     assert refused.status_code == 409, refused.text
-    assert "CHOREGOS_GITHUB_APP_ID" in refused.text
+    assert "TRANIBOR_GITHUB_APP_ID" in refused.text
 
 
 async def test_without_a_secrets_key_nothing_is_started_and_the_code_is_not_spent(
@@ -212,10 +212,10 @@ async def test_without_a_secrets_key_nothing_is_started_and_the_code_is_not_spen
 ) -> None:
     from tranibor_api.services.github_app_manifest import sign_state
 
-    monkeypatch.delenv("CHOREGOS_SECRETS_KEKS")
+    monkeypatch.delenv("TRANIBOR_SECRETS_KEKS")
     refused = await client.post("/api/v1/platform/github-app/manifest", json={"name": "x", "public": False})
     assert refused.status_code == 409, refused.text
-    assert "CHOREGOS_SECRETS_KEKS" in refused.text
+    assert "TRANIBOR_SECRETS_KEKS" in refused.text
     # A state signed while a key existed, the key gone since: the callback spends nothing.
     conversion.register("c0de", pem=PEM)
     state = sign_state(user=admin, public=False, webhook_active=True)
@@ -326,9 +326,9 @@ async def test_the_stored_app_is_the_app_of_every_reader(
     assert (built.auth.app_id, built.auth.private_key) == ("4242", PEM)
 
     # The installations' port, outside the fakes: the real App with the OAuth client GitHub issued.
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
     real = svc.get_github_app()
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert isinstance(real, GitHubApp)
     assert real.oauth_enabled, "the conversion's client id and secret make multi-organisation claims work"
 
@@ -369,9 +369,9 @@ async def test_the_deployments_settings_win_over_a_stored_app(
     from tranibor_api.services import github_app_credentials as credentials
 
     assert (await _create(client, conversion)).status_code == 302
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "999")
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "deployment-key")
-    monkeypatch.setenv("CHOREGOS_GITHUB_WEBHOOK_SECRET", "deployment-webhook-secret")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "999")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_PRIVATE_KEY", "deployment-key")
+    monkeypatch.setenv("TRANIBOR_GITHUB_WEBHOOK_SECRET", "deployment-webhook-secret")
     _settings_again()
     found = credentials.current()
     assert found is not None and (found.app_id, found.source) == ("999", "deployment")
@@ -404,13 +404,13 @@ async def test_a_key_rotation_moves_the_stored_app_to_the_new_key(
     from tranibor_api.services import github_app_credentials as credentials
 
     assert (await _create(client, conversion)).status_code == 302
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"{KEY_2},{KEY_1}")
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"{KEY_2},{KEY_1}")
     rewrapped = await client.post("/api/v1/platform/secrets/rewrap")
     assert rewrapped.status_code == 200, rewrapped.text
     assert rewrapped.json()["rewrapped"] >= 1
     (row,) = await _rows()
     assert row.kek_id == "k2"
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", KEY_2)  # the old key dropped
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", KEY_2)  # the old key dropped
     async with session_scope(orgs="*") as session:
         found = await credentials.refresh(session, force=True)
     assert found is not None and found.private_key == PEM
@@ -427,4 +427,4 @@ async def test_under_the_fakes_a_stored_app_configures_the_fake(
     assert svc.get_github_app() is None
     assert (await _create(client, conversion)).status_code == 302
     assert svc.get_github_app() is FakeGitHubApp.shared()
-    assert os.environ.get("CHOREGOS_FAKES") == "1"
+    assert os.environ.get("TRANIBOR_FAKES") == "1"

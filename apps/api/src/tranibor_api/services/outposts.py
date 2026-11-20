@@ -161,7 +161,7 @@ def require_person(principal: Principal) -> None:
 def _disabled() -> ApiError:
     return refusal(
         "outposts_disabled",
-        "outposts are switched off on this deployment (`CHOREGOS_OUTPOSTS`): its operator turns them on",
+        "outposts are switched off on this deployment (`TRANIBOR_OUTPOSTS`): its operator turns them on",
     )
 
 
@@ -606,7 +606,7 @@ async def create_enrolment(
         raise refusal(
             "door_key_missing",
             "the outposts' door has no signing key on this deployment "
-            "(`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`): there is no key to pin, so no instance is enrolled",
+            "(`TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY`): there is no key to pin, so no instance is enrolled",
         )
     if outpost.status == _REVOKED:
         raise refusal("outpost_revoked", f"`{outpost.slug}` is revoked: that is final", outpost.slug)

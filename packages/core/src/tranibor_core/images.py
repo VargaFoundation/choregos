@@ -31,7 +31,7 @@ def check_image_map(env_name: str, images: Mapping[str, str], *, require_digest:
         if require_digest and not is_digest_pinned(reference):
             raise ValueError(
                 f"{env_name}: the image `{name}` is `{reference}`, not pinned by digest "
-                "(`@sha256:...`); pin it, or set CHOREGOS_REQUIRE_IMAGE_DIGEST=false for a local setup"
+                "(`@sha256:...`); pin it, or set TRANIBOR_REQUIRE_IMAGE_DIGEST=false for a local setup"
             )
 
 

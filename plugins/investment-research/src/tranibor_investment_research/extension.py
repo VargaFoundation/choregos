@@ -6,7 +6,7 @@ platform's processes, registered through the core's seams when the API and the w
 - the connector kind `marketdata` in the contracts' open list (`CONNECTOR_KINDS`, ADR 0181 round C0);
 - the `marketdata` connector types (`stooq`, `yahoo`, `alphavantage`, `tiingo`, `composite`), through
   `tranibor_adapters.register`, with the specs their organisation connectors are validated against;
-- their fake (ADR 0005), registered as the kind's `fake` type: `CHOREGOS_FAKES=1` switches every
+- their fake (ADR 0005), registered as the kind's `fake` type: `TRANIBOR_FAKES=1` switches every
   `marketdata` connector to it, as it switches the core's;
 - the eval scene `marketdata/default`, through `declare_scene`.
 
@@ -77,7 +77,7 @@ def _constructor(name: str) -> Callable[[dict[str, Any]], MarketDataProvider]:
 
 
 def _fake_connector(cfg: dict[str, Any]) -> Any:
-    """The process-wide fake of `CHOREGOS_FAKES=1`, scriptable by tests as `marketdata.fake.FAKE`."""
+    """The process-wide fake of `TRANIBOR_FAKES=1`, scriptable by tests as `marketdata.fake.FAKE`."""
     return _fake.shared()
 
 

@@ -4,7 +4,7 @@
 // The SDK drives the Copilot CLI runtime, which npm installs from the SDK's platform package: there
 // is nothing to fetch when the container starts. In BYOK mode (`provider`), the runtime speaks chat
 // completions to the platform's model at `OPENAI_BASE_URL` with `OPENAI_API_KEY` (the loopback key),
-// without a GitHub account. It is given the step's MCP servers (`CHOREGOS_MCP_URL<name>`, HTTP) and
+// without a GitHub account. It is given the step's MCP servers (`TRANIBOR_MCP_URL<name>`, HTTP) and
 // none of its built-in tools: a hosted triager reads, it does not edit files or run commands.
 
 import { mkdtemp, rm } from "node:fs/promises";
@@ -16,14 +16,14 @@ const INSTRUCTIONS =
   'You triage tickets. Use the tools to read the ticket, then answer one JSON object and nothing else: {"status": "done", "summary": "<one sentence>"}.';
 
 export async function answer(text) {
-  const names = (process.env.CHOREGOS_MCP_SERVERS ?? "").split(",").filter(Boolean);
+  const names = (process.env.TRANIBOR_MCP_SERVERS ?? "").split(",").filter(Boolean);
   const home = await mkdtemp(join(tmpdir(), "copilot-"));
   const client = new CopilotClient({ workingDirectory: home, baseDirectory: home, useLoggedInUser: false });
   try {
     await client.start();
     const session = await client.createSession({
       onPermissionRequest: approveAll,
-      model: process.env.CHOREGOS_MODEL ?? "default",
+      model: process.env.TRANIBOR_MODEL ?? "default",
       provider: {
         type: "openai",
         wireApi: "completions",
@@ -32,7 +32,7 @@ export async function answer(text) {
       },
       systemMessage: { mode: "replace", content: INSTRUCTIONS },
       mcpServers: Object.fromEntries(
-        names.map((name) => [name, { type: "http", url: process.env.CHOREGOS_MCP_URL + name, tools: ["*"] }]),
+        names.map((name) => [name, { type: "http", url: process.env.TRANIBOR_MCP_URL + name, tools: ["*"] }]),
       ),
       // The MCP tools only: none of the runtime's shell, file and web tools.
       availableTools: new ToolSet().addMcp("*"),

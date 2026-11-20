@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """The tools of this run as a Python library (ADR 0122 §3): `from choregos_tools import <server>`.
 
-Copied by the runner, for each run offered tool scripts, to `$CHOREGOS_TOOLS_DIR/choregos_tools/`,
+Copied by the runner, for each run offered tool scripts, to `$TRANIBOR_TOOLS_DIR/choregos_tools/`,
 outside the repository, beside one module per server (`<server>.py`, one function per tool) and
-`$CHOREGOS_TOOLS_DIR/INDEX.md`. Do not edit the copy: the next run writes it again. Standard library
+`$TRANIBOR_TOOLS_DIR/INDEX.md`. Do not edit the copy: the next run writes it again. Standard library
 only, Python 3.9 or later.
 
-Every call goes through the runner's tool bridge (`$CHOREGOS_TOOLS_BRIDGE`), which holds the run's
+Every call goes through the runner's tool bridge (`$TRANIBOR_TOOLS_BRIDGE`), which holds the run's
 credential; the script holds none. The platform governs a call from a script exactly as a tool call of
 the model: the same allowlist, cap, approvals, bounds, masking, injection guard and ledger.
 
@@ -63,9 +63,9 @@ import urllib.request as _urlrequest
 from typing import Any as _Any
 
 #: The tool bridge's address (`http://localhost:7777/bridge/v1`), set by the runner.
-BRIDGE_VARIABLE = "CHOREGOS_TOOLS_BRIDGE"
+BRIDGE_VARIABLE = "TRANIBOR_TOOLS_BRIDGE"
 #: The directory of this package and of `INDEX.md`, set by the runner.
-DIRECTORY_VARIABLE = "CHOREGOS_TOOLS_DIR"
+DIRECTORY_VARIABLE = "TRANIBOR_TOOLS_DIR"
 #: The header that carries the running script's digest.
 SCRIPT_HEADER = "X-Choregos-Script"
 #: The longest script text the bridge keeps (UTF-8 bytes); a longer one is not sent, its digest is.

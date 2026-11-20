@@ -44,7 +44,7 @@ def sealed_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """The deployment's key: a typed client secret is sealed with it (ADR 0058)."""
     from tranibor_core.redaction import forget_secrets
 
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{base64.b64encode(os.urandom(32)).decode()}")
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"k1:{base64.b64encode(os.urandom(32)).decode()}")
     forget_secrets()
 
 
@@ -68,7 +68,7 @@ def server(provider: FakeOAuthProvider, monkeypatch: pytest.MonkeyPatch) -> Fake
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 

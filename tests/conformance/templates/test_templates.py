@@ -61,7 +61,7 @@ def test_the_declared_connectors_exist(path: Path) -> None:
 
     from tranibor_adapters import available
 
-    was_fake = os.environ.pop("CHOREGOS_FAKES", None)
+    was_fake = os.environ.pop("TRANIBOR_FAKES", None)
     try:
         for kind, type_name in manifest(path)["requires"]["connectors"].items():
             assert type_name in available(kind), (
@@ -69,7 +69,7 @@ def test_the_declared_connectors_exist(path: Path) -> None:
             )
     finally:
         if was_fake is not None:
-            os.environ["CHOREGOS_FAKES"] = was_fake
+            os.environ["TRANIBOR_FAKES"] = was_fake
 
 
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)

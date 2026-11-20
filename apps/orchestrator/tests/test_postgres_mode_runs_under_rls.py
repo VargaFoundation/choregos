@@ -17,7 +17,7 @@ from .conftest import ON_POSTGRES, Fixture
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 
 
-@pytest.mark.skipif(not ON_POSTGRES, reason="CHOREGOS_TEST_ORCH_ON_POSTGRES is not set")
+@pytest.mark.skipif(not ON_POSTGRES, reason="TRANIBOR_TEST_ORCH_ON_POSTGRES is not set")
 async def test_the_suite_connects_as_a_role_that_is_not_superuser(setup: Fixture) -> None:
     from alembic.script import ScriptDirectory
     from tranibor_api.db import session as db_session

@@ -72,9 +72,9 @@ def directory() -> Iterator[Directory]:
 
 @pytest.fixture
 async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClient]:
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/tenants.db")
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", INSTANCE)
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{tmp_path}/tenants.db")
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", INSTANCE)
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.db import session as db_session
     from tranibor_api.db.models import Organization
@@ -96,7 +96,7 @@ async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Asy
         await db_session.dispose_engine()
         forget_discovery()
         reset_settings_cache()
-        os.environ.pop("CHOREGOS_DATABASE_URL", None)
+        os.environ.pop("TRANIBOR_DATABASE_URL", None)
 
 
 def _query(response: Any) -> dict[str, list[str]]:

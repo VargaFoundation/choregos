@@ -23,7 +23,7 @@ def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
     from tranibor_api.config import reset_settings_cache
 
     for key, value in env.items():
-        monkeypatch.setenv(f"CHOREGOS_{key.upper()}", value)
+        monkeypatch.setenv(f"TRANIBOR_{key.upper()}", value)
     reset_settings_cache()
 
 

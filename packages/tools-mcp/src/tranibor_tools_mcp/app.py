@@ -29,15 +29,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # authenticated with the run's token; creating a second one would be a second identity.
         yield
         return
-    token = os.environ.get("CHOREGOS_RUN_TOKEN", "")
+    token = os.environ.get("TRANIBOR_RUN_TOKEN", "")
     client = InternalClient(
-        os.environ.get("CHOREGOS_API_URL", "http://localhost:8000/api/v1/internal"),
-        os.environ.get("CHOREGOS_RUN_ID", ""),
+        os.environ.get("TRANIBOR_API_URL", "http://localhost:8000/api/v1/internal"),
+        os.environ.get("TRANIBOR_RUN_ID", ""),
         token,
     )
     _state["client"] = client
     _state["server"] = McpServer(
-        client, ToolContext(max_findings=int(os.environ.get("CHOREGOS_MAX_FINDINGS", "5")))
+        client, ToolContext(max_findings=int(os.environ.get("TRANIBOR_MAX_FINDINGS", "5")))
     )
     # The sidecar is not told its run's input: the bridge reads it from the API on first use.
     _state["bridge"] = StageInputBridge(client, ApiJournal(client), secrets=(token,))
@@ -99,7 +99,7 @@ def main() -> None:
     uvicorn.run(
         app,
         host="127.0.0.1",  # the sidecar listens on the pod's loopback only
-        port=int(os.environ.get("CHOREGOS_TOOLS_PORT", "7777")),
+        port=int(os.environ.get("TRANIBOR_TOOLS_PORT", "7777")),
         log_level="warning",
     )
 

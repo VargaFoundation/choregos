@@ -3,7 +3,7 @@
 # no provider key, no cost. Every port is bound to 127.0.0.1.
 #
 #   docker compose -p s4020b -f tests/live/otel/compose.yaml up -d --wait
-#   CHOREGOS_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
+#   TRANIBOR_LIVE_OTEL=1 uv run pytest tests/live/test_otel_collector_live.py -m live
 #   docker compose -p s4020b -f tests/live/otel/compose.yaml down -v
 name: s4020b
 services:
@@ -45,7 +45,7 @@ services:
 
   litellm:
     # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
-    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
+    image: ghcr.io/berriai/litellm-database:v1.108.12@sha256:1a5e629eee10f0a38a4eb276afea812411ed6c27031b826525134730c57f05ce
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     user: "1000:1000"
     environment:

@@ -99,7 +99,7 @@ def test_a_stored_extra_key_is_named_in_the_refusal() -> None:
 
 
 def test_the_real_factory_fails_closed_without_the_platform(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     with pytest.raises(AdapterError, match="only the platform supplies"):
         build("mcp", "mcp-gateway", {"server": "x"})
     with pytest.raises(AdapterError, match="only the platform supplies"):
@@ -109,7 +109,7 @@ def test_the_real_factory_fails_closed_without_the_platform(monkeypatch: pytest.
 
 
 async def test_the_real_factory_uses_what_the_platform_injects(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     upstream = _server(TOOLS)
     gateway = FakeMcpGateway(upstreams={"x": GatewayUpstream(server=upstream)}, auth="none")
 
@@ -137,7 +137,7 @@ async def test_the_real_factory_uses_what_the_platform_injects(monkeypatch: pyte
 
 
 async def test_fakes_route_a_gateway_connector_to_the_fake_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     gateway = FakeMcpGateway(upstreams={"x": GatewayUpstream(server=_server(TOOLS))}, auth="none")
     monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", gateway)
     client = build("mcp", "mcp-gateway", _injected())
@@ -154,13 +154,13 @@ async def test_fakes_route_a_gateway_connector_to_the_fake_gateway(monkeypatch: 
 
 
 def test_fakes_refuse_a_gateway_connector_without_the_platform(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     with pytest.raises(AdapterError, match="only the platform supplies"):
         build("mcp", "mcp-gateway", {"server": "x"})
 
 
 def test_fakes_check_a_gateway_connector_like_the_real_factory(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     with pytest.raises(AdapterError, match="name at the organisation's MCP gateway"):
         build("mcp", "mcp-gateway", _injected(server="../x"))
     with pytest.raises(AdapterError, match="name at the organisation's MCP gateway"):
@@ -172,7 +172,7 @@ def test_fakes_check_a_gateway_connector_like_the_real_factory(monkeypatch: pyte
 
 
 async def test_the_fake_gateway_follows_the_current_fake_mcp(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     monkeypatch.setattr(tranibor_adapters, "FAKE_MCP_GATEWAY", None)
     monkeypatch.setattr(tranibor_adapters, "FAKE_MCP", _server(TOOLS))
     config = _injected(server="y", gateway_url="https://gw.test/y/mcp")

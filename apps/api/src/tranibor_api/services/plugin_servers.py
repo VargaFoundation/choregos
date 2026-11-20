@@ -15,7 +15,7 @@ approval, ADR 0050), each of its servers becomes:
 - **objects in the plugins namespace** (`tranibor_adapters.plugin_servers`): the Deployment, its
   Service, its NetworkPolicy, and a Secret with the server's configuration and the bearer token the
   platform generated for it, sealed in the organisation's store (ADR 0058) under the connector's
-  `_server_token` field and presented on every broker call (`CHOREGOS_SERVER_TOKEN` in the pod).
+  `_server_token` field and presented on every broker call (`TRANIBOR_SERVER_TOKEN` in the pod).
 
 The server's `config_schema` and `secret_fields` are the connector's configuration: an administrator
 types them with the connector routes (secrets sealed); every change reconciles the objects, and the
@@ -23,11 +23,11 @@ digest of the Secret on the pod template rolls the Deployment. Until the configu
 schema the Deployment has no replica and the connector says `unconfigured`.
 
 The image follows the hosted-agent rules (ADR 0080 §8): pinned by digest (the contract), under
-`CHOREGOS_PLUGIN_SERVERS_REGISTRIES`, and signed per `CHOREGOS_HOSTED_COSIGN`.
+`TRANIBOR_PLUGIN_SERVERS_REGISTRIES`, and signed per `TRANIBOR_HOSTED_COSIGN`.
 
 **The eval instance (#1372).** A server that declares its `fake` (the variables that switch it to its
 seeded fake, the scenes that fake serves) is also run, where the deployment serves eval fakes
-(`CHOREGOS_EVAL_FAKE_SCENES`) and only there, as a second set of objects (`fake_object`): the same image,
+(`TRANIBOR_EVAL_FAKE_SCENES`) and only there, as a second set of objects (`fake_object`): the same image,
 the fake's variables and the platform's token, no configuration, no egress at all, one replica. It is
 deleted at the next reconcile once the switch is off. A connector reaches it only when the live eval
 matrix's seeding bound it (`fake_scene: <scene>` in its configuration, which every API write path
@@ -98,7 +98,7 @@ def use_plugin_transport(transport: httpx.AsyncBaseTransport | None) -> None:
 
 
 def transport() -> httpx.AsyncBaseTransport | None:
-    """The transport of the platform's calls to a server: a test's, else under `CHOREGOS_FAKES` the
+    """The transport of the platform's calls to a server: a test's, else under `TRANIBOR_FAKES` the
     in-memory server of the tracker profile (`FakePluginTrackerServer`, one per process), else the
     network."""
     if "transport" in _OVERRIDES:
@@ -121,7 +121,7 @@ def fake_tracker_server() -> Any:
 
 def runtime(settings: Settings | None = None) -> PluginServerRuntime | None:
     """Where servers run: the Kubernetes API of `plugin_servers_namespace`; in memory under
-    `CHOREGOS_FAKES`; `None` when the deployment runs none (`plugin_servers: off`)."""
+    `TRANIBOR_FAKES`; `None` when the deployment runs none (`plugin_servers: off`)."""
     if "runtime" in _OVERRIDES:
         found: PluginServerRuntime = _OVERRIDES["runtime"]
         return found
@@ -253,7 +253,7 @@ async def _check_image(image: str, settings: Settings) -> None:
         known = ", ".join(allowed) or "none"
         raise unprocessable(
             f"the server image `{ref.name}` is not from a registry the operator allows for plugin servers "
-            f"(CHOREGOS_PLUGIN_SERVERS_REGISTRIES: {known})",
+            f"(TRANIBOR_PLUGIN_SERVERS_REGISTRIES: {known})",
             loc,
         )
     if settings.hosted_cosign == "off":
@@ -278,16 +278,16 @@ async def check(
     if runtime(settings) is None:
         raise unprocessable(
             f"`{plugin.name}` brings a server and this deployment runs none "
-            "(`global.plugins.servers.enabled`, CHOREGOS_PLUGIN_SERVERS)"
+            "(`global.plugins.servers.enabled`, TRANIBOR_PLUGIN_SERVERS)"
         )
     require_store({SERVER_TOKEN_FIELD: "-"})
     for name, doc in sorted(plugin.servers.items()):
         await _check_image(str(doc["image"]), settings)
         for field, env in _env_names(doc).items():
-            if not _ENV.match(env) or env.startswith("CHOREGOS_"):
+            if not _ENV.match(env) or env.startswith(("TRANIBOR_", "CHOREGOS_")):  # compat-ok
                 raise unprocessable(
                     f"server `{name}`: `{field}` reaches the server as `{env}`, which is not a variable it "
-                    "may receive (upper case, not `CHOREGOS_*`)"
+                    "may receive (upper case, not `TRANIBOR_*`)"
                 )
         found = await _connector(session, org_id, name)
         owners = {plugin.name, *([replacing] if replacing else [])}
@@ -674,7 +674,7 @@ async def connector_client(
     Service and bearer token; any other through its type's adapter, its secrets resolved here.
 
     A connector the live eval matrix declared on a fake's scene (`fake_scene`, S57-11a) is served by
-    that scene, built anew, when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`); the API
+    that scene, built anew, when the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`); the API
     refuses the field on every declaration and edit, so no other connector carries it.
 
     `bearer` (ADR 0135): the person's exchanged token, for this call only. It is the connector's bearer in

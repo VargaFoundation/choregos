@@ -100,13 +100,14 @@ alarm). Both set and different: refused, that is a contradiction.
 {{- end -}}
 
 {{/*
-Where every run's agent runs (ADR 0146): `process` or `container`. One value for the API (`/readiness`),
+Where every run's agent runs (ADR 0146): `container` (the default since S65-04m) or `process`. One value
+for the API (`/readiness`),
 the workers (each run's executor) and the warm pool's template, as `CHOREGOS_RUNNER_AGENT_ISOLATION`.
 `runner.sandbox.agentIsolation`, where it lived while only the warm pool had the agent's container, is
 refused with where it went: a value silently ignored would leave the agent beside the runner.
 */}}
 {{- define "choregos.agentIsolation" -}}
-{{- $value := (.Values.global.runner | default dict).agentIsolation | default "process" -}}
+{{- $value := (.Values.global.runner | default dict).agentIsolation | default "container" -}}
 {{- if not (has $value (list "process" "container")) -}}
 {{- fail (printf "global.runner.agentIsolation=%q: expected process or container (ADR 0146)" $value) -}}
 {{- end -}}
@@ -421,9 +422,15 @@ right — in the parent chart only.
 {{- end -}}
 {{- end -}}
 
+{{- /* The embedded Temporal's Service name: `global.temporal.serviceName` (global, so the API and the
+workers, which render the address from their own values, see it too), or `<release>-temporal`. */ -}}
+{{- define "choregos.temporalServiceName" -}}
+{{- (.Values.global.temporal | default dict).serviceName | default (printf "%s-temporal" .Release.Name) -}}
+{{- end -}}
+
 {{- define "choregos.temporalAddress" -}}
 {{- if .Values.global.temporal.embedded -}}
-{{ .Release.Name }}-temporal:7233
+{{ include "choregos.temporalServiceName" . }}:7233
 {{- else -}}
 {{ .Values.global.temporal.address }}
 {{- end -}}

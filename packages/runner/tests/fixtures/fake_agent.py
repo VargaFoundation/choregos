@@ -161,14 +161,18 @@ def _http(calls: list[dict[str, Any]]) -> None:
             answers.append({"status": error.code, "body": error.read().decode()})
         except OSError as exc:
             answers.append({"status": None, "body": type(exc).__name__})
-    held = sorted(name for name in os.environ if name.startswith("CHOREGOS_RUN_"))
+    held = sorted(
+        name
+        for name in os.environ
+        if name.startswith(("TRANIBOR_RUN_", "CHOREGOS_RUN_"))  # compat-ok
+    )  # compat-ok
     (Path(os.environ["HOME"]) / "http.json").write_text(
         json.dumps({"answers": answers, "run_variables": held}), encoding="utf-8"
     )
 
 
 #: What `scripts` records of the agent's environment: what the runner sets for tool scripts (ADR 0122).
-SCRIPT_VARIABLES = ("CHOREGOS_TOOLS_DIR", "CHOREGOS_TOOLS_BRIDGE", "PYTHONPATH", "TMPDIR")
+SCRIPT_VARIABLES = ("TRANIBOR_TOOLS_DIR", "TRANIBOR_TOOLS_BRIDGE", "PYTHONPATH", "TMPDIR")
 
 
 def _scripts(scripts: list[dict[str, Any]], workspace: Path) -> None:
@@ -232,11 +236,32 @@ def _say(session_id: str, notes: list[str]) -> None:
         )
 
 
+def _exit_at_start(script: dict[str, Any]) -> None:
+    """`exit_at_start`: opencode 1.18.31 on a read-only config root (#1986) said why on stderr and
+    exited before reading anything."""
+    if "exit_at_start" in script:
+        sys.stderr.write("Error: FileSystem.writeFile failed: read-only file system\n")
+        sys.stderr.flush()
+        raise SystemExit(int(script["exit_at_start"]))
+
+
+def _new_session(message_id: Any, script: dict[str, Any]) -> None:
+    """`fail_session_new`: opencode 1.18.31 when the port rule refused its own server (#1986)."""
+    if script.get("fail_session_new"):
+        sys.stderr.write("service=directory error=connection refused\n")
+        sys.stderr.flush()
+        error = {"code": -32603, "message": "Internal error", "data": {"service": "directory"}}
+        send({"jsonrpc": "2.0", "id": message_id, "error": error})
+        return
+    send({"jsonrpc": "2.0", "id": message_id, "result": {"sessionId": "sess-fake-1"}})
+
+
 def main() -> int:
     script: dict[str, Any] = json.loads(os.environ.get("FAKE_AGENT_SCRIPT", "{}"))
-    workspace = Path(os.environ.get("CHOREGOS_WORKSPACE_PATH", ".")).resolve()
+    workspace = Path(os.environ.get("TRANIBOR_WORKSPACE_PATH", ".")).resolve()
     outgoing_id = 1000
     prompts_seen = 0
+    _exit_at_start(script)
 
     while True:
         message = read()
@@ -251,7 +276,7 @@ def main() -> int:
             continue
 
         if method == "session/new":
-            send({"jsonrpc": "2.0", "id": message_id, "result": {"sessionId": "sess-fake-1"}})
+            _new_session(message_id, script)
             continue
 
         if method == "session/load":

@@ -33,7 +33,7 @@ pytestmark = pytest.mark.conformance
 def _egress_of_the_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     """The fake hosts (`fournisseur.test`, `demo`) carry no egress rule: this module sets its own mode
     instead of inheriting `warn` from a `conftest.py` another suite imported first (#771)."""
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "warn")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "warn")
 
 
 SECRET = "cle-tres-secrete-0b7f"

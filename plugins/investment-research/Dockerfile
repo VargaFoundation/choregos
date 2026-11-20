@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # The `investment-research` job image (ADR 0181 O4-3, ADR 0056): the image the operator maps for the
-# plugin's job steps (`CHOREGOS_JOB_IMAGES`, chart `global.images.jobs.investment-research`). A job step
+# plugin's job steps (`TRANIBOR_JOB_IMAGES`, chart `global.images.jobs.investment-research`). A job step
 # runs the runner, which runs the step's command: so the image is the SAME release's runner image plus
 # the plugin's `choregos-quant`, and the release builds it FROM the runner it has just published
 # (`.github/workflows/release.yml`, job `job-image`), so the runner inside always matches the platform.

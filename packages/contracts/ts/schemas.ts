@@ -690,7 +690,7 @@ export type PluginServer = {
   webhook?: {
     path: string;
   };
-  /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
+  /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
   fake?: {
     env: {
       [key: string]: string;
@@ -1287,7 +1287,7 @@ export type StageInput = {
   };
   agent: {
     backend: string;
-    /** The image the run's pod uses instead of the runner image (ADR 0063): the reference the operator's `CHOREGOS_AGENT_IMAGES` maps the agent's image name to, built from the runner image. */
+    /** The image the run's pod uses instead of the runner image (ADR 0063): the reference the operator's `TRANIBOR_AGENT_IMAGES` maps the agent's image name to, built from the runner image. */
     image?: string;
     launch?: {
       command?: Array<string>;
@@ -1776,7 +1776,7 @@ export type WorkflowJobActor = {
   role: string;
   /** argv, never a shell line. */
   command: Array<string>;
-  /** A job image's name, as the platform maps it (CHOREGOS_JOB_IMAGES); absent: the runner image. */
+  /** A job image's name, as the platform maps it (TRANIBOR_JOB_IMAGES); absent: the runner image. */
   image?: string;
   max_minutes?: number;
 };

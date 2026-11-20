@@ -62,15 +62,15 @@ def parse_response(payload: Any, symbol: str) -> Fetched:
 
 
 class HttpFetcher:
-    """POST `{CHOREGOS_API_URL}/runs/{CHOREGOS_RUN_ID}/tools/{tool}` with the run token."""
+    """POST `{TRANIBOR_API_URL}/runs/{TRANIBOR_RUN_ID}/tools/{tool}` with the run token."""
 
     def __init__(
         self, tool: str = "marketdata__get_bars", env: dict[str, str] | None = None, timeout: float = 60
     ):
         e = dict(os.environ) if env is None else env
         try:
-            self._url = f"{e['CHOREGOS_API_URL'].rstrip('/')}/runs/{e['CHOREGOS_RUN_ID']}/tools/{tool}"
-            self._token = e["CHOREGOS_RUN_TOKEN"]
+            self._url = f"{e['TRANIBOR_API_URL'].rstrip('/')}/runs/{e['TRANIBOR_RUN_ID']}/tools/{tool}"
+            self._token = e["TRANIBOR_RUN_TOKEN"]
         except KeyError as exc:
             raise InputError(f"missing environment variable {exc.args[0]}") from exc
         self._timeout = timeout

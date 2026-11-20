@@ -9,15 +9,15 @@ over the image's, so the code under test is the checkout's. `agent_shape/runner_
 step through `Runner.execute` with `agent_isolation=container`: fix a function, read a code word from a
 credentialed MCP server, pass the project's checks (which run in the agent's container and probe it).
 
-    CHOREGOS_LIVE_LITELLM_URL=https://… CHOREGOS_LIVE_LITELLM_KEY=sk-… \\
-    CHOREGOS_LIVE_RUNNER_IMAGE=ghcr.io/graalsystems/tranibor-runner:0.27.15 \\
+    TRANIBOR_LIVE_LITELLM_URL=https://… TRANIBOR_LIVE_LITELLM_KEY=sk-… \\
+    TRANIBOR_LIVE_RUNNER_IMAGE=<registry>/tranibor-runner:<version> \\
     uv run pytest tests/live/test_agent_shape_live.py -m live -rs
 
-Optional: `CHOREGOS_LIVE_SHAPE_MODEL` (default `choregos-claude-haiku`, the cheapest model of the dev
-gateway's live-tests key), `CHOREGOS_LIVE_SHAPE_RESULTS` (a directory that keeps each harness's JSON
-report), `CHOREGOS_LIVE_SHAPE_LAUNCH_ENV` (a JSON object added to the step's `agent.launch.env`, to try
-a harness's setting without changing its backend), `CHOREGOS_LIVE_SHAPE_PROVIDER_MODEL` (the model behind
-an alias, for a backend that checks the family), `CHOREGOS_LIVE_SHAPE_GATEWAY_NETWORK` (a Docker network the
+Optional: `TRANIBOR_LIVE_SHAPE_MODEL` (default `choregos-claude-haiku`, the cheapest model of the dev
+gateway's live-tests key), `TRANIBOR_LIVE_SHAPE_RESULTS` (a directory that keeps each harness's JSON
+report), `TRANIBOR_LIVE_SHAPE_LAUNCH_ENV` (a JSON object added to the step's `agent.launch.env`, to try
+a harness's setting without changing its backend), `TRANIBOR_LIVE_SHAPE_PROVIDER_MODEL` (the model behind
+an alias, for a backend that checks the family), `TRANIBOR_LIVE_SHAPE_GATEWAY_NETWORK` (a Docker network the
 gateway is on). Skipped without the gateway's variables, without Docker or without an image.
 Every container, network and volume made here carries the label `s65a`, and is removed after.
 """
@@ -83,30 +83,30 @@ class Gateway(dict[str, str]):
     arguments, and a CI log would otherwise carry the key."""
 
     def __repr__(self) -> str:
-        return f"Gateway(url={self.get('CHOREGOS_LIVE_LITELLM_URL', '')!r}, key=<redacted>)"
+        return f"Gateway(url={self.get('TRANIBOR_LIVE_LITELLM_URL', '')!r}, key=<redacted>)"
 
 
 @pytest.fixture(scope="module")
 def gateway() -> Gateway:
-    env = require("CHOREGOS_LIVE_LITELLM_URL", "CHOREGOS_LIVE_LITELLM_KEY")
+    env = require("TRANIBOR_LIVE_LITELLM_URL", "TRANIBOR_LIVE_LITELLM_KEY")
     info = None
     if shutil.which("docker"):
         info = subprocess.run(["docker", "info"], capture_output=True, check=False)
     if info is None or info.returncode:
         pytest.skip("the agent's shape needs Docker")
-    image = os.environ.get("CHOREGOS_LIVE_RUNNER_IMAGE", "")
+    image = os.environ.get("TRANIBOR_LIVE_RUNNER_IMAGE", "")
     if not image:
-        pytest.skip("CHOREGOS_LIVE_RUNNER_IMAGE names no runner image")
+        pytest.skip("TRANIBOR_LIVE_RUNNER_IMAGE names no runner image")
     if docker("image", "inspect", image, check=False) == "[]":
         docker("pull", "--quiet", image, timeout=1800)
     return Gateway(
-        {**env, "image": image, "model": os.environ.get("CHOREGOS_LIVE_SHAPE_MODEL", "choregos-claude-haiku")}
+        {**env, "image": image, "model": os.environ.get("TRANIBOR_LIVE_SHAPE_MODEL", "choregos-claude-haiku")}
     )
 
 
 @pytest.fixture
 def results(tmp_path: Path) -> Path:
-    kept = os.environ.get("CHOREGOS_LIVE_SHAPE_RESULTS")
+    kept = os.environ.get("TRANIBOR_LIVE_SHAPE_RESULTS")
     path = Path(kept) if kept else tmp_path / "results"
     path.mkdir(parents=True, exist_ok=True)
     path.chmod(0o777)  # written by the containers' uids
@@ -146,7 +146,7 @@ def pod(gateway: Gateway, results: Path) -> Iterator[dict[str, str]]:
             "/shape/egress_proxy.py", "--log", f"/results/egress-{tag}.jsonl",
         )  # fmt: skip
         docker("network", "connect", names["net"], names["egress"])
-        if gateway_network := os.environ.get("CHOREGOS_LIVE_SHAPE_GATEWAY_NETWORK"):
+        if gateway_network := os.environ.get("TRANIBOR_LIVE_SHAPE_GATEWAY_NETWORK"):
             # A gateway on a network of its own (the nightly's compose stack): the pod reaches it
             # through its egress proxy, as everything else.
             docker("network", "connect", gateway_network, names["egress"])
@@ -154,9 +154,9 @@ def pod(gateway: Gateway, results: Path) -> Iterator[dict[str, str]]:
         proxy = f"http://s65a-run:{egress_token}@{names['egress']}:3128"
         # The values travel in docker's environment, never on its command line.
         secret_env = {
-            "CHOREGOS_RUN_GATEWAY_KEY": gateway["CHOREGOS_LIVE_LITELLM_KEY"],
-            "CHOREGOS_RUN_TOKEN": run_token,
-            "CHOREGOS_RUN_S65A_EGRESS": egress_token,
+            "TRANIBOR_RUN_GATEWAY_KEY": gateway["TRANIBOR_LIVE_LITELLM_KEY"],
+            "TRANIBOR_RUN_TOKEN": run_token,
+            "TRANIBOR_RUN_S65A_EGRESS": egress_token,
             "HTTPS_PROXY": proxy,
             "HTTP_PROXY": proxy,
         }
@@ -165,12 +165,12 @@ def pod(gateway: Gateway, results: Path) -> Iterator[dict[str, str]]:
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             *(arg for name in secret_env for arg in ("-e", name)),
             "-e", "NO_PROXY=127.0.0.1,localhost", "-e", "TMPDIR=/exchange",
-            "-e", f"S65A_LAUNCH_ENV={os.environ.get('CHOREGOS_LIVE_SHAPE_LAUNCH_ENV', '{}')}",
-            "-e", f"S65A_GATEWAY_URL={gateway['CHOREGOS_LIVE_LITELLM_URL']}",
+            "-e", f"S65A_LAUNCH_ENV={os.environ.get('TRANIBOR_LIVE_SHAPE_LAUNCH_ENV', '{}')}",
+            "-e", f"S65A_GATEWAY_URL={gateway['TRANIBOR_LIVE_LITELLM_URL']}",
             "-e", f"S65A_MODEL={gateway['model']}",
-            "-e", f"S65A_PROVIDER_MODEL={os.environ.get('CHOREGOS_LIVE_SHAPE_PROVIDER_MODEL', '')}",
-            "-e", "CHOREGOS_RUNNER_AGENT_ISOLATION=container",
-            "-e", f"CHOREGOS_RUNNER_LAUNCHER_PORT={LAUNCHER_PORT}",
+            "-e", f"S65A_PROVIDER_MODEL={os.environ.get('TRANIBOR_LIVE_SHAPE_PROVIDER_MODEL', '')}",
+            "-e", "TRANIBOR_RUNNER_AGENT_ISOLATION=container",
+            "-e", f"TRANIBOR_RUNNER_LAUNCHER_PORT={LAUNCHER_PORT}",
             *shared,
             "-v", packages, "-v", f"{SHAPE}:/shape:ro", "-v", f"{results}:/results",
             "--entrypoint", "sleep", image, "infinity",
@@ -195,12 +195,12 @@ def pod(gateway: Gateway, results: Path) -> Iterator[dict[str, str]]:
 
 
 def harnesses() -> list[Any]:
-    """The three harnesses; `gemini-cli` is expected to fail on a model that is not Gemini (#1990)."""
-    model = os.environ.get("CHOREGOS_LIVE_SHAPE_MODEL", "choregos-claude-haiku")
-    gemini = pytest.mark.xfail(
+    """The three harnesses; `gemini-cli` only on a Gemini model, the one family the platform gives it
+    (#1990: on another, LiteLLM's Gemini adapter gives two calls of one tool the same id)."""
+    model = os.environ.get("TRANIBOR_LIVE_SHAPE_MODEL", "choregos-claude-haiku")
+    gemini = pytest.mark.skipif(
         "gemini" not in model.lower(),
-        reason="#1990: LiteLLM's Gemini adapter gives parallel calls of one function one id (Claude)",
-        strict=False,
+        reason="#1990: gemini-cli is refused on a model that is not Gemini (BACKEND_MODEL_CONSTRAINTS)",
     )
     return [pytest.param(name, marks=gemini) if name == "gemini-cli" else name for name in HARNESSES]
 

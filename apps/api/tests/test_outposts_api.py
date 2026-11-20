@@ -56,12 +56,12 @@ def door(monkeypatch: pytest.MonkeyPatch) -> kit.Door:
 
 
 async def test_with_outposts_off_a_creation_is_refused(client: AsyncClient, admin: str) -> None:
-    """`CHOREGOS_OUTPOSTS` is off unless turned on (ADR 0147 §12)."""
+    """`TRANIBOR_OUTPOSTS` is off unless turned on (ADR 0147 §12)."""
     from tranibor_api.config import Settings
 
     assert Settings.model_fields["outposts"].default is False
     refused = _refused(await client.post(BASE, json={"slug": SLUG}), "outposts_disabled")
-    assert "CHOREGOS_OUTPOSTS" in refused["detail"]
+    assert "TRANIBOR_OUTPOSTS" in refused["detail"]
     # The list says so before anyone tries (S65-24): switched off, and no key for the door either.
     assert (await client.get(BASE)).json() == {"items": [], "enabled": False, "door_signing_key": False}
 
@@ -212,7 +212,7 @@ async def test_without_a_door_signing_key_no_enrolment_token_is_issued(
     listing = (await client.get(BASE)).json()
     assert (listing["enabled"], listing["door_signing_key"]) == (True, False)
     refused = _refused(await client.post(f"{ONE}/enrolments"), "door_key_missing")
-    assert "CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY" in refused["detail"]
+    assert "TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY" in refused["detail"]
     assert await kit.rows_of(SLUG, OutpostEnrolment) == []
     assert await kit.audit_rows("outpost.enrol") == []
 

@@ -9,7 +9,7 @@ Three permissions, decided here and nowhere else:
   an administrator who is not in the audience does not talk to the assistant.
 - `assistant:audit`: the owners, the administrator, and the privacy officers. `privacy_officer` is not an
   organisation role (the `Role` enum is a published contract): it is a list of IdP groups the platform
-  names in `CHOREGOS_ASSISTANT_PRIVACY_OFFICER_GROUPS`.
+  names in `TRANIBOR_ASSISTANT_PRIVACY_OFFICER_GROUPS`.
 
 Groups come from the principal (`Principal.groups`, read from the user's row at each request), so leaving a
 group takes effect at the next request, and the audience is evaluated again at every turn.

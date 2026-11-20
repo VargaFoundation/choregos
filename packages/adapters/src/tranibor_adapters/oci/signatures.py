@@ -24,7 +24,7 @@ class UnconfiguredVerifier:
     nothing verifies, and `detail` says why."""
 
     def __init__(
-        self, detail: str = "no signature verifier is configured (CHOREGOS_HOSTED_COSIGN_*)"
+        self, detail: str = "no signature verifier is configured (TRANIBOR_HOSTED_COSIGN_*)"
     ) -> None:
         self.detail = detail
 

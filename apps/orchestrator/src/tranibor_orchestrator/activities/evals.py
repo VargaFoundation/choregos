@@ -608,7 +608,7 @@ async def _play_agent_case(name: str, payload: dict[str, Any], tools: str) -> di
 async def _apply_change(spec: dict[str, Any], payload: dict[str, Any], work: Path) -> dict[str, Any]:
     """Apply the agent's change in the workspace.
 
-    In scripted mode (CI, `CHOREGOS_FAKES=1`), the fixture supplies the diff: the matrix is
+    In scripted mode (CI, `TRANIBOR_FAKES=1`), the fixture supplies the diff: the matrix is
     reproducible and the assertions bear on real files. With a real executor, the runner's
     `StageResult` is read back.
     """
@@ -730,7 +730,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
         if bundle.engine.memory_enabled():
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
         if context != "none" and not get_settings().context_reduction:
-            return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
+            return _skip("the deployment refuses context reduction (TRANIBOR_CONTEXT_REDUCTION)")
         if tools == "scripts" and (scripts_refused := _tool_scripts_refusal(bundle)):
             return _skip(scripts_refused)
 
@@ -881,7 +881,7 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
             "connectors must be fake scenes"
         )
     if context != "none" and not get_settings().context_reduction:
-        return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
+        return _skip("the deployment refuses context reduction (TRANIBOR_CONTEXT_REDUCTION)")
     try:
         connectors = live_cases.case_connectors(case)
     except AdapterError as unknown:

@@ -23,7 +23,7 @@ VALUE = "plain-vendor-key-9f8e7d"
 def key(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from tranibor_core.redaction import forget_secrets
 
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
     forget_secrets()
     yield
     forget_secrets()
@@ -40,7 +40,7 @@ def leaky(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     spec = ConnectorTypeSpec("leaky", ("tracker",), {"type": "object", "properties": {}}, ("api_token",))
     register("tracker", "leaky", spec)(factory)
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     try:
         yield
     finally:

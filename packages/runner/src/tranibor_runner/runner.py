@@ -32,6 +32,7 @@ from tranibor_contracts import (
     StageStatus,
     is_inert_binary_path,
 )
+from tranibor_contracts.env import with_legacy
 from tranibor_core import telemetry
 from tranibor_core.context_breakdown import PARTS_EVENT, Hints, register
 from tranibor_core.egress_gate import REPORT_EVENT as EGRESS_GATE_EVENT
@@ -39,8 +40,8 @@ from tranibor_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from tranibor_core.redaction import REDACTED, redact
 
 from . import compression, confine, safe_files, tool_scripts
-from .acp import AcpClient, AgentUnreachableError
-from .acp.client import PromptOutcome, WriteGuard
+from .acp import AcpClient, AgentDidNotStartError, AgentExitedError, AgentProtocolError, AgentUnreachableError
+from .acp.client import PromptOutcome, WriteGuard, started_session
 from .acp.guard import TurnGuard
 from .backends import Backend, LaunchPlan, get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
@@ -184,7 +185,7 @@ def with_gateway_key(stage_input: StageInput, gateway_key: str) -> StageInput:
     """The input with the run's gateway key from the run's Secret (#523).
 
     The orchestrator no longer stores the key with the input: it travels in the run's Secret, as
-    `CHOREGOS_RUN_GATEWAY_KEY`. Without that variable (an orchestrator older than #523), the key
+    `TRANIBOR_RUN_GATEWAY_KEY`. Without that variable (an orchestrator older than #523), the key
     the input carries is used, as before; this fallback is kept for one release.
     """
     if not gateway_key:
@@ -442,24 +443,24 @@ class Runner:
         dod_iterations = repairs = 0
         scope_result = None
         try:
-            async with AcpClient(
-                command,
-                cwd=str(workspace.path),
-                scripts_dir=scripts_dir,
-                env=env,
-                launcher=self.launcher,
-                on_update=on_update,
-                on_permission=on_permission,
-                write_guard=file_system_guard(guards),
-                # Enforced, not only prompted (S27-07): past max_turns tool calls, or one call
-                # repeated `loop_threshold` times in a row, the session is cancelled.
-                guard=TurnGuard(
-                    max_turns=stage_input.budget.max_turns, loop_threshold=self.settings.loop_threshold
+            async with started_session(
+                AcpClient(
+                    command,
+                    cwd=str(workspace.path),
+                    scripts_dir=scripts_dir,
+                    env=env,
+                    launcher=self.launcher,
+                    on_update=on_update,
+                    on_permission=on_permission,
+                    write_guard=file_system_guard(guards),
+                    # Enforced, not only prompted (S27-07): past max_turns tool calls, or one call
+                    # repeated `loop_threshold` times in a row, the session is cancelled.
+                    guard=TurnGuard(
+                        max_turns=stage_input.budget.max_turns, loop_threshold=self.settings.loop_threshold
+                    ),
                 ),
+                lambda agent: _open_session(agent, journal, workspace.path, backend.name, plan.mcp_servers),
             ) as agent:
-                await agent.initialize()
-                await _open_session(agent, journal, workspace.path, backend.name, plan.mcp_servers)
-
                 # 7. premier tour
                 prompt = self._prompt(stage_input, workspace.path)
                 await self._record_tool_instructions(journal, prompt)
@@ -555,9 +556,7 @@ class Runner:
                     await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
                     return RunOutcome(code, final, detail=detail)
         except AgentUnreachableError as exc:
-            await journal.record("agent.unreachable", {"error": str(exc)[:500]})
-            await journal.flush()
-            return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
+            return await self._unreachable(client, journal, workspace, stage_input, exc, (base, start_ref))
 
         # 11-12. publication
         final = complete_result(
@@ -571,6 +570,52 @@ class Runner:
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     # ───────────────────────── internal steps ─────────────────────────
+
+    async def _unreachable(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        workspace: Workspace,
+        stage_input: StageInput,
+        exc: AgentUnreachableError,
+        refs: tuple[str, str],
+    ) -> RunOutcome:
+        """The agent stopped answering. In its turn: `agent.unreachable`, exit 30. Before its first
+        prompt (#1986) — it could not be started, did not answer `initialize`, exited, or refused its
+        session — the run also says where and why: before, a refused `session/new` left
+        `Runner.execute` as an exception (no result, a traceback) and the other cases posted no
+        result. It journals `run.failed` with the phase, a named reason, the exit code and the agent's
+        last error lines, and posts a failed result that says the same."""
+        if not isinstance(exc, AgentDidNotStartError):
+            await journal.record("agent.unreachable", {"error": str(exc)[:500]})
+            await journal.flush()
+            return RunOutcome(Exit.AGENT_UNREACHABLE, detail=str(exc))
+        acp, phase, cause = exc.client, exc.phase, exc.cause
+        code = acp.process.returncode if acp.process is not None else None
+        if isinstance(cause, AgentProtocolError):
+            reason = "agent_session_refused"
+        elif isinstance(cause, AgentExitedError) or (phase != "start" and code is not None):
+            reason = "agent_exited"
+        else:
+            reason = "agent_unreachable"
+        detail = str(cause)[:500]
+        event: dict[str, Any] = {"phase": phase, "reason": reason, "error": detail}
+        if code is not None:
+            event["exit_code"] = code
+        if stderr := acp.stderr_lines():
+            event["stderr"] = stderr
+        await journal.record("run.failed", event)
+        base, start_ref = refs
+        result = complete_result(
+            fallback_result(reason, f"the agent did not start ({phase}): {detail}"),
+            measured=Evidence(),
+            artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
+            diagnostics=Diagnostics(
+                duration_s=round(time.monotonic() - self.started, 2), agent_exit="crashed"
+            ),
+        )
+        final = await self._publish(client, journal, workspace, stage_input, result, base, start_ref)
+        return RunOutcome(Exit.AGENT_UNREACHABLE, final, transcript_path=journal.path, detail=detail)
 
     async def _compress(self, stage_input: StageInput, journal: Any) -> RunOutcome | None:
         """Says which context reduction the run was given, then starts headroom when it asks for it
@@ -711,16 +756,18 @@ class Runner:
         token = self.settings.run_token or (
             "" if stage_input.callbacks.run_token == REDACTED else stage_input.callbacks.run_token
         )
-        env = {
-            **workspace_env(stage_input),
-            # The run token is the run's, scoped to it and short-lived: what a job uses to call a
-            # connector through the internal API (`POST /runs/{id}/tools/{name}`), never a provider key.
-            # Named here on purpose: no command inherits it from the runner (ADR 0115).
-            "CHOREGOS_RUN_ID": stage_input.run_id,
-            "CHOREGOS_API_URL": stage_input.callbacks.api_url,
-            "CHOREGOS_RUN_TOKEN": token,
-            "CHOREGOS_WORKSPACE": str(workspace.path),
-        }
+        env = with_legacy(
+            {
+                **workspace_env(stage_input),
+                # The run token is the run's, scoped to it and short-lived: what a job uses to call a
+                # connector through the internal API (`POST /runs/{id}/tools/{name}`), never a provider key.
+                # Named here on purpose: no command inherits it from the runner (ADR 0115).
+                "TRANIBOR_RUN_ID": stage_input.run_id,
+                "TRANIBOR_API_URL": stage_input.callbacks.api_url,
+                "TRANIBOR_RUN_TOKEN": token,
+                "TRANIBOR_WORKSPACE": str(workspace.path),
+            }
+        )
         ran = await run_job(stage_input, workspace.path, env)
         await journal.record(
             "job.finished",

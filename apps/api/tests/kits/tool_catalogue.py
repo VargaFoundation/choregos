@@ -91,7 +91,7 @@ async def run_with_catalogue(
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(file))
     monkeypatch.setenv("ANNUAIRE_API_KEY", "cle-du-coffre")
     catalogue_service.clear_cache()
 
@@ -132,7 +132,7 @@ async def project_with_mcp(
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(MCP_CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(file))
     monkeypatch.setenv("FOURNISSEUR_MCP_KEY", "cle-du-fournisseur")
     catalogue_service.clear_cache()
 

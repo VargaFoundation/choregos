@@ -512,14 +512,14 @@ def check_the_door(settings: Settings) -> None:
     missing = [
         name
         for name, value in (
-            ("CHOREGOS_OUTPOSTS_DOOR_URL", settings.outposts_door_url),
-            ("CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY", settings.outposts_door_signing_key),
+            ("TRANIBOR_OUTPOSTS_DOOR_URL", settings.outposts_door_url),
+            ("TRANIBOR_OUTPOSTS_DOOR_SIGNING_KEY", settings.outposts_door_signing_key),
         )
         if not value
     ]
     if missing:
         raise RuntimeError(
-            f"CHOREGOS_OUTPOSTS is on and {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} "
+            f"TRANIBOR_OUTPOSTS is on and {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} "
             "not set: the outposts' door cannot verify a request's URL without its public origin, nor "
             "sign a call without its key. Set them, or switch outposts off."
         )

@@ -46,7 +46,9 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- $fautes := list }}
 {{- if not $singleNode }}
 {{- if $g.database.embedded }}{{ $fautes = append $fautes "global.database.embedded" }}{{ end }}
-{{- if $g.temporal.embedded }}{{ $fautes = append $fautes "global.temporal.embedded" }}{{ end }}
+{{- /* S80-14: the embedded Temporal in `server` mode (auto-setup on PostgreSQL, ADR 0195) is the production
+       tier, not the SQLite bench: it is the one the serious environments may use. */}}
+{{- if and $g.temporal.embedded (ne (toString ((index .Values "choregos-temporal" | default dict).mode | default "dev")) "server") }}{{ $fautes = append $fautes "global.temporal.embedded (choregos-temporal.mode=dev, the SQLite bench)" }}{{ end }}
 {{- if $g.gateway.embedded }}{{ $fautes = append $fautes "global.gateway.embedded" }}{{ end }}
 {{- if $g.memory.embedded }}{{ $fautes = append $fautes "global.memory.embedded" }}{{ end }}
 {{- end }}
@@ -62,6 +64,18 @@ and sign-in, the demonstration fakes) stay refused whatever the profile.
 {{- if has (lower (toString (get $runnerEnv "CHOREGOS_FAKES" | default false))) $truthy }}{{ $fautes = append $fautes "choregos-orchestrator.runner.env.CHOREGOS_FAKES" }}{{ end }}
 {{- if $fautes }}
 {{- fail (printf "global.environment=%s refused: %s. These values are those of a bench (values/local.yaml); a serious environment brings its own dependencies and secrets, or is the single-node profile with its backup (values/single-node.yaml, ADR 0184)." $g.environment (join ", " $fautes)) }}
+{{- end }}
+{{- end }}
+{{- /*
+S80-14: the embedded Temporal and the clients must agree on TLS. A client that dials TLS a server that
+speaks clear (or the reverse) fails at the first call, with an error that names neither side.
+*/ -}}
+{{- if $g.temporal.embedded }}
+{{- $tm := index .Values "choregos-temporal" | default dict }}
+{{- $serverTls := ($tm.tls | default dict).enabled | default false }}
+{{- $clientTls := (($g.temporal.tls | default dict).enabled) | default false }}
+{{- if and $serverTls (not $clientTls) }}
+{{- fail "choregos-temporal.tls.enabled=true needs global.temporal.tls.enabled=true: the Temporal serves TLS and the API and workers would speak clear." }}
 {{- end }}
 {{- end }}
 {{- /*

@@ -27,7 +27,7 @@ def elsewhere(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     here on it lands them in `other`, so a northwind role is only one a test grants."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "other")
+    monkeypatch.setenv("TRANIBOR_OIDC_DEFAULT_ORG", "other")
     reset_settings_cache()
     yield
     reset_settings_cache()

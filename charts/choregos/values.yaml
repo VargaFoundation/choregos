@@ -91,8 +91,10 @@ global:
     # runner's environment (run token, git token, egress report key) nor /app. An executor that cannot
     # start that container (it does not declare `separate_agent`) refuses the run, and `/readiness`
     # says so first (`agent-isolation`); the runner refuses too (exit 100) rather than fall back to
-    # `process`. Needs Kubernetes >= 1.29 (native sidecar). Roll back by setting `process`.
-    agentIsolation: process
+    # `process`. Needs Kubernetes >= 1.29 (native sidecar). `container` is the default from 0.28
+    # (S65-04m); `tekton` and `aca` cannot start the agent's container, so a deployment on them sets
+    # `process`, which stays a choice, journaled on every run (`agent.isolation`). Roll back the same way.
+    agentIsolation: container
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
   # yet — for example a setting an installed plugin reads (`ACME_PLUGIN_MODE: "strict"`) — without
@@ -426,6 +428,9 @@ global:
       timeoutSeconds: 10
   temporal:
     embedded: false
+    # The embedded Temporal's Service name, hence the address clients dial. Empty: `<release>-temporal`.
+    # An operator whose clients already dial another name keeps it here (ADR 0195).
+    serviceName: ""
     address: temporal-frontend.choregos-temporal.svc:7233
     namespace: default
     # TLS to the Temporal frontend, for the API and every worker (ADR 0183). Off by default: dev,

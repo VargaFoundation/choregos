@@ -3,9 +3,9 @@
 S57-05b).
 
 The organisation decides: its setting `tool_scripts` (a key of `Organization.settings`) is `enabled`,
-`disabled`, or absent, and absent follows the deployment's default (`CHOREGOS_TOOL_SCRIPTS`, Helm
+`disabled`, or absent, and absent follows the deployment's default (`TRANIBOR_TOOL_SCRIPTS`, Helm
 `choregos-orchestrator.runner.toolScripts.enabled`). The deployment keeps a hard brake,
-`CHOREGOS_TOOL_SCRIPTS_ALLOWED` (Helm `…toolScripts.allowed`, on by default): off, no run of any
+`TRANIBOR_TOOL_SCRIPTS_ALLOWED` (Helm `…toolScripts.allowed`, on by default): off, no run of any
 organisation is offered them, whatever its setting says. Past this switch, the organisation's ceiling
 (which only forbids) and the project's policy (`tools.scripts: offer`, per role) decide as before.
 
@@ -43,13 +43,13 @@ def tool_scripts_refusal(
     if not deployment_allowed:
         return (
             "the deployment's brake refuses tool scripts to every organisation "
-            "(CHOREGOS_TOOL_SCRIPTS_ALLOWED)"
+            "(TRANIBOR_TOOL_SCRIPTS_ALLOWED)"
         )
     if choice == "disabled":
         return "the organisation has tool scripts disabled (its `tool_scripts` setting)"
     if choice is None and not deployment_default:
         return (
-            "the organisation follows the deployment's default, which is off (CHOREGOS_TOOL_SCRIPTS); "
+            "the organisation follows the deployment's default, which is off (TRANIBOR_TOOL_SCRIPTS); "
             "its administrator can enable them (`tool_scripts: enabled`)"
         )
     return None

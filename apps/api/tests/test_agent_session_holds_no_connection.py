@@ -9,7 +9,7 @@ orchestrator is asked, and finds no connection lent out: the request's transacti
 the call left, and what the call brought back is booked after it.
 
 These run on SQLite and, in CI's second pass, on PostgreSQL under RLS
-(`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`), where the booking after the call also proves that the scope
+(`TRANIBOR_TEST_SUITE_ON_POSTGRES=1`), where the booking after the call also proves that the scope
 is set again. The pool itself, exhausted and not, is `test_agent_session_pool_postgres.py`.
 """
 

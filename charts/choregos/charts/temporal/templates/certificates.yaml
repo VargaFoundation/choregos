@@ -1,0 +1,84 @@
+{{- if and .Values.tls.enabled .Values.tls.certManager.enabled }}
+{{- $svc := include "choregos-temporal.name" . }}
+{{- $cm := .Values.tls.certManager }}
+{{- $ns := .Release.Namespace }}
+{{- $pre := $cm.namePrefix | default $svc }}
+{{- /*
+A namespace-local authority issued and renewed by cert-manager (ADR 0183). Nothing public: only the API
+and the workers speak to the Service.
+
+  <prefix>-selfsigned (Issuer) -> <prefix>-ca (Certificate, CA) -> <prefix>-ca (Issuer)
+       |-> serverSecret : the SERVER certificate (the frontend, or the relay in `dev`)
+       `-> clientSecret : what the API and the workers mount (`global.temporal.tls.secretName`); the
+                          chart reads only `ca.crt` from it while `mutual: false`, so the server's key
+                          never leaves the Temporal pod.
+*/}}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $pre }}-selfsigned
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $pre }}-ca
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: {{ $cm.caCommonName }}
+  secretName: {{ $pre }}-ca
+  duration: {{ $cm.caDuration }}
+  renewBefore: {{ $cm.renewBefore }}
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Never }
+  issuerRef: { name: {{ $pre }}-selfsigned, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $pre }}-ca
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ $pre }}-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "choregos-temporal.serverSecret" . }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "choregos-temporal.serverSecret" . }}
+  commonName: {{ $svc }}
+  # The name the clients dial (`global.temporal.address`), and its long forms.
+  dnsNames:
+    - {{ $svc }}
+    - {{ $svc }}.{{ $ns }}
+    - {{ $svc }}.{{ $ns }}.svc
+    - {{ $svc }}.{{ $ns }}.svc.cluster.local
+    {{- range $cm.extraDnsNames }}
+    - {{ . }}
+    {{- end }}
+  duration: {{ $cm.duration }}
+  renewBefore: {{ $cm.renewBefore }}
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  # `client auth` too: in `server` mode the internal services present themselves to each other with it.
+  usages: [digital signature, key encipherment, server auth, client auth]
+  issuerRef: { name: {{ $pre }}-ca, kind: Issuer }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "choregos-temporal.clientSecret" . }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "choregos-temporal.clientSecret" . }}
+  commonName: choregos-temporal-client
+  duration: {{ $cm.duration }}
+  renewBefore: {{ $cm.renewBefore }}
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  usages: [digital signature, key encipherment, client auth]
+  issuerRef: { name: {{ $pre }}-ca, kind: Issuer }
+{{- end }}

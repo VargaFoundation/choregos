@@ -130,7 +130,7 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
     from tranibor_core.domain import ExecRef, ExecStatus, StageJobSpec
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
+    monkeypatch.setenv("TRANIBOR_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
     reset_settings_cache()
     project_id, item_id, key = await _live_ticket(setup)
     executor = setup.adapters.executor

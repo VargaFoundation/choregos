@@ -42,9 +42,9 @@ def profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(activity, "clock", lambda: NOW)
     monkeypatch.setattr(workspace, "RECONNECT_S", 3600)
     monkeypatch.setattr(workspace, "RUN_POLL_S", 0.05)
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_TOKEN", "chg_test")
-    monkeypatch.setenv("CHOREGOS_ORG", "acme")
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_TOKEN", "chg_test")
+    monkeypatch.setenv("TRANIBOR_ORG", "acme")
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
 
@@ -315,6 +315,8 @@ class Platform:
         router.post(f"{V1}/runs/{RUN}/cancel").mock(side_effect=self._stop)
         # What an expanded run node reads (S67-14): its journal, its context and its sub-agents.
         self.journal: list[dict[str, Any]] = _journal()
+        #: A run's own journal, when it has one; the others get `journal`.
+        self.journals: dict[str, list[dict[str, Any]]] = {}
         self.breakdown: dict[str, Any] | None = None
         self.agent_nodes: list[dict[str, Any]] = [_agent_node(RUN, None, "agent")]
         self.asked: list[tuple[str, str]] = []  # (route, after_seq or "")
@@ -504,7 +506,9 @@ class Platform:
         self.asked.append(("events", str(after)))
         if self.journal_status != 200:
             return Response(self.journal_status, json={"title": "Forbidden", "detail": "no"})
-        return Response(200, json=[e for e in self.journal if e["seq"] > after])
+        run_id = request.url.path.split("/")[-2]
+        journal = self.journals.get(run_id, self.journal)
+        return Response(200, json=[e for e in journal if e["seq"] > after])
 
     def _context(self, request: Any) -> Response:
         self.asked.append(("context", ""))
@@ -1188,6 +1192,181 @@ async def test_a_run_the_person_may_not_stop_opens_no_dialog(platform: Platform)
         assert "Stop run" not in screen_text(app)
 
 
+# ───────────────────────────────────── a relaunch (S67-30) ─────────────────────────────────────
+
+BAD = "run-bad00001"
+
+
+def _failed_run(**changes: Any) -> dict[str, Any]:
+    return (
+        _entry(
+            BAD,
+            status="failed",
+            ended_at=_iso(NOW),
+            can_stop=False,
+            stage_role="review",
+            failure={"reason": "budget", "summary": "The run spent its budget."},
+        )
+        | changes
+    )
+
+
+def _relaunches(platform: Platform) -> list[tuple[str, Any]]:
+    return [stop for stop in platform.stops if stop[1].get("action") == "rerun_stage"]
+
+
+async def test_r_relaunches_a_failed_run_through_the_work_item_action_with_its_reason(
+    platform: Platform,
+) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Relaunch run run-bad00001" in screen_text(app) and "FIN-12" in screen_text(app)
+        await pilot.press("enter")  # no reason
+        await pilot.pause()
+        assert "a relaunch needs a reason" in screen_text(app)
+        assert platform.stops == []
+        await pilot.press(*"budget topped up", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert platform.stops == [
+        (
+            "/api/v1/work-items/wi-12/actions",
+            {"action": "rerun_stage", "reason": "budget topped up", "run_id": BAD},
+        )
+    ]
+
+
+async def test_escape_in_the_relaunch_dialog_relaunches_nothing(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r", *"x", "escape")
+        await pilot.pause()
+        assert "Relaunch run" not in screen_text(app)
+    assert platform.stops == []
+
+
+async def test_a_cancelled_run_is_relaunched_too(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run(status="cancelled", failure=None)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r", *"again", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert _relaunches(platform)
+
+
+async def test_a_work_item_whose_last_run_failed_is_relaunched_without_a_run_id(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "FIN-12")
+        await pilot.press("r", *"again", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert platform.stops == [
+        ("/api/v1/work-items/wi-12/actions", {"action": "rerun_stage", "reason": "again"})
+    ]
+
+
+async def test_a_running_run_has_no_relaunch_key_and_no_footer_entry(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Relaunch" not in screen_text(app)
+        assert "x stops it" in screen_text(app)
+    assert platform.stops == []
+
+
+async def test_a_succeeded_run_is_not_relaunched(platform: Platform) -> None:
+    platform.in_flight = []
+    platform.finished = [_entry(RUN, status="succeeded", ended_at=_iso(NOW), can_stop=False)]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await pilot.press("r")
+        await pilot.pause()
+        assert "Relaunch" not in screen_text(app)
+    assert platform.stops == []
+
+
+async def test_the_footer_shows_relaunch_only_on_what_can_be_relaunched(platform: Platform) -> None:
+    platform.finished = [_failed_run(work_item_id="wi-4", work_item_key="OPS-4")]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        footer = lambda: screen_text(app).splitlines()[-1]  # noqa: E731
+        await put_cursor_on(pilot, "review")
+        await pilot.pause(0.2)
+        assert "r Relaunch (asks why)" in footer()
+        assert "r relaunches it" in pane(app)
+        await put_cursor_on(pilot, "implement")  # still running
+        await pilot.pause(0.2)
+        assert "Relaunch" not in footer() and "x Stop (asks why)" in footer()
+
+
+async def test_the_palette_relaunch_command_does_the_same_as_the_key(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await show(pilot, "decisions")
+        await _palette(pilot, "relaunch")
+        assert re.search(r"Relaunch the selected failed run or item\s+r", screen_text(app))
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.current_view == "activity"
+        assert "Relaunch run run-bad00001" in screen_text(app)
+        await pilot.press(*"budget topped up", "enter")
+        await until(pilot, lambda: bool(platform.stops), "the relaunch")
+    assert platform.stops == [
+        (
+            "/api/v1/work-items/wi-12/actions",
+            {"action": "rerun_stage", "reason": "budget topped up", "run_id": BAD},
+        )
+    ]
+
+
+async def test_the_palette_relaunch_command_says_what_it_needs_on_a_running_run(platform: Platform) -> None:
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "implement")
+        await _palette(pilot, "relaunch")
+        await pilot.press("enter")
+        await pilot.pause()
+        assert "Relaunch run" not in screen_text(app)
+        assert any("failed or cancelled" in n.message for n in app._notifications)
+    assert platform.stops == []
+
+
+async def test_a_refused_relaunch_says_why(platform: Platform) -> None:
+    platform.in_flight, platform.finished = [], [_failed_run()]
+    platform.router.post(f"{V1}/work-items/wi-12/actions").mock(
+        return_value=Response(409, json={"title": "Conflict", "detail": "the work item's budget is spent"})
+    )
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await put_cursor_on(pilot, "review")
+        await pilot.press("r", *"again", "enter")
+        await until(
+            pilot, lambda: any("could not relaunch" in (n.title or "") for n in app._notifications), "refusal"
+        )
+
+
 # ─────────────────────── an expanded run node (S67-14, ADR 0154 §2, §5) ───────────────────────
 
 
@@ -1312,6 +1491,126 @@ async def test_a_run_stays_open_when_it_moves_to_the_ended_part(platform: Platfo
         app.redraw()
         await pilot.pause(0.2)
         assert "Steps  3 tool calls" in screen_text(app)
+
+
+def _several_runs(platform: Platform, count: int) -> list[str]:
+    """`count` runs in flight, each on its own work item and with a journal of its own."""
+    ids = [f"run-{n:02d}" for n in range(1, count + 1)]
+    platform.in_flight = [
+        _entry(run_id, work_item_id=f"wi-{n}", work_item_key=f"FIN-{100 + n}", stage_role=f"stage{n:02d}")
+        for n, run_id in enumerate(ids, start=1)
+    ]
+    for n, run_id in enumerate(ids, start=1):
+        platform.journals[run_id] = [
+            _event(1, _call(f"{run_id}-a", f"Read file{n:02d}.py", "read", "completed"), 20),
+            _event(2, _call(f"{run_id}-b", f"Edit file{n:02d}.py", "edit", "in_progress"), 10),
+        ]
+    return ids
+
+
+async def test_several_open_runs_each_show_their_own_journal(platform: Platform) -> None:
+    ids = _several_runs(platform, 3)
+    app = make_app()
+    async with app.run_test(size=(160, 80)) as pilot:
+        await ready(pilot)
+        for n in (1, 2, 3):
+            await expand_run(pilot, f"stage{n:02d}")
+        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        await until(pilot, lambda: "Edit file03.py" in screen_text(app), "the third journal")
+        text = screen_text(app)
+    for n in (1, 2, 3):
+        assert f"Read file{n:02d}.py" in text and f"Edit file{n:02d}.py" in text, text
+    # Each node holds its own calls: three runs, six calls, none counted twice or under another run.
+    assert text.count("Steps  2 tool calls · 1 finished") == 3, text
+    assert text.index("stage01") < text.index("file01.py") < text.index("stage02") < text.index("file02.py")
+
+
+RECORDED_RUNS = Path(__file__).parent / "fixtures" / "dev-opencode-runs.json"
+
+
+async def test_several_open_runs_each_show_their_own_recorded_journal(platform: Platform) -> None:
+    """Three runs of a real instance (opencode, recorded), open together, each on the journal it served:
+    the count of calls in each node is the one the server's own `/runs/{id}/agents` gave for that run."""
+    recording = json.loads(RECORDED_RUNS.read_text())
+    assert recording["source"].startswith("RECORDED")
+    runs = recording["runs"]
+    platform.in_flight = [
+        _entry(
+            run["run_id"], work_item_id=f"wi-{n}", work_item_key=f"FIN-{100 + n}", stage_role=f"stage{n:02d}"
+        )
+        for n, run in enumerate(runs, start=1)
+    ]
+    for run in runs:
+        platform.journals[run["run_id"]] = run["events"]
+    expected = [run["agents"][0]["tool_calls"] for run in runs]
+    assert expected == [16, 9, 6]
+    app = make_app()
+    async with app.run_test(size=(160, 120)) as pilot:
+        await ready(pilot)
+        for n in (1, 2, 3):
+            await expand_run(pilot, f"stage{n:02d}")
+        ids = [run["run_id"] for run in runs]
+        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+        await pilot.pause(0.3)
+        text = screen_text(app)
+    for count in expected:
+        assert f"Steps  {count} tool calls" in text, text
+
+
+async def test_many_open_runs_are_read_a_few_at_a_time_and_all_of_them_are_read(
+    platform: Platform, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Twenty runs open must not leave sixty requests together: at most `RUN_READERS` rounds are in flight,
+    and every run is still read."""
+    import asyncio
+
+    from tranibor_cli import workspace
+
+    ids = _several_runs(platform, 10)
+    in_flight = peak = 0
+    real = workspace.Workspace.read_run
+
+    async def slow(self: Any, run_id: str, detail: Any) -> None:
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        try:
+            await asyncio.sleep(0.15)
+            await real(self, run_id, detail)
+        finally:
+            in_flight -= 1
+
+    monkeypatch.setattr(workspace.Workspace, "read_run", slow)
+    app = make_app()
+    async with app.run_test(size=(160, 80)) as pilot:
+        await ready(pilot)
+        for n in range(1, 11):
+            await expand_run(pilot, f"stage{n:02d}")
+        await until(pilot, lambda: all(app._details.get(r) and app._details[r].loaded for r in ids), "reads")
+    assert peak == workspace.RUN_READERS, f"{peak} rounds at once"
+
+
+async def test_a_very_long_journal_shows_the_latest_calls_and_is_read_in_full_once(
+    platform: Platform,
+) -> None:
+    from tranibor_cli.run_activity import STEPS_SHOWN
+
+    calls = 3000
+    platform.journal = [
+        _event(n, _call(f"toolu_{n}", f"Read part{n:04d}.py", "read", "completed"), 30)
+        for n in range(1, calls + 1)
+    ]
+    app = make_app()
+    async with app.run_test(size=(160, 80)) as pilot:
+        await ready(pilot)
+        await expand_run(pilot)
+        await until(pilot, lambda: f"Steps  {calls} tool calls" in screen_text(app), "the whole journal")
+        text = screen_text(app)
+        await pilot.pause(0.3)
+    assert f"… {calls - STEPS_SHOWN} earlier" in text
+    assert f"part{calls:04d}.py" in text and "part0001.py" not in text
+    assert platform.asked_events()[0] == "0"
+    assert platform.asked_events().count("0") == 1, "the journal is read from the start only once"
 
 
 async def test_an_unreadable_journal_is_said_on_the_node_and_the_workspace_goes_on(
@@ -1449,6 +1748,37 @@ def test_the_workspace_snapshot_with_an_expanded_run(
 
 @pytest.mark.parametrize("colour", ["colour", "no-color"])
 @pytest.mark.parametrize("columns", ["80", "160"])
+def test_the_workspace_snapshot_on_a_failed_run_with_the_relaunch_dialog(
+    snap_compare: Any,
+    platform: Platform,
+    monkeypatch: pytest.MonkeyPatch,
+    colour: str,
+    columns: str,
+) -> None:
+    if colour == "no-color":
+        monkeypatch.setenv("NO_COLOR", "1")
+    from tranibor_cli.workspace import FlightTree
+
+    _showcase(platform)
+    app = make_app(conversation=CID)
+
+    async def settled(pilot: Any) -> None:
+        await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
+        await until(pilot, lambda: bool(app.pending), "the decisions")
+        await put_cursor_on(pilot, "OPS-4")
+        failed = next(
+            n for n in app._by_key.values() if (n.data or {}).get("entry", {}).get("id") == "run-failed-0001"
+        )
+        app.query_one(FlightTree).move_cursor(failed, animate=False)
+        await pilot.pause()
+        await pilot.press("r", *"budget topped up")
+        await pilot.pause(0.3)
+
+    assert snap_compare(app, terminal_size=SIZES[columns], run_before=settled)
+
+
+@pytest.mark.parametrize("colour", ["colour", "no-color"])
+@pytest.mark.parametrize("columns", ["80", "160"])
 @pytest.mark.parametrize("view", ["conversation", "activity", "projects", "decisions", "artefacts", "live"])
 def test_the_workspace_snapshot(
     snap_compare: Any,
@@ -1464,7 +1794,7 @@ def test_the_workspace_snapshot(
     if colour == "no-color":
         monkeypatch.setenv("NO_COLOR", "1")
     # The Live tab is drawn against pinned clocks and without motion: a snapshot is one instant.
-    monkeypatch.setenv("CHOREGOS_NO_MOTION", "1")
+    monkeypatch.setenv("TRANIBOR_NO_MOTION", "1")
     monkeypatch.setattr(live_app, "now", lambda: NOW)
     monkeypatch.setattr(live_app, "mono", lambda: 1000.0)
     _showcase(platform)
@@ -1602,10 +1932,14 @@ async def test_the_palette_lists_every_kind_with_the_key_that_also_reaches_it(pl
         assert all(e.reach for e in entries)
         # Nothing is only in the palette: a command's key is bound, a tab's digit is bound.
         bound = {b.key for b in type(app).BINDINGS if isinstance(b, Binding)}
+        from tranibor_cli.workspace import FlightTree
+
+        tree_keys = {b.key for b in FlightTree.BINDINGS if isinstance(b, Binding)}
+        assert {"x", "r"} <= tree_keys  # the keys of the stop and relaunch commands
         for entry in entries:
             if entry.kind == "tab":
                 assert entry.reach.removeprefix("key ") in bound, entry
-            elif entry.kind == "command" and entry.reach != "x":
+            elif entry.kind == "command" and entry.reach not in tree_keys:
                 assert entry.reach.lower().replace("esc", "escape").replace("-", "+") in bound, entry
             elif entry.kind == "assistant":
                 assert "ctrl+a" in bound
@@ -1782,6 +2116,8 @@ async def test_the_footer_keeps_every_key_and_shows_the_palette(platform: Platfo
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
+        # The footer is drawn after the first refresh: a loaded runner read an empty last line.
+        await until(pilot, lambda: "Quit" in screen_text(app).splitlines()[-1], "the footer")
         footer = screen_text(app).splitlines()[-1]
         assert "Palette" in footer and "Decide" in footer and "New" in footer and "Quit" in footer
 

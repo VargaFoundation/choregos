@@ -138,7 +138,7 @@ the requests waiting for a second administrator. Choose the plugin and its versi
 **By API:**
 
 ```bash
-curl -s "$CHOREGOS_API_URL/api/v1/orgs/acme/plugins/install" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -s "$TRANIBOR_API_URL/api/v1/orgs/acme/plugins/install" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/json' -d '{"source": "acme", "name": "billing-team", "version": "^1"}'
 ```
 

@@ -16,7 +16,7 @@ REFERENCE = "registry.example/agents/ticket-triager@sha256:" + "d" * 64
 def images(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_AGENT_IMAGES", json.dumps({"ticket-triager": REFERENCE}))
+    monkeypatch.setenv("TRANIBOR_AGENT_IMAGES", json.dumps({"ticket-triager": REFERENCE}))
     reset_settings_cache()
 
 
@@ -93,7 +93,7 @@ async def test_a_tag_only_image_is_listed_as_not_pinned(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_AGENT_IMAGES", json.dumps({"loose": "registry.example/agent:latest"}))
+    monkeypatch.setenv("TRANIBOR_AGENT_IMAGES", json.dumps({"loose": "registry.example/agent:latest"}))
     reset_settings_cache()
     assert (await client.get("/api/v1/platform/agent-images")).json() == [
         {"name": "loose", "digest_pinned": False}
@@ -106,7 +106,7 @@ def test_a_tag_only_reference_stops_the_api_when_digests_are_required(
     from pydantic import ValidationError
     from tranibor_api.config import Settings
 
-    monkeypatch.setenv("CHOREGOS_REQUIRE_IMAGE_DIGEST", "true")
-    monkeypatch.setenv("CHOREGOS_AGENT_IMAGES", json.dumps({"loose": "registry.example/agent:latest"}))
+    monkeypatch.setenv("TRANIBOR_REQUIRE_IMAGE_DIGEST", "true")
+    monkeypatch.setenv("TRANIBOR_AGENT_IMAGES", json.dumps({"loose": "registry.example/agent:latest"}))
     with pytest.raises(ValidationError, match="not pinned by digest"):
         Settings()

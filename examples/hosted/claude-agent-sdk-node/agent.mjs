@@ -3,7 +3,7 @@
 //
 // The SDK drives the Claude Code CLI it carries. The CLI reads the platform's model from
 // `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` (the loopback key) and is given the step's MCP
-// servers (`CHOREGOS_MCP_URL<name>`, HTTP) and none of its built-in tools: a hosted triager reads,
+// servers (`TRANIBOR_MCP_URL<name>`, HTTP) and none of its built-in tools: a hosted triager reads,
 // it does not edit files or run commands. The CLI's own traffic (telemetry, error reports, updates)
 // is turned off: a step's network does not reach it (the conformance suite's `no_egress` check fails
 // otherwise).
@@ -23,17 +23,17 @@ const QUIET = {
 };
 
 export async function answer(text) {
-  const names = (process.env.CHOREGOS_MCP_SERVERS ?? "").split(",").filter(Boolean);
+  const names = (process.env.TRANIBOR_MCP_SERVERS ?? "").split(",").filter(Boolean);
   const home = await mkdtemp(join(tmpdir(), "claude-"));
   try {
     const messages = query({
       prompt: text,
       options: {
         systemPrompt: INSTRUCTIONS,
-        model: process.env.CHOREGOS_MODEL,
+        model: process.env.TRANIBOR_MODEL,
         tools: [],
         mcpServers: Object.fromEntries(
-          names.map((name) => [name, { type: "http", url: process.env.CHOREGOS_MCP_URL + name }]),
+          names.map((name) => [name, { type: "http", url: process.env.TRANIBOR_MCP_URL + name }]),
         ),
         strictMcpConfig: true,
         allowedTools: names.map((name) => `mcp__${name}`),

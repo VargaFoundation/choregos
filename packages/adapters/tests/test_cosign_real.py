@@ -1,6 +1,6 @@
 """`CosignVerifier` against the real `cosign` and a real registry (S41-14): the job `hosted-cosign`.
 
-Skipped unless `CHOREGOS_COSIGN_REAL_REGISTRY` names a registry served over HTTP (`localhost:5000`,
+Skipped unless `TRANIBOR_COSIGN_REAL_REGISTRY` names a registry served over HTTP (`localhost:5000`,
 `registry:2` in CI) and `cosign` and `crane` are on the path. Everything else is made here, at test
 time: the key pairs (no key is ever committed), two tiny images, a signature of one of them, and the
 same signature copied onto the other image's signature tag.
@@ -20,13 +20,13 @@ from pathlib import Path
 import pytest
 from tranibor_adapters.oci import CosignVerifier
 
-REGISTRY = os.environ.get("CHOREGOS_COSIGN_REAL_REGISTRY", "")
+REGISTRY = os.environ.get("TRANIBOR_COSIGN_REAL_REGISTRY", "")
 
 pytestmark = [
     pytest.mark.cosign_real,
     pytest.mark.skipif(
         not REGISTRY or shutil.which("cosign") is None or shutil.which("crane") is None,
-        reason="no registry (CHOREGOS_COSIGN_REAL_REGISTRY), or no cosign or crane on the path",
+        reason="no registry (TRANIBOR_COSIGN_REAL_REGISTRY), or no cosign or crane on the path",
     ),
 ]
 

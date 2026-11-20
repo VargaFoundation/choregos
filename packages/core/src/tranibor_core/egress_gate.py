@@ -45,7 +45,7 @@ REPORT_EVENT = "egress.gate"
 REPORT_DIR = "/egress-gate"
 REPORT_FILE = "report.json"
 #: The variable that tells the runner where the report is.
-REPORT_ENV = "CHOREGOS_EGRESS_GATE_REPORT"
+REPORT_ENV = "TRANIBOR_EGRESS_GATE_REPORT"
 
 DEFAULT_TARGET = "1.1.1.1:443"
 DEFAULT_DEADLINE_S = 30.0
@@ -91,14 +91,14 @@ class EgressGate:
 def gate_from_env(environ: Mapping[str, str] | None = None) -> EgressGate | None:
     """The deployment's gate (the chart's `runner.egressGate`), or `None` when it is off.
 
-    `CHOREGOS_RUNNER_EGRESS_GATE` is `true` or `false`; the target and the deadline have their own
+    `TRANIBOR_RUNNER_EGRESS_GATE` is `true` or `false`; the target and the deadline have their own
     variables. The deployment's, never a connector's: a project cannot turn it off."""
     env = os.environ if environ is None else environ
-    if env.get("CHOREGOS_RUNNER_EGRESS_GATE", "").strip().lower() not in {"1", "true", "yes", "on"}:
+    if env.get("TRANIBOR_RUNNER_EGRESS_GATE", "").strip().lower() not in {"1", "true", "yes", "on"}:
         return None
     return EgressGate(
-        target=env.get("CHOREGOS_RUNNER_EGRESS_GATE_TARGET", "").strip() or DEFAULT_TARGET,
-        deadline_s=float(env.get("CHOREGOS_RUNNER_EGRESS_GATE_DEADLINE", "").strip() or DEFAULT_DEADLINE_S),
+        target=env.get("TRANIBOR_RUNNER_EGRESS_GATE_TARGET", "").strip() or DEFAULT_TARGET,
+        deadline_s=float(env.get("TRANIBOR_RUNNER_EGRESS_GATE_DEADLINE", "").strip() or DEFAULT_DEADLINE_S),
     )
 
 

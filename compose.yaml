@@ -18,30 +18,30 @@
 name: choregos
 
 x-platform-env: &platform-env
-  CHOREGOS_ENV: dev
-  CHOREGOS_DATABASE_URL: postgresql+asyncpg://choregos_app:local-dev-only@postgres:5432/choregos
-  CHOREGOS_TEMPORAL_ADDRESS: temporal:7233
-  CHOREGOS_DEV_LOGIN_ENABLED: "true"
-  CHOREGOS_DEV_ADMIN_EMAILS: ${CHOREGOS_ADMIN_EMAIL:-admin@choregos.local}
-  CHOREGOS_BOOTSTRAP_ORG: demo
-  CHOREGOS_BOOTSTRAP_ORG_NAME: Demo
-  CHOREGOS_BOOTSTRAP_ADMINS: ${CHOREGOS_ADMIN_EMAIL:-admin@choregos.local}
-  CHOREGOS_SESSION_SECRET: local-install-only-not-a-secret
-  CHOREGOS_PUBLIC_URL: http://localhost:${CHOREGOS_PORT_WEB:-3000}
-  CHOREGOS_API_URL: http://localhost:${CHOREGOS_PORT_API:-8000}
+  TRANIBOR_ENV: dev
+  TRANIBOR_DATABASE_URL: postgresql+asyncpg://choregos_app:local-dev-only@postgres:5432/choregos
+  TRANIBOR_TEMPORAL_ADDRESS: temporal:7233
+  TRANIBOR_DEV_LOGIN_ENABLED: "true"
+  TRANIBOR_DEV_ADMIN_EMAILS: ${TRANIBOR_ADMIN_EMAIL:-admin@choregos.local}
+  TRANIBOR_BOOTSTRAP_ORG: demo
+  TRANIBOR_BOOTSTRAP_ORG_NAME: Demo
+  TRANIBOR_BOOTSTRAP_ADMINS: ${TRANIBOR_ADMIN_EMAIL:-admin@choregos.local}
+  TRANIBOR_SESSION_SECRET: local-install-only-not-a-secret
+  TRANIBOR_PUBLIC_URL: http://localhost:${TRANIBOR_PORT_WEB:-3000}
+  TRANIBOR_API_URL: http://localhost:${TRANIBOR_PORT_API:-8000}
   # What an agent calls back, from inside the compose network. The workers hand it to each run; the
   # API reads it to know that runs do not come in under its published name (ADR 0144).
-  CHOREGOS_INTERNAL_API_URL: http://api:8000
-  CHOREGOS_CORS_ORIGINS: http://localhost:${CHOREGOS_PORT_WEB:-3000}
-  CHOREGOS_GATEWAY_URL: http://litellm:4000
-  CHOREGOS_GATEWAY_MASTER_KEY: sk-local-install-only
-  CHOREGOS_MEMORY_URL: http://ecphoria:8432
-  CHOREGOS_LOG_JSON: ${CHOREGOS_LOG_JSON:-false}
+  TRANIBOR_INTERNAL_API_URL: http://api:8000
+  TRANIBOR_CORS_ORIGINS: http://localhost:${TRANIBOR_PORT_WEB:-3000}
+  TRANIBOR_GATEWAY_URL: http://litellm:4000
+  TRANIBOR_GATEWAY_MASTER_KEY: sk-local-install-only
+  TRANIBOR_MEMORY_URL: http://ecphoria:8432
+  TRANIBOR_LOG_JSON: ${TRANIBOR_LOG_JSON:-false}
   # The plugins the image ships (ADR 0093 §6): the built-in agents, offline.
-  CHOREGOS_PLUGINS_OFFLINE: /opt/choregos/plugins
+  TRANIBOR_PLUGINS_OFFLINE: /opt/choregos/plugins
   # The host of the optional fake MCP gateway (profile `mcp-gateway`, ADR 0105): the API accepts
   # http and a dotless host only when it is listed here. Harmless without the profile.
-  CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS: '["mcp-gateway"]'
+  TRANIBOR_MCP_GATEWAY_INTERNAL_HOSTS: '["mcp-gateway"]'
 
 # The run-token key is generated once per install (service `keys`) and read from a shared
 # volume: the workers sign run tokens, the API verifies them, so both need the same key.
@@ -110,7 +110,7 @@ services:
     image: temporalio/ui:2.32.0@sha256:82bf98dbe005a831b6bc5dc12ccd7bffd606af2032dae4821ae133caaa943d3d
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-    ports: ["127.0.0.1:${CHOREGOS_PORT_TEMPORAL_UI:-8233}:8080"]
+    ports: ["127.0.0.1:${TRANIBOR_PORT_TEMPORAL_UI:-8233}:8080"]
     depends_on: [temporal]
 
   litellm-config:
@@ -126,12 +126,12 @@ services:
       LITELLM_REAL: ${LITELLM_REAL:-auto}
       # `platform/decide` only when Laya runs (`tranibor_api.local_demo.decisions_enabled`).
       LITELLM_DECISIONS: ${LITELLM_DECISIONS:-${COMPOSE_PROFILES:-}}
-      CHOREGOS_LOG_JSON: "false"
+      TRANIBOR_LOG_JSON: "false"
     volumes: ["litellm-config:/litellm"]
     restart: "no"
 
   litellm:
-    image: ghcr.io/berriai/litellm-database:v1.105.5@sha256:87a881738240d0458a47588dd45cd819b00966ae3565786a7818e6d17d837921
+    image: ghcr.io/berriai/litellm-database:v1.108.12@sha256:1a5e629eee10f0a38a4eb276afea812411ed6c27031b826525134730c57f05ce
     command: ["--config", "/litellm/config.yaml", "--port", "4000"]
     environment:
       LITELLM_MASTER_KEY: sk-local-install-only
@@ -182,9 +182,9 @@ services:
     command:
       - sh
       - -c
-      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec uvicorn tranibor_api.main:app --host 0.0.0.0 --port 8000
+      - export TRANIBOR_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec uvicorn tranibor_api.main:app --host 0.0.0.0 --port 8000
     environment: *platform-env
-    ports: ["127.0.0.1:${CHOREGOS_PORT_API:-8000}:8000"]
+    ports: ["127.0.0.1:${TRANIBOR_PORT_API:-8000}:8000"]
     depends_on:
       keys: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }
@@ -213,12 +213,12 @@ services:
     command:
       - sh
       - -c
-      - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec python -m tranibor_orchestrator.worker
+      - export TRANIBOR_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec python -m tranibor_orchestrator.worker
     environment:
       <<: *platform-env
       # A project with no runtime connector runs its agents as local containers.
-      CHOREGOS_EXECUTOR_KIND: local_docker
-      CHOREGOS_RUNNER_IMAGE: ghcr.io/graalsystems/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}
+      TRANIBOR_EXECUTOR_KIND: local_docker
+      TRANIBOR_RUNNER_IMAGE: ghcr.io/graalsystems/choregos-runner:${TRANIBOR_RUNNER_VERSION:-0.17.12}
     depends_on:
       keys: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }
@@ -230,7 +230,7 @@ services:
     command: ["python", "-m", "tranibor_api.local_demo"]
     environment:
       <<: *platform-env
-      CHOREGOS_LOCAL_PROVIDER_FILE: /litellm/provider
+      TRANIBOR_LOCAL_PROVIDER_FILE: /litellm/provider
     volumes: ["litellm-config:/litellm:ro"]
     depends_on:
       api: { condition: service_healthy }
@@ -244,14 +244,14 @@ services:
       dockerfile: docker/web.Dockerfile
       args:
         # Baked at build time: Next.js computes its rewrites and `NEXT_PUBLIC_*` when it builds.
-        CHOREGOS_API_URL: http://api:8000
+        TRANIBOR_API_URL: http://api:8000
         NEXT_PUBLIC_DEV_LOGIN: "true"
         # One click: the demo admin filled in, and the first sign-in lands on the demo project.
-        NEXT_PUBLIC_DEV_LOGIN_EMAIL: ${CHOREGOS_ADMIN_EMAIL:-admin@choregos.local}
+        NEXT_PUBLIC_DEV_LOGIN_EMAIL: ${TRANIBOR_ADMIN_EMAIL:-admin@choregos.local}
         NEXT_PUBLIC_DEV_LOGIN_NEXT: /p/demo
     environment:
-      CHOREGOS_API_URL: http://api:8000
-    ports: ["127.0.0.1:${CHOREGOS_PORT_WEB:-3000}:3000"]
+      TRANIBOR_API_URL: http://api:8000
+    ports: ["127.0.0.1:${TRANIBOR_PORT_WEB:-3000}:3000"]
     depends_on:
       api: { condition: service_healthy }
       # The console opens on a seeded install, and `up --wait` waits for the one-shot seed.
@@ -283,7 +283,7 @@ services:
     <<: *platform-image
     command: ["python", "-m", "tranibor_adapters.fakes.server"]
     environment:
-      CHOREGOS_DEMO_PORT: "8090"
+      TRANIBOR_DEMO_PORT: "8090"
       CONNECTOR_DEMO_TOKEN: local-upstream-only
 
   mcp-gateway:
@@ -295,10 +295,10 @@ services:
     command: ["python", "-m", "tranibor_adapters.fakes.mcp_gateway"]
     depends_on: [demo-fakes]
     environment:
-      CHOREGOS_FAKE_GATEWAY_PORT: "8091"
-      CHOREGOS_FAKE_GATEWAY_AUTH: bearer
-      CHOREGOS_FAKE_GATEWAY_TOKEN: local-gateway-only
-      CHOREGOS_FAKE_GATEWAY_UPSTREAMS: >-
+      TRANIBOR_FAKE_GATEWAY_PORT: "8091"
+      TRANIBOR_FAKE_GATEWAY_AUTH: bearer
+      TRANIBOR_FAKE_GATEWAY_TOKEN: local-gateway-only
+      TRANIBOR_FAKE_GATEWAY_UPSTREAMS: >-
         {"supplier": {"url": "http://demo-fakes:8090/supplier/mcp", "token": "local-upstream-only"},
         "mdm": {"url": "http://demo-fakes:8090/mdm/mcp", "token": "local-upstream-only"},
         "shipping": {"url": "http://demo-fakes:8090/shipping/mcp", "token": "local-upstream-only"},

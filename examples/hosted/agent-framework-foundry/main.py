@@ -24,8 +24,8 @@ INSTRUCTIONS = (
 
 def triager() -> Agent:
     client = FoundryChatClient(credential=DefaultAzureCredential())
-    names = [name for name in os.environ.get("CHOREGOS_MCP_SERVERS", "").split(",") if name]
-    tools = [MCPStreamableHTTPTool(name=name, url=os.environ["CHOREGOS_MCP_URL"] + name) for name in names]
+    names = [name for name in os.environ.get("TRANIBOR_MCP_SERVERS", "").split(",") if name]
+    tools = [MCPStreamableHTTPTool(name=name, url=os.environ["TRANIBOR_MCP_URL"] + name) for name in names]
     return client.as_agent(name="triager", instructions=INSTRUCTIONS, tools=tools)
 
 

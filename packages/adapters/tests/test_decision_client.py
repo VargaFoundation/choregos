@@ -343,7 +343,7 @@ async def test_the_fakes_ask_through_the_fake_gateway() -> None:
 async def test_the_platform_asks_over_http_unless_fakes_are_on(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_adapters.registry import default_decision_client
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
     assert isinstance(default_decision_client(), SystemOneClient)
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert isinstance(default_decision_client(), FakeDecisionClient)

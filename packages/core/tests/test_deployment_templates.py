@@ -5,7 +5,7 @@ everything else. The only way out was to post the full YAML through `PUT /projec
 so without a name, without reuse, and without two projects of the same house being able to start from
 the same model.
 
-It is the same seam as the playbooks (`CHOREGOS_PLAYBOOKS_DIR`), for the same reason: the
+It is the same seam as the playbooks (`TRANIBOR_PLAYBOOKS_DIR`), for the same reason: the
 states and transitions of a trade have no place in this package, whereas the rest of the
 machine (budgets, guarantees, memory) does not change from one domain to the next.
 
@@ -43,7 +43,7 @@ def _write(directory: pathlib.Path, name: str, final_state: str = "done") -> pat
 def test_without_a_setting_only_the_package_templates_exist(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("CHOREGOS_WORKFLOW_TEMPLATES_DIR", raising=False)
+    monkeypatch.delenv("TRANIBOR_WORKFLOW_TEMPLATES_DIR", raising=False)
     assert set(template_names()) == set(TEMPLATE_NAMES)
 
 
@@ -51,7 +51,7 @@ def test_a_deployment_template_becomes_available(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _write(tmp_path, "case-review")
-    monkeypatch.setenv("CHOREGOS_WORKFLOW_TEMPLATES_DIR", str(tmp_path))
+    monkeypatch.setenv("TRANIBOR_WORKFLOW_TEMPLATES_DIR", str(tmp_path))
 
     assert "case-review" in template_names()
     assert set(TEMPLATE_NAMES) <= set(template_names()), "the shipped templates stay there"
@@ -63,7 +63,7 @@ def test_the_deployment_wins_over_the_package(
 ) -> None:
     """Adapt a shipped template without rewriting the platform: the whole point of the seam."""
     replacement = _write(tmp_path, "default-simple")
-    monkeypatch.setenv("CHOREGOS_WORKFLOW_TEMPLATES_DIR", str(tmp_path))
+    monkeypatch.setenv("TRANIBOR_WORKFLOW_TEMPLATES_DIR", str(tmp_path))
 
     assert template_path("default-simple") == replacement
     assert template_names().count("default-simple") == 1, "the name must not appear twice"
@@ -75,11 +75,11 @@ def test_several_directories_in_order(tmp_path: pathlib.Path, monkeypatch: pytes
     second.mkdir()
     _write(first, "house")
     _write(second, "house")
-    monkeypatch.setenv("CHOREGOS_WORKFLOW_TEMPLATES_DIR", f"{first}:{second}")
+    monkeypatch.setenv("TRANIBOR_WORKFLOW_TEMPLATES_DIR", f"{first}:{second}")
     assert template_path("house").parent == first, "the first directory named wins"
 
 
 def test_an_unknown_name_says_what_exists(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CHOREGOS_WORKFLOW_TEMPLATES_DIR", raising=False)
+    monkeypatch.delenv("TRANIBOR_WORKFLOW_TEMPLATES_DIR", raising=False)
     with pytest.raises(FileNotFoundError, match="default-simple"):
         template_path("this-one-does-not-exist")

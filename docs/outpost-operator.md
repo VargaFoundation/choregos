@@ -277,7 +277,7 @@ of its own, and a person approves it.
    choregos-outpost enrol --token-file /run/secrets/enrolment-token
    ```
 
-   The token is read from `--token-file`, from `--token`, from `CHOREGOS_OUTPOST_ENROLMENT_TOKEN`,
+   The token is read from `--token-file`, from `--token`, from `TRANIBOR_OUTPOST_ENROLMENT_TOKEN`,
    or asked for at a terminal without being echoed. The daemon makes its two key pairs if it has
    none, presents the token with the public halves, and prints the **fingerprint** of its signing
    key:
@@ -334,17 +334,17 @@ choregos-outpost doctor    # check the policy, the path to the door, the clock a
 
 | Option | Environment | Default | What |
 | :-- | :-- | :-- | :-- |
-| `--policy` | `CHOREGOS_OUTPOST_POLICY` | `/etc/choregos-outpost/policy.yaml` | the policy file |
-| `--state-dir` | `CHOREGOS_OUTPOST_STATE_DIR` | `/var/lib/choregos-outpost` | the identity and the journal; it must outlive a restart |
-| `--identity-dir` | `CHOREGOS_OUTPOST_IDENTITY_DIR` | `identity` under the state directory | the keys, when they live elsewhere |
-| `--ca-file` | `CHOREGOS_OUTPOST_CA_FILE` | none | an authority to trust besides the system's: an inspecting proxy's, a private one |
-| `--proxy` | `CHOREGOS_OUTPOST_PROXY` | `HTTPS_PROXY`, unless `NO_PROXY` covers the door | the outbound proxy towards the door only |
-| `--log-level` | `CHOREGOS_OUTPOST_LOG_LEVEL` | `INFO` | the daemon's own log |
+| `--policy` | `TRANIBOR_OUTPOST_POLICY` | `/etc/choregos-outpost/policy.yaml` | the policy file |
+| `--state-dir` | `TRANIBOR_OUTPOST_STATE_DIR` | `/var/lib/choregos-outpost` | the identity and the journal; it must outlive a restart |
+| `--identity-dir` | `TRANIBOR_OUTPOST_IDENTITY_DIR` | `identity` under the state directory | the keys, when they live elsewhere |
+| `--ca-file` | `TRANIBOR_OUTPOST_CA_FILE` | none | an authority to trust besides the system's: an inspecting proxy's, a private one |
+| `--proxy` | `TRANIBOR_OUTPOST_PROXY` | `HTTPS_PROXY`, unless `NO_PROXY` covers the door | the outbound proxy towards the door only |
+| `--log-level` | `TRANIBOR_OUTPOST_LOG_LEVEL` | `INFO` | the daemon's own log |
 | `--version` | | | print the daemon's version and the protocol it speaks |
-| `enrol --token` | `CHOREGOS_OUTPOST_ENROLMENT_TOKEN` | | the enrolment token |
+| `enrol --token` | `TRANIBOR_OUTPOST_ENROLMENT_TOKEN` | | the enrolment token |
 | `enrol --token-file` | | | a file that holds the token |
 | `enrol --no-facts` | | | send no fact about this machine |
-| `run --grace` | `CHOREGOS_OUTPOST_GRACE_S` | `20` | seconds the calls in progress have to finish when the daemon is told to stop |
+| `run --grace` | `TRANIBOR_OUTPOST_GRACE_S` | `20` | seconds the calls in progress have to finish when the daemon is told to stop |
 | `doctor --json` | | | print the checks as JSON |
 
 **What it keeps on disk**, and what you must keep for it:

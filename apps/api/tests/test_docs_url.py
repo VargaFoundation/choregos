@@ -1,4 +1,4 @@
-"""Where the console's help links point (S62-11): `docs_url` in `GET /edition`, from `CHOREGOS_DOCS_URL`.
+"""Where the console's help links point (S62-11): `docs_url` in `GET /edition`, from `TRANIBOR_DOCS_URL`.
 
 An air-gapped install serves its own copy of the documentation: the console must not hard-code the
 public site. The value lands in an `href`, so only an `http(s)` address is served.
@@ -18,19 +18,19 @@ def docs_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
     from tranibor_api.config import reset_settings_cache
 
     yield monkeypatch
-    monkeypatch.delenv("CHOREGOS_DOCS_URL", raising=False)
+    monkeypatch.delenv("TRANIBOR_DOCS_URL", raising=False)
     reset_settings_cache()
 
 
 def _set(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_DOCS_URL", value)
+    monkeypatch.setenv("TRANIBOR_DOCS_URL", value)
     reset_settings_cache()
 
 
 async def test_the_public_site_by_default(client: AsyncClient, docs_env: pytest.MonkeyPatch) -> None:
-    docs_env.delenv("CHOREGOS_DOCS_URL", raising=False)
+    docs_env.delenv("TRANIBOR_DOCS_URL", raising=False)
     from tranibor_api.config import reset_settings_cache
 
     reset_settings_cache()

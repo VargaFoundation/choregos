@@ -377,6 +377,7 @@ async def test_gemini_cli_gets_the_loopback_key_and_address_too(
     """S65-04f remainder: Gemini's own variables carry the loopback key and address, nothing real."""
     port, _ = serving
     step = _step(stage_input, backend="gemini-cli")
+    step.model.provider_model = "gemini/gemini-2.5-pro"  # gemini-cli runs on a Gemini model only (#1990)
     agent_script({"turns": [{"result": valid_result()}]}, step, runner_settings.workspace)
 
     monkeypatch.setenv("HTTPS_PROXY", PROXY_URL)
@@ -408,7 +409,7 @@ async def test_anthropic_paths_reach_the_gateway_under_v1_when_the_platform_name
     stage_input: StageInput,
 ) -> None:
     """S65-04a, measured with claude-agent-acp against the dev gateway: the platform names LiteLLM by its
-    root (`CHOREGOS_GATEWAY_URL=http://litellm:4000`), which serves `messages` only under `/v1`; every
+    root (`TRANIBOR_GATEWAY_URL=http://litellm:4000`), which serves `messages` only under `/v1`; every
     Claude Code request was forwarded to `/messages` and answered 404. Its token count (21 calls in a
     26-message step) was not served at all. A base that already ends in `/v1` is left as it is."""
     gateway = Gateway()

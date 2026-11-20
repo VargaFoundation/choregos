@@ -2,7 +2,7 @@
 """A plugin's stage roles: its playbooks, and their names in the contract's open list (ADR 0181, C0).
 
 The workflow schema's `role` was always a free pattern; what a role needs is a playbook, resolved by
-its name. A deployment brings its own with `CHOREGOS_PLAYBOOKS_DIR`; an extension brings its plugin's
+its name. A deployment brings its own with `TRANIBOR_PLAYBOOKS_DIR`; an extension brings its plugin's
 with `declare_stage_roles`, which adds its directory to the playbooks' search path (after the
 deployment's) and declares each role it holds in `tranibor_contracts.STAGE_ROLES`, with the plugin.
 """

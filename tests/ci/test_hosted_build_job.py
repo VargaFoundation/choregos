@@ -37,10 +37,10 @@ def test_the_job_builds_the_reference_zip_then_runs_the_image_through_conformanc
     assert "pytest tests/build -m buildkit" in runs
     assert 'make conformance-hosted IMAGE="$(cat "$RUNNER_TEMP/built-image")"' in runs
     env = next(step["env"] for step in _job()["steps"] if "tests/build" in str(step.get("run", "")))
-    assert {"CHOREGOS_TEST_BUILDKIT_ADDRESS", "CHOREGOS_TEST_BUILD_REPOSITORY"} <= set(env), (
+    assert {"TRANIBOR_TEST_BUILDKIT_ADDRESS", "TRANIBOR_TEST_BUILD_REPOSITORY"} <= set(env), (
         "without them the test skips, and a skipped test is a green job"
     )
-    assert env["CHOREGOS_TEST_BUILT_IMAGE_FILE"] == "${{ runner.temp }}/built-image"
+    assert env["TRANIBOR_TEST_BUILT_IMAGE_FILE"] == "${{ runner.temp }}/built-image"
     conditions = {str(step.get("if")) for step in _job()["steps"] if "if" in step}
     assert conditions == {"failure()"}, "no step of the proof is skipped, only the logs wait for a failure"
 

@@ -91,7 +91,7 @@ async def test_a_name_already_taken_by_the_catalogue_is_refused_and_not_masked(
 
     file = tmp_path / "catalogue.yaml"
     file.write_text(OVERLAPPING_CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(file))
     catalogue_service.clear_cache()
     async with session_scope() as session:
         proj = await session.get(Project, project["id"])
@@ -104,7 +104,7 @@ async def test_a_name_already_taken_by_the_catalogue_is_refused_and_not_masked(
             f"/api/v1/internal/runs/{run_id}/tools/internal_directory", headers=headers, json={}
         )
     finally:
-        monkeypatch.delenv("CHOREGOS_TOOL_CATALOG")
+        monkeypatch.delenv("TRANIBOR_TOOL_CATALOG")
         catalogue_service.clear_cache()
     assert listing.status_code == 409, listing.text
     assert call.status_code == 409, call.text

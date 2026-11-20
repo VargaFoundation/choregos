@@ -2,7 +2,7 @@
 """A Teams incoming webhook / Workflows URL that records what is posted to it (S63-25).
 
 Scriptable: `fail_with(status)` makes the next posts answer that status, `unreachable` makes them fail as a
-dead host does, `cards()` reads what Teams would have shown. Under `CHOREGOS_FAKES=1` the Teams notifier is
+dead host does, `cards()` reads what Teams would have shown. Under `TRANIBOR_FAKES=1` the Teams notifier is
 built over `transport()`, so the real card, the guarded transport and the egress allowlist are what run.
 """
 

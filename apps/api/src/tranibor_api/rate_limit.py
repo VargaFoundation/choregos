@@ -4,12 +4,12 @@
 `/cli/install.*`, S62-08), whose answers weigh tens of megabytes.
 
 A sliding one-minute window in memory, per client address and per replica: with N replicas a
-client gets up to N x `CHOREGOS_RATE_LIMIT_PER_MINUTE`. There is no shared store, by decision.
+client gets up to N x `TRANIBOR_RATE_LIMIT_PER_MINUTE`. There is no shared store, by decision.
 
 The key is the address the nearest trusted proxy saw (`client_address`), never the left-most
 `X-Forwarded-For` entry, which the client writes: rotating that header buys no new window, and a
 client outside the trusted networks cannot spend a third party's budget by forging its address.
-Which proxies are trusted is `CHOREGOS_TRUSTED_PROXY_CIDRS` (or `CHOREGOS_TRUSTED_PROXY_HOPS`);
+Which proxies are trusted is `TRANIBOR_TRUSTED_PROXY_CIDRS` (or `TRANIBOR_TRUSTED_PROXY_HOPS`);
 with neither, the TCP peer is the client and the header is ignored. An IPv6 client is keyed by
 its /64, which one subscriber usually holds whole. The table holds at most `MAX_KEYS` keys,
 evicting the least recently seen, and no request walks it.

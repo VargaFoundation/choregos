@@ -4,7 +4,7 @@
 # memory and recovery after a crash do not talk about code. What, in the platform, did talk
 # about code — the playbooks, the `evidence_present` guarantee, the typed outputs — is
 # replaced here by its business equivalent:
-#   · the playbooks come from the deployment (`CHOREGOS_PLAYBOOKS_DIR`), not the package;
+#   · the playbooks come from the deployment (`TRANIBOR_PLAYBOOKS_DIR`), not the package;
 #   · the guarantee is `outputs_present`: the step produced what the transition declares;
 #   · the outputs carry business names (`profils`, `evaluation`);
 #   · the ROLES too: `sourcing`, `qualification`. Before 2026-09-24 one had to write

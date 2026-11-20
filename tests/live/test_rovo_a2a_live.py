@@ -7,8 +7,8 @@ is answered, the task reaches a final state.
 Prerequisites: A2A allowed in Atlassian Administration, and an ACCESS token of the dedicated account
 (the one a `connected` credential gives a run: it lives about an hour):
 
-    export CHOREGOS_LIVE_ROVO_ACCESS_TOKEN=...        # from the OAuth consent, never committed
-    export CHOREGOS_LIVE_ROVO_PROMPT="List the 3 most recent issues of project KEY"   # optional
+    export TRANIBOR_LIVE_ROVO_ACCESS_TOKEN=...        # from the OAuth consent, never committed
+    export TRANIBOR_LIVE_ROVO_PROMPT="List the 3 most recent issues of project KEY"   # optional
     uv run pytest tests/live/test_rovo_a2a_live.py -m live
 """
 
@@ -34,9 +34,9 @@ async def test_the_live_card_still_parses() -> None:
 
 
 async def test_a_message_reaches_a_final_state() -> None:
-    token = require("CHOREGOS_LIVE_ROVO_ACCESS_TOKEN")["CHOREGOS_LIVE_ROVO_ACCESS_TOKEN"]
+    token = require("TRANIBOR_LIVE_ROVO_ACCESS_TOKEN")["TRANIBOR_LIVE_ROVO_ACCESS_TOKEN"]
     card = await fetch_card(CARD)
-    prompt = os.environ.get("CHOREGOS_LIVE_ROVO_PROMPT", "List the 3 most recent Jira issues I can see.")
+    prompt = os.environ.get("TRANIBOR_LIVE_ROVO_PROMPT", "List the 3 most recent Jira issues I can see.")
     async with A2aClient(card.url, token, card.protocol_version) as client:
         task = await client.send(client.message([text_part(prompt)]))
         for _ in range(60):

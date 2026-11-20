@@ -65,11 +65,11 @@ def door_keys() -> Door:
 
 
 def configure(monkeypatch: pytest.MonkeyPatch, **settings: str | None) -> None:
-    """Set (or, with `None`, unset) `CHOREGOS_<NAME>` and have the next request read it."""
+    """Set (or, with `None`, unset) `TRANIBOR_<NAME>` and have the next request read it."""
     from tranibor_api.config import reset_settings_cache
 
     for name, value in settings.items():
-        variable = f"CHOREGOS_{name.upper()}"
+        variable = f"TRANIBOR_{name.upper()}"
         if value is None:
             monkeypatch.delenv(variable, raising=False)
         else:

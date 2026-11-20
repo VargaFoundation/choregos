@@ -1,6 +1,6 @@
 """`CosignVerifier` keyless, against the real Sigstore (S41-25): the job `hosted-cosign`.
 
-Needs the network and `cosign`; skipped unless `CHOREGOS_COSIGN_KEYLESS_REAL=1` (the job sets it and
+Needs the network and `cosign`; skipped unless `TRANIBOR_COSIGN_KEYLESS_REAL=1` (the job sets it and
 fails on a skip). The image is cosign v3.1.3 itself, signed keyless by the Sigstore project's own
 service account: a Sigstore bundle, whose `cosign verify --output json` reports no certificate
 subject or issuer. Before S41-25 every such signature was refused by the verifier.
@@ -17,8 +17,8 @@ from tranibor_adapters.oci import CosignVerifier
 pytestmark = [
     pytest.mark.cosign_real,
     pytest.mark.skipif(
-        os.environ.get("CHOREGOS_COSIGN_KEYLESS_REAL") != "1" or shutil.which("cosign") is None,
-        reason="no network test requested (CHOREGOS_COSIGN_KEYLESS_REAL=1), or no cosign on the path",
+        os.environ.get("TRANIBOR_COSIGN_KEYLESS_REAL") != "1" or shutil.which("cosign") is None,
+        reason="no network test requested (TRANIBOR_COSIGN_KEYLESS_REAL=1), or no cosign on the path",
     ),
 ]
 

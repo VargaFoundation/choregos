@@ -112,7 +112,7 @@ def one_second_polls(monkeypatch: pytest.MonkeyPatch) -> None:
     """`await_run` polls every `heartbeat_seconds`: one second here, so "within one poll" is short."""
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")
+    monkeypatch.setenv("TRANIBOR_HEARTBEAT_SECONDS", "1")
     reset_settings_cache()
 
 

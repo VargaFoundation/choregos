@@ -500,9 +500,9 @@ async def test_the_sidecar_s_lifespan_builds_its_bridge_from_its_environment(
 ) -> None:
     api = FakeApi(scripts=ToolScripts())
     monkeypatch.setattr(app_module, "_state", {})
-    monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_RUN_ID", RUN)
-    monkeypatch.setenv("CHOREGOS_RUN_TOKEN", TOKEN)
+    monkeypatch.setenv("TRANIBOR_API_URL", API)
+    monkeypatch.setenv("TRANIBOR_RUN_ID", RUN)
+    monkeypatch.setenv("TRANIBOR_RUN_TOKEN", TOKEN)
     real = InternalClient
 
     def through_the_fake(base_url: str, run_id: str, token: str) -> InternalClient:

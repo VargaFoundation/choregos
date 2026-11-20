@@ -122,7 +122,7 @@ class SystemActor(Strict):
     type: Literal[ActorType.SYSTEM] = ActorType.SYSTEM
 
 
-#: The name of a job image the platform knows (`CHOREGOS_JOB_IMAGES`), never a free image reference:
+#: The name of a job image the platform knows (`TRANIBOR_JOB_IMAGES`), never a free image reference:
 #: what runs in a pod is chosen by whoever operates the platform, not by whoever writes a workflow.
 JobImage = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")]
 

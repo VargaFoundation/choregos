@@ -5,7 +5,7 @@ the two doors of a run's tools, MCP and scripts (S57-09, ADR 0122 §9; the examp
 
 `scene(kind, name)` builds, each time anew, the REAL connector of a kind wired to a fresh fake holding
 the scene's data, and hands back both with the operations the kind declares. Nothing is shared with the
-process-wide fakes of `CHOREGOS_FAKES=1`: a case that proposes eight actions leaves nothing behind for
+process-wide fakes of `TRANIBOR_FAKES=1`: a case that proposes eight actions leaves nothing behind for
 the next one, and a test reads the fake's state to prove that nothing was written.
 
 | kind             | scene            | what it holds                                                   |
@@ -29,7 +29,7 @@ ever served by a fake:
 
 - the field is refused on every declaration and edit (`registry.validate_config`): only the seeding, which
   writes its rows itself, sets it;
-- it is honoured only when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`, given to the
+- it is honoured only when the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES=1`, given to the
   API and the orchestrator); otherwise it is ignored and the connector is built as its type says, from its
   configuration, which holds no address: it reaches nothing.
 
@@ -53,7 +53,7 @@ from ..errors import AdapterError
 from ..registry import FAKE_SCENE_FIELD, OperationSpec, spec_of
 
 #: The deployment's switch: the API serves a `fake_scene` connector from its scene only when it is on.
-EVAL_FAKE_SCENES_ENV = "CHOREGOS_EVAL_FAKE_SCENES"
+EVAL_FAKE_SCENES_ENV = "TRANIBOR_EVAL_FAKE_SCENES"
 #: The scene of a case's fake web (#1378), on a `web_search` connector: served by the web tools, not by
 #: the broker.
 WEB_SCENE = "web"
@@ -222,7 +222,7 @@ def web_scene(web: Mapping[str, Any]) -> WebScene:
 
 def binds_web_scene(config: Mapping[str, Any] | None) -> bool:
     """Whether a `web_search` connector's configuration binds its projects' web tools to a case's fake
-    web, and the deployment honours it (`CHOREGOS_EVAL_FAKE_SCENES`)."""
+    web, and the deployment honours it (`TRANIBOR_EVAL_FAKE_SCENES`)."""
     return (config or {}).get(FAKE_SCENE_FIELD) == WEB_SCENE and eval_fake_scenes_allowed()
 
 
@@ -237,7 +237,7 @@ def bound_web_scene(config: Mapping[str, Any] | None) -> WebScene | None:
 
 
 def eval_fake_scenes_allowed() -> bool:
-    """Whether this deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`); off by default."""
+    """Whether this deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES=1`); off by default."""
     return os.environ.get(EVAL_FAKE_SCENES_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
 
 

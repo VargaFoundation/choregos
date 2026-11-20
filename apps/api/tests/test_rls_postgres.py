@@ -2,7 +2,7 @@
 
 Never exercised before 2026-09-24: the whole suite ran on SQLite, where the policy does not
 exist, and the policy itself was fail-open. This test runs only against a real PostgreSQL
-(`CHOREGOS_TEST_DATABASE_URL`): the CI starts one, locally `docs/development.md` says how.
+(`TRANIBOR_TEST_DATABASE_URL`): the CI starts one, locally `docs/development.md` says how.
 """
 
 from __future__ import annotations

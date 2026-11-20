@@ -47,7 +47,7 @@ def extension_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
     """The result cap an extension's tool declares (S40-17b), as a catalogue entry does, or None.
 
     `result_max_bytes` beside `name` in what the extension lists: an integer of at least 1024,
-    bounded by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` like every cap. Anything else is an extension
+    bounded by `TRANIBOR_BROKER_RESULT_CEILING_BYTES` like every cap. Anything else is an extension
     bug, refused when the tools are listed rather than read as the default.
     """
     declared = tool.get("result_max_bytes")

@@ -268,9 +268,13 @@ async def test_an_out_of_scope_file_is_reverted(tmp_path: Path) -> None:
 def test_each_backend_produces_a_launch_plan(name: str, tmp_path: Path) -> None:
     backend = get_backend(name)
     stage_input = _minimal_stage_input(tmp_path)
-    if backend.model_constraint:
+    if "claude" in backend.model_constraint:
         stage_input.model = ModelRef(
             litellm_model="anthropic/claude-sonnet-5", base_url="http://litellm:4000", api_format="anthropic"
+        )
+    elif backend.model_constraint:
+        stage_input.model = ModelRef(
+            litellm_model="gemini/gemini-2.5-pro", base_url="http://litellm:4000", api_format="gemini"
         )
     plan = backend.launch_plan(stage_input, tmp_path)
     assert plan.command, name
@@ -278,6 +282,33 @@ def test_each_backend_produces_a_launch_plan(name: str, tmp_path: Path) -> None:
     assert all((tmp_path / relative).exists() for relative in written)
     env = backend.model_env(stage_input.model, "sk-test")
     assert any("sk-test" in value for value in env.values()), "the run's key reaches the backend"
+
+
+def test_the_runner_holds_each_backend_to_the_family_the_platform_routes_it_to() -> None:
+    """The resolver refuses a pair before the step (`BACKEND_MODEL_CONSTRAINTS`), the runner again at
+    launch (`model_constraint`): the two lists are the same."""
+    from tranibor_core.models import BACKEND_MODEL_CONSTRAINTS
+
+    for name in known_backends():
+        assert get_backend(name).model_constraint == BACKEND_MODEL_CONSTRAINTS.get(name, ()), name
+
+
+def test_gemini_cli_refuses_a_claude_model_at_launch_and_says_why() -> None:
+    """#1990: LiteLLM's Gemini adapter names every tool call `call_<function name>`, so gemini-cli's
+    turns on a Claude model are refused by Anthropic once it calls one tool twice."""
+    backend = get_backend("gemini-cli")
+    claude = ModelRef(
+        litellm_model="choregos-claude-haiku",
+        provider_model="anthropic/claude-haiku-4-5",
+        base_url="http://127.0.0.1:4001",
+        api_format="gemini",
+    )
+    with pytest.raises(ValueError, match=r"only accepts gemini models.*#1990"):
+        backend.model_env(claude, "sk-loopback")
+    gemini = ModelRef(
+        litellm_model="gemini/gemini-2.5-flash", base_url="http://127.0.0.1:4001", api_format="gemini"
+    )
+    assert backend.model_env(gemini, "sk-loopback")["GEMINI_MODEL"] == "gemini/gemini-2.5-flash"
 
 
 def test_a_repository_file_is_never_overwritten(tmp_path: Path) -> None:

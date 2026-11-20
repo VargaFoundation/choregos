@@ -10,7 +10,7 @@ the route itself can refuse is a typed refusal that names the outpost, never a c
 offline, refused by the outpost's own policy, not answered in time, in doubt, not admitted.
 
 The outpost's side is a scripted daemon at the real door, in front of the scriptable `FakeOutpost`
-(`kits/outpost_route.py`). They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, on
+(`kits/outpost_route.py`). They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, on
 PostgreSQL under row-level security.
 """
 
@@ -464,10 +464,10 @@ async def test_a_deployment_without_a_secrets_key_hands_nothing_to_an_outpost(
     daemon, headers = await route.prepared(client, project, fake)
     placed = len(await route.calls())
     monkeypatch.delenv(ENV_KEKS)
-    monkeypatch.delenv("CHOREGOS_FAKES")
+    monkeypatch.delenv("TRANIBOR_FAKES")
     async with route.serving(client, daemon, fake):
         body = _refused(await _search(client, headers), 403, "outpost_paused", "network_policy")
-    assert "CHOREGOS_SECRETS_KEKS" in body["error"]
+    assert "TRANIBOR_SECRETS_KEKS" in body["error"]
     assert len(await route.calls()) == placed and await route.ledger() == []
 
 

@@ -64,36 +64,36 @@ async def test_the_runner_pods_limits_follow_the_configuration() -> None:
 
 
 def test_a_project_without_a_runtime_takes_the_deployments_executor(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "k8s_job")
     assert default_executor_kind() == "k8s_job"
-    monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND")
+    monkeypatch.delenv("TRANIBOR_EXECUTOR_KIND")
     assert default_executor_kind() == "agent_sandbox", "ADR 0072: Tekton is no longer assumed"
 
 
 def test_the_allowed_executors_default_to_the_deployment_s(monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_adapters.registry import allowed_executor_kinds, executors_declared
 
-    monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND", raising=False)
-    monkeypatch.delenv("CHOREGOS_EXECUTORS_ALLOWED", raising=False)
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+    monkeypatch.delenv("TRANIBOR_EXECUTOR_KIND", raising=False)
+    monkeypatch.delenv("TRANIBOR_EXECUTORS_ALLOWED", raising=False)
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     assert allowed_executor_kinds() == ["agent_sandbox"]
     assert executors_declared() is False
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
-    monkeypatch.setenv("CHOREGOS_EXECUTORS_ALLOWED", "agent_sandbox, k8s_job,")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_EXECUTORS_ALLOWED", "agent_sandbox, k8s_job,")
     assert allowed_executor_kinds() == ["k8s_job", "agent_sandbox"], "the default comes first, no duplicate"
     assert executors_declared() is True
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert allowed_executor_kinds()[-1] == "fake"
 
 
 def test_the_memory_takes_the_deployments_url_and_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`CHOREGOS_MEMORY_URL` was set by the chart and ignored: every project aimed at
+    """`TRANIBOR_MEMORY_URL` was set by the chart and ignored: every project aimed at
     `ecphoria.choregos-memory`, a service that exists only in one installation."""
     from tranibor_adapters import build
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # CI runs on fakes
-    monkeypatch.setenv("CHOREGOS_MEMORY_URL", "http://ecphoria:8432")
-    monkeypatch.setenv("CHOREGOS_MEMORY_TOKEN", "cle")
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)  # CI runs on fakes
+    monkeypatch.setenv("TRANIBOR_MEMORY_URL", "http://ecphoria:8432")
+    monkeypatch.setenv("TRANIBOR_MEMORY_TOKEN", "cle")
     memory = build("memory", "ecphoria", {})
     assert memory.base_url == "http://ecphoria:8432"
     assert memory.token == "cle"
@@ -553,7 +553,7 @@ def test_the_deployment_s_pull_secrets_reach_the_executor(monkeypatch: pytest.Mo
     """What the chart sets from `global.imagePullSecrets`, read where the executor is built."""
     from tranibor_adapters import build
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-    monkeypatch.setenv("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "harbor-prive, ghcr-ee,")
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
+    monkeypatch.setenv("TRANIBOR_RUNNER_IMAGE_PULL_SECRETS", "harbor-prive, ghcr-ee,")
     executor = build("runtime", "k8s_job", {"kubernetes": {"token": "t", "verify": False}})
     assert executor.image_pull_secrets == ["harbor-prive", "ghcr-ee"]

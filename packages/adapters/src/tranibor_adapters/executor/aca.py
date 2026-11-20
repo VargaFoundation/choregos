@@ -23,6 +23,7 @@ from typing import Any
 
 import httpx
 from tranibor_contracts import ExecutorKind
+from tranibor_contracts.env import with_legacy_entries
 from tranibor_core.domain import RUN_GATEWAY_KEY_ENV, RUN_REMOTE_TOKEN_ENV, ExecRef, ExecStatus, StageJobSpec
 
 from ..errors import ConfigurationError, UpstreamError
@@ -181,26 +182,28 @@ class AcaExecutor:
             "name": "runner",
             "image": spec.runner_image,
             "args": ["run"],
-            "env": [
-                {"name": "CHOREGOS_RUN_ID", "value": spec.run_id},
-                {"name": "CHOREGOS_API_URL", "value": spec.api_url},
-                # The token goes through a job secret: it does not appear in the definition
-                # rendered by ARM, so not in an `az containerapp job show` either.
-                {"name": "CHOREGOS_RUN_TOKEN", "secretRef": "run-token"},
-                # The run's gateway key, a job secret too (#523): never in the rendered definition.
-                *(
-                    [{"name": RUN_GATEWAY_KEY_ENV, "secretRef": "run-gateway-key"}]
-                    if spec.gateway_key
-                    else []
-                ),
-                # The access token of a remote agent (ADR 0062), a job secret like the key above.
-                *(
-                    [{"name": RUN_REMOTE_TOKEN_ENV, "secretRef": "run-remote-token"}]
-                    if spec.remote_token
-                    else []
-                ),
-                *[{"name": key, "value": value} for key, value in spec.env.items()],
-            ],
+            "env": with_legacy_entries(
+                [
+                    {"name": "TRANIBOR_RUN_ID", "value": spec.run_id},
+                    {"name": "TRANIBOR_API_URL", "value": spec.api_url},
+                    # The token goes through a job secret: it does not appear in the definition
+                    # rendered by ARM, so not in an `az containerapp job show` either.
+                    {"name": "TRANIBOR_RUN_TOKEN", "secretRef": "run-token"},
+                    # The run's gateway key, a job secret too (#523): never in the rendered definition.
+                    *(
+                        [{"name": RUN_GATEWAY_KEY_ENV, "secretRef": "run-gateway-key"}]
+                        if spec.gateway_key
+                        else []
+                    ),
+                    # The access token of a remote agent (ADR 0062), a job secret like the key above.
+                    *(
+                        [{"name": RUN_REMOTE_TOKEN_ENV, "secretRef": "run-remote-token"}]
+                        if spec.remote_token
+                        else []
+                    ),
+                    *[{"name": key, "value": value} for key, value in spec.env.items()],
+                ]
+            ),
             "resources": self._resources(spec),
         }
         configuration: dict[str, Any] = {

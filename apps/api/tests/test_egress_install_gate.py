@@ -31,7 +31,7 @@ def fake() -> Iterator[Any]:
 def enforce(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    monkeypatch.setenv("TRANIBOR_EGRESS_MODE", "enforce")
     reset_settings_cache()
 
 
@@ -156,9 +156,9 @@ async def test_the_ceiling_is_reported_and_the_platform_change_is_rendered(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_EGRESS_CEILING", '{"api": ["api.github.com"]}')
+    monkeypatch.setenv("TRANIBOR_EGRESS_CEILING", '{"api": ["api.github.com"]}')
     monkeypatch.setenv(
-        "CHOREGOS_EGRESS_PLATFORM_CHANGE",
+        "TRANIBOR_EGRESS_PLATFORM_CHANGE",
         '{"format": "text", "owner": "the platform team", "entries": {"api": "api-github"},'
         ' "template": "entry {{entry}} add:\\n{{#hosts}}  - {{.}}\\n{{/hosts}}for {{reason}}",'
         ' "issueUrl": "https://git.example.test/new?title={{hosts_csv}}&body={{snippet_urlencoded}}"}',

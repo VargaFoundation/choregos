@@ -310,7 +310,7 @@ class RemoteCall(Strict):
 
     `agent` is a placeholder and no gateway key exists: the remote agent brings its own model. The
     access token the runner presents is NOT here: it travels in the run's Secret
-    (`CHOREGOS_RUN_REMOTE_TOKEN`), like the run key (#523)."""
+    (`TRANIBOR_RUN_REMOTE_TOKEN`), like the run key (#523)."""
 
     protocol: Literal["a2a"] = "a2a"
     #: The JSON-RPC endpoint messages are posted to (the card's `url`, pinned at publication).

@@ -152,9 +152,9 @@ def test_http_fetcher_contract() -> None:
     thread.start()
     try:
         env = {
-            "CHOREGOS_API_URL": f"http://127.0.0.1:{server.server_port}/",
-            "CHOREGOS_RUN_ID": "r1",
-            "CHOREGOS_RUN_TOKEN": "tok",
+            "TRANIBOR_API_URL": f"http://127.0.0.1:{server.server_port}/",
+            "TRANIBOR_RUN_ID": "r1",
+            "TRANIBOR_RUN_TOKEN": "tok",
         }
         got = HttpFetcher("marketdata__get_bars", env)("AAA", "2020-01-01", "2020-12-31")
     finally:
@@ -166,7 +166,7 @@ def test_http_fetcher_contract() -> None:
 
 
 def test_http_fetcher_needs_its_environment() -> None:
-    with pytest.raises(InputError, match="CHOREGOS_API_URL"):
+    with pytest.raises(InputError, match="TRANIBOR_API_URL"):
         HttpFetcher("t", {})
 
 

@@ -26,7 +26,7 @@ from tranibor_core.catalogue import (
 @lru_cache(maxsize=1)
 def catalogue() -> Catalogue:
     """The deployment's catalogue, read once. Absent = no tool, not an error."""
-    path = os.environ.get("CHOREGOS_TOOL_CATALOG", "")
+    path = os.environ.get("TRANIBOR_TOOL_CATALOG", "")
     if not path or not Path(path).is_file():
         return Catalogue()
     return load_catalogue(Path(path).read_text(encoding="utf-8"))

@@ -9,7 +9,7 @@ SIGTERM or egress still fail theirs, so the sandbox does not hide a broken agent
 
 `--network=host` keeps the runner's listeners where they are on a pod, on the loopback the two
 containers share; `--rootless` and `--ignore-cgroups` let it run without root. Skipped without
-`CHOREGOS_TEST_RUNSC`, the path to `runsc` (its `gvisor-bin/` beside it): the `hosted-gvisor` CI
+`TRANIBOR_TEST_RUNSC`, the path to `runsc` (its `gvisor-bin/` beside it): the `hosted-gvisor` CI
 job sets it and fails on a skip.
 """
 
@@ -28,7 +28,7 @@ from .harness import HOSTED_CHECKS, HostedAgentSpec, node_example, python_exampl
 
 pytestmark = pytest.mark.gvisor
 
-RUNSC = os.environ.get("CHOREGOS_TEST_RUNSC", "")
+RUNSC = os.environ.get("TRANIBOR_TEST_RUNSC", "")
 ROGUE = Path(__file__).with_name("rogue_hosted_agent.py")
 SANDBOX = ["--rootless", "--network=host", "--ignore-cgroups", "do"]
 
@@ -36,7 +36,7 @@ SANDBOX = ["--rootless", "--network=host", "--ignore-cgroups", "do"]
 @pytest.fixture
 def runsc() -> str:
     if not RUNSC:
-        pytest.skip("CHOREGOS_TEST_RUNSC is not set: no gVisor on this machine")
+        pytest.skip("TRANIBOR_TEST_RUNSC is not set: no gVisor on this machine")
     return RUNSC
 
 

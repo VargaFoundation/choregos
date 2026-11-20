@@ -51,7 +51,7 @@ class GitHubApp:
     ) -> None:
         if not app_id or not private_key:
             raise ConfigurationError(
-                "the GitHub App is not configured (CHOREGOS_GITHUB_APP_ID / _PRIVATE_KEY)"
+                "the GitHub App is not configured (TRANIBOR_GITHUB_APP_ID / _PRIVATE_KEY)"
             )
         self._auth = GitHubAppAuth(app_id=app_id, private_key=private_key, base_url=base_url)
         self._client_id = client_id
@@ -78,7 +78,7 @@ class GitHubApp:
         can access (`GET /user/installations`). The proof that they manage what they claim."""
         if not self.oauth_enabled:
             raise ConfigurationError(
-                "the GitHub App has no OAuth client: CHOREGOS_GITHUB_APP_CLIENT_SECRET is not set"
+                "the GitHub App has no OAuth client: TRANIBOR_GITHUB_APP_CLIENT_SECRET is not set"
             )
         try:
             exchange = await self._client.post(

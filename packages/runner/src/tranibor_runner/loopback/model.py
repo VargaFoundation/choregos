@@ -203,7 +203,7 @@ class ModelProxy:
             if self.stage_input.gateway_key:
                 headers["x-goog-api-key"] = self.stage_input.gateway_key
         elif not base.endswith("/v1"):
-            # The platform names its gateway by its root (`CHOREGOS_GATEWAY_URL`, `http://litellm:4000`).
+            # The platform names its gateway by its root (`TRANIBOR_GATEWAY_URL`, `http://litellm:4000`).
             # LiteLLM serves `chat/completions` there too, but Anthropic's `messages` only under `/v1`
             # (S65-04a: every Claude Code request was a 404 through the listener).
             base = f"{base}/v1"

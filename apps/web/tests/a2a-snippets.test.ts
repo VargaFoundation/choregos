@@ -94,7 +94,7 @@ describe("the A2A snippets name only what the door and the CLI have (a2a-names.j
   });
 
   it("every environment variable the CLI snippet sets is in the list", () => {
-    const set = new Set(ALL_CODE.flatMap((code) => [...code.matchAll(/\b(CHOREGOS_[A-Z0-9_]+)=/g)].map((m) => m[1]!)));
+    const set = new Set(ALL_CODE.flatMap((code) => [...code.matchAll(/\b(TRANIBOR_[A-Z0-9_]+)=/g)].map((m) => m[1]!)));
     expect([...set].sort()).toEqual([...A2A_NAMES.env].sort());
   });
 });
@@ -107,7 +107,7 @@ describe("the A2A snippets carry the instance's values", () => {
 
   it("the skill, its required fields with values the schema accepts, and the token placeholder", () => {
     const [cli, curl, v1] = a2aSnippets(CONTEXTS[0]!);
-    expect(cli!.code).toContain("CHOREGOS_API_URL=https://choregos.example CHOREGOS_ORG=acme CHOREGOS_A2A_TOKEN=<token>");
+    expect(cli!.code).toContain("TRANIBOR_API_URL=https://choregos.example TRANIBOR_ORG=acme TRANIBOR_A2A_TOKEN=<token>");
     expect(cli!.code).toContain("--field 'ticket=<ticket>'");
     expect(cli!.code).toContain("--field 'count=1'");
     expect(cli!.code).not.toContain("priority");

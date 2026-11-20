@@ -48,7 +48,7 @@ class Publishing:
     image_alias_prefix: str
     #: The core's repository: its releases, its issues, its files.
     source_repository: str
-    #: The public user documentation, without a trailing slash (`CHOREGOS_DOCS_URL` by default).
+    #: The public user documentation, without a trailing slash (`TRANIBOR_DOCS_URL` by default).
     documentation: str
     #: Where a vulnerability is reported (`SECURITY.md`).
     security_contact: str

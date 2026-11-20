@@ -3,7 +3,7 @@
 A live cell seeds an agent case into an eval project of its own (its connectors on fake scenes, its policy,
 its case-local agent: idempotent), runs the case's agent as a stage like any other, and judges the run's
 answer and journal with the case's assertions, once its governance parity holds. Here the deployment is
-the suite's: the real API (its broker serves the fake scenes, `CHOREGOS_EVAL_FAKE_SCENES=1`), the fake
+the suite's: the real API (its broker serves the fake scenes, `TRANIBOR_EVAL_FAKE_SCENES=1`), the fake
 gateway standing in for the model, and a scripted agent that plays the case through the real doors — the
 run's MCP server, or a script through the real tool bridge — during its run.
 """
@@ -41,10 +41,10 @@ def eval_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def scripts_on(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    monkeypatch.setenv("CHOREGOS_TOOL_SCRIPTS", "on")
+    monkeypatch.setenv("TRANIBOR_TOOL_SCRIPTS", "on")
     reset_settings_cache()
     yield
-    monkeypatch.delenv("CHOREGOS_TOOL_SCRIPTS", raising=False)
+    monkeypatch.delenv("TRANIBOR_TOOL_SCRIPTS", raising=False)
     reset_settings_cache()
 
 
@@ -828,7 +828,7 @@ def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
 
     monkeypatch.setenv(OFFLINE_ENV, str(FIXTURES / "plugins"))
     monkeypatch.setenv(
-        "CHOREGOS_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("tranibor-agents")])
+        "TRANIBOR_PLUGIN_SERVERS_REGISTRIES", json.dumps([PUBLISHING.image("tranibor-agents")])
     )
     reset_api_settings()
     kube = FakeKubernetesApi()
@@ -847,7 +847,7 @@ def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     yield {"kube": kube, "fake": fake, "hosts": hosts}
     use_plugin_runtime(None)
     use_plugin_transport(None)
-    monkeypatch.delenv("CHOREGOS_PLUGIN_SERVERS_REGISTRIES")
+    monkeypatch.delenv("TRANIBOR_PLUGIN_SERVERS_REGISTRIES")
     reset_api_settings()
 
 

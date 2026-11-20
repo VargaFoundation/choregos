@@ -101,13 +101,13 @@ def test_a_demo_connector_that_carries_a_url_reaches_the_fakes_process(
     from tranibor_adapters import build
     from tranibor_adapters.fakes.hr import Desk
 
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    monkeypatch.setenv("CHOREGOS_ENV", "dev")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_ENV", "dev")
     remote: Any = build("mdm", "demo", {"url": "http://choregos-demo-fakes:8090/mdm/mcp", "api_key": TOKEN})
     assert isinstance(remote, RemoteDesk)
     assert remote.client.url == "http://choregos-demo-fakes:8090/mdm/mcp"
     assert isinstance(build("mdm", "demo", {}), Desk), "without a url: in memory"
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     assert isinstance(build("mdm", "demo", {"url": "http://elsewhere/mcp"}), Desk), (
-        "under CHOREGOS_FAKES, nothing leaves the process"
+        "under TRANIBOR_FAKES, nothing leaves the process"
     )

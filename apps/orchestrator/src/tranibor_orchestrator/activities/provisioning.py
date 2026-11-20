@@ -23,7 +23,7 @@ from .base import db, notification_target, project_bundle
 
 
 def templates_dir() -> Path:
-    """Where the project templates live: `CHOREGOS_TEMPLATES_DIR`, else the repository's `templates/`.
+    """Where the project templates live: `TRANIBOR_TEMPLATES_DIR`, else the repository's `templates/`.
 
     `parents[5]` assumed the layout of the source repository; in the image it is `/app`, and
     `templates/` was not even copied there. The setting says where to look, and an absence shows
@@ -31,7 +31,7 @@ def templates_dir() -> Path:
     """
     import os
 
-    configured = os.environ.get("CHOREGOS_TEMPLATES_DIR", "").strip()
+    configured = os.environ.get("TRANIBOR_TEMPLATES_DIR", "").strip()
     if configured:
         return Path(configured)
     return Path(__file__).resolve().parents[5] / "templates"

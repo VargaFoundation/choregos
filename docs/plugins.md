@@ -105,7 +105,7 @@ contents:
   - a server that `implements: [tracker]` declares every tool of the
     [tracker profile](#the-tracker-profile), each with the profile's access;
   - a server's `fake` ([On its fake](#on-its-fake-for-the-eval-matrix)) switches it with variables
-    that are neither `CHOREGOS_*` nor any its configuration reaches.
+    that are neither `TRANIBOR_*` nor any its configuration reaches.
 
   An operation's `human_approval` is a floor: an organisation may raise it, never lower it. A tool the
   server serves but does not list is refused.
@@ -354,7 +354,7 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
   administrator opens the URL's host in `/admin/egress` first (until then the card is not sent and the ledger says
   `egress refused`, retried at the next pass). The card carries the task, the artifact and the work item; the same
   channel receives the owners' notice of a plugin upgrade that left knowledge proposals (one card for the
-  installation, besides the e-mail to each owner). Under `CHOREGOS_FAKES=1` the notifier posts its real card to
+  installation, besides the e-mail to each owner). Under `TRANIBOR_FAKES=1` the notifier posts its real card to
   `FakeTeamsWebhook`. The webhook's signing key is shown ONCE to whoever manages the installation:
   `POST /orgs/{org}/assistants/{slug}/webhook-secret` (`assistant:manage`) returns it, a second call is 409
   unless `{"rotate": true}` makes a new generation (the console's installation page has the two buttons); each
@@ -546,7 +546,7 @@ on a scripted model) the platform's own plays each case through the prompt loop 
 (`services/conversation_player.py`): the version's instructions and model, the tools answering from the
 `tool_results` the suite declares. If a deployment cannot play (no gateway key, or an organisation that brings
 its own gateway, on which the deployment's key is no good) the promotion is REFUSED, with the reason in the
-`conversation_suite` check. `CHOREGOS_CONVERSATION_SUITES_REQUIRE_MODEL=false` is the explicit opt-out: such a
+`conversation_suite` check. `TRANIBOR_CONVERSATION_SUITES_REQUIRE_MODEL=false` is the explicit opt-out: such a
 suite then adds no check (a deployment that gates by other means says so).
 
 **The rubric and the judge.** A case's `rubric` (criteria, each with a threshold from 0 to 1) is scored only after
@@ -557,7 +557,7 @@ SDK) with a fixed prompt that frames the transcript as data, not instructions, a
 answer (not JSON, a missing, unknown or repeated criterion, a score outside 0 to 1), a refusal, a gateway error,
 or a rubric with no judge available fails the case, never passes it. A case fails when any criterion scores below
 its threshold; the suite's `threshold` (share of cases passing) gates promotion as before. The judge model is the
-setting `CHOREGOS_CONVERSATION_JUDGE_MODEL`; empty, it is `default_model_profiles["strong"]`, else `["standard"]`,
+setting `TRANIBOR_CONVERSATION_JUDGE_MODEL`; empty, it is `default_model_profiles["strong"]`, else `["standard"]`,
 else `platform/standard`. Tests script it on `FakeModelServer` (`say_for("conversation_judge", ...)`).
 
 A task's workflow (`tasks[].workflow`) must be a valid workflow (the workflow schema and its static rules):
@@ -655,7 +655,7 @@ identity provider gave the person (`Principal.groups`, read from the user's row 
 | --- | --- |
 | `assistant:manage` | the organisation administrator, and a member of an owner group of the installation |
 | `assistant:use` | a member of an audience group of the installation; no organisation role carries it (an administrator outside the audience does not talk to the assistant) |
-| `assistant:audit` | the owners, the organisation administrator, and the privacy officers: members of the groups in `CHOREGOS_ASSISTANT_PRIVACY_OFFICER_GROUPS` (`privacy_officer` is not a `Role`: the roles are a published contract) |
+| `assistant:audit` | the owners, the organisation administrator, and the privacy officers: members of the groups in `TRANIBOR_ASSISTANT_PRIVACY_OFFICER_GROUPS` (`privacy_officer` is not a `Role`: the roles are a published contract) |
 
 ```text
 GET  /api/v1/me/assistants                                    # the installations whose audience holds me
@@ -866,7 +866,7 @@ approval) runs each of its servers and governs it:
 
 - **Refuse every call without the platform's token.** The platform generates a token per server and
   organisation, seals it in the organisation's secret store (ADR 0058), gives it to the pod as
-  `CHOREGOS_SERVER_TOKEN`, and presents it as `Authorization: Bearer <token>` on every call to
+  `TRANIBOR_SERVER_TOKEN`, and presents it as `Authorization: Bearer <token>` on every call to
   `paths.mcp`. A server that answers without it lets anything in the cluster that reaches it act with
   its credentials.
 - **Answer MCP over HTTP** (`protocol: mcp-http`) at `paths.mcp`, and `200` at `paths.health`
@@ -877,7 +877,7 @@ approval) runs each of its servers and governs it:
 - **Read its configuration from the environment**: each `config_schema` property and each
   `secret_fields` entry reaches it as the variable named by the property's `x-env`, else its name in
   upper case (`base_url` → `BASE_URL`). A list of scalars is joined with commas, an object is JSON.
-  `CHOREGOS_*` names are the platform's.
+  `TRANIBOR_*` names are the platform's.
 
 ### Configuring a server
 
@@ -908,9 +908,9 @@ fake:
   scenes: [default]             # the scenes that fake serves (`default` when absent)
 ```
 
-Its variables are not configuration: none may be `CHOREGOS_*` or one a `config_schema` property or a
+Its variables are not configuration: none may be `TRANIBOR_*` or one a `config_schema` property or a
 `secret_fields` entry reaches, so no administrator switches a server to its fake. Where the deployment
-serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`), and only there, the platform runs beside the server
+serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES=1`), and only there, the platform runs beside the server
 its **eval instance**: the same image, the fake's variables and the platform's token, nothing of the
 configuration, no egress, one replica (`<server>-fake-<org digest>`); the next reconcile deletes it once
 the switch is off. A connector reaches the eval instance only when the live matrix's seeding bound it
@@ -985,7 +985,7 @@ approval).
   event goes to the organisation's project that holds the item, or its only project on that tracker.
 - **Polling.** `list_candidates` is the profile's `tracker_list_candidates`, read by the tracker
   reconciliation like any external tracker's, for systems that send no events.
-- **Fakes.** Under `CHOREGOS_FAKES=1` a plugin tracker is built as itself and talks to
+- **Fakes.** Under `TRANIBOR_FAKES=1` a plugin tracker is built as itself and talks to
   `FakePluginTrackerServer` (`tranibor_adapters.fakes.plugin_tracker`), an in-memory server of the
   profile with the same replay rules.
 
@@ -1040,7 +1040,7 @@ The full reference of the commands is in [the CLI reference](cli.md#choregos-plu
 
 ## Sources and trust
 
-A deployment declares where plugins come from in the file `CHOREGOS_PLUGINS_CONFIG` names (the chart
+A deployment declares where plugins come from in the file `TRANIBOR_PLUGINS_CONFIG` names (the chart
 writes it from its `global.plugins` values, [deployment](deployment.md#plugins)):
 
 ```yaml
@@ -1056,7 +1056,7 @@ sources:
 defaultPlugins:
   - {source: tranibor, name: servicenow, version: "^0.1"}
   - {source: tranibor, name: software-delivery, version: "^1.0", preapproved: true}
-offline: /opt/choregos/plugins  # or CHOREGOS_PLUGINS_OFFLINE; both, and different: the API does not start
+offline: /opt/choregos/plugins  # or TRANIBOR_PLUGINS_OFFLINE; both, and different: the API does not start
 ```
 
 Every source has a trust policy; there is no unsigned source. `GET /orgs/{org}/plugin-sources` lists
@@ -1098,7 +1098,7 @@ at the first failed check, naming it:
 Sources are the operator's, not an organisation's, so their fetches are not checked against an
 organisation's allowlist. They go through the guarded transport (ADR 0066) under a policy that opens the
 index's host, the hosts `egress` lists, the blob storage of `ghcr.io` and Docker Hub, and GitHub or
-GitLab for a git release, all still bounded by the deployment's ceiling (`CHOREGOS_EGRESS_CEILING`) and
+GitLab for a git release, all still bounded by the deployment's ceiling (`TRANIBOR_EGRESS_CEILING`) and
 mode. An index that names an artifact on another host reaches it only when that host is in `egress`.
 
 ### The supply-chain gate

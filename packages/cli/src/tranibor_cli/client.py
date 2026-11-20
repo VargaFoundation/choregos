@@ -12,11 +12,11 @@ from typing import Any
 
 import httpx
 
-CONFIG_PATH = Path(os.environ.get("CHOREGOS_CONFIG", Path.home() / ".config" / "choregos" / "config.json"))
+CONFIG_PATH = Path(os.environ.get("TRANIBOR_CONFIG", Path.home() / ".config" / "choregos" / "config.json"))
 
 
 class NoOrganisationError(RuntimeError):
-    """Neither `--org`, the profile nor `CHOREGOS_ORG` names an organisation."""
+    """Neither `--org`, the profile nor `TRANIBOR_ORG` names an organisation."""
 
 
 @dataclass
@@ -35,17 +35,17 @@ class Profile:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             return cls(**{k: v for k, v in data.items() if k in {"api_url", "token", "org"}})
         return cls(
-            api_url=os.environ.get("CHOREGOS_API_URL", "http://localhost:8000"),
-            token=os.environ.get("CHOREGOS_TOKEN", ""),
-            org=os.environ.get("CHOREGOS_ORG", ""),
+            api_url=os.environ.get("TRANIBOR_API_URL", "http://localhost:8000"),
+            token=os.environ.get("TRANIBOR_TOKEN", ""),
+            org=os.environ.get("TRANIBOR_ORG", ""),
         )
 
     def organisation(self, override: str | None = None) -> str:
         """`--org`, else the profile's organisation; otherwise a usage error naming both ways."""
-        chosen = override or self.org or os.environ.get("CHOREGOS_ORG", "")
+        chosen = override or self.org or os.environ.get("TRANIBOR_ORG", "")
         if not chosen:
             raise NoOrganisationError(
-                "no organisation: pass --org <slug>, set CHOREGOS_ORG, or save one in the profile "
+                "no organisation: pass --org <slug>, set TRANIBOR_ORG, or save one in the profile "
                 "with `choregos login --org <slug>` (`choregos orgs list` shows yours)"
             )
         return chosen

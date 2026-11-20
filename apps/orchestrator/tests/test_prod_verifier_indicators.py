@@ -40,7 +40,7 @@ tools:
 def tool_catalogue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     path = tmp_path / "catalogue.yaml"
     path.write_text(CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(path))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(path))
     clear_cache()
     yield
     clear_cache()

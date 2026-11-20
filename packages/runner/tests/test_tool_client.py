@@ -549,7 +549,7 @@ def test_search_reads_the_index(tools: ModuleType) -> None:
 def test_without_a_bridge_a_call_says_why(tools: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(tool_client.BRIDGE_VARIABLE)
     tools._STATE.clear()
-    with pytest.raises(RuntimeError, match="CHOREGOS_TOOLS_BRIDGE is not set"):
+    with pytest.raises(RuntimeError, match="TRANIBOR_TOOLS_BRIDGE is not set"):
         tools.call("web_fetch")
 
 

@@ -42,7 +42,7 @@ def _config(url: str) -> Config:
 @pytest.fixture
 def database(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[str, Engine]]:
     file = tmp_path / "ontology.db"
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
+    monkeypatch.setenv("TRANIBOR_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     engine = create_engine(f"sqlite:///{file}")
     try:

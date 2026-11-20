@@ -5,7 +5,7 @@ Without a script, a query gets three results under `https://docs.example.org/` w
 the query's SHA-256, so the same query always gives the same links. Scripting: `results[query]`
 replaces the results of a query, `errors[query]` makes it raise, `rate_limited` makes every call a
 429; `calls` records every call (query and filters).
-Used under `CHOREGOS_FAKES=1`, by the tests, the e2e and the demo.
+Used under `TRANIBOR_FAKES=1`, by the tests, the e2e and the demo.
 """
 
 from __future__ import annotations

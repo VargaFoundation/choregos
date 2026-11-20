@@ -12,7 +12,7 @@ For a project owner. Procedure `connector.scm.gitlab`, version 1, reviewed 2026-
   only a Maintainer can create project access tokens.
 - **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the
   connector cannot give a run its token. A self-managed GitLab has no such tier limit.
-- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates
+- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates
   Tranibor, if you want merge request events.
 
 ## At GitLab

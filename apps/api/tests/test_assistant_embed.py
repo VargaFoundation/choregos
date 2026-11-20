@@ -108,8 +108,8 @@ def idp(org: str, monkeypatch: pytest.MonkeyPatch) -> Any:
     from tranibor_api.config import reset_settings_cache
     from tranibor_api.routers.auth import forget_discovery
 
-    monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
-    monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
+    monkeypatch.setenv("TRANIBOR_DEV_LOGIN_ENABLED", "false")
+    monkeypatch.setenv("TRANIBOR_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
     forget_discovery()
     with respx.mock(assert_all_called=False) as mock:

@@ -70,8 +70,8 @@ def test_each_command_and_option_shown_exists_in_the_cli(entry: dict[str, Any]) 
 def test_the_token_variable_shown_is_the_one_the_a2a_commands_read() -> None:
     send = _command(["a2a", "send"])
     token = next(p for p in send.params if "--token" in getattr(p, "opts", []))
-    assert token.envvar == "CHOREGOS_A2A_TOKEN"
-    assert "CHOREGOS_A2A_TOKEN" in NAMES["env"]
+    assert token.envvar == "TRANIBOR_A2A_TOKEN"
+    assert "TRANIBOR_A2A_TOKEN" in NAMES["env"]
     client = (ROOT / "packages" / "cli" / "src" / "tranibor_cli" / "client.py").read_text(encoding="utf-8")
-    for variable in set(NAMES["env"]) - {"CHOREGOS_A2A_TOKEN"}:
+    for variable in set(NAMES["env"]) - {"TRANIBOR_A2A_TOKEN"}:
         assert f'"{variable}"' in client, f"the CLI's profile does not read {variable}"

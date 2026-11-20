@@ -34,7 +34,7 @@ __all__ = ["noop_effect", "temporal_server", "workers"]  # fixtures, used by nam
 
 pytestmark = pytest.mark.skipif(
     not SUITE_ON_POSTGRES,
-    reason="two processes share a database: PostgreSQL only (CHOREGOS_TEST_SUITE_ON_POSTGRES)",
+    reason="two processes share a database: PostgreSQL only (TRANIBOR_TEST_SUITE_ON_POSTGRES)",
 )
 
 
@@ -92,7 +92,7 @@ async def replicas(app: Any, tmp_path: pathlib.Path) -> AsyncIterator[Callable[.
     started: list[ApiProcess] = []
 
     async def start(count: int, **env: str) -> list[ApiProcess]:
-        base = {**os.environ, "CHOREGOS_LOG_JSON": "true", "CHOREGOS_LOG_LEVEL": "INFO", **env}
+        base = {**os.environ, "TRANIBOR_LOG_JSON": "true", "TRANIBOR_LOG_LEVEL": "INFO", **env}
         names = [f"replica-{len(started) + i}" for i in range(count)]
         batch = [ApiProcess(name, tmp_path / f"{name}.log", base) for name in names]
         started.extend(batch)
@@ -126,11 +126,11 @@ async def test_two_api_processes_relaying_one_action_run_it_once(
     address = temporal_server.client.service_client.config.target_host
     pair = await replicas(
         2,
-        CHOREGOS_FAKES="0",  # the real Temporal client, in both
-        CHOREGOS_TEMPORAL_ADDRESS=address,
-        CHOREGOS_TEMPORAL_NAMESPACE=temporal_server.client.namespace,
-        CHOREGOS_TEMPORAL_TASK_QUEUE=TASK_QUEUE,
-        CHOREGOS_ACTION_RELAY_INTERVAL_S="0.3",
+        TRANIBOR_FAKES="0",  # the real Temporal client, in both
+        TRANIBOR_TEMPORAL_ADDRESS=address,
+        TRANIBOR_TEMPORAL_NAMESPACE=temporal_server.client.namespace,
+        TRANIBOR_TEMPORAL_TASK_QUEUE=TASK_QUEUE,
+        TRANIBOR_ACTION_RELAY_INTERVAL_S="0.3",
     )
     for _ in range(200):
         if all(len(r.events("action.relay.started")) >= 3 for r in pair):

@@ -28,9 +28,9 @@ pytestmark = pytest.mark.conformance
 
 @pytest.fixture(autouse=True)
 def real_connectors(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`CHOREGOS_FAKES=1`, set by the API's suite when everything runs together, makes `build()`
+    """`TRANIBOR_FAKES=1`, set by the API's suite when everything runs together, makes `build()`
     answer the fake for every type: each promise would then be judged on the fake, and pass."""
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
 
 SECRET = "cle-marketdata-0b7f"

@@ -68,7 +68,8 @@ async def test_an_opencode_run_is_a_flat_list_with_no_sub_agent(
     run_id = await _run(project, "opencode")
     await _journal(client, run_id, "opencode-task.json")
     items = (await client.get(f"/api/v1/runs/{run_id}/agents")).json()["items"]
-    assert [(n["kind"], n["tool_calls"]) for n in items] == [("agent", 3)]
+    # The fixture is a real opencode run recorded on a dev instance (S67-12): six tool calls.
+    assert [(n["kind"], n["tool_calls"]) for n in items] == [("agent", 6)]
 
 
 async def test_the_rule_is_the_runs_backends_not_a_guess_from_the_journal(

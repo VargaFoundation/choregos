@@ -17,8 +17,8 @@ SUBJECT = "rounding"
 
 @pytest.fixture
 def real_adapters(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`CHOREGOS_FAKES=1` would swap the lexical memory for the in-memory fake: we want the database."""
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    """`TRANIBOR_FAKES=1` would swap the lexical memory for the in-memory fake: we want the database."""
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
 
 
 def _memory() -> Any:

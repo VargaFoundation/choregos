@@ -3,7 +3,7 @@
 //
 // The OpenAI chat client is pointed at the platform's model (`OPENAI_BASE_URL`, the loopback key),
 // and the agent is given the tools of one MCP client per MCP server of the step
-// (`CHOREGOS_MCP_URL<name>`, streamable HTTP).
+// (`TRANIBOR_MCP_URL<name>`, streamable HTTP).
 
 using System.ClientModel;
 using Microsoft.Agents.AI;
@@ -22,8 +22,8 @@ static class Agent
         var chat = new OpenAIClient(
                 new ApiKeyCredential(Environment.GetEnvironmentVariable("OPENAI_API_KEY") ?? ""),
                 new OpenAIClientOptions { Endpoint = new Uri(Environment.GetEnvironmentVariable("OPENAI_BASE_URL")!) })
-            .GetChatClient(Environment.GetEnvironmentVariable("CHOREGOS_MODEL") ?? "default");
-        var names = (Environment.GetEnvironmentVariable("CHOREGOS_MCP_SERVERS") ?? "")
+            .GetChatClient(Environment.GetEnvironmentVariable("TRANIBOR_MODEL") ?? "default");
+        var names = (Environment.GetEnvironmentVariable("TRANIBOR_MCP_SERVERS") ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries);
         var clients = new List<McpClient>();
         try
@@ -34,7 +34,7 @@ static class Agent
                 var transport = new HttpClientTransport(new HttpClientTransportOptions
                 {
                     Name = name,
-                    Endpoint = new Uri(Environment.GetEnvironmentVariable("CHOREGOS_MCP_URL") + name),
+                    Endpoint = new Uri(Environment.GetEnvironmentVariable("TRANIBOR_MCP_URL") + name),
                     TransportMode = HttpTransportMode.StreamableHttp,
                 });
                 var client = await McpClient.CreateAsync(transport, cancellationToken: cancellation);

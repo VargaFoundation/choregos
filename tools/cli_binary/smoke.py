@@ -193,8 +193,8 @@ def bare_environment(work: pathlib.Path, api_url: str) -> dict[str, str]:
     home.mkdir(exist_ok=True)
     env = {
         "HOME": str(home),
-        "CHOREGOS_CONFIG": str(work / "no-profile" / "config.json"),
-        "CHOREGOS_API_URL": api_url,
+        "TRANIBOR_CONFIG": str(work / "no-profile" / "config.json"),
+        "TRANIBOR_API_URL": api_url,
         # Wide enough for Rich never to wrap a table cell the checks look for; no colour codes.
         "COLUMNS": "200",
         "TERM": "dumb",
@@ -271,8 +271,8 @@ class Runner:
                 ]
             return [self.binary.name, *args]
         docker = shutil.which("docker") or "docker"
-        inside = {**self.env, "HOME": "/smoke/home", "CHOREGOS_CONFIG": "/smoke/no-profile/config.json"}
-        inside["CHOREGOS_API_URL"] = self.env["CHOREGOS_API_URL"].replace("127.0.0.1", "host.docker.internal")
+        inside = {**self.env, "HOME": "/smoke/home", "TRANIBOR_CONFIG": "/smoke/no-profile/config.json"}
+        inside["TRANIBOR_API_URL"] = self.env["TRANIBOR_API_URL"].replace("127.0.0.1", "host.docker.internal")
         inside.update(
             {
                 "PATH": "/opt/choregos:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -357,7 +357,7 @@ def functional_checks(runner: Runner, version: str) -> None:
     # The workspace starts without a terminal, shows its parts and quits (S67-09): Textual and its data files
     # are inside the binary.
     expect(runner.run("chat", "--smoke", "--org", ORG), 0, "workspace ok: 6 parts", what="the workspace")
-    runner.env["CHOREGOS_A2A_TOKEN"] = TOKEN
+    runner.env["TRANIBOR_A2A_TOKEN"] = TOKEN
     expect(
         runner.run("a2a", "skills", "--org", ORG),
         0,
@@ -366,9 +366,9 @@ def functional_checks(runner: Runner, version: str) -> None:
         "ticket*",
         what="a2a skills",
     )
-    runner.env["CHOREGOS_A2A_TOKEN"] = "not-the-token"  # noqa: S105 - refused on purpose
+    runner.env["TRANIBOR_A2A_TOKEN"] = "not-the-token"  # noqa: S105 - refused on purpose
     expect(runner.run("a2a", "skills", "--org", ORG), 1, "HTTP 401", "invalid token", what="a refused token")
-    del runner.env["CHOREGOS_A2A_TOKEN"]
+    del runner.env["TRANIBOR_A2A_TOKEN"]
 
 
 def self_knowledge_checks(runner: Runner, version: str) -> list[dict[str, Any]]:

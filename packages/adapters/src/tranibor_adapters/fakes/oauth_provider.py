@@ -197,7 +197,7 @@ class FakeOAuthProvider:
 
 
 def current_fake_oauth_provider() -> FakeOAuthProvider:
-    """The fake OAuth provider of CHOREGOS_FAKES=1: one, scripted by the tests and the demo."""
+    """The fake OAuth provider of TRANIBOR_FAKES=1: one, scripted by the tests and the demo."""
     import tranibor_adapters as package
 
     if package.FAKE_OAUTH is None:

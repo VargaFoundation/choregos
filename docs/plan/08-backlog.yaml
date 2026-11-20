@@ -5243,6 +5243,14 @@ stories:
     notes: "The workflow map laid out left to right (nominal path as stations, side states on a row below, SVG curves); each item a token at its station that travels along the edge when it changes state, the edge lighting up; a station with a run glows in the workflow's hue, its token has a spinning ring; red flash with the reason, amber on a human wait; summary bar, ticker, wall mode; a Flow tab on the workflow page and a Flow entry in the project navigation; the reduction (TypeScript, Python, shared fixtures) records each item's last transition (from, to, edge); prefers-reduced-motion: tokens jump; mock mode shows a realistic workflow; vitest and Playwright."
 
   # ───────────────────────── S68 — The editor is a surface of the platform (ADR 0155) ─────────────────────────
+  - id: S67-30
+    title: "feat(cli): relaunch from the workspace, and its palette entry (ADR 0187 \u00a71)"
+    stream: S67
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S67-24]
+    notes: "`r` in the Activity tree on a failed, cancelled or timed-out run (or a work item whose last run ended so, nothing in flight) asks why and POSTs /work-items/{id}/actions {action: rerun_stage, reason, run_id} (no new route); absent from the footer and refused on a running or succeeded one; the palette lists Relaunch with `r` and runs the same; pilot tests, snapshots."
   - id: S68-00
     title: "docs(adr): ADR 0155, the S68 plan, the backlog stories"
     stream: S68
@@ -5693,7 +5701,7 @@ stories:
     priority: 3
     size: M
     depends_on: [S75-01]
-    notes: "One shared helper for the four env_prefix settings classes and the direct os.environ reads; one warning per variable naming the new one, never the value; the charts render TRANIBOR_*."
+    notes: "One shared helper for the four env_prefix settings classes and the direct os.environ reads; one warning per variable naming the new one, never the value; the charts render TRANIBOR_*. Done as an adoption at import (tranibor_contracts.env) plus both names on emission; the charts and the images ENV stay CHOREGOS_* until the chart step (ADR 0176 point 5)."
   - id: S80-10
     title: "chore: the publisher is GRAAL.SYSTEMS SAS and the product no longer names the Varga Foundation (ADR 0186)"
     stream: S80
@@ -5734,7 +5742,7 @@ stories:
     priority: 3
     size: L
     depends_on: [S80-12, S80-06]
-    notes: "First move of ADR 0195. The temporal subchart gains tls (cert-manager chain or an existing secret, an nginx relay for start-dev), mode server (auto-setup on PostgreSQL), persistence.existingClaim and service.name. Not done: a handshake against a real Temporal over TLS on a cluster."
+    notes: "First move of ADR 0195. The temporal subchart gains tls (cert-manager chain or an existing secret, an nginx relay for start-dev), mode server (auto-setup on PostgreSQL), persistence.existingClaim and global.temporal.serviceName. Not done: a handshake against a real Temporal over TLS on a cluster."
   - id: S80-15
     title: "feat(charts): the LiteLLM subchart takes model prices, cache prices, a TLS database and a pinned image (ADR 0195)"
     stream: S80

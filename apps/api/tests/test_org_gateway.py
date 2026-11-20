@@ -22,7 +22,7 @@ def sealed_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """The deployment's key: without it nothing can be typed (ADR 0058)."""
     from tranibor_core.redaction import forget_secrets
 
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", f"k1:{base64.b64encode(os.urandom(32)).decode()}")
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", f"k1:{base64.b64encode(os.urandom(32)).decode()}")
     forget_secrets()
 
 

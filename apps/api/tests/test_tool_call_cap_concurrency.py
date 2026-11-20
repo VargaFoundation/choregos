@@ -6,7 +6,7 @@ provider until every call has either reached it or been refused, so without the 
 place taken before the call, all eight reach it.
 
 These tests run on SQLite (the in-process lock of `lock_budget_scopes`) and, in CI's second pass, on
-PostgreSQL under RLS (`CHOREGOS_TEST_SUITE_ON_POSTGRES=1`: `pg_advisory_xact_lock`, the migrated
+PostgreSQL under RLS (`TRANIBOR_TEST_SUITE_ON_POSTGRES=1`: `pg_advisory_xact_lock`, the migrated
 schema, the non-superuser role). The PostgreSQL statement itself is checked on every backend by
 `test_on_postgresql_the_lock_is_asked_for_before_the_count`.
 """

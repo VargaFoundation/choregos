@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tranibor_contracts.env import with_legacy_entries
 from tranibor_core.egress_gate import GATE_CONTAINER, REPORT_DIR, REPORT_ENV, REPORT_FILE, EgressGate
 from tranibor_core.exit_codes import explanation
 
@@ -66,7 +67,7 @@ def add_to_pod(pod_spec: dict[str, Any], image: str, gate: EgressGate, runner: s
     pod_spec.setdefault("volumes", []).append(volume())
     container = next(c for c in pod_spec["containers"] if c["name"] == runner)
     container.setdefault("volumeMounts", []).append(runner_mount())
-    container.setdefault("env", []).append(runner_env())
+    container.setdefault("env", []).extend(with_legacy_entries([runner_env()]))
 
 
 def gate_failure(pod: Any) -> tuple[int, str] | None:

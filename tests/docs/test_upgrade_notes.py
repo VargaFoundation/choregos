@@ -8,16 +8,16 @@ DEPLOYMENT = Path(__file__).resolve().parents[2] / "docs" / "deployment.md"
 HEADING = "## Upgrading to 0.21"
 
 NAMES = (
-    "CHOREGOS_SESSION_SECRET",
-    "CHOREGOS_SESSION_SECRET_PREVIOUS",
+    "TRANIBOR_SESSION_SECRET",
+    "TRANIBOR_SESSION_SECRET_PREVIOUS",
     "choregos-api.trustedProxyCidrs",
     "choregos-api.corsOrigins",
     "choregos-api.oidcEndpoints",
     "read_only",
     "allowed_backends",
     "global.mcpGateway",
-    "CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS",
-    "CHOREGOS_RUNNER_CONFINEMENT",
+    "TRANIBOR_MCP_GATEWAY_INTERNAL_HOSTS",
+    "TRANIBOR_RUNNER_CONFINEMENT",
     "global.plugins",
 )
 

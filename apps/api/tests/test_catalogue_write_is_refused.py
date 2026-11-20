@@ -66,7 +66,7 @@ async def _run(
 
     path = tmp_path / "catalogue.yaml"
     path.write_text(_catalogue(read_only=read_only), encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(path))
+    monkeypatch.setenv("TRANIBOR_TOOL_CATALOG", str(path))
     service_catalogue.clear_cache()
 
     async with session_scope() as session:

@@ -12,19 +12,19 @@ finds all three; through the launcher it finds none. The shared volumes still wo
 (the runner reads and appends to what the agent wrote: umask and `fsGroup`).
 
 On kind (runc) it runs with a test image and the repository's `launcher.py`:
-`CHOREGOS_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster/test_agent_isolation.py`.
+`TRANIBOR_CLUSTER_CONTEXT=kind-choregos uv run pytest tests/cluster/test_agent_isolation.py`.
 
-**On a deployed platform (S65-04o)**, `CHOREGOS_ISOLATION_PLATFORM_NAMESPACE=<namespace>` runs the same
+**On a deployed platform (S65-04o)**, `TRANIBOR_ISOLATION_PLATFORM_NAMESPACE=<namespace>` runs the same
 probe in that namespace, under its network policy, with what its warm pool's `SandboxTemplate` names:
 the real runner image (whose own `launcher` is the agent's container), its RuntimeClass (`gvisor` on
-the diametral clusters), its pull secrets and its egress gate. The warm-pool pod is the template's own
+the hardened clusters), its pull secrets and its egress gate. The warm-pool pod is the template's own
 pod with the runner's command replaced by the probe; the Job is the one `k8s_job` renders with the same
 settings. The probe then also asks, from the agent's container, whether the gate's target answers
 directly and what the platform's egress proxy answers without credentials. It creates its own objects
 in that namespace and deletes them; it touches nothing else. On the dev cluster:
 
-    CHOREGOS_CLUSTER_CONTEXT=dev CHOREGOS_CLUSTER_ALLOW_SHARED=dev \
-    CHOREGOS_ISOLATION_PLATFORM_NAMESPACE=choregos uv run pytest tests/cluster/test_agent_isolation.py
+    TRANIBOR_CLUSTER_CONTEXT=dev TRANIBOR_CLUSTER_ALLOW_SHARED=dev \
+    TRANIBOR_ISOLATION_PLATFORM_NAMESPACE=choregos uv run pytest tests/cluster/test_agent_isolation.py
 
 What this does NOT prove: a real agent (the probe is a shell), what a run's real CONNECT listener
 carries (a run's journal does: `hosted.egress`), the agent-sandbox operator's suspension.
@@ -54,8 +54,8 @@ PROBE_CODE = "import socket; socket.create_connection(('127.0.0.1', 8766))"
 SECRET = "secret-run-token-01"  # a test value: the probe looks for it, it protects nothing
 GATEWAY_KEY = "secret-gateway-key-01"  # idem, the run's gateway key in the Job's Secret
 #: A deployed platform's namespace (S65-04o): the probe then runs there, as its warm pool's template says.
-PLATFORM_NS = os.environ.get("CHOREGOS_ISOLATION_PLATFORM_NAMESPACE", "")
-WARM_POOL_TEMPLATE = os.environ.get("CHOREGOS_ISOLATION_TEMPLATE", "choregos-runner")
+PLATFORM_NS = os.environ.get("TRANIBOR_ISOLATION_PLATFORM_NAMESPACE", "")
+WARM_POOL_TEMPLATE = os.environ.get("TRANIBOR_ISOLATION_TEMPLATE", "choregos-runner")
 #: Objects of this test, in a namespace it does not own: a suffix of their own.
 SUFFIX = secrets.token_hex(3)
 CONFIG = f"isolation-{SUFFIX}" if PLATFORM_NS else "isolation"
@@ -200,7 +200,7 @@ def _manifest(namespace: str) -> dict[str, Any]:
                     "name": "runner",
                     "image": IMAGE,
                     "command": ["python", "/cfg/runner.py", "runner-marker-8841"],
-                    "env": [{"name": "CHOREGOS_RUN_TOKEN", "value": SECRET}],
+                    "env": [{"name": "TRANIBOR_RUN_TOKEN", "value": SECRET}],
                     "securityContext": DROP,
                     "volumeMounts": [*mounts, CFG_MOUNT],
                 }
@@ -235,10 +235,10 @@ def _probe_env(pod_spec: dict[str, Any]) -> list[dict[str, str]]:
     gate = next((c for c in pod_spec.get("initContainers", []) if c["name"] == "egress-gate"), None)
     args = list((gate or {}).get("args") or (gate or {}).get("command") or [])
     target = args[args.index("--target") + 1] if "--target" in args else ""
-    proxy = os.environ.get("CHOREGOS_ISOLATION_EGRESS_PROXY", f"choregos-egress.{PLATFORM_NS}.svc:3128")
+    proxy = os.environ.get("TRANIBOR_ISOLATION_EGRESS_PROXY", f"choregos-egress.{PLATFORM_NS}.svc:3128")
     return [
-        {"name": "CHOREGOS_RUN_TOKEN", "value": SECRET},
-        {"name": "CHOREGOS_RUN_GATEWAY_KEY_PROBE", "value": GATEWAY_KEY},
+        {"name": "TRANIBOR_RUN_TOKEN", "value": SECRET},
+        {"name": "TRANIBOR_RUN_GATEWAY_KEY_PROBE", "value": GATEWAY_KEY},
         {"name": "PROBE_NETWORK", "value": "1"},
         {"name": "PROBE_EXTERNAL", "value": target},
         {"name": "PROBE_PROXY", "value": proxy},
@@ -442,7 +442,7 @@ def _job_manifest(namespace: str) -> dict[str, Any]:
         runtime_class=template.get("runtimeClassName") if template else None,
     )
     # The agent's limits the platform gives its runs (its template's agent container): a namespace under
-    # a LimitRange refuses a pod beyond them (4Gi on the diametral clusters).
+    # a LimitRange refuses a pod beyond them (4Gi on the dev cluster this was proven on).
     agent_limits = next(
         (
             c.get("resources", {}).get("limits", {})
@@ -463,7 +463,7 @@ def _job_manifest(namespace: str) -> dict[str, Any]:
     pod["volumes"].append({"name": "cfg", "configMap": {"name": CONFIG}})
     (runner,) = pod["containers"]
     if template:
-        _as_probe(runner, [e for e in _probe_env(template) if e["name"] != "CHOREGOS_RUN_TOKEN"])
+        _as_probe(runner, [e for e in _probe_env(template) if e["name"] != "TRANIBOR_RUN_TOKEN"])
         return job
     pod.pop("serviceAccountName")  # the test namespace has no `choregos-runner` account
     (agent,) = [c for c in pod["initContainers"] if c["name"] == "agent"]

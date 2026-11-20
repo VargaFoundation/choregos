@@ -85,7 +85,7 @@ def run_token_keys(settings: Settings | None = None) -> tuple[str, str]:
         # A public key alone cannot sign: the essential is missing, and saying so is better than
         # verifying tokens that we will never be able to issue.
         raise RuntimeError(
-            "CHOREGOS_RUN_TOKEN_PUBLIC_KEY est fournie sans sa clé privée : "  # lang: fr-ok pinned by a test
+            "TRANIBOR_RUN_TOKEN_PUBLIC_KEY est fournie sans sa clé privée : "  # lang: fr-ok pinned by a test
             "l'orchestrateur ne peut pas signer les jetons de run."  # lang: fr-ok pinned by a test
         )
     # No key: an ephemeral pair, valid as long as a SINGLE process issues and verifies
@@ -275,12 +275,12 @@ def check_session_secret(settings: Settings) -> None:
     """
     secret = settings.session_secret
     if not secret.strip():
-        raise RuntimeError("CHOREGOS_SESSION_SECRET is empty: an empty HMAC key lets anyone forge a session")
+        raise RuntimeError("TRANIBOR_SESSION_SECRET is empty: an empty HMAC key lets anyone forge a session")
     if settings.deployed and (
         secret == DEFAULT_SESSION_SECRET or len(secret.encode()) < MIN_SESSION_SECRET_BYTES
     ):
         raise RuntimeError(
-            "CHOREGOS_SESSION_SECRET is the published default or shorter than "
+            "TRANIBOR_SESSION_SECRET is the published default or shorter than "
             f"{MIN_SESSION_SECRET_BYTES} bytes on a deployed instance (staging/prod, or served over "
             "https): anyone can forge a session. Set a random value, for example "
             "`openssl rand -base64 48`"
@@ -288,7 +288,7 @@ def check_session_secret(settings: Settings) -> None:
     previous = settings.session_secret_previous
     if settings.deployed and previous and len(previous.encode()) < MIN_SESSION_SECRET_BYTES:
         raise RuntimeError(
-            f"CHOREGOS_SESSION_SECRET_PREVIOUS is shorter than {MIN_SESSION_SECRET_BYTES} bytes on a "
+            f"TRANIBOR_SESSION_SECRET_PREVIOUS is shorter than {MIN_SESSION_SECRET_BYTES} bytes on a "
             "deployed instance: a verification key that short still lets anyone forge a session while "
             "it is kept. Unset it (the sessions it signed then end), or check the old value was copied whole"
         )

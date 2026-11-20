@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -44,6 +44,9 @@ SAID_KEPT = 20
 #: never read, and the run waited its whole budget before exiting 1.
 MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 
+#: How long, once the agent's output ended, the client waits for its exit code and its last error lines.
+EXIT_SETTLE_S = 2.0
+
 PermissionHandler = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
 #: Whether a file of the workspace may be written, and why: the runner's `GuardRails.check_write`,
 #: asked with the path relative to the workspace (or the absolute path beneath the script directory).
@@ -67,8 +70,28 @@ class AgentSilentError(AgentUnreachableError):
         self.alive = alive
 
 
+class AgentExitedError(AgentUnreachableError):
+    """The agent's process ended while a request waited for its answer (#1986): said when it ends,
+    with its exit code and its last error lines, not after the request's whole timeout."""
+
+    def __init__(self, message: str, *, code: int | None) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class AgentProtocolError(RuntimeError):
     """The agent broke the ACP protocol."""
+
+
+class AgentDidNotStartError(AgentUnreachableError):
+    """The agent failed before its first prompt (#1986): `phase` is where (`start`, `initialize`,
+    `session`), `cause` what it said, `client` what is known of its process."""
+
+    def __init__(self, client: AcpClient, phase: str, cause: Exception) -> None:
+        super().__init__(str(cause))
+        self.client = client
+        self.phase = phase
+        self.cause = cause
 
 
 @dataclass
@@ -153,6 +176,9 @@ class AcpClient:
         self.dropped_messages = 0
         #: Why the read loop stopped, when it died of an error rather than of the agent's EOF.
         self.reader_error: str | None = None
+        #: Set when the agent's output ended (its process exited, or the launcher said it did): every
+        #: request still waiting fails then, instead of at its timeout (#1986).
+        self._ended = asyncio.Event()
         self.process: asyncio.subprocess.Process | RemoteProcess | None = None
         self.session_id: str | None = None
         self.capabilities: dict[str, Any] = {}
@@ -199,6 +225,17 @@ class AcpClient:
         self._stderr_task = asyncio.create_task(self._read_stderr())
 
     async def stop(self) -> None:
+        if self.process is not None and self.process.returncode is None:
+            self.process.terminate()
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=10)
+            except TimeoutError:
+                self.process.kill()
+        if self._stderr_task is not None:
+            # The agent's last error lines, read to the end once it exited: what a run that ends on
+            # an agent's refusal journals (#1986). A grandchild holding the pipe open is not waited for.
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await asyncio.wait_for(asyncio.shield(self._stderr_task), timeout=EXIT_SETTLE_S)
         for task in (self._reader_task, self._stderr_task):
             if task is not None:
                 task.cancel()
@@ -207,12 +244,6 @@ class AcpClient:
                 # error with a bare traceback and exit 1 (#498).
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
-        if self.process is not None and self.process.returncode is None:
-            self.process.terminate()
-            try:
-                await asyncio.wait_for(self.process.wait(), timeout=10)
-            except TimeoutError:
-                self.process.kill()
 
     async def __aenter__(self) -> AcpClient:
         await self.start()
@@ -355,19 +386,51 @@ class AcpClient:
             raise AgentUnreachableError("agent process missing")
         if self.reader_error is not None:
             raise AgentUnreachableError(f"the runner stopped reading the agent: {self.reader_error}")
+        if self._ended.is_set():
+            raise self._exited(method)
         self._next_id += 1
         request = Request(id=self._next_id, method=method, params=params)
         future: asyncio.Future[Response] = asyncio.get_running_loop().create_future()
         self._pending[request.id] = future
-        self.process.stdin.write(request.encode())
-        await self.process.stdin.drain()
+        ended = asyncio.ensure_future(self._ended.wait())
         try:
-            return await asyncio.wait_for(future, timeout=timeout)
-        except TimeoutError as exc:
+            try:
+                self.process.stdin.write(request.encode())
+                await self.process.stdin.drain()
+            except (ConnectionError, OSError):
+                pass  # a closed pipe: the agent has exited, which the read loop says below
+            # Raced against the agent's end (#1986): an agent that exits before it answers is said to
+            # have exited when it does, not after `timeout` (60 s for `initialize`).
+            waiting: set[asyncio.Future[Any]] = {future, ended}
+            done, _ = await asyncio.wait(waiting, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+            if future in done:
+                return future.result()
+            if ended in done:
+                raise self._exited(method)
             alive = self.process is not None and self.process.returncode is None
-            raise AgentSilentError(self._why_silent(method, timeout), alive=alive) from exc
+            raise AgentSilentError(self._why_silent(method, timeout), alive=alive)
         finally:
+            ended.cancel()
             self._pending.pop(request.id, None)
+
+    def _exited(self, method: str) -> AgentExitedError:
+        """The agent's process ended before it answered `method`: what is known of it."""
+        code = self.process.returncode if self.process is not None else None
+        parts = [
+            f"the agent exited before it answered `{method}`"
+            + (f" (code {code})" if code is not None else ""),
+            f"command: {' '.join(self.command)}",
+        ]
+        start_error = getattr(self.process, "start_error", None)
+        if start_error:
+            parts.append(f"the launcher could not start it: {start_error}")
+        parts.append(f"agent's error output: {self.stderr_lines() or 'EMPTY'}")
+        return AgentExitedError(" — ".join(parts), code=code)
+
+    def stderr_lines(self, count: int = 5) -> str:
+        """The agent's last error lines, joined, at most 600 characters."""
+        lines = (line.strip() for line in self.stderr_tail[-count:])
+        return " / ".join(line for line in lines if line)[:600]
 
     def _why_silent(self, method: str, timeout: float) -> str:
         """What we know about an agent that did not answer, instead of a bare `TimeoutError`.
@@ -395,13 +458,7 @@ class AcpClient:
             morceaux.append(
                 f"{self.dropped_messages} message(s) longer than {self.max_message_bytes} bytes dropped"
             )
-        if self.stderr_tail:
-            last_lines = " / ".join(
-                line_text.strip() for line_text in self.stderr_tail[-5:] if line_text.strip()
-            )
-            morceaux.append(f"agent's error output: {last_lines[:600]}")
-        else:
-            morceaux.append("agent's error output: EMPTY")
+        morceaux.append(f"agent's error output: {self.stderr_lines() or 'EMPTY'}")
         return " — ".join(morceaux)
 
     async def notify(self, method: str, params: dict[str, Any]) -> None:
@@ -421,6 +478,7 @@ class AcpClient:
     async def _read_loop(self) -> None:
         try:
             await self._read_messages()
+            await self._settle()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -433,6 +491,18 @@ class AcpClient:
                 if not future.done():
                     future.set_exception(AgentUnreachableError(reason))
             raise
+
+    async def _settle(self) -> None:
+        """The agent's output ended: its exit code and its last error lines are awaited a moment (the
+        launcher sends the code after the streams; a local child's pipes close before `wait` returns),
+        then every request still waiting learns that it exited (#1986)."""
+        if self.process is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self.process.wait(), timeout=EXIT_SETTLE_S)
+        if self._stderr_task is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(asyncio.shield(self._stderr_task), timeout=EXIT_SETTLE_S)
+        self._ended.set()
 
     async def _read_messages(self) -> None:
         assert self.process is not None and self.process.stdout is not None
@@ -604,3 +674,24 @@ class AcpClient:
             self.stderr_tail.append(text)
             if len(self.stderr_tail) > 200:
                 self.stderr_tail.pop(0)
+
+
+@contextlib.asynccontextmanager
+async def started_session(
+    client: AcpClient, open_session: Callable[[AcpClient], Awaitable[None]]
+) -> AsyncIterator[AcpClient]:
+    """`client` started, initialized and in its session (opened by `open_session`), stopped on the way
+    out. Any failure before that is an `AgentDidNotStartError` saying where."""
+    phase = "start"
+    try:
+        try:
+            await client.start()
+            phase = "initialize"
+            await client.initialize()
+            phase = "session"
+            await open_session(client)
+        except (AgentUnreachableError, AgentProtocolError) as exc:
+            raise AgentDidNotStartError(client, phase, exc) from exc
+        yield client
+    finally:
+        await client.stop()

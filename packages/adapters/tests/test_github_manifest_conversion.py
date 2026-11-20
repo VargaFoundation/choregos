@@ -20,8 +20,8 @@ def no_provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     kept = list(manifest._PROVIDER)
     set_app_credentials_provider(None)
-    monkeypatch.delenv("CHOREGOS_GITHUB_APP_ID", raising=False)
-    monkeypatch.delenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("TRANIBOR_GITHUB_APP_ID", raising=False)
+    monkeypatch.delenv("TRANIBOR_GITHUB_APP_PRIVATE_KEY", raising=False)
     yield
     manifest._PROVIDER[:] = kept
 
@@ -67,8 +67,8 @@ def test_the_deployments_variables_win_over_a_stored_app(monkeypatch: pytest.Mon
     assert app_credentials() == ("", "")
     set_app_credentials_provider(lambda: ("42", "stored-key"))
     assert app_credentials() == ("42", "stored-key")
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "1")
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "deployment-key")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "1")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_PRIVATE_KEY", "deployment-key")
     assert app_credentials() == ("1", "deployment-key")
 
 

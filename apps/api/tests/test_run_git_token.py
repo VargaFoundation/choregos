@@ -21,9 +21,9 @@ def github_app(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     """A GitHub App set up, and its token minting intercepted: we keep what it was asked for."""
     from tranibor_adapters.github import GitHubAppAuth, InstallationToken
 
-    monkeypatch.setenv("CHOREGOS_GITHUB_APP_ID", "5242171")
+    monkeypatch.setenv("TRANIBOR_GITHUB_APP_ID", "5242171")
     monkeypatch.setenv(
-        "CHOREGOS_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
+        "TRANIBOR_GITHUB_APP_PRIVATE_KEY", "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----"
     )
     # The App is read from the settings (ADR 0167), cached per process: read again.
     from tranibor_api.config import reset_settings_cache
@@ -63,7 +63,7 @@ async def test_without_an_app_or_outside_github_the_token_is_null(
 ) -> None:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.delenv("CHOREGOS_GITHUB_APP_ID", raising=False)
+    monkeypatch.delenv("TRANIBOR_GITHUB_APP_ID", raising=False)
     reset_settings_cache()
     run_id = await run_with_repository(project, "https://github.com/acme/public.git")
     body = (

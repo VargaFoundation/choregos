@@ -7,10 +7,10 @@ again.
 
 It only touches the project it is given:
 
-    CHOREGOS_LIVE_JIRA_URL=https://your-site.atlassian.net \\
-    CHOREGOS_LIVE_JIRA_EMAIL=you@example.com \\
-    CHOREGOS_LIVE_JIRA_TOKEN=<API token> \\
-    CHOREGOS_LIVE_JIRA_PROJECT=SANDBOX \\
+    TRANIBOR_LIVE_JIRA_URL=https://your-site.atlassian.net \\
+    TRANIBOR_LIVE_JIRA_EMAIL=you@example.com \\
+    TRANIBOR_LIVE_JIRA_TOKEN=<API token> \\
+    TRANIBOR_LIVE_JIRA_PROJECT=SANDBOX \\
       uv run pytest tests/live/test_jira_live.py -m live
 
 The token is an Atlassian *API token* (id.atlassian.com → Security → API tokens), not a
@@ -37,23 +37,23 @@ pytestmark = pytest.mark.live
 async def tracker() -> AsyncIterator[JiraTracker]:
     """One client per test: `httpx` binds its connections to the loop that opened them."""
     env = require(
-        "CHOREGOS_LIVE_JIRA_URL",
-        "CHOREGOS_LIVE_JIRA_EMAIL",
-        "CHOREGOS_LIVE_JIRA_TOKEN",
-        "CHOREGOS_LIVE_JIRA_PROJECT",
+        "TRANIBOR_LIVE_JIRA_URL",
+        "TRANIBOR_LIVE_JIRA_EMAIL",
+        "TRANIBOR_LIVE_JIRA_TOKEN",
+        "TRANIBOR_LIVE_JIRA_PROJECT",
     )
     # Jira Cloud: Basic with `email:token`. Bearer is only valid for OAuth tokens, and answers
     # `AUTHENTICATED_FAILED` to an API token — a message that suggests a revoked token when it
     # is the scheme that is wrong.
-    credentials = f"{env['CHOREGOS_LIVE_JIRA_EMAIL']}:{env['CHOREGOS_LIVE_JIRA_TOKEN']}"
+    credentials = f"{env['TRANIBOR_LIVE_JIRA_EMAIL']}:{env['TRANIBOR_LIVE_JIRA_TOKEN']}"
     token = base64.b64encode(credentials.encode()).decode()
     client = RestClient(
-        env["CHOREGOS_LIVE_JIRA_URL"],
+        env["TRANIBOR_LIVE_JIRA_URL"],
         headers={"Authorization": f"Basic {token}", "Accept": "application/json"},
         service="jira",
     )
     try:
-        yield JiraTracker(client, env["CHOREGOS_LIVE_JIRA_PROJECT"])
+        yield JiraTracker(client, env["TRANIBOR_LIVE_JIRA_PROJECT"])
     finally:
         await client.aclose()
 

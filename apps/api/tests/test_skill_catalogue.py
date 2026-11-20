@@ -313,13 +313,13 @@ async def test_git_entries_say_whether_the_deployment_declares_their_host(
     unknown = _by_id((await client.get(BASE)).json())
     assert unknown["systematic-debugging"]["egress"] == "unknown"
 
-    monkeypatch.setenv("CHOREGOS_API_EGRESS_HOSTS", '["api.github.com"]')
+    monkeypatch.setenv("TRANIBOR_API_EGRESS_HOSTS", '["api.github.com"]')
     reset_settings_cache()
     declared = _by_id((await client.get(BASE)).json())
     assert declared["systematic-debugging"]["egress"] == "undeclared", "codeload.github.com is not declared"
     assert declared["write-spec"]["egress"] == "unknown", "a bundled skill needs no network"
 
-    monkeypatch.setenv("CHOREGOS_API_EGRESS_HOSTS", '["codeload.github.com"]')
+    monkeypatch.setenv("TRANIBOR_API_EGRESS_HOSTS", '["codeload.github.com"]')
     reset_settings_cache()
     assert _by_id((await client.get(BASE)).json())["systematic-debugging"]["egress"] == "open"
 

@@ -38,7 +38,7 @@ class Exit(IntEnum):
     #: A file the runner writes into the agent's tree stands behind a link or a second name the agent left
     #: (a workspace kept across a person's answer): the runner follows neither and stops (S65-04b).
     WORKSPACE_UNSAFE = 110
-    #: `CHOREGOS_FAKES` is on and `CHOREGOS_ENV` is staging or prod: the runner does not start (S80-03).
+    #: `TRANIBOR_FAKES` is on and `TRANIBOR_ENV` is staging or prod: the runner does not start (S80-03).
     FAKES_IN_PRODUCTION = 120
     #: The egress gate (S80-07f): a direct connection out of the pod still succeeded at its deadline,
     #: so the pod's egress NetworkPolicy is not in force and nothing the agent controls is started.

@@ -16,7 +16,7 @@ export default defineConfig({
   webServer: [
     { command: "node e2e-assistants/fake-api.mjs", url: "http://127.0.0.1:4200/api/v1/me", reuseExistingServer: !process.env.CI },
     {
-      command: `CHOREGOS_API_URL=http://127.0.0.1:4200 pnpm build && CHOREGOS_API_URL=http://127.0.0.1:4200 pnpm start -p ${console_}`,
+      command: `TRANIBOR_API_URL=http://127.0.0.1:4200 pnpm build && TRANIBOR_API_URL=http://127.0.0.1:4200 pnpm start -p ${console_}`,
       url: `http://127.0.0.1:${console_}/login`,
       reuseExistingServer: !process.env.CI,
       timeout: 240_000,

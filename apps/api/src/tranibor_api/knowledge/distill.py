@@ -22,7 +22,7 @@ A base too large for one prompt is read in **passes** (S42-10c):
 Each model call is kept by the digest of what it read (`KnowledgeDistillationPart`, ADR 0008): a
 replayed call and a repeated distillation pay only for what changed. A budget is checked before each
 call. The steps below are what the Temporal activities run; `distill()` runs them in sequence for the
-fakes (no Temporal) and for the tests. Under `CHOREGOS_FAKES` the distiller is deterministic.
+fakes (no Temporal) and for the tests. Under `TRANIBOR_FAKES` the distiller is deterministic.
 """
 
 from __future__ import annotations

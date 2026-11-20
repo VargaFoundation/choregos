@@ -31,6 +31,14 @@ from .conftest import FakeInternalClient, agent_script, valid_result
 
 TOKEN = "rt-runner-5e1d2c3b4a59687766554433"
 HEADING = "## Calling tools from a script"
+
+
+def _accepted_model(backend: str) -> str:
+    """A model of the family the backend is held to: Claude for claude-code, Gemini for gemini-cli
+    (#1990); the others take either."""
+    return "gemini/gemini-2.5-pro" if backend == "gemini-cli" else "anthropic/claude-sonnet-5"
+
+
 #: A rule set whose raw description the model never needs to read: only the script does.
 RULES = [
     {"id": 17, "interface": "wan", "source": "PARTNERS", "descr": "RAW-RULE-NOT-FOR-THE-MODEL"},
@@ -84,7 +92,7 @@ def own_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def settings(runner_settings: RunnerSettings, monkeypatch: pytest.MonkeyPatch) -> RunnerSettings:
-    monkeypatch.setenv("CHOREGOS_RUN_TOKEN", TOKEN)
+    monkeypatch.setenv("TRANIBOR_RUN_TOKEN", TOKEN)
     runner_settings.run_token = TOKEN
     return runner_settings
 
@@ -164,14 +172,14 @@ async def test_the_agent_gets_the_client_its_environment_and_the_instructions(
     # the agent may write, the runner's own.
     monkeypatch.delenv("TMPDIR")
     stage_input.agent.backend = backend
-    stage_input.model.provider_model = "anthropic/claude-sonnet-5"  # what claude-code requires
+    stage_input.model.provider_model = _accepted_model(backend)
     stage_input.tools.scripts = ToolScripts()
     _, ran = await _run(stage_input, settings, "print('hello')\n")
 
     directory = own_tmp / "choregos" / "tools"
     assert ran["env"] == {
-        "CHOREGOS_TOOLS_DIR": str(directory),
-        "CHOREGOS_TOOLS_BRIDGE": tool_scripts.bridge_url(settings.tools_url),
+        "TRANIBOR_TOOLS_DIR": str(directory),
+        "TRANIBOR_TOOLS_BRIDGE": tool_scripts.bridge_url(settings.tools_url),
         "PYTHONPATH": os.pathsep.join([str(directory), "/opt/agent-own"]),
         "TMPDIR": str(own_tmp),
     }
@@ -192,13 +200,13 @@ async def test_the_first_prompt_carries_the_scripts_section_when_the_run_is_offe
     the agent's FIRST prompt, read before the task with its own instructions, and the journal says so —
     not a file it may never open."""
     stage_input.agent.backend = backend
-    stage_input.model.provider_model = "anthropic/claude-sonnet-5"  # what claude-code requires
+    stage_input.model.provider_model = _accepted_model(backend)
     stage_input.tools.scripts = ToolScripts() if offered else None
     client, ran = await _run(stage_input, settings, "print('hello')\n")
 
     first = ran["prompts"][0]
     if not offered:
-        assert HEADING not in first and "choregos_tools" not in first and "CHOREGOS_TOOLS" not in first
+        assert HEADING not in first and "choregos_tools" not in first and "TRANIBOR_TOOLS" not in first
         assert _events(client, "tools.instructions") == []
         return
     section = tool_scripts.instructions(tool_scripts.ToolClient(Path(), "", tool_scripts.plan(RUN_TOOLS)))
@@ -222,8 +230,8 @@ async def test_without_scripts_the_agent_gets_nothing_new(
     client, ran = await _run(stage_input, settings, "print('hello')\n")
 
     assert ran["env"] == {
-        "CHOREGOS_TOOLS_DIR": None,
-        "CHOREGOS_TOOLS_BRIDGE": None,
+        "TRANIBOR_TOOLS_DIR": None,
+        "TRANIBOR_TOOLS_BRIDGE": None,
         "PYTHONPATH": "/opt/agent-own",
         "TMPDIR": str(own_tmp),
     }
@@ -242,6 +250,6 @@ async def test_a_client_that_cannot_be_written_leaves_the_run_without_it(
 
     [event] = _events(client, "tools.client")
     assert event["written"] is False and event["error"]
-    assert ran["env"]["CHOREGOS_TOOLS_DIR"] is None
+    assert ran["env"]["TRANIBOR_TOOLS_DIR"] is None
     assert HEADING not in (settings.workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
     assert HEADING not in ran["prompts"][0] and _events(client, "tools.instructions") == []

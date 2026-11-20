@@ -8,7 +8,7 @@ tool its agent names will not answer. The field is additive: the entry of a dire
 carries no `outpost` key. The presence is read once per outpost, however many tools live there, and an
 outpost the caller's organisation does not have is never named, whatever a connector's row says.
 
-They run on SQLite and, with `CHOREGOS_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level
+They run on SQLite and, with `TRANIBOR_TEST_SUITE_ON_POSTGRES`, on PostgreSQL under row-level
 security, where the outposts' registry and an outpost's instances are read under their own scopes.
 """
 

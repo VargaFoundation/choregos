@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A scriptable A2A agent for tests and `CHOREGOS_FAKES` (ADR 0005, ADR 0062).
+"""A scriptable A2A agent for tests and `TRANIBOR_FAKES` (ADR 0005, ADR 0062).
 
 It serves an Agent Card (GET) and a JSON-RPC endpoint (POST) over `httpx.MockTransport`
 (`fake.transport()`), so the client, the runner and the orchestrator talk to it exactly as they

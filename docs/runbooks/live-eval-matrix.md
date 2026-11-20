@@ -24,8 +24,8 @@ A live cell **forces** the door into the stage input, whatever the project's pol
 the context (`StagePlan.eval_cell.tools`): a `scripts` cell gives `tools.scripts:
 {max_concurrent_calls: 4}`, an `mcp` cell gives none. The eval organisation's switch still wins (S57-05b):
 unless the organisation enables tool scripts (`tool_scripts: enabled`), or follows a deployment default
-that is on (`CHOREGOS_TOOL_SCRIPTS`, off by default), and the deployment's brake is released
-(`CHOREGOS_TOOL_SCRIPTS_ALLOWED`, released by default), a `scripts` cell is skipped at seeding with the
+that is on (`TRANIBOR_TOOL_SCRIPTS`, off by default), and the deployment's brake is released
+(`TRANIBOR_TOOL_SCRIPTS_ALLOWED`, released by default), a `scripts` cell is skipped at seeding with the
 switch that refused it, and a run prepared after the switch went off gets no bridge and is skipped as
 unfaithful. Only a cell with context `none`
 **and** door `mcp` validates a backend (`model_profiles.validated_backends`): a run is offered neither
@@ -38,7 +38,7 @@ did get the door: not using it is what `script_adoption` measures.
 
 ## Agent cases and the two doors (scripted)
 
-In a scripted cell (`live: false`, CI and `CHOREGOS_FAKES=1`), an agent case goes through the
+In a scripted cell (`live: false`, CI and `TRANIBOR_FAKES=1`), an agent case goes through the
 platform's **real** doors on the fakes (`activities/eval_doors.py`):
 
 - `mcp`: the case's `evidence` calls go through the run's MCP server (`McpServer`, `tools/call`);
@@ -144,7 +144,7 @@ matrix checks:
 
 A plugin ships agent cases in this same format, declared in its manifest's `contents.matrix_cases`
 (`docs/plugins.md`, "Matrix cases"); the matrix names one `plugin:<plugin>/<file stem>`. A scripted cell
-loads it from the offline plugins (`CHOREGOS_PLUGINS_OFFLINE`, else `plugins/offline/`); a live cell
+loads it from the offline plugins (`TRANIBOR_PLUGINS_OFFLINE`, else `plugins/offline/`); a live cell
 from the eval organisation's installed version of the plugin (its kept file), else from the offline
 plugins. Its agent is the plugin's own. A connector of the case may be one of the plugin's servers,
 named after the server:
@@ -168,7 +168,7 @@ is skipped with its reason, never failed.
 **In a live cell**, the eval organisation installs the plugin, so its server is the organisation
 connector named after it; the seeding **binds** that connector to the server's **eval instance**
 (`fake_scene: <scene>`, refused on every declaration and edit, honoured only under
-`CHOREGOS_EVAL_FAKE_SCENES`), makes it available to the selected projects, turns it on for the case's
+`TRANIBOR_EVAL_FAKE_SCENES`), makes it available to the selected projects, turns it on for the case's
 eval project and applies the case's `writes` (`human_approval` never lowered). The eval instance is the
 API's: for a server whose file declares its `fake` (the variables that switch it to its fake, the
 scenes it serves), the API runs, under the same switch only, the server's image with those variables
@@ -205,7 +205,7 @@ catalogue: that is the maintainers' call, not the matrix's.
 2. The deployment allows context reduction: `runner.contextReduction.enabled: true` (the default).
    With it off, every cell but `none` is skipped, and says why.
 3. The runner image carries rtk and headroom (`docker/runner.Dockerfile`, built by `make images`; ADR 0055).
-4. For the agent cases: an eval organisation of its own, `CHOREGOS_EVAL_FAKE_SCENES=1` on the API and
+4. For the agent cases: an eval organisation of its own, `TRANIBOR_EVAL_FAKE_SCENES=1` on the API and
    the workers, `netops` installed, and for E3 and C1 the servicenow plugin installed after the switch is
    on ([What the operator provides](#what-the-operator-provides-on-dev)).
 
@@ -228,7 +228,7 @@ organisation has tool scripts enabled — its administrator does it through the 
 stays as it is (S57-05b):
 
 ```bash
-curl -X PATCH "$CHOREGOS_URL/api/v1/orgs/<eval-org>" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+curl -X PATCH "$TRANIBOR_URL/api/v1/orgs/<eval-org>" -H "Authorization: Bearer $TRANIBOR_TOKEN" \
   -H 'Content-Type: application/json' -d '{"tool_scripts": "enabled"}'
 ```
 
@@ -284,7 +284,7 @@ organisation (`apps/orchestrator/src/tranibor_orchestrator/eval_live_cases.py`):
 
 **Which connectors a fake serves.** The API builds a connector whose configuration holds `fake_scene` from
 that scene instead of its type's adapter (`services/plugin_servers.connector_client`), and only when the
-deployment says so: `CHOREGOS_EVAL_FAKE_SCENES=1`. Without it the field is ignored, the connector is
+deployment says so: `TRANIBOR_EVAL_FAKE_SCENES=1`. Without it the field is ignored, the connector is
 built as its type says, from a configuration that points nowhere, and the seeding skips every agent case
 (`the deployment does not serve eval fakes`). No person, project or organisation can set the field: every
 declaration and edit of a connector refuses it (422, `registry.validate_config`), whatever the deployment
@@ -338,19 +338,19 @@ choregos-agents#8 (0.1.1) does not yet, so their live cells skip with that reaso
    ```yaml
    global:
      extraEnv:
-       - name: CHOREGOS_EVAL_FAKE_SCENES
+       - name: TRANIBOR_EVAL_FAKE_SCENES
          value: "1"
    choregos-orchestrator:
      runner:
        toolScripts:
-         allowed: true        # CHOREGOS_TOOL_SCRIPTS_ALLOWED: the brake released (the default)
+         allowed: true        # TRANIBOR_TOOL_SCRIPTS_ALLOWED: the brake released (the default)
        contextReduction:
          enabled: true        # only for cells with a context other than `none`
    ```
 
    Tool scripts for the `scripts` cells are the eval organisation's own switch (item 2), not the
    deployment's default: `toolScripts.enabled` stays `false`, so no other organisation gets them. Switch
-   `CHOREGOS_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the seeding
+   `TRANIBOR_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the seeding
    wrote is served by its scene.
 2. An **eval organisation** holding the matrix's eval project (`Before`, above) and nothing else, so
    that the names `pfsense`, `cilium`, `entra`, `marketdata`, `web-<case>` and the slugs
@@ -367,7 +367,7 @@ choregos-agents#8 (0.1.1) does not yet, so their live cells skip with that reaso
 5. The real model gateway the eval project runs on (its connector, or the organisation's, or the
    deployment's): the agent cases' cost is what it bills.
 6. For E3 and C1 (`plugin:servicenow/…`), the **servicenow plugin installed** in that organisation
-   **after** `CHOREGOS_EVAL_FAKE_SCENES` is on (item 1), from a source that publishes a version whose
+   **after** `TRANIBOR_EVAL_FAKE_SCENES` is on (item 1), from a source that publishes a version whose
    server file declares `fake` and whose manifest declares `matrix_cases`: Settings → Plugins, or
    `POST /api/v1/orgs/<eval-org>/plugins/install` `{"source": …, "name": "servicenow", "version": …}`,
    then a second administrator's approval (it brings a server). The API then runs the server's eval

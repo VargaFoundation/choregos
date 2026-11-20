@@ -7,7 +7,7 @@ server-side gesture: this one. It talks to the database directly, like the migra
 used for nothing else.
 
     choregos-admin tokens create --email admin@example.org --name bootstrap
-    choregos-admin orgs bootstrap   # replays the bootstrap (CHOREGOS_BOOTSTRAP_*) by hand
+    choregos-admin orgs bootstrap   # replays the bootstrap (TRANIBOR_BOOTSTRAP_*) by hand
     choregos-admin audit verify     # walks every audit chain, reports the first break (ADR 0182)
     choregos-admin audit checkpoint --key-file - < audit-checkpoint.pem
 """
@@ -75,7 +75,7 @@ def tokens_create(
 
 @orgs_app.command("bootstrap")
 def orgs_bootstrap() -> None:
-    """Replay the bootstrap (`CHOREGOS_BOOTSTRAP_ORG`, `CHOREGOS_BOOTSTRAP_ADMINS`). Idempotent."""
+    """Replay the bootstrap (`TRANIBOR_BOOTSTRAP_ORG`, `TRANIBOR_BOOTSTRAP_ADMINS`). Idempotent."""
     from .bootstrap import bootstrap_installation
     from .config import get_settings
 

@@ -35,3 +35,18 @@ def _operator_installed(request: pytest.FixtureRequest, monkeypatch: pytest.Monk
         return real_run(args, *positional, **keywords)
 
     monkeypatch.setattr(subprocess, "run", run)
+
+
+@pytest.fixture(autouse=True)
+def _chart_names_are_adopted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The charts still render `CHOREGOS_*` (ADR 0176 R4: they move with the chart step), and a real
+    process adopts them as `TRANIBOR_*` when it starts. A test that sets what the chart wrote in the
+    environment gets the same adoption."""
+    set_env = monkeypatch.setenv
+
+    def setenv(name: str, value: str, prepend: str | None = None) -> None:
+        set_env(name, value, prepend)
+        if name.startswith("CHOREGOS_"):  # compat-ok
+            set_env("TRANIBOR_" + name.removeprefix("CHOREGOS_"), value)  # compat-ok
+
+    monkeypatch.setenv = setenv  # type: ignore[method-assign]

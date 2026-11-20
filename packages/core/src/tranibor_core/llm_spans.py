@@ -30,7 +30,7 @@ paragraph whose digest the runner registered (`context.parts`) counts in its sec
 `server__tool` after a server of the run in `tools.mcp`, everything else in `backend` — and scaled to
 the `prompt_tokens` the gateway reported. The breakdown (numbers only: no text, no digest) is posted
 to the API as a `context.breakdown` event with `source: gateway`, at most one per 5 seconds per run
-(the first call, the largest of each window, the last). Off unless `CHOREGOS_CONTEXT_API_URL` and
+(the first call, the largest of each window, the last). Off unless `TRANIBOR_CONTEXT_API_URL` and
 `LITELLM_MASTER_KEY` are set; it never blocks the call: the registered parts are fetched once per run
 (a bounded cache), each request to the API is a task of its own with a timeout, and nothing it does
 raises.
@@ -190,7 +190,10 @@ def describe(kwargs: dict[str, Any], *, failed: bool) -> tuple[str, dict[str, An
 # ───────────────────── what fills an ACP CLI's context (ADR 0141 §4) ─────────────────────
 
 #: Where the API's internal routes are (`http://choregos-api:8000/api/v1/internal`).
-CONTEXT_URL_VARIABLE = "CHOREGOS_CONTEXT_API_URL"
+CONTEXT_URL_VARIABLE = "TRANIBOR_CONTEXT_API_URL"
+# This file runs alone inside LiteLLM, where nothing adopts the former names (ADR 0176 R4), and the chart
+# still sets this one.
+LEGACY_CONTEXT_URL_VARIABLE = "CHOREGOS_CONTEXT_API_URL"  # compat-ok
 #: The backends whose context only the gateway sees: the third-party CLIs. The `prompt` and `hosted`
 #: backends are measured where their requests are built (ADR 0141 §4); `code` and `remote` not at all.
 ACP_CLIS = frozenset({"claude-code", "codex", "gemini-cli", "goose", "opencode", "copilot-cli"})
@@ -619,7 +622,8 @@ class ContextMeasure:
 
 def context_from_environment() -> ContextMeasure | None:
     """The measure the deployment asks for: on when both the API's URL and the master key are set."""
-    url, key = os.environ.get(CONTEXT_URL_VARIABLE, ""), os.environ.get("LITELLM_MASTER_KEY", "")
+    url = os.environ.get(CONTEXT_URL_VARIABLE) or os.environ.get(LEGACY_CONTEXT_URL_VARIABLE, "")
+    key = os.environ.get("LITELLM_MASTER_KEY", "")
     if not url or not key:
         return None
     try:

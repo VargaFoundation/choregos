@@ -171,7 +171,7 @@ async def test_a_job_step_gets_the_projects_network(setup: Fixture, monkeypatch:
     from tranibor_orchestrator.config import reset_settings_cache
 
     image = "registry.example/choregos-runner-quant@sha256:" + "a" * 64
-    monkeypatch.setenv("CHOREGOS_JOB_IMAGES", json.dumps({"quant": image}))
+    monkeypatch.setenv("TRANIBOR_JOB_IMAGES", json.dumps({"quant": image}))
     reset_settings_cache()
     await _network(
         setup, project={"allow_domains": ["pypi.org"]}, ceiling={"deny_domains": ["tracker.example"]}
@@ -189,7 +189,7 @@ async def test_the_deployments_instance_deny_list_is_merged(
 ) -> None:
     from tranibor_orchestrator.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_NETWORK_INSTANCE_DENY", "evil.example, spam.example")
+    monkeypatch.setenv("TRANIBOR_NETWORK_INSTANCE_DENY", "evil.example, spam.example")
     reset_settings_cache()
     await _network(setup)
     assert (await _permissions(setup))["deny_domains"] == ["evil.example", "spam.example"]

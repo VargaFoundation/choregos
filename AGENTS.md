@@ -56,7 +56,7 @@ or external: the external aliases' window closed with 0.23.0 and S45-49 removed 
   ESLint, Prettier.
 - Conventional commits: `feat(orchestrator): …`, `fix(runner): …`, `contract(schemas): …`.
   One story = one PR = one squash.
-- Fakes are mandatory: every integration has its scriptable `Fake*`; `CHOREGOS_FAKES=1` switches
+- Fakes are mandatory: every integration has its scriptable `Fake*`; `TRANIBOR_FAKES=1` switches
   the whole platform (ADR 0005).
 - Idempotence: every Temporal activity and every provisioning step can be replayed without a double
   effect (ADR 0008). No PR on `workflows/` without a replayed history (`tests/replay/`).

@@ -113,7 +113,7 @@ class _Server:
             session_id=session_id,
             workspace=Path(cwd),
             mcp_servers=list(mcp_servers or []),
-            max_turns=env_int("CHOREGOS_MAX_TURNS", self.env),
+            max_turns=env_int("TRANIBOR_MAX_TURNS", self.env),
         )
         self._turns[session_id] = 0
         return NewSessionResponse(session_id=session_id)

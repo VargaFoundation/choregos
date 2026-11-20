@@ -219,7 +219,7 @@ async def test_a_rollback_hands_the_ticket_to_a_human_without_waiting_for_the_de
 # ───────────── the express lane: from the ticket, under ITS approval (#279) ─────────────
 
 HOTFIX_CAPTAINS = {"group": "hotfix-captains", "required": True}
-#: The case whose history is archived (`CHOREGOS_RECORD_HISTORY=1`). `train-express-old-code`
+#: The case whose history is archived (`TRANIBOR_RECORD_HISTORY=1`). `train-express-old-code`
 #: was recorded on `main` before this change, case `lane-waives`: it goes red if the decision
 #: leaves the `express-lane-approval` marker.
 EXPRESS_ARCHIVES = {"lane-requires": "train-express-S22-17"}
@@ -365,7 +365,7 @@ async def test_an_express_departure_takes_the_approval_of_the_express_lane(
 
 # ─────────────── the express lane reads ITS label, duplicates included (#351, S22-30) ───────────────
 
-#: The cases whose history is archived (`CHOREGOS_RECORD_HISTORY=1`).
+#: The cases whose history is archived (`TRANIBOR_RECORD_HISTORY=1`).
 EXPRESS_LABEL_ARCHIVES = {
     "policy-label": "train-express-label-S22-30",
     "labelled-duplicate": "train-express-duplicate-S22-30",

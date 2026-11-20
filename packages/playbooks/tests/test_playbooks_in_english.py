@@ -114,16 +114,16 @@ def test_every_rendered_playbook_is_in_english(role: str) -> None:
 
 @pytest.mark.parametrize("role", ["sourcing", "qualification"])
 def test_the_demonstration_playbooks_are_in_english(role: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Brought by the deployment (`demo/playbooks`, mounted through `CHOREGOS_PLAYBOOKS_DIR`):
+    """Brought by the deployment (`demo/playbooks`, mounted through `TRANIBOR_PLAYBOOKS_DIR`):
     rendered by the same path as in production. The Jinja loader caches its directories."""
     from tranibor_playbooks import _env
 
-    monkeypatch.setenv("CHOREGOS_PLAYBOOKS_DIR", str(ROOT / "demo/playbooks"))
+    monkeypatch.setenv("TRANIBOR_PLAYBOOKS_DIR", str(ROOT / "demo/playbooks"))
     _env.cache_clear()
     try:
         rendered = render_playbook(role, **VARIABLES, inputs={"profils": "- Alice, senior Python developer"})
     finally:
-        monkeypatch.delenv("CHOREGOS_PLAYBOOKS_DIR")
+        monkeypatch.delenv("TRANIBOR_PLAYBOOKS_DIR")
         _env.cache_clear()
     assert "acme/billing#123" in rendered and "## Invariants" in rendered
     faults = _french_lines(rendered)

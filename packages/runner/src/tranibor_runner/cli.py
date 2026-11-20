@@ -29,8 +29,8 @@ PROCESS = "runner"
 
 @app.callback()
 def _refuse_fakes_in_production() -> None:
-    """No command starts on the fakes in staging and prod (S80-03): under `CHOREGOS_FAKES` the
-    egress control only warns. The orchestrator tells every run its `CHOREGOS_ENV`."""
+    """No command starts on the fakes in staging and prod (S80-03): under `TRANIBOR_FAKES` the
+    egress control only warns. The orchestrator tells every run its `TRANIBOR_ENV`."""
     _stop_on_fakes_in_production()
 
 
@@ -44,8 +44,8 @@ def _stop_on_fakes_in_production() -> None:
 
 @app.command()
 def run(
-    run_id: Annotated[str, typer.Option("--run-id", envvar="CHOREGOS_RUN_ID")] = "",
-    api_url: Annotated[str, typer.Option("--api-url", envvar="CHOREGOS_API_URL")] = "",
+    run_id: Annotated[str, typer.Option("--run-id", envvar="TRANIBOR_RUN_ID")] = "",
+    api_url: Annotated[str, typer.Option("--api-url", envvar="TRANIBOR_API_URL")] = "",
     workspace: Annotated[Path | None, typer.Option("--workspace")] = None,
     write_result_url: Annotated[Path | None, typer.Option("--write-result-url")] = None,
     write_status: Annotated[Path | None, typer.Option("--write-status")] = None,
@@ -93,7 +93,7 @@ def run(
 
 @app.command("await-assignment")
 def await_assignment(
-    port: Annotated[int, typer.Option("--port", envvar="CHOREGOS_ASSIGNMENT_PORT")] = 8765,
+    port: Annotated[int, typer.Option("--port", envvar="TRANIBOR_ASSIGNMENT_PORT")] = 8765,
     workspace: Annotated[Path | None, typer.Option("--workspace")] = None,
 ) -> None:
     """Warm sandbox (ADR 0016): wait for ONE assignment on `--port`, then run that stage."""
@@ -149,8 +149,8 @@ async def _serve_then_run(port: int, workspace: Path | None) -> tuple[RunOutcome
 
 @app.command("launcher")
 def launcher(
-    port: Annotated[int, typer.Option("--port", envvar="CHOREGOS_RUNNER_LAUNCHER_PORT")] = 8766,
-    host: Annotated[str, typer.Option("--host", envvar="CHOREGOS_RUNNER_LAUNCHER_HOST")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", envvar="TRANIBOR_RUNNER_LAUNCHER_PORT")] = 8766,
+    host: Annotated[str, typer.Option("--host", envvar="TRANIBOR_RUNNER_LAUNCHER_HOST")] = "127.0.0.1",
 ) -> None:
     """The agent's container (ADR 0146): start, on the runner's request, the agent and the project's
     checks. Holds no credential and starts nothing until it is asked."""
@@ -162,8 +162,8 @@ def launcher(
 
 @app.command("serve-session")
 def serve_session(
-    run_id: Annotated[str, typer.Option("--run-id", envvar="CHOREGOS_RUN_ID")] = "",
-    api_url: Annotated[str, typer.Option("--api-url", envvar="CHOREGOS_API_URL")] = "",
+    run_id: Annotated[str, typer.Option("--run-id", envvar="TRANIBOR_RUN_ID")] = "",
+    api_url: Annotated[str, typer.Option("--api-url", envvar="TRANIBOR_API_URL")] = "",
 ) -> None:
     """A hosted session's pod (S41-11): serve the session's turns until it ends."""
     from .serve_session import serve_session as serve

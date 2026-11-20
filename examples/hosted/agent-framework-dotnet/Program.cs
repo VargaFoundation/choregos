@@ -123,7 +123,7 @@ static JsonObject ResponseObject(string text, string status = "completed", strin
         ["object"] = "response",
         ["created_at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
         ["status"] = status,
-        ["model"] = Environment.GetEnvironmentVariable("CHOREGOS_MODEL") ?? "",
+        ["model"] = Environment.GetEnvironmentVariable("TRANIBOR_MODEL") ?? "",
         ["output"] = output,
         ["error"] = error.Length > 0 ? new JsonObject { ["code"] = "server_error", ["message"] = error } : null,
     };

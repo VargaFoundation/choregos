@@ -1,7 +1,7 @@
 """The agent never holds the run token, on any executor (ADR 0115, S57-02).
 
 Every executor but `agent_sandbox` puts the run's Secret in the runner container's environment:
-`CHOREGOS_RUN_TOKEN`, with the gateway key and the remote agent's token beside it. The runner reads
+`TRANIBOR_RUN_TOKEN`, with the gateway key and the remote agent's token beside it. The runner reads
 them into its settings. The agent it starts (`AcpClient`, the confinement's view of it, the `code`
 backend's agent too), the project's checks that run the code the agent wrote, and the runner's git
 get none of them; the agent gets its gateway key under its backend's own variable. A job still gets
@@ -51,9 +51,9 @@ REMOTE_TOKEN = "s57-02-the-remote-agent-token"
 GATEWAY_KEY = "sk-s57-02-the-run-gateway-key"
 #: The run's credentials as the executors name them.
 RUN_SECRETS = {
-    "CHOREGOS_RUN_TOKEN": RUN_TOKEN,
-    "CHOREGOS_RUN_REMOTE_TOKEN": REMOTE_TOKEN,
-    "CHOREGOS_RUN_GATEWAY_KEY": GATEWAY_KEY,
+    "TRANIBOR_RUN_TOKEN": RUN_TOKEN,
+    "TRANIBOR_RUN_REMOTE_TOKEN": REMOTE_TOKEN,
+    "TRANIBOR_RUN_GATEWAY_KEY": GATEWAY_KEY,
 }
 
 
@@ -135,9 +135,9 @@ EXECUTORS: dict[str, Callable[[StageJobSpec], Awaitable[dict[str, str]]]] = {
 
 async def _as_the_executor_sets_them(executor: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """The run's variables in the runner's process environment, as `executor` puts them there."""
-    monkeypatch.delenv("CHOREGOS_EGRESS_AUTH", raising=False)
+    monkeypatch.delenv("TRANIBOR_EGRESS_AUTH", raising=False)
     for name, value in (await EXECUTORS[executor](_spec())).items():
-        if name.startswith("CHOREGOS_RUN_"):
+        if name.startswith(("TRANIBOR_RUN_", "CHOREGOS_RUN_")):  # compat-ok
             monkeypatch.setenv(name, value)
 
 
@@ -159,7 +159,7 @@ def _digest(value: str) -> str:
 LABELS = {"run-token": RUN_TOKEN, "remote-token": REMOTE_TOKEN, "gateway-key": GATEWAY_KEY}
 
 #: Run in the agent's process (or a check's, or a job's): which variables hold each secret, by
-#: digest so that the probe itself carries none, and which `CHOREGOS_RUN_*` variables exist. Printed
+#: digest so that the probe itself carries none, and which `TRANIBOR_RUN_*` variables exist. Printed
 #: as `label -> names`, a shape the journal's redaction leaves readable (`NAME=value` is masked).
 PROBE = (
     "import hashlib, os, sys\n"
@@ -169,7 +169,8 @@ PROBE = (
     "        k for k, v in os.environ.items() if hashlib.sha256(v.encode()).hexdigest() == digest\n"
     "    )\n"
     "    print(label + ' -> ' + ','.join(held))\n"
-    "print('run-variables -> ' + ','.join(sorted(k for k in os.environ if k.startswith('CHOREGOS_RUN_'))))\n"
+    "prefixes = ('TRANIBOR_RUN_', 'CHOREGOS_RUN_')\n"  # compat-ok
+    "print('run-variables -> ' + ','.join(sorted(k for k in os.environ if k.startswith(prefixes))))\n"
 )
 
 
@@ -188,7 +189,8 @@ AGENT_SEES = {
     "run-token": "",
     "remote-token": "",
     "gateway-key": "OPENAI_API_KEY",
-    "run-variables": "CHOREGOS_RUN_ID",
+    # The run id is no credential: it comes under both names during the window (ADR 0176 R4).
+    "run-variables": "CHOREGOS_RUN_ID,TRANIBOR_RUN_ID",  # compat-ok
 }
 
 
@@ -238,7 +240,10 @@ async def _run_the_agent(stage_input: StageInput, settings: RunnerSettings) -> d
 
 
 def _assert_holds_no_run_secret(env: dict[str, str]) -> None:
-    assert not {name for name in env if name.startswith("CHOREGOS_RUN_")} - {"CHOREGOS_RUN_ID"}, sorted(env)
+    assert not {name for name in env if name.startswith(("TRANIBOR_RUN_", "CHOREGOS_RUN_"))} - {  # compat-ok
+        "TRANIBOR_RUN_ID",
+        "CHOREGOS_RUN_ID",  # compat-ok
+    }, sorted(env)
     for value in (RUN_TOKEN, REMOTE_TOKEN):
         assert value not in json.dumps(env)
 
@@ -262,11 +267,11 @@ async def test_the_agent_is_started_without_the_run_secrets(
     [confined_env] = confined
     for env in (agent_env, confined_env):
         _assert_holds_no_run_secret(env)
-        assert env["CHOREGOS_RUN_ID"] == stage_input.run_id
+        assert env["TRANIBOR_RUN_ID"] == stage_input.run_id
     # The model still answers: the gateway key reaches the agent under its backend's own variable.
     assert agent_env["OPENAI_API_KEY"] == GATEWAY_KEY
     assert seen == AGENT_SEES, "what the agent's own process holds"
-    assert os.environ["CHOREGOS_RUN_TOKEN"] == RUN_TOKEN, "the runner's environment is left as it is"
+    assert os.environ["TRANIBOR_RUN_TOKEN"] == RUN_TOKEN, "the runner's environment is left as it is"
 
 
 async def test_the_code_backend_starts_its_agent_without_the_run_secrets(
@@ -281,7 +286,7 @@ async def test_the_code_backend_starts_its_agent_without_the_run_secrets(
 
     [agent_env] = launched
     _assert_holds_no_run_secret(agent_env)
-    assert agent_env["CHOREGOS_MAX_TURNS"] == str(code.budget.max_turns), "the code backend's launch"
+    assert agent_env["TRANIBOR_MAX_TURNS"] == str(code.budget.max_turns), "the code backend's launch"
     assert seen == AGENT_SEES
 
 
@@ -303,7 +308,7 @@ async def test_the_checks_run_the_agents_code_without_the_run_secrets(
         "run-token": "",
         "remote-token": "",
         "gateway-key": "",
-        "run-variables": "CHOREGOS_RUN_ID",
+        "run-variables": "CHOREGOS_RUN_ID,TRANIBOR_RUN_ID",  # compat-ok
     }
 
 
@@ -332,10 +337,10 @@ async def test_a_job_still_gets_its_run_token_and_no_other_secret(
     assert outcome.exit_code is Exit.OK, outcome.detail
     [finished] = [event for event in client.events if event["type"] == "job.finished"]
     assert _read_probe(finished["payload"]["stdout"]) == {
-        "run-token": "CHOREGOS_RUN_TOKEN",
+        "run-token": "CHOREGOS_RUN_TOKEN,TRANIBOR_RUN_TOKEN",  # compat-ok
         "remote-token": "",
         "gateway-key": "",
-        "run-variables": "CHOREGOS_RUN_ID,CHOREGOS_RUN_TOKEN",
+        "run-variables": "CHOREGOS_RUN_ID,CHOREGOS_RUN_TOKEN,TRANIBOR_RUN_ID,TRANIBOR_RUN_TOKEN",  # compat-ok
     }
 
 
@@ -346,18 +351,18 @@ def test_every_run_variable_but_the_run_id_is_left_out() -> None:
     environ = {
         **RUN_SECRETS,
         # A credential added tomorrow under the same prefix is left out until somebody says otherwise.
-        "CHOREGOS_RUN_SOMETHING_NEW": "unknown",
-        "CHOREGOS_RUN_ID": "run-1",
-        "CHOREGOS_RUNNER_CONFINEMENT": "enforce",
-        "CHOREGOS_API_URL": "http://api.invalid",
+        "TRANIBOR_RUN_SOMETHING_NEW": "unknown",
+        "TRANIBOR_RUN_ID": "run-1",
+        "TRANIBOR_RUNNER_CONFINEMENT": "enforce",
+        "TRANIBOR_API_URL": "http://api.invalid",
         # ADR 0115: the proxy variables carry the egress token, which the agent's tools need.
         "HTTPS_PROXY": "http://run-1:egress-token@proxy:3128",
         "PATH": "/usr/bin",
     }
     assert agent_base_environment(environ) == {
-        "CHOREGOS_RUN_ID": "run-1",
-        "CHOREGOS_RUNNER_CONFINEMENT": "enforce",
-        "CHOREGOS_API_URL": "http://api.invalid",
+        "TRANIBOR_RUN_ID": "run-1",
+        "TRANIBOR_RUNNER_CONFINEMENT": "enforce",
+        "TRANIBOR_API_URL": "http://api.invalid",
         "HTTPS_PROXY": "http://run-1:egress-token@proxy:3128",
         "PATH": "/usr/bin",
     }
@@ -368,9 +373,9 @@ def test_the_acp_client_starts_from_it_and_its_own_variables_win(
 ) -> None:
     for name, value in RUN_SECRETS.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv("CHOREGOS_RUN_ID", "run-1")
+    monkeypatch.setenv("TRANIBOR_RUN_ID", "run-1")
     client = AcpClient(["agent"], cwd=str(tmp_path), env={"OPENAI_API_KEY": GATEWAY_KEY, "PATH": "/opt/bin"})
     _assert_holds_no_run_secret(client.env)
-    assert client.env["CHOREGOS_RUN_ID"] == "run-1"
+    assert client.env["TRANIBOR_RUN_ID"] == "run-1"
     assert client.env["OPENAI_API_KEY"] == GATEWAY_KEY and client.env["PATH"] == "/opt/bin"
     assert {name: os.environ[name] for name in RUN_SECRETS} == RUN_SECRETS, "nothing removed from the runner"

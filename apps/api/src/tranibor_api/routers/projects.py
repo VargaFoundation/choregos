@@ -77,7 +77,7 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     """Create an organisation; the caller becomes its administrator.
 
     Reserved to whoever already administers an organisation. The very first one comes from the bootstrap
-    (`CHOREGOS_BOOTSTRAP_ORG`): before 2026-09-24, no route, no command and
+    (`TRANIBOR_BOOTSTRAP_ORG`): before 2026-09-24, no route, no command and
     no screen could create one.
     """
     # Creating an organisation is an INSTANCE gesture: it takes administering the instance, not one

@@ -206,7 +206,7 @@ async def test_a_credential_typed_at_install_is_sealed_and_never_returned(
 
     from tranibor_core.redaction import forget_secrets
 
-    monkeypatch.setenv("CHOREGOS_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
+    monkeypatch.setenv("TRANIBOR_SECRETS_KEKS", "k1:" + base64.b64encode(os.urandom(32)).decode())
     forget_secrets()
     typed = "vendor-key-" + "AAAA-1111"
     created = await client.post(f"{BASE}/github/install", json={"secret_values": {"token": typed}})
@@ -243,7 +243,7 @@ async def test_egress_is_declared_open_undeclared_or_unknown(
     unknown = _by_id((await client.get(BASE)).json())
     assert unknown["github"]["egress"] == "unknown", "the deployment declares nothing"
 
-    monkeypatch.setenv("CHOREGOS_API_EGRESS_HOSTS", '["api.githubcopilot.com", "*.exa.ai"]')
+    monkeypatch.setenv("TRANIBOR_API_EGRESS_HOSTS", '["api.githubcopilot.com", "*.exa.ai"]')
     reset_settings_cache()
     declared = _by_id((await client.get(BASE)).json())
     assert declared["github"]["egress"] == "open"
@@ -268,7 +268,7 @@ async def test_a_site_catalogue_adds_entries_after_the_shipped_one(
             }]}
         )
     )  # fmt: skip
-    monkeypatch.setenv("CHOREGOS_MCP_CATALOGUE_EXTRA", str(site))
+    monkeypatch.setenv("TRANIBOR_MCP_CATALOGUE_EXTRA", str(site))
     reset_settings_cache()
     body = (await client.get(BASE)).json()
     entry = _by_id(body)["insights"]
@@ -293,7 +293,7 @@ async def test_a_site_entry_cannot_shadow_a_shipped_one_nor_be_malformed(
     }  # fmt: skip
     site = tmp_path / "site.yaml"
     site.write_text(yaml.safe_dump({"entries": [entry]}))
-    monkeypatch.setenv("CHOREGOS_MCP_CATALOGUE_EXTRA", str(site))
+    monkeypatch.setenv("TRANIBOR_MCP_CATALOGUE_EXTRA", str(site))
     reset_settings_cache()
     shadow = await client.get(BASE)
     assert shadow.status_code == 422 and "already in the shipped catalogue" in shadow.text
@@ -323,7 +323,7 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     }  # fmt: skip
     site = tmp_path / "site.yaml"
     site.write_text(yaml.safe_dump({"entries": [entry]}))
-    monkeypatch.setenv("CHOREGOS_MCP_CATALOGUE_EXTRA", str(site))
+    monkeypatch.setenv("TRANIBOR_MCP_CATALOGUE_EXTRA", str(site))
     monkeypatch.setenv("CONNECTOR_CATALOGUE_KEYED", "the-raw-key")
     reset_settings_cache()
     server = FakeMcpServer(tools=[dict(t) for t in TOOLS])

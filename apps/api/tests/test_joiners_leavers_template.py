@@ -108,7 +108,7 @@ async def test_a_template_skill_reads_nothing_outside_itself(
     copy = tmp_path / "joiners-leavers"
     shutil.copytree(TEMPLATE, copy)
     (copy / "skills" / "access-profiles" / "leak.md").symlink_to("/etc/hostname")
-    monkeypatch.setenv("CHOREGOS_TEMPLATES_DIR", str(tmp_path))
+    monkeypatch.setenv("TRANIBOR_TEMPLATES_DIR", str(tmp_path))
     refusal = await client.post(
         f"{ORG}/projects",
         json={

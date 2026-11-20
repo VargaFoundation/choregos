@@ -1011,14 +1011,14 @@ def _check_known_roles(wf: Workflow, report: ValidationReport, source: Any) -> N
         role = str(actor.playbook or actor.role)
         try:
             # We try the RESOLUTION, not a comparison with the package's list: a trade
-            # role has its playbook in the deployment (`CHOREGOS_PLAYBOOKS_DIR`), and
+            # role has its playbook in the deployment (`TRANIBOR_PLAYBOOKS_DIR`), and
             # warning when it is there would be a warning people learn to ignore.
             playbook_path(role)
         except FileNotFoundError:
             report.warn(
                 "role.playbook_not_found",
                 f"no playbook for the role `{role}`: the deployment must provide "
-                f"`{role}.md` (CHOREGOS_PLAYBOOKS_DIR)",
+                f"`{role}.md` (TRANIBOR_PLAYBOOKS_DIR)",
                 ["actors", actor_id, "role"],
                 source,
             )

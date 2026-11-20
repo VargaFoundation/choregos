@@ -92,7 +92,7 @@ def missing_proofs(
 
 
 def _announced(monkeypatch: pytest.MonkeyPatch) -> dict[str, frozenset[str]]:
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # the real executors, not the fakes
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)  # the real executors, not the fakes
     return {
         name: frozenset(getattr(build("runtime", name, CONFIGS.get(name, {})), "capabilities", frozenset()))
         for name in available("runtime")

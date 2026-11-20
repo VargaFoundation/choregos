@@ -29,7 +29,7 @@ STRICT_ENVIRONMENTS = frozenset({"staging", "prod"})
 def tls_verification(connector: str, config: dict[str, Any]) -> bool | ssl.SSLContext:
     """What `httpx` receives as `verify`: an SSL context trusting `ca_cert`, `True`, or — in dev
     only, said out loud — `False`."""
-    environment = os.environ.get("CHOREGOS_ENV", "dev")
+    environment = os.environ.get("TRANIBOR_ENV", "dev")
     if config.get("verify_tls", True) is False:
         if environment in STRICT_ENVIRONMENTS:
             raise ConfigurationError(

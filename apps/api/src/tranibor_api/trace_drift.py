@@ -9,7 +9,7 @@ each run whose spend was collected in the window, the job sums the ledger's mode
 usage on the gateway's spans of the run's trace (read from Tempo by the trace id derived from the
 run id), and compares input and output tokens.
 
-- **matched**: both agree within the tolerance (`CHOREGOS_TRACE_DRIFT_TOLERANCE`, a share of the
+- **matched**: both agree within the tolerance (`TRANIBOR_TRACE_DRIFT_TOLERANCE`, a share of the
   ledger's figure, at least one token);
 - **drift**: they do not. The drift is recorded once per run as a platform audit line
   (`trace.drift`, no organisation: only a platform session reads it) and logged; the ledger is
@@ -253,7 +253,7 @@ async def _main(hours: float, settle_minutes: float) -> int:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
     if not settings.tempo_url:
-        print("trace_drift: CHOREGOS_TEMPO_URL is not set", file=sys.stderr)
+        print("trace_drift: TRANIBOR_TEMPO_URL is not set", file=sys.stderr)
         return 2
     until = utcnow() - timedelta(minutes=settle_minutes)
     reader = TempoReader(settings.tempo_url)

@@ -5,13 +5,15 @@ An adapter implements a `Protocol` of `base.py` and **has no business logic**: t
 `packages/core`, the orchestration in `apps/orchestrator`.
 
 This root keeps the public API. The connector type specs are in `specs.py`, the factories and the
-builtin registrations in `builtins.py`; the mutable fakes of `CHOREGOS_FAKES=1` live here, because
+builtin registrations in `builtins.py`; the mutable fakes of `TRANIBOR_FAKES=1` live here, because
 tests rebind them as `tranibor_adapters.FAKE_*` and the factories read them from this package.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+import tranibor_contracts  # noqa: F401 - adopts the former environment variable names, first (ADR 0176 R4)
 
 from .base import (
     AgentBackend,
@@ -95,10 +97,10 @@ __all__ = [
     "validate_config",
 ]
 
-# The process-wide fakes of CHOREGOS_FAKES=1, scripted by the tests and the demo. `None` until the
+# The process-wide fakes of TRANIBOR_FAKES=1, scripted by the tests and the demo. `None` until the
 # first build; the factories in `builtins.py` create them here, and a test rebinds them here.
 FAKE_MCP: Any = None  # the fake MCP server
-FAKE_IDP: Any = None  # the fake identity provider (ADR 0135), served under CHOREGOS_FAKES=1
+FAKE_IDP: Any = None  # the fake identity provider (ADR 0135), served under TRANIBOR_FAKES=1
 FAKE_OAUTH: Any = None  # the fake OAuth provider of a `user_consent` source (ADR 0135)
 FAKE_MCP_GATEWAY: Any = None  # the fake MCP gateway, whose fallback is always the CURRENT `FAKE_MCP`
 FAKE_OUTPOST: Any = None  # the fake outpost (ADR 0149), whose every alias is served by the CURRENT `FAKE_MCP`
@@ -121,7 +123,7 @@ def load_extensions(group: str = EXTENSION_GROUP) -> list[str]:
     Until 2026-09-26 there was NO seam: `register()` was public, but nothing ever imported a
     third-party module, so an outside package could not register itself unless
     `_register_builtins()` was patched. The playbooks were the only capability truly extensible
-    from the outside (`CHOREGOS_PLAYBOOKS_DIR`); that is the model copied here.
+    from the outside (`TRANIBOR_PLAYBOOKS_DIR`); that is the model copied here.
 
     Each entry point designates a callable with no argument, which makes its `register(...)` calls.
 

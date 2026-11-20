@@ -1,13 +1,13 @@
 """Live: the platform's MCP client against a real MCP gateway (ADR 0105).
 
-    CHOREGOS_LIVE_MCP_GATEWAY_URL='https://gateway.example/{server}/mcp' \\
-    CHOREGOS_LIVE_MCP_GATEWAY_SERVER=github CHOREGOS_LIVE_MCP_GATEWAY_TOKEN=... \\
+    TRANIBOR_LIVE_MCP_GATEWAY_URL='https://gateway.example/{server}/mcp' \\
+    TRANIBOR_LIVE_MCP_GATEWAY_SERVER=github TRANIBOR_LIVE_MCP_GATEWAY_TOKEN=... \\
     uv run pytest tests/live/test_mcp_gateway_live.py -m live -rs
 
-Optional: `CHOREGOS_LIVE_MCP_GATEWAY_ROUTING` (`path` or `header`), `_SERVER_HEADER` and
+Optional: `TRANIBOR_LIVE_MCP_GATEWAY_ROUTING` (`path` or `header`), `_SERVER_HEADER` and
 `_AUTH_HEADER`. An unset URL skips (no gateway to prove). A URL that is set means a gateway is
 expected: a missing server or token, an unreachable gateway or a refused token FAILS, never skips.
-The gateway is deliberately not in `CHOREGOS_LIVE_REQUIRED`.
+The gateway is deliberately not in `TRANIBOR_LIVE_REQUIRED`.
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ if str(ROOT) not in sys.path:
 
 
 async def test_a_real_gateway_lists_a_servers_tools():
-    url = os.environ.get("CHOREGOS_LIVE_MCP_GATEWAY_URL", "")
+    url = os.environ.get("TRANIBOR_LIVE_MCP_GATEWAY_URL", "")
     if not url:
-        pytest.skip("live test skipped — variables not set: CHOREGOS_LIVE_MCP_GATEWAY_URL")
-    server = os.environ.get("CHOREGOS_LIVE_MCP_GATEWAY_SERVER", "")
-    token = os.environ.get("CHOREGOS_LIVE_MCP_GATEWAY_TOKEN", "")
-    assert server, "CHOREGOS_LIVE_MCP_GATEWAY_URL is set but CHOREGOS_LIVE_MCP_GATEWAY_SERVER is not"
-    assert token, "CHOREGOS_LIVE_MCP_GATEWAY_URL is set but CHOREGOS_LIVE_MCP_GATEWAY_TOKEN is not"
+        pytest.skip("live test skipped — variables not set: TRANIBOR_LIVE_MCP_GATEWAY_URL")
+    server = os.environ.get("TRANIBOR_LIVE_MCP_GATEWAY_SERVER", "")
+    token = os.environ.get("TRANIBOR_LIVE_MCP_GATEWAY_TOKEN", "")
+    assert server, "TRANIBOR_LIVE_MCP_GATEWAY_URL is set but TRANIBOR_LIVE_MCP_GATEWAY_SERVER is not"
+    assert token, "TRANIBOR_LIVE_MCP_GATEWAY_URL is set but TRANIBOR_LIVE_MCP_GATEWAY_TOKEN is not"
 
     from tranibor_adapters.mcp import CLIENT_VERSIONS
 
@@ -44,9 +44,9 @@ async def test_a_real_gateway_lists_a_servers_tools():
         url,
         server=server,
         token=token,
-        routing=os.environ.get("CHOREGOS_LIVE_MCP_GATEWAY_ROUTING") or "path",
-        server_header=os.environ.get("CHOREGOS_LIVE_MCP_GATEWAY_SERVER_HEADER") or "X-MCP-Server",
-        auth_header=os.environ.get("CHOREGOS_LIVE_MCP_GATEWAY_AUTH_HEADER") or "Authorization",
+        routing=os.environ.get("TRANIBOR_LIVE_MCP_GATEWAY_ROUTING") or "path",
+        server_header=os.environ.get("TRANIBOR_LIVE_MCP_GATEWAY_SERVER_HEADER") or "X-MCP-Server",
+        auth_header=os.environ.get("TRANIBOR_LIVE_MCP_GATEWAY_AUTH_HEADER") or "Authorization",
     )
     assert result["version"] in CLIENT_VERSIONS
     assert result["tools"] >= 1

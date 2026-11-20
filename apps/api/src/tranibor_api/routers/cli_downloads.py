@@ -3,7 +3,7 @@
 
 A person installs the CLI from their own Tranibor, in the exact version it runs, through the host
 of the console: no firewall to open towards GitHub, and it works on a network without internet.
-The native binaries (S62-07) lie in `CHOREGOS_CLI_DIR` (`/opt/choregos/cli` in the API image) with
+The native binaries (S62-07) lie in `TRANIBOR_CLI_DIR` (`/opt/choregos/cli` in the API image) with
 `SHA256SUMS` and `manifest.json` (the shared contract of S62-07/08):
 
 - `GET /downloads/cli/manifest.json`: the manifest, as the build wrote it, once checked.
@@ -16,7 +16,7 @@ The native binaries (S62-07) lie in `CHOREGOS_CLI_DIR` (`/opt/choregos/cli` in t
 Public, like `/healthz` and `/edition`, on purpose: the CLI is open source and carries no secret,
 the scripts must work with a plain `curl | sh` or `irm | iex` before the person has any token, and
 the manifest says only the version `/edition` already says. The bandwidth is what needs guarding:
-the routes have a rate limit of their own (`CHOREGOS_DOWNLOAD_RATE_LIMIT_PER_MINUTE`).
+the routes have a rate limit of their own (`TRANIBOR_DOWNLOAD_RATE_LIMIT_PER_MINUTE`).
 
 Outside the OpenAPI contract, like `/metrics` and the MCP door: these are files and scripts, not
 API resources, and a contract change is a `contract-change` PR of its own (ADR 0001).
@@ -188,7 +188,7 @@ def instance_url() -> str:
         raise ApiError(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Install script unavailable",
-            "CHOREGOS_PUBLIC_URL is not a plain http(s) URL, so it cannot be written into an install script",
+            "TRANIBOR_PUBLIC_URL is not a plain http(s) URL, so it cannot be written into an install script",
         )
     return url
 

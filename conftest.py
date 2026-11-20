@@ -1,6 +1,6 @@
 """Root conftest: one PostgreSQL database per pytest-xdist worker.
 
-The suites that run on PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`) reset the schema of the database
+The suites that run on PostgreSQL (`TRANIBOR_TEST_DATABASE_URL`) reset the schema of the database
 they are given, so two workers cannot share one. Each worker takes its own, `<name>_gw0`,
 `<name>_gw1`, ... created beside the configured one, and the variable is rewritten before any
 test module reads it (`PG_URL` constants are evaluated at import). Without xdist nothing changes.
@@ -42,20 +42,20 @@ async def _ensure_database(url: str, name: str) -> None:
 
 def _own_database_per_worker() -> None:
     worker = os.environ.get("PYTEST_XDIST_WORKER")
-    url = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
+    url = os.environ.get("TRANIBOR_TEST_DATABASE_URL", "")
     # Imported twice (a second import path), it must not suffix the name twice.
     if (
         not worker
         or not url.startswith("postgresql")
-        or os.environ.get("CHOREGOS_TEST_DATABASE_WORKER") == worker
+        or os.environ.get("TRANIBOR_TEST_DATABASE_WORKER") == worker
     ):
         return
     from sqlalchemy.engine import make_url
 
     own = make_url(url).set(database=f"{make_url(url).database}_{worker}")
     asyncio.run(_ensure_database(url, str(own.database)))
-    os.environ["CHOREGOS_TEST_DATABASE_URL"] = own.render_as_string(hide_password=False)
-    os.environ["CHOREGOS_TEST_DATABASE_WORKER"] = worker
+    os.environ["TRANIBOR_TEST_DATABASE_URL"] = own.render_as_string(hide_password=False)
+    os.environ["TRANIBOR_TEST_DATABASE_WORKER"] = worker
 
 
 _own_database_per_worker()

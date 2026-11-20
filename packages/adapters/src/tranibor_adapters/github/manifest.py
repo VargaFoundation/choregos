@@ -8,7 +8,7 @@ A platform administrator registers the App on github.com from a manifest the pla
 (`fakes/github_app.py`) has the same method.
 
 The credentials then live where the platform keeps them: the deployment's settings
-(`CHOREGOS_GITHUB_APP_ID` / `_PRIVATE_KEY`), or the App registered from a manifest, sealed in the
+(`TRANIBOR_GITHUB_APP_ID` / `_PRIVATE_KEY`), or the App registered from a manifest, sealed in the
 database. Code outside the API (the adapters' GitHub client) asks `app_credentials()`, which reads the
 deployment's variables first and then the provider the API registers (`set_app_credentials_provider`).
 """
@@ -43,8 +43,8 @@ def set_app_credentials_provider(provider: AppCredentialsProvider | None) -> Non
 def app_credentials() -> tuple[str, str]:
     """`(app_id, private_key)`: the deployment's variables when they name an App, else the provider's
     stored App, else two empty strings. The deployment's settings always win (ADR 0167)."""
-    app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
-    private_key = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
+    app_id = os.environ.get("TRANIBOR_GITHUB_APP_ID", "")
+    private_key = os.environ.get("TRANIBOR_GITHUB_APP_PRIVATE_KEY", "")
     if app_id or private_key:
         return app_id, private_key
     stored = _PROVIDER[0]() if _PROVIDER else None

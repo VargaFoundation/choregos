@@ -7,7 +7,7 @@ sentry. The policy that refuses a pod without the RuntimeClass is judged by the 
 `apps/orchestrator/tests/test_gvisor_policy.py`; the cluster of `make cluster-up` has no Kyverno.
 
 It needs `make cluster-gvisor` (runsc in the runners node, the RuntimeClass) and the reference
-image of S41-16's test (`CHOREGOS_HOSTED_REFERENCE_IMAGE`); without either, it is skipped.
+image of S41-16's test (`TRANIBOR_HOSTED_REFERENCE_IMAGE`); without either, it is skipped.
 """
 
 from __future__ import annotations

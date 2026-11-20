@@ -80,7 +80,7 @@ async def test_a_row_under_the_neutral_spelling_holds_its_permissions(
     """A row written by 0.29.0 or by the enterprise edition's SCIM: `approver` approves releases."""
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@northwind.dev")
+    monkeypatch.setenv("TRANIBOR_DEV_ADMIN_EMAILS", "admin@northwind.dev")
     reset_settings_cache()
     await _member("neutral@northwind.dev", Role.APPROVER)
     async with AsyncClient(transport=ASGITransport(app=client._transport.app), base_url="http://test") as c:  # type: ignore[attr-defined]

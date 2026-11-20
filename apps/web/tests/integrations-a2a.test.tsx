@@ -222,11 +222,11 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
       token: "chg_application_once",
     } as ApiTokenCreated);
     const { unmount } = render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
-    expect(await snippet()).toContain("CHOREGOS_A2A_TOKEN=<token>");
+    expect(await snippet()).toContain("TRANIBOR_A2A_TOKEN=<token>");
     fireEvent.click(await screen.findByRole("button", { name: "Issue a token" }));
     expect(await screen.findByTestId("machine-token-partner-app")).toHaveTextContent("chg_application_once");
     expect(screen.getByTestId("a2a-token-in-snippets")).toHaveTextContent("Partner app");
-    await waitFor(async () => expect(await snippet()).toContain("CHOREGOS_A2A_TOKEN=chg_application_once"));
+    await waitFor(async () => expect(await snippet()).toContain("TRANIBOR_A2A_TOKEN=chg_application_once"));
     expect(screen.getByTestId("a2a-follow-up")).toHaveTextContent(
       "machine:partner-app.p1@machines.choregos.invalid for Partner app",
     );
@@ -236,7 +236,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
     // Shown once: the page keeps it in memory only. Opened again, it is gone, and the examples say `<token>`.
     unmount();
     render(wrap(<A2aIntegration org="northwind" projet="billing-api" />));
-    await waitFor(async () => expect(await snippet()).toContain("CHOREGOS_A2A_TOKEN=<token>"));
+    await waitFor(async () => expect(await snippet()).toContain("TRANIBOR_A2A_TOKEN=<token>"));
     expect(document.body.textContent).not.toContain("chg_application_once");
   });
 
@@ -259,7 +259,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
     await screen.findByTestId("a2a-workflow-ship-a-change");
     await waitFor(async () => expect(await snippet()).toContain("billing-api/ship-a-change"));
     const cli = await snippet();
-    expect(cli).toContain("export CHOREGOS_API_URL=https://choregos.example CHOREGOS_ORG=northwind");
+    expect(cli).toContain("export TRANIBOR_API_URL=https://choregos.example TRANIBOR_ORG=northwind");
     expect(cli).toContain("choregos a2a send billing-api/ship-a-change");
     expect(cli).toContain("--field 'ticket=<ticket>'");
     fireEvent.click(screen.getByRole("tab", { name: "curl (A2A 0.3.0)" }));

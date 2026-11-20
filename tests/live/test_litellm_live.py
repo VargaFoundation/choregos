@@ -7,7 +7,7 @@ can prove that. This one checks it against a real LiteLLM in front of a real mod
 what `.github/workflows/live-model.yml` runs every night (S80-13):
 
     ANTHROPIC_API_KEY=… docker compose -p livemodel -f tests/live/model/compose.yaml up -d --wait
-    CHOREGOS_LIVE_LITELLM_URL=http://127.0.0.1:14420 CHOREGOS_LIVE_LITELLM_KEY=sk-local-live-model-only \
+    TRANIBOR_LIVE_LITELLM_URL=http://127.0.0.1:14420 TRANIBOR_LIVE_LITELLM_KEY=sk-local-live-model-only \
     uv run pytest tests/live/test_litellm_live.py -m live
 """
 
@@ -37,10 +37,10 @@ RUN = uuid4().hex[:8]
 
 @pytest.fixture
 async def gateway() -> AsyncIterator[LiteLlmGateway]:
-    env = require("CHOREGOS_LIVE_LITELLM_URL", "CHOREGOS_LIVE_LITELLM_KEY")
+    env = require("TRANIBOR_LIVE_LITELLM_URL", "TRANIBOR_LIVE_LITELLM_KEY")
     adapter = LiteLlmGateway(
-        base_url=env["CHOREGOS_LIVE_LITELLM_URL"],
-        master_key=env["CHOREGOS_LIVE_LITELLM_KEY"],
+        base_url=env["TRANIBOR_LIVE_LITELLM_URL"],
+        master_key=env["TRANIBOR_LIVE_LITELLM_KEY"],
     )
     try:
         yield adapter
@@ -50,7 +50,7 @@ async def gateway() -> AsyncIterator[LiteLlmGateway]:
 
 @pytest.fixture
 def base_url() -> str:
-    return require("CHOREGOS_LIVE_LITELLM_URL")["CHOREGOS_LIVE_LITELLM_URL"]
+    return require("TRANIBOR_LIVE_LITELLM_URL")["TRANIBOR_LIVE_LITELLM_URL"]
 
 
 async def test_the_proxy_exposes_the_platform_aliases(base_url: str, gateway: LiteLlmGateway) -> None:

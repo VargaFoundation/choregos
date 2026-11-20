@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """`python -m tranibor_api.relay [serve]` runs the relay; `… mint --org <slug> --days N` prints a relay
-token (it needs the run-token key, `CHOREGOS_RUN_TOKEN_PRIVATE_KEY`).
+token (it needs the run-token key, `TRANIBOR_RUN_TOKEN_PRIVATE_KEY`).
 
 The relay reads its environment and refuses to start without it:
 
-- `CHOREGOS_RELAY_ORG`: the one organisation it serves (a slug);
-- `CHOREGOS_RELAY_API_URL`: the API, e.g. `http://choregos-api:8000/api/v1`;
-- `CHOREGOS_RELAY_API_TOKEN`: its relay token for that organisation (`mint`);
-- `CHOREGOS_RELAY_CLIENT_TOKEN`: the password its clients (SearXNG, Firecrawl) give, 16 characters or more;
-- `CHOREGOS_RELAY_LISTEN`: `host:port`, `0.0.0.0:3128` by default.
+- `TRANIBOR_RELAY_ORG`: the one organisation it serves (a slug);
+- `TRANIBOR_RELAY_API_URL`: the API, e.g. `http://choregos-api:8000/api/v1`;
+- `TRANIBOR_RELAY_API_TOKEN`: its relay token for that organisation (`mint`);
+- `TRANIBOR_RELAY_CLIENT_TOKEN`: the password its clients (SearXNG, Firecrawl) give, 16 characters or more;
+- `TRANIBOR_RELAY_LISTEN`: `host:port`, `0.0.0.0:3128` by default.
 """
 
 from __future__ import annotations
@@ -42,31 +42,31 @@ class RelaySettings:
 def settings_from(env: Mapping[str, str]) -> RelaySettings:
     """The relay's settings, or `SystemExit` naming every one that is missing or wrong."""
     names = (
-        "CHOREGOS_RELAY_ORG",
-        "CHOREGOS_RELAY_API_URL",
-        "CHOREGOS_RELAY_API_TOKEN",
-        "CHOREGOS_RELAY_CLIENT_TOKEN",
+        "TRANIBOR_RELAY_ORG",
+        "TRANIBOR_RELAY_API_URL",
+        "TRANIBOR_RELAY_API_TOKEN",
+        "TRANIBOR_RELAY_CLIENT_TOKEN",
     )
     missing = [name for name in names if not env.get(name, "").strip()]
     if missing:
         raise SystemExit(f"the relay needs {', '.join(missing)}")
     unresolved = [
-        name for name in (*names, "CHOREGOS_RELAY_LISTEN") if env.get(name, "").strip() in UNRESOLVED
+        name for name in (*names, "TRANIBOR_RELAY_LISTEN") if env.get(name, "").strip() in UNRESOLVED
     ]
     if unresolved:
         # A secret template whose key is missing writes this text and syncs fine (see `config.py`): taken as a
         # token, every call to the API would be refused and the relay would fail closed on all traffic.
         raise SystemExit(f"{', '.join(unresolved)} holds an unresolved template value, not a setting")
-    client_token = env["CHOREGOS_RELAY_CLIENT_TOKEN"].strip()
+    client_token = env["TRANIBOR_RELAY_CLIENT_TOKEN"].strip()
     if len(client_token) < MIN_CLIENT_TOKEN:
-        raise SystemExit(f"CHOREGOS_RELAY_CLIENT_TOKEN must be {MIN_CLIENT_TOKEN} characters or more")
-    host, _, port = env.get("CHOREGOS_RELAY_LISTEN", "0.0.0.0:3128").rpartition(":")
+        raise SystemExit(f"TRANIBOR_RELAY_CLIENT_TOKEN must be {MIN_CLIENT_TOKEN} characters or more")
+    host, _, port = env.get("TRANIBOR_RELAY_LISTEN", "0.0.0.0:3128").rpartition(":")
     if not port.isdigit() or not 1 <= int(port) <= 65535:
-        raise SystemExit("CHOREGOS_RELAY_LISTEN is host:port")
+        raise SystemExit("TRANIBOR_RELAY_LISTEN is host:port")
     return RelaySettings(
-        org=env["CHOREGOS_RELAY_ORG"].strip(),
-        api_url=env["CHOREGOS_RELAY_API_URL"].strip(),
-        api_token=env["CHOREGOS_RELAY_API_TOKEN"].strip(),
+        org=env["TRANIBOR_RELAY_ORG"].strip(),
+        api_url=env["TRANIBOR_RELAY_API_URL"].strip(),
+        api_token=env["TRANIBOR_RELAY_API_TOKEN"].strip(),
         client_token=client_token,
         host=host or "0.0.0.0",  # noqa: S104 - a pod
         port=int(port),

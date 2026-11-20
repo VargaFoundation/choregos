@@ -51,14 +51,14 @@ OFFLINE = Path(__file__).resolve().parents[3] / "plugins" / "offline"
 def research(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from tranibor_api.config import reset_settings_cache
 
-    monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(OFFLINE))
+    monkeypatch.setenv("TRANIBOR_PLUGINS_OFFLINE", str(OFFLINE))
     monkeypatch.setenv(
-        "CHOREGOS_JOB_IMAGES", json.dumps({"investment-research": "registry.example/ir@sha256:" + "a" * 64})
+        "TRANIBOR_JOB_IMAGES", json.dumps({"investment-research": "registry.example/ir@sha256:" + "a" * 64})
     )
     reset_settings_cache()
     yield
-    monkeypatch.delenv("CHOREGOS_PLUGINS_OFFLINE")
-    monkeypatch.delenv("CHOREGOS_JOB_IMAGES")
+    monkeypatch.delenv("TRANIBOR_PLUGINS_OFFLINE")
+    monkeypatch.delenv("TRANIBOR_JOB_IMAGES")
     reset_settings_cache()
 
 
@@ -237,17 +237,17 @@ async def test_readiness_says_a_gvisor_policy_the_warm_pool_cannot_run(
     edited = policy.replace("runtime: default", "runtime: gvisor", 1)
     put = await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": edited})
     assert put.status_code == 200, put.text
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "agent_sandbox")
-    monkeypatch.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "agent_sandbox")
+    monkeypatch.setenv("TRANIBOR_RUNNER_RUNTIME_CLASS", "")
     item = next(i for i in (await _readiness(client, project["id"]))["items"] if i["id"] == "runtime-class")
     assert item["state"] == "todo"
     assert "gvisor" in item["detail"] and "the cluster default" in item["detail"]
     assert "runner.runtimeClass" in item["detail"]
-    monkeypatch.setenv("CHOREGOS_RUNNER_RUNTIME_CLASS", "gvisor")
+    monkeypatch.setenv("TRANIBOR_RUNNER_RUNTIME_CLASS", "gvisor")
     item = next(i for i in (await _readiness(client, project["id"]))["items"] if i["id"] == "runtime-class")
     assert item["state"] == "done"
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "k8s_job")
     assert "runtime-class" not in {i["id"] for i in (await _readiness(client, project["id"]))["items"]}
 
 

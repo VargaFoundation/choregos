@@ -40,7 +40,7 @@ from ..plugins import Plugin, PluginError, opened
 
 FOLDER = Path(__file__).parent
 #: The environment variable the API reads for the same directory (`Settings.plugins_offline`).
-OFFLINE_ENV = "CHOREGOS_PLUGINS_OFFLINE"
+OFFLINE_ENV = "TRANIBOR_PLUGINS_OFFLINE"
 #: Where the API image puts the plugins it ships (`docker/api.Dockerfile`).
 IMAGE_OFFLINE = Path("/opt/choregos/plugins")
 LOCK = "plugins.lock"
@@ -288,7 +288,7 @@ def load(directory: Path | None) -> Catalogue:
 
 
 def offline_directory() -> Path | None:
-    """The offline plugin directory: `CHOREGOS_PLUGINS_OFFLINE`, else this repository's
+    """The offline plugin directory: `TRANIBOR_PLUGINS_OFFLINE`, else this repository's
     `plugins/offline/` (a source tree), else the API image's `/opt/choregos/plugins`."""
     configured = os.environ.get(OFFLINE_ENV)
     if configured:

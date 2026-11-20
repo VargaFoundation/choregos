@@ -49,7 +49,7 @@ MISSING_SCOPE = (
     "the A2A door needs a token of scope `a2a`, and refuses a `*` one such as the CLI's profile token: "
     "create one with `choregos tokens create --name <name> --scope a2a --project <org:project>` (as you) "
     "or `choregos machines token <org:project> <application> --name <name>` (as an application), then "
-    "pass it with `--token` or CHOREGOS_A2A_TOKEN"
+    "pass it with `--token` or TRANIBOR_A2A_TOKEN"
 )
 
 
@@ -458,7 +458,7 @@ TokenOption = Annotated[
     str | None,
     typer.Option(
         "--token",
-        envvar="CHOREGOS_A2A_TOKEN",
+        envvar="TRANIBOR_A2A_TOKEN",
         show_envvar=True,
         help="an `a2a` token; the profile's token otherwise, which the door refuses when it is `*`",
     ),

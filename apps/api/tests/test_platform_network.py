@@ -283,7 +283,7 @@ async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_us
               "config": {"url": "https://github.com/acme/private.git"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text
-    monkeypatch.setenv("CHOREGOS_FAKES", "0")
+    monkeypatch.setenv("TRANIBOR_FAKES", "0")
     async with session_scope() as session:
         row = await session.get(KnowledgeSource, created.json()["id"])
         assert row is not None
@@ -291,7 +291,7 @@ async def test_a_private_git_source_obeys_a_tightened_ceiling_and_carries_the_us
     assert isinstance(opened, GitSource) and opened.user_agent, (
         "the organisation's User-Agent, as a public one"
     )
-    monkeypatch.setenv("CHOREGOS_FAKES", "1")
+    monkeypatch.setenv("TRANIBOR_FAKES", "1")
     await _ceiling(client, {"deny_domains": ["github.com"]})
     with pytest.raises(SourceUnavailableError, match=r"github\.com"):
         await sync_source("northwind", created.json()["id"])

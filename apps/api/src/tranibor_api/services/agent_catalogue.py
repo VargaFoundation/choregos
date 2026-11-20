@@ -79,7 +79,7 @@ def from_catalogue(created_by: str | None, entry: CatalogueEntry) -> bool:
 
 
 def offline_catalogue() -> Catalogue:
-    """The deployment's offline directory (`global.plugins.offline`, `CHOREGOS_PLUGINS_OFFLINE`), else the
+    """The deployment's offline directory (`global.plugins.offline`, `TRANIBOR_PLUGINS_OFFLINE`), else the
     core's default one (this repository's `plugins/offline/`, the image's `/opt/choregos/plugins`)."""
     from .plugin_sources import plugins_config
 

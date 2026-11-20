@@ -28,8 +28,8 @@ async def test_the_catalogue_comes_from_the_configured_gateway_type(
     monkeypatch.setattr(registry, "_REGISTRY", dict(registry._REGISTRY))
     monkeypatch.setattr(registry, "_SPECS", dict(registry._SPECS))
     register("gateway", "scripted-test")(lambda cfg: Scripted())
-    monkeypatch.setenv("CHOREGOS_FAKES", "")
-    monkeypatch.setenv("CHOREGOS_GATEWAY_TYPE", "scripted-test")
+    monkeypatch.setenv("TRANIBOR_FAKES", "")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_TYPE", "scripted-test")
     response = await client.get("/api/v1/platform/models")
     assert response.status_code == 200, response.text
     assert [m["model_name"] for m in response.json()] == ["acme/chat"]
@@ -39,10 +39,10 @@ async def test_the_catalogue_comes_from_the_configured_gateway_type(
 async def test_an_openai_compatible_gateway_is_listed_through_its_models_endpoint(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("CHOREGOS_FAKES", "")
-    monkeypatch.setenv("CHOREGOS_GATEWAY_TYPE", "openai-compatible")
-    monkeypatch.setenv("CHOREGOS_GATEWAY_URL", "https://gw.example/v1")
-    monkeypatch.setenv("CHOREGOS_GATEWAY_MASTER_KEY", "discovery-key")
+    monkeypatch.setenv("TRANIBOR_FAKES", "")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_TYPE", "openai-compatible")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_URL", "https://gw.example/v1")
+    monkeypatch.setenv("TRANIBOR_GATEWAY_MASTER_KEY", "discovery-key")
     with respx.mock() as mock:
         route: Any = mock.get("https://gw.example/v1/models").mock(
             return_value=httpx.Response(200, json={"data": [{"id": "gpt-x", "owned_by": "acme"}]})

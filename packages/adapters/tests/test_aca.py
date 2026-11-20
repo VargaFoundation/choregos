@@ -41,7 +41,7 @@ def spec(run_id: str = "run-42") -> StageJobSpec:
         api_url="https://api.choregos.dev/api/v1/internal",
         run_token="jeton-du-run",
         timeout_minutes=90,
-        env={"CHOREGOS_BACKEND": "claude-code"},
+        env={"TRANIBOR_BACKEND": "claude-code"},
         labels={"choregos/env": "prod"},
     )
 
@@ -97,8 +97,8 @@ async def test_the_runs_token_goes_through_a_secret() -> None:
     await executor(handler).start(spec())
 
     container = definition["properties"]["template"]["containers"][0]
-    token_env = next(e for e in container["env"] if e["name"] == "CHOREGOS_RUN_TOKEN")
-    assert token_env == {"name": "CHOREGOS_RUN_TOKEN", "secretRef": "run-token"}
+    token_env = next(e for e in container["env"] if e["name"] == "TRANIBOR_RUN_TOKEN")
+    assert token_env == {"name": "TRANIBOR_RUN_TOKEN", "secretRef": "run-token"}
     assert not any("value" in e and e["value"] == "jeton-du-run" for e in container["env"])
     secrets = definition["properties"]["configuration"]["secrets"]
     assert secrets == [{"name": "run-token", "value": "jeton-du-run"}]

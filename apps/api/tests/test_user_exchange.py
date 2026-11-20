@@ -313,18 +313,18 @@ async def test_the_deployments_audience_list_bounds_what_a_connectors_editor_can
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The audience is written in the connector's configuration, by whoever edits the connector: with
-    `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` set, an audience outside it is never even asked of the provider."""
+    `TRANIBOR_TOKEN_EXCHANGE_AUDIENCES` set, an audience outside it is never even asked of the provider."""
     from tranibor_api.config import reset_settings_cache
 
     await _declare(client)
     await _sign_in_sealed()
-    monkeypatch.setenv("CHOREGOS_TOKEN_EXCHANGE_AUDIENCES", '["iris-mcp"]')
+    monkeypatch.setenv("TRANIBOR_TOKEN_EXCHANGE_AUDIENCES", '["iris-mcp"]')
     reset_settings_cache()
     try:
         source.received.clear()
         await _converse(client, upstream, "user_exchange")
     finally:
-        monkeypatch.delenv("CHOREGOS_TOKEN_EXCHANGE_AUDIENCES")
+        monkeypatch.delenv("TRANIBOR_TOKEN_EXCHANGE_AUDIENCES")
         reset_settings_cache()
     assert _calls(source) == []
     assert [f for f in idp.requests if f["grant_type"].endswith("token-exchange")] == []
@@ -339,7 +339,7 @@ async def test_the_deployments_scope_for_an_audience_is_sent_with_its_exchange(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Keycloak grants an audience only through a scope the request names or a default scope of the
-    client: `CHOREGOS_TOKEN_EXCHANGE_SCOPES` names it, so the scope can stay optional on the client and
+    client: `TRANIBOR_TOKEN_EXCHANGE_SCOPES` names it, so the scope can stay optional on the client and
     the source's audience is not in every token the client is issued (S63-27)."""
     from tranibor_api.config import reset_settings_cache
 
@@ -352,14 +352,14 @@ async def test_the_deployments_scope_for_an_audience_is_sent_with_its_exchange(
     idp.requests.clear()
     source.received.clear()
     monkeypatch.setenv(
-        "CHOREGOS_TOKEN_EXCHANGE_SCOPES", f'{{"{AUDIENCE}": "{AUDIENCE}", "another": "other-scope"}}'
+        "TRANIBOR_TOKEN_EXCHANGE_SCOPES", f'{{"{AUDIENCE}": "{AUDIENCE}", "another": "other-scope"}}'
     )
     reset_settings_cache()
     try:
         upstream.model.call("fournisseur__suivi_commande", {"numero": "43"}).say("Done.")
         assert (await _ask(client, "Where is order 43?")).json()["status"] == "completed"
     finally:
-        monkeypatch.delenv("CHOREGOS_TOKEN_EXCHANGE_SCOPES")
+        monkeypatch.delenv("TRANIBOR_TOKEN_EXCHANGE_SCOPES")
         reset_settings_cache()
     (scoped,) = [f for f in idp.requests if f["grant_type"].endswith("token-exchange")]
     assert scoped["scope"] == AUDIENCE and scoped["audience"] == AUDIENCE

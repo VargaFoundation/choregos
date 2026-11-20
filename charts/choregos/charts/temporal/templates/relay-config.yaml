@@ -1,0 +1,29 @@
+{{- if and .Values.tls.enabled (ne .Values.mode "server") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-temporal-tls-relay
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    worker_processes 1;
+    pid /tmp/nginx.pid;
+    error_log /dev/stderr notice;
+    events { worker_connections 1024; }
+    stream {
+      # A variable path: nginx re-reads the certificate at each handshake, so the one cert-manager has
+      # just renewed, with no restart and no reload.
+      map $remote_addr $tls_dir { default /etc/temporal-tls; }
+      server {
+        listen 7233 ssl;
+        ssl_certificate $tls_dir/tls.crt;
+        ssl_certificate_key $tls_dir/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        # gRPC: recent clients (grpc-go >= 1.67) require the server to pick h2.
+        ssl_alpn h2;
+        proxy_pass 127.0.0.1:7234;
+        # Long gRPC streams (the workers' long poll) are not cut by the relay.
+        proxy_timeout 24h;
+      }
+    }
+{{- end }}

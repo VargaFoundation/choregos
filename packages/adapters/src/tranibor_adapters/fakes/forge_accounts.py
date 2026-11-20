@@ -135,7 +135,7 @@ _CURRENT: list[FakeForge] = []
 
 
 def current_fake_forge() -> FakeForge:
-    """The fake forge of CHOREGOS_FAKES=1: one, scripted by the tests and the demo."""
+    """The fake forge of TRANIBOR_FAKES=1: one, scripted by the tests and the demo."""
     if not _CURRENT:
         _CURRENT.append(FakeForge())
     return _CURRENT[0]

@@ -23,7 +23,7 @@ and pushes them without loading them.
   the line.
 - `test_la_roue_ee_*` builds a real image FROM a CE image and exercises the two real loading
   paths (the API's `create_app()`, the import of the orchestrator's activities), startup guard
-  included. It needs Docker and `CHOREGOS_IMAGES_CE` (comma-separated images), and skips
+  included. It needs Docker and `TRANIBOR_IMAGES_CE` (comma-separated images), and skips
   without them.
 """
 
@@ -40,7 +40,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKERFILE = ROOT / "docker" / "api.Dockerfile"
 #: The CE images to exercise, e.g. `choregos-api:local,choregos-orchestrator:local`.
-IMAGES_CE = [i.strip() for i in os.environ.get("CHOREGOS_IMAGES_CE", "").split(",") if i.strip()]
+IMAGES_CE = [i.strip() for i in os.environ.get("TRANIBOR_IMAGES_CE", "").split(",") if i.strip()]
 
 
 def _etages() -> dict[str, str]:
@@ -98,7 +98,7 @@ print(current(), ",".join(sorted(features())))
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("docker") is None, reason="docker missing")
-@pytest.mark.skipif(not IMAGES_CE, reason="CHOREGOS_IMAGES_CE not set")
+@pytest.mark.skipif(not IMAGES_CE, reason="TRANIBOR_IMAGES_CE not set")
 @pytest.mark.parametrize("image_ce", IMAGES_CE)
 def test_the_ee_wheel_laid_by_the_obvious_gesture_gives_the_enterprise_edition(
     image_ce: str, ee_wheel: pathlib.Path, tmp_path: pathlib.Path
@@ -123,7 +123,7 @@ def test_the_ee_wheel_laid_by_the_obvious_gesture_gives_the_enterprise_edition(
     )
     assert construit.returncode == 0, f"the EE image does not build:\n{construit.stderr[-800:]}"
     try:
-        env = ["-e", "CHOREGOS_FAKES=1", "-e", "CHOREGOS_EDITION=enterprise"]
+        env = ["-e", "TRANIBOR_FAKES=1", "-e", "TRANIBOR_EDITION=enterprise"]
         lance = subprocess.run(
             ["docker", "run", "--rm", *env, "--entrypoint", "python", tag, "-c", VERIFICATION],
             capture_output=True,

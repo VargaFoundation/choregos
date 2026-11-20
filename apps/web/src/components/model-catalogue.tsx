@@ -122,8 +122,8 @@ export function ModelCataloguePanel() {
                 </>
               ) : (
                 <>
-                  The deployment&apos;s environment (<span className="font-mono">CHOREGOS_GATEWAY_TYPE</span>,{" "}
-                  <span className="font-mono">CHOREGOS_GATEWAY_URL</span>), by its operator: no screen changes it
+                  The deployment&apos;s environment (<span className="font-mono">TRANIBOR_GATEWAY_TYPE</span>,{" "}
+                  <span className="font-mono">TRANIBOR_GATEWAY_URL</span>), by its operator: no screen changes it
                 </>
               )}
             </dd>

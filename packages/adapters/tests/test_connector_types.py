@@ -79,7 +79,7 @@ def test_a_projects_adapters_receive_their_secrets(monkeypatch: pytest.MonkeyPat
     try:
         for kind_name in kind_names:
             register(kind_name, "probe")(lambda cfg, s=kind_name: received.__setitem__(s, cfg) or object())
-        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
         monkeypatch.setenv("CONNECTOR_PROBE_TOKEN", "t0k")
         connectors: dict[str, dict[str, Any]] = {s: {"type": "probe"} for s in kind_names}
         connectors["notify"] = {
@@ -97,7 +97,7 @@ def test_a_projects_adapters_receive_their_secrets(monkeypatch: pytest.MonkeyPat
 
 
 def test_the_default_type_is_the_one_a_project_takes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
+    monkeypatch.setenv("TRANIBOR_EXECUTOR_KIND", "k8s_job")
     assert default_type("runtime") == "k8s_job"
     assert default_type("scm") == "github"
     assert default_type("identity") is None
@@ -126,7 +126,7 @@ def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
     try:
         for kind in kinds:
             register(kind, "probe")(lambda cfg: object())
-        monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
+        monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
         adapters = AdapterSet.from_connectors({kind: {"type": "probe"} for kind in kinds})
     finally:
         for kind in kinds:

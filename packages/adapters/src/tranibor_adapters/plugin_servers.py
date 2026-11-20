@@ -9,7 +9,7 @@ replaying an install, an upgrade or a configuration change converges on the same
 What runs:
 
 - a **Secret** with the server's configuration as environment variables and the platform's bearer
-  token (`CHOREGOS_SERVER_TOKEN`), the server refusing any call without it;
+  token (`TRANIBOR_SERVER_TOKEN`), the server refusing any call without it;
 - a **Deployment** of one replica (none while the configuration is incomplete), the image pinned by
   digest, non-root, read-only root filesystem, no ServiceAccount token, capabilities dropped,
   resource limits, the RuntimeClass the deployment names (gVisor). The digest of the Secret's data
@@ -39,7 +39,7 @@ APPS_API = "/apis/apps/v1"
 NETWORKING_API = "/apis/networking.k8s.io/v1"
 CILIUM_API = "/apis/cilium.io/v2"
 #: The variable the server reads its bearer token from; it refuses `/mcp` without it (docs/plugins.md).
-TOKEN_ENV = "CHOREGOS_SERVER_TOKEN"  # noqa: S105 - a variable name, not a secret
+TOKEN_ENV = "TRANIBOR_SERVER_TOKEN"  # noqa: S105 - a variable name, not a secret
 CONFIG_DIGEST = "choregos.dev/config-digest"
 APP_NAME = "choregos-plugin-server"
 #: Addresses a server never reaches by the default NetworkPolicy: the cluster's, the node's, the
@@ -309,7 +309,7 @@ class PluginServerClient(McpClient):
     It posts to one URL only, the Service's, which the platform wrote (never an administrator, never
     a plugin), and follows no redirect: it is not an egress of the organisation, so it does not pass
     the organisation's egress allowlist the way a call to the internet does (ADR 0066). The bearer
-    token is the server's own (`CHOREGOS_SERVER_TOKEN`), presented on every call."""
+    token is the server's own (`TRANIBOR_SERVER_TOKEN`), presented on every call."""
 
     def _http(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`FakeImageBuilder`: builds in memory (ADR 0005, ADR 0080 §9), for `CHOREGOS_FAKES=1` and tests.
+"""`FakeImageBuilder`: builds in memory (ADR 0005, ADR 0080 §9), for `TRANIBOR_FAKES=1` and tests.
 
 Like the real builders, a key already built is found, not built again: `builds` lists the keys that
 really built, `requests` every call. `fail(key, reason)` makes that key's next build fail as a

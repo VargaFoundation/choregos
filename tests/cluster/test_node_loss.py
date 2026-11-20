@@ -74,7 +74,7 @@ def stack() -> None:
 def _stack() -> str:
     """Two deployments with no external dependency: what is measured is the replacement, not the app.
 
-    `CHOREGOS_FAKES=1` and no database: the test is about scheduling, and one more dependency
+    `TRANIBOR_FAKES=1` and no database: the test is about scheduling, and one more dependency
     would only add reasons to fail that have nothing to do with losing a node.
     """
 
