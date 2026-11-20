@@ -19,7 +19,7 @@ def test_the_028_notes_name_the_setting_its_new_default_and_the_way_back() -> No
     section = _section()
     for name in (
         "global.runner.agentIsolation",
-        "CHOREGOS_RUNNER_AGENT_ISOLATION",
+        "TRANIBOR_RUNNER_AGENT_ISOLATION",
         "`container`",
         "`process`",
         "agent_isolation_unavailable",
