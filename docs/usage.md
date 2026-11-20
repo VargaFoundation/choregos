@@ -3656,6 +3656,59 @@ token, and it changes when the token is minted again. The project's settings lis
 the received events: their URL, their workflow, whether a token exists, a button to mint it (shown
 once) and a box to fire it with a payload.
 
+### Handing files to a work item
+
+A workflow that works from documents a person received says so in its metadata
+([ADR 0197](adr/0197-a-person-hands-files-to-a-work-item.md)):
+
+```yaml
+metadata:
+  name: compare-documents
+  version: 1
+  attachments:
+    accept: [pdf, xlsx]   # artifact types
+    min: 2                # a start waits for this many files (default 0)
+    max: 20               # distinct names at most (default 20, 50 at most)
+```
+
+A work item of a workflow that requires files (`min` of 1 or more) is filed in two steps: created
+with `start: false`, given its files, then started. Creating it with `start: true` answers `422`.
+
+```shell
+# 1. file it without starting it
+curl -s "$TRANIBOR_API_URL/api/v1/projects/acme:billing-api/work-items" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title": "Compare the quotes", "workflow": "compare-documents", "start": false}'
+
+# 2. hand it the files (the repeated multipart part `files`), for whoever holds `item:control`
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/BIL-12/files" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" \
+  -F files=@quote-a.pdf -F files=@quote-b.pdf
+
+# 3. start it; `409` while fewer than `min` files were handed
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/BIL-12/actions" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"action": "mark_agent_ready"}'
+```
+
+Each file becomes an input artifact of the work item (`201`, the artifacts, each with
+`handed_by: "person"`; the artifact list shows them with `handed_by: "a2a"` when an application sent
+them through the A2A door, and files sent that way count toward `min`). What is checked, before
+anything is stored:
+
+- the file's type (from its extension) is in `accept`, and its bytes are what the type says (`422`);
+- its size is within the project's limit for handed files, `a2a.max_file_bytes`: 10 MiB by default,
+  50 MiB at most (`413`);
+- the number of distinct names after the request is within `max` (`422`);
+- the work item is not finished (`409`).
+
+The artifact's name is a slug of the file name: ASCII letters, digits, `_`, `.` and `-`, the extension
+kept, 128 characters at most (`Quote A.pdf` becomes `Quote-A.pdf`). Two files of one request that reach
+the same name are refused together. Handing the same name again makes revision 2; the same bytes again
+make none. A name taken by a step's output is refused. Files are stored before any row is written, so a
+store that fails leaves nothing behind (`502`). Each file leaves one audit entry,
+`work_item.file.attached`, with the name, the digest and the size, never the content.
+
 ### Tracker items that start without `agent-ready`
 
 A project can start tracker items on its own rules (S56-03): a ServiceNow incident in the desk's

@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from sqlalchemy import select
@@ -367,9 +367,22 @@ async def store_file(
 SENT_BY_A2A = "a2a:"
 
 
+#: The producer of a file a person handed to the work item (ADR 0197 §2): `person:<user id>`.
+SENT_BY_PERSON = "person:"
+
+
+def handed(row: ArtifactRecord) -> Literal["person", "a2a"] | None:
+    """Who handed this revision to the work item: a person, an application, or no one (a step's output)."""
+    if row.run_id.startswith(SENT_BY_PERSON):
+        return "person"
+    if row.run_id.startswith(SENT_BY_A2A):
+        return "a2a"
+    return None
+
+
 def sent_by_caller(row: ArtifactRecord) -> bool:
     """An input artefact a caller sent, as opposed to an output a step produced."""
-    return row.run_id.startswith(SENT_BY_A2A)
+    return handed(row) is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,18 +415,19 @@ async def put_input_file(
 
 
 async def record_input_file(
-    session: AsyncSession, *, org_id: str, item: WorkItem, stored: StoredInput
+    session: AsyncSession, *, org_id: str, item: WorkItem, stored: StoredInput, person: str | None = None
 ) -> ArtifactRecord:
     """The input artefact of a file a caller sent: stored like a step's file, produced by no run.
 
-    Its producer is `a2a:<work item id>`; a step reads it by declaring its name in `inputs`.
+    Its producer is `a2a:<work item id>`, or `person:<user id>` when `person` names who handed it
+    (ADR 0197 §2); a step reads it by declaring its name in `inputs`.
     """
     return await _record(
         session,
         org_id=org_id,
         item=item,
         run=None,
-        producer=f"{SENT_BY_A2A}{item.id}",
+        producer=f"{SENT_BY_PERSON}{person}" if person is not None else f"{SENT_BY_A2A}{item.id}",
         name=stored.name,
         type_=stored.type,
         digest=stored.digest,
@@ -481,6 +495,7 @@ def to_contract(row: ArtifactRecord) -> Artifact:
             "created_at": row.created_at,
             "display": display,
             "value": value,
+            "handed_by": handed(row),
         }
     )
 
@@ -498,6 +513,15 @@ async def artifacts_of(session: AsyncSession, work_item_id: str) -> list[Artifac
         .scalars()
         .all()
     )
+
+
+async def handed_artifacts(session: AsyncSession, work_item_id: str) -> list[ArtifactRecord]:
+    """The latest revision of each name a person or an application handed to the work item, by name."""
+    latest_of: dict[str, ArtifactRecord] = {}
+    for row in await artifacts_of(session, work_item_id):  # by name then version: the last one wins
+        if sent_by_caller(row):
+            latest_of[row.name] = row
+    return list(latest_of.values())
 
 
 def filename_of(row: ArtifactRecord) -> str:
