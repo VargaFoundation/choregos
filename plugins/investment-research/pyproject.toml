@@ -1,6 +1,6 @@
 [project]
 name = "tranibor-investment-research"
-version = "0.27.16"
+version = "0.27.17"
 description = "The code of the investment-research plugin: the marketdata connector family and the choregos-quant job command (ADR 0181)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

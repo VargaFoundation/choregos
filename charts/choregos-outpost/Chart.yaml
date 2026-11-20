@@ -4,8 +4,8 @@ description: >-
   The Choregos outpost daemon: what an outpost's operator installs in their own cluster. It only
   dials out, to one hostname, and makes the calls its own policy file allows.
 type: application
-version: 0.27.16
-appVersion: "0.27.16"
+version: 0.27.17
+appVersion: "0.27.17"
 home: https://github.com/graalsystems/tranibor
 sources:
   - https://github.com/graalsystems/tranibor
