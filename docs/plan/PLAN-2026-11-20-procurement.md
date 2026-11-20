@@ -747,10 +747,11 @@ derived from a threshold written in the workflow.
 
 **Steps.**
 1. `offers_structured.schema.json` (JSON Schema 2020-12), the shape the reading agent must produce
-   and PA-02 copies into its `output_schema` gate: `{currency, suppliers: [{name, files: [string],
+   and PA-02 copies into its `output_schema` gate: `{suppliers: [{name, currency, files: [string],
    lines: [{label, quantity, unit, unit_price, line_total}], stated_total, payment_terms_days,
-   delivery_days, validity_date, exclusions: [string]}], unassigned_files: [string]}`; every number
-   nullable, never defaulted; `additionalProperties: false`.
+   delivery_days, validity_date, exclusions: [string]}], unassigned_files: [string]}`; `currency` is
+   each offer's own (three upper-case letters or null), never one for the whole document; every
+   number nullable, never defaulted; `additionalProperties: false`.
 2. `compare`: reads `.choregos/inputs/offers_structured.json`, `.choregos/inputs/offers_text.json`
    and the fields (`currency`). Per supplier: `lines_total` (sum of `line_total`, a null line counted
    in `lines_without_total`), `line_mismatches` (a line whose `quantity × unit_price` differs from
@@ -761,7 +762,8 @@ derived from a threshold written in the workflow.
 3. Outputs: `comparison` (everything above) and `award_basis` (`{totals: {supplier: total},
    lowest_total, highest_total, spread, mismatches: [{supplier, kind, expected, written}]}`), the
    document the memo must quote in full. Facts: `suppliers_count`, `files_unassigned` (extracted files
-   named by no supplier, plus `unassigned_files`), `currencies` (distinct currencies stated),
+   named by no supplier, plus `unassigned_files`), `currencies` (distinct currencies among the
+   suppliers' own and the request's field `currency`; a supplier with none counts as one more),
    `mismatches`, `lowest_total`, `highest_total`.
 4. `tier --committee-from <amount>`: reads `.choregos/inputs/award_basis.json`; outputs
    `approval_tier` (`committee` when `highest_total` ≥ the amount, else `standard`) and
