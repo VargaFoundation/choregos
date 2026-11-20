@@ -53,7 +53,7 @@ def read_fields(root: Path) -> dict[str, Any]:
     return fields
 
 
-def publish(root: Path, *, summary: str, facts: dict[str, int], outputs: dict[str, Any]) -> dict[str, Any]:
+def publish(root: Path, *, summary: str, facts: dict[str, Any], outputs: dict[str, Any]) -> dict[str, Any]:
     """Writes `.choregos/job.json`; refuses an inline output past the bound, and writes nothing then."""
     doc = {"summary": summary, "facts": facts, "outputs": outputs}
     body = json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2) + "\n"

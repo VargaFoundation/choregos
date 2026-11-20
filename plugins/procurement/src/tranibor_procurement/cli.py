@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`tranibor-procurement extract [--timeout N] [--max-chars-per-file N]`, a job step (ADR 0198).
+"""`tranibor-procurement extract|compare|tier`, job steps (ADR 0198).
 
 Exit codes: 0 the contract is kept (files may be unreadable: see the facts), 2 it is broken.
 """
@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from decimal import Decimal
 
 from tranibor_procurement import job
+from tranibor_procurement.compare import compare
 from tranibor_procurement.convert import DEFAULT_TIMEOUT_S
 from tranibor_procurement.extract import DEFAULT_MAX_CHARS, OUTPUT_NAME, extract
 from tranibor_procurement.numbers import NUMBER_FORMATS
+from tranibor_procurement.tier import parse_threshold, tier
 
 
 def _positive(text: str) -> float:
@@ -20,6 +23,13 @@ def _positive(text: str) -> float:
     if value <= 0:
         raise argparse.ArgumentTypeError("must be above zero")
     return value
+
+
+def _threshold(text: str) -> Decimal:
+    try:
+        return parse_threshold(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -30,6 +40,15 @@ def _parser() -> argparse.ArgumentParser:
     e = sub.add_parser("extract", help="the files of .choregos/inputs/ as one JSON document of text")
     e.add_argument("--timeout", type=_positive, default=DEFAULT_TIMEOUT_S, help="seconds per file")
     e.add_argument("--max-chars-per-file", type=int, default=DEFAULT_MAX_CHARS, help="text kept per file")
+    sub.add_parser("compare", help="the numbers of a comparison, computed from the structured offers")
+    t = sub.add_parser("tier", help="the approval tier of an award basis")
+    t.add_argument(
+        "--committee-from",
+        type=_threshold,
+        required=True,
+        metavar="AMOUNT",
+        help="the highest total from which the committee decides",
+    )
     return p
 
 
@@ -37,6 +56,14 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         root = job.workspace()
+        if args.command == "compare":
+            summary, facts, outputs = compare(root)
+            job.publish(root, summary=summary, facts=facts, outputs=outputs)
+            return 0
+        if args.command == "tier":
+            summary, facts, outputs = tier(root, args.committee_from)
+            job.publish(root, summary=summary, facts=facts, outputs=outputs)
+            return 0
         inputs = job.inputs_dir(root)
         number_format = str(job.read_fields(root).get("number_format") or "auto")
         if number_format not in NUMBER_FORMATS:

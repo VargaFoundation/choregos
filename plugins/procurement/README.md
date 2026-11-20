@@ -45,3 +45,37 @@ Extraction does not judge: an instruction written in an offer is text like any o
 `uv run pytest -q plugins/procurement`. The fixtures of `tests/fixtures/` come from
 `tests/make_fixtures.py` (three invented suppliers); the PDFs are written by hand, the encrypted one with
 the standard security handler (user password `secret`).
+
+## `tranibor-procurement compare`
+
+```
+tranibor-procurement compare
+```
+
+Reads `.choregos/inputs/offers_structured.json` (the shape of
+`src/tranibor_procurement/schemas/offers_structured.schema.json`: each supplier has its own `currency`,
+every number nullable), `offers_text.json` and the field `currency` of `.choregos/fields.json`. An inline
+JSON input is mounted under its artifact name plus `.json`. All arithmetic is `decimal.Decimal`, rounded
+half-even to two places; the only float is the JSON number an amount is written as, after the arithmetic.
+
+- **Per supplier**: `lines_total` (a null line total is counted in `lines_without_total`),
+  `line_mismatches` (`quantity × unit_price` against `line_total`, more than 0.01 apart),
+  `total_mismatch` (`stated_total` against `lines_total`, same tolerance, only when a line has a total),
+  `total` (the stated total when present, else `lines_total`).
+- **Output `comparison`**: the suppliers, `ranking` by `total` then name, `lowest_total`,
+  `highest_total`, `spread`, `spread_ratio`.
+- **Output `award_basis`**: `{totals, lowest_total, highest_total, spread, mismatches: [{supplier, kind,
+  expected, written}]}`, the document a memo must quote in full. `kind` is `line_total` or `stated_total`.
+- **Facts**: `suppliers_count`, `files_unassigned`, `currencies` (distinct among the suppliers' own and the
+  request's `currency`; a supplier with none counts as one more), `mismatches`, `lowest_total`,
+  `highest_total` (the last two are absent when there is no supplier).
+
+## `tranibor-procurement tier`
+
+```
+tranibor-procurement tier --committee-from AMOUNT
+```
+
+Reads `.choregos/inputs/award_basis.json`. Output `approval_tier` is `committee` when `highest_total` is
+at least the amount, else `standard`; output `highest_total`; fact `approval_tier_threshold`. A missing or
+non-numeric `--committee-from` exits non-zero and writes nothing: no threshold never means the lighter tier.
