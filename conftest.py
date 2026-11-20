@@ -19,6 +19,7 @@ import contextlib
 import os
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
+from pathlib import Path
 
 import pytest
 
@@ -100,3 +101,15 @@ def _structlog_configuration_put_back() -> Iterator[None]:
 def structlog_configuration_kept() -> Callable[[], AbstractContextManager[None]]:
     """The context manager every test runs in, for a test that proves it."""
     return kept_structlog_configuration
+
+
+@pytest.fixture(autouse=True)
+def _runner_git_dirs(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The runner keeps its git directory outside the tree (S65-04c, ADR 0146 section 5), by default under
+    the fixed `/var/tmp/choregos-git`: owned by whichever account ran it first, so a test that reaches the
+    runner (the runner's own, the orchestrator's `test_remote_agent_runner_seam`) failed with `Permission
+    denied` on a shared machine (#2011). Every test points the root into its own temporary directory instead;
+    the production default is untouched. `tests/test_runner_git_dir_in_tests.py` guards it."""
+    root = tmp_path_factory.mktemp("git-dirs")
+    monkeypatch.setenv("TRANIBOR_RUNNER_GIT_DIR_ROOT", str(root))
+    return root
