@@ -17,6 +17,7 @@ and an optional MCP tools sidecar — plus four dependencies it can either **emb
 | The agent-sandbox operator | v1.0.6 | **Required by default.** `global.runner.executor` defaults to `agent_sandbox`, and the chart refuses to render when the cluster lacks the `extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` API; its CRDs are cluster-scoped, so a platform team installs it ([the `agent_sandbox` executor](#the-agent_sandbox-executor-the-default)). Not needed with `global.runner.executor: k8s_job` |
 | External Secrets Operator | — | **Required by default.** `global.externalSecrets.enabled` is `true`: the chart renders an `ExternalSecret` (`external-secrets.io/v1beta1`) against the `ClusterSecretStore` named by `global.externalSecrets.storeRef`. Optional with `global.externalSecrets.enabled: false`, when the tenant provides the Secrets itself ([Secrets](#secrets)) |
 | An S3-compatible object store | — | Needed for **file artifacts** (decks, spreadsheets, images; `global.objectStore`; AWS S3, RustFS, MinIO, Ceph). Only the API talks to it. The chart renders without one; an in-memory store (`memory://` URL, or `TRANIBOR_FAKES=1`) is for a bench and is lost on restart |
+| All of the above in one install | — | `values/all-in-one.yaml` embeds the OIDC provider and the object store, draws the Secrets and uses `k8s_job` ([All in one](#all-in-one)); a cluster then needs only a default StorageClass |
 | Kyverno | 1.12 | **Optional for the chart**: nothing in the chart's default render needs it (`hostedCosignPolicy` renders a Kyverno `ClusterPolicy` only when switched on). Needed only to install the admission policies of `infra/policies` ("Installing the admission policies", under *Running agent stages*) |
 
 Optional but recommended in production: a model gateway (LiteLLM), a memory service
@@ -1658,6 +1659,66 @@ this bench does **not** prove.
 | `choregos-orchestrator.runner.toolScripts.allowed` | `TRANIBOR_TOOL_SCRIPTS_ALLOWED` | `true` | The **hard brake**. `false`: no run of any organisation is offered tool scripts, whatever its setting says. |
 
 Before S57-05b, `enabled: false` refused tool scripts to every run; it now only sets the default, and an organisation administrator can enable them for their organisation. To keep them refused everywhere — while the runner image predates the bridge (S57-07: an older runner refuses a stage input that carries `tools.scripts`), or in an emergency — set `allowed: false`. The API does not know these values: the console says "the deployment's default" without saying which.
+
+## All in one
+
+A cluster with nothing but Kubernetes (1.29 or later is advised) and a **default StorageClass** gets a working
+platform from one `helm install` ([ADR 0197](adr/0197-the-chart-deploys-every-solution-the-platform-requires-in-one-install.md)).
+The profile `charts/choregos/values/all-in-one.yaml` embeds, beside the PostgreSQL (pgvector), Temporal, LiteLLM
+and Ecphoria the chart already carried, the two pieces a bare cluster lacked:
+
+| Prerequisite (table above) | In all-in-one mode |
+|:--|:--|
+| An OIDC provider | **Keycloak** (`choregos-keycloak`): one replica, its database `keycloak` in the embedded PostgreSQL, a realm `choregos` with a confidential client for the console (`choregos`), a public client for the CLI (the console's client id followed by `-cli`, device grant), the `groups` claim in the form `choregos:<org>:<role>`, the five role groups of the bootstrap organisation, and one administrator (the first of `global.bootstrap.admins`, in `choregos:<org>:org-admins`). Served at `https://auth.<global.domain>` by its own Ingress |
+| An S3-compatible object store | **RustFS** (`choregos-objectstore`): one replica, one volume, an S3 API on 9000 (no Service for its console), and a hook Job that makes the bucket of `global.objectStore.url` |
+| The agent-sandbox operator | **Not installed**: its CRDs are cluster-scoped, which a chart installed into a namespace cannot lay down. The profile falls back to the `k8s_job` executor (each agent stage is a Job of the release namespace) and `NOTES.txt` says so. Install `infra/operators/agent-sandbox` and set `global.runner.executor: agent_sandbox` to use the operator |
+| External Secrets Operator | **Off** (`global.externalSecrets.enabled: false`, and the render refuses it on). The chart draws every Secret itself: `choregos-api-secrets` (session secret, run-token signing key, connector-secret key, egress report key), `choregos-oidc` (the client secret, shared by the realm and the API), `choregos-object-store` (access and secret keys), the PostgreSQL, gateway and memory Secrets, and `<release>-keycloak` (the master realm's `admin-password` and the platform administrator's `realm-admin-password`). Each is drawn once and **re-read** on upgrades |
+| Kyverno | Optional, unchanged: not needed |
+| The egress proxy and NetworkPolicies | **On**, with the egress gate; the object store and Keycloak are walled like the PostgreSQL (the store admits only the API, the backup and its bucket Job; a runner reaches neither) |
+
+```bash
+helm install choregos oci://ghcr.io/graalsystems/charts/choregos --version 0.27.17 \
+  -n choregos --create-namespace \
+  -f values/all-in-one.yaml -f my-site.yaml     # all-in-one.yaml is in charts/choregos/values/ of the chart
+```
+
+`my-site.yaml` sets what only you know: `global.domain`, `global.publicUrl`, `global.apiUrl`, the two ingresses'
+`hostnames` (and `className` when the cluster has no default IngressClass), `global.bootstrap.org` and
+`global.bootstrap.admins` (the render is refused without them: nobody could otherwise sign in and create the first
+organisation), and the model provider's key (`choregos-litellm.upstream`). The DNS name `auth.<domain>` must resolve
+**from inside the cluster too**: the API reads the issuer's discovery document there (`choregos-keycloak.ingress.hostname`
+changes the host; `choregos-api.hostAliases` is the escape where DNS cannot).
+
+After the install: `kubectl -n choregos get secret choregos-keycloak -o jsonpath='{.data.realm-admin-password}' | base64 -d`
+gives the administrator's password; sign in at `global.publicUrl` as the first bootstrap admin.
+
+**Each piece is overridable**, so a customer brings their own:
+
+| Bring your own | Set |
+|:--|:--|
+| Keycloak or another OIDC provider | `global.oidc.embedded: false`, `global.oidc.generateSecret: false`, `global.oidc.issuer`, `clientId`, `secretRef` (your Secret) |
+| An S3 | `global.objectStore.embedded: false`, `generateSecret: false`, `url`, `endpoint`, `secretRef` |
+| A PostgreSQL | `global.database.embedded: false`, `secretRef`; the embedded Keycloak then needs `choregos-keycloak.database.host` and `secretRef` (the database `keycloak` made by you) |
+| Temporal, the gateway, the memory | their `embedded` switches, as in [Dependencies](#dependencies-embedded-or-external) |
+
+**Sizing.** One node of 8 vCPU, 32 GiB and 250 GB is the same as the single-node profile, plus Keycloak
+(requests 250m and 768 MiB, limit 2 GiB) and RustFS (requests 100m and 256 MiB, 20 GiB volume); the PostgreSQL volume
+is 50 GiB, the backup volume 50 GiB. The volumes use the default StorageClass.
+
+**What is not production-grade.** Single replicas everywhere, no high availability, no rolling upgrade of the
+volumes' owners (`Recreate`). The recovery point is the backup interval (24 h), and the backup lands on a volume
+of the same cluster until `backup.target` points off it (`kind: s3`). The backup pod mounts the embedded volumes
+beside their owners, which a one-node cluster allows and a multi-node one may not. The realm is imported **once**,
+at Keycloak's first start: later changes to `choregos-keycloak.realm` do not alter a realm that exists. The
+NetworkPolicies need a CNI that enforces them (the egress gate holds every agent pod until a direct connection out
+is refused, and holds forever where nothing refuses it). `RustFS` and `Keycloak`'s images are pinned by tag and digest
+(`choregos-objectstore.image`, `choregos-keycloak.image`); RustFS names its user instead of numbering it, so an
+admission policy that demands a numeric `runAsUser` needs `choregos-objectstore.podSecurityContext`.
+
+**What was verified.** The render, by `tests/charts/test_all_in_one.py`: the objects, the wiring between them, the
+guards, the pins, and that an install without the mode renders what it did. Nothing has been installed on a real
+cluster: that Keycloak imports the realm and the API signs in through it, that RustFS starts with the generated
+keys and serves the bucket, and that the profile runs end to end are **not proven**.
 
 ## The first organisation, and the first token
 
