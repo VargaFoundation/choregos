@@ -10955,6 +10955,22 @@ components:
       properties:
         input_per_1k: { type: number, minimum: 0 }
         output_per_1k: { type: number, minimum: 0 }
+    CacheMultipliers:
+      type: object
+      description: "What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0196). A null or absent field keeps the default for the model's provider family."
+      properties:
+        read: { type: [number, "null"], minimum: 0, description: "a token read from the cache (0.1 on Anthropic, 0.05 on Opus 5.5 / Sonnet 5.5)" }
+        write_5m: { type: [number, "null"], minimum: 0, description: "a token written with the 5-minute TTL (1.25 on Anthropic)" }
+        write_1h: { type: [number, "null"], minimum: 0, description: "a token written with the 1-hour TTL (2 on Anthropic)" }
+    EffectiveCacheMultipliers:
+      type: object
+      required: [read, write_5m, write_1h, source]
+      description: "The multipliers a cache-heavy line is priced with when the organisation's price override applies: the entry's own, else the gateway's cached-input price, else the provider family's default."
+      properties:
+        read: { type: number, minimum: 0 }
+        write_5m: { type: number, minimum: 0 }
+        write_1h: { type: number, minimum: 0 }
+        source: { type: string, enum: [override, gateway, family_default], description: "where the read multiplier comes from; the writes come from the override or the family default" }
     ModelGatewayFacts:
       type: object
       properties:
@@ -10982,6 +10998,8 @@ components:
         allowed_roles: { type: array, items: { type: string } }
         usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        cache_multipliers: { oneOf: [{ $ref: "#/components/schemas/CacheMultipliers" }, { type: "null" }] }
+        effective_cache_multipliers: { $ref: "#/components/schemas/EffectiveCacheMultipliers" }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
         last_seen_at: { type: [string, "null"], format: date-time }
@@ -10999,6 +11017,7 @@ components:
         allowed_roles: { type: array, items: { type: string } }
         usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        cache_multipliers: { oneOf: [{ $ref: "#/components/schemas/CacheMultipliers" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
     ModelCataloguePatch:
@@ -11009,7 +11028,9 @@ components:
         allowed_roles: { type: [array, "null"], items: { type: string } }
         usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
+        cache_multipliers: { oneOf: [{ $ref: "#/components/schemas/CacheMultipliers" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
+        clear_cache_multipliers: { type: boolean, default: false }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         clear_max_usd_per_minute: { type: boolean, default: false }
         notes: { type: [string, "null"] }
@@ -12961,6 +12982,7 @@ components:
               tokens_out: { type: integer, default: 0 }
               tokens_cached: { type: integer, default: 0 }
               tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07" }
+              tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0196)" }
               runs: { type: integer, default: 0 }
         total:
           type: object
@@ -12972,6 +12994,7 @@ components:
             tokens_out: { type: integer, default: 0 }
             tokens_cached: { type: integer, default: 0, description: "the input tokens the model read from its cache, part of tokens_in" }
             tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache, part of tokens_in (S4-07)" }
+            tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0196)" }
     MemoryAbGroup:
       type: object
       properties:
