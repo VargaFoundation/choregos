@@ -31,6 +31,8 @@ import { StopWithReason } from "@/components/activity/stop";
 import { AgentProposal } from "@/components/agent-proposal";
 import { ArtifactFacts } from "@/components/artifact-value";
 import { Artifacts } from "@/components/artifacts";
+import { FilesCard } from "@/components/ticket/files-card";
+import { attachmentRule, handedFiles } from "@/lib/attachments";
 import { LevelBadge } from "@/components/level-badge";
 import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
@@ -428,6 +430,19 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         url={data.url}
         fields={data.fields}
       />
+
+      {/* The files a person (or an application) handed to the work item (ADR 0197 §11). */}
+      {(attachmentRule(workflow.data?.json?.metadata) !== null || handedFiles(artifacts.data ?? []).length > 0) && (
+        <Card id="files" title="Files">
+          <FilesCard
+            itemId={id}
+            artifacts={artifacts.data ?? []}
+            rule={attachmentRule(workflow.data?.json?.metadata)}
+            terminal={Boolean(data.closed_at)}
+            onChanged={() => void queryClient.invalidateQueries({ queryKey: ["artifacts", id] })}
+          />
+        </Card>
+      )}
 
       <Card id="artifacts" title="Artifacts" action={<Provenance de="observed" />}>
         {artifacts.error ? (
