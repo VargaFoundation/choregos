@@ -6550,6 +6550,9 @@ export interface Operations {
   azureBoardsWebhook: { method: "POST"; path: "/webhooks/azure-boards"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  azureDevopsWebhook: { method: "POST"; path: "/webhooks/azure-devops"; body: {
+  [key: string]: unknown;
+}; response: WebhookAck };
   bindAssistantKnowledge: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/knowledge-bindings/{name}"; body: AssistantKnowledgeBind; response: Assistant };
   bindAssistantLaunch: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/launches/{launch}"; body: AssistantLaunchBind; response: Assistant };
   bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
