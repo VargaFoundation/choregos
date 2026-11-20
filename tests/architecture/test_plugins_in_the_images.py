@@ -17,7 +17,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _plugins() -> list[str]:
     members = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]["members"]
-    return sorted(m for m in members if m.startswith("plugins/") and "*" not in m)
+    # A glob member (`plugins/*`) is expanded, so it cannot hide a plugin from the checks below.
+    found = {
+        path.relative_to(ROOT).as_posix()
+        for m in members
+        if m.startswith("plugins/")
+        for path in ROOT.glob(m)
+        if (path / "pyproject.toml").is_file()
+    }
+    return sorted(found)
 
 
 def _syncing_dockerfiles() -> list[Path]:
