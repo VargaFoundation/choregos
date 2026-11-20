@@ -191,16 +191,20 @@ async def list_gateway_keys(
                 GatewayKeyRow.project_id.in_(matching_projects),
             )
         )
-    rows, meta = await keyset_page(
-        session, query, sort=GatewayKeyRow.created_at, tiebreak=GatewayKeyRow.id, page=page
-    )
-    # The slugs of this page's projects only, not of every project on the instance.
-    project_ids = {row.project_id for row in rows if row.project_id}
-    slugs: dict[str, str] = {}
-    if project_ids:
-        page_projects = select(Project.id, Project.slug).where(Project.id.in_(project_ids))
-        slug_rows = (await session.execute(page_projects)).all()
-        slugs = {str(row[0]): str(row[1]) for row in slug_rows}
+    # The whole instance: the caller administers every organisation (`require_platform_admin`), and
+    # under the RLS of `gateway_keys` a key minted without a project belongs to no organisation, so
+    # the request's own scope hid it — on PostgreSQL only (found 2026-11-20, ADR 0206).
+    async with in_platform_scope(session):
+        rows, meta = await keyset_page(
+            session, query, sort=GatewayKeyRow.created_at, tiebreak=GatewayKeyRow.id, page=page
+        )
+        # The slugs of this page's projects only, not of every project on the instance.
+        project_ids = {row.project_id for row in rows if row.project_id}
+        slugs: dict[str, str] = {}
+        if project_ids:
+            page_projects = select(Project.id, Project.slug).where(Project.id.in_(project_ids))
+            slug_rows = (await session.execute(page_projects)).all()
+            slugs = {str(row[0]): str(row[1]) for row in slug_rows}
     return GatewayKeyPage(
         items=[
             GatewayKeyInfo(
