@@ -2334,3 +2334,28 @@ async def test_an_unreadable_currency_keeps_each_amounts_own_symbol(platform: Pl
         app = pilot.app
         await until(pilot, lambda: app.live and app.conversation is not None, "the workspace")
         assert "today" in screen_text(app) and "€1.11 today" in screen_text(app)
+
+
+async def test_a_queued_runs_wait_ticks_with_the_clock(
+    platform: Platform, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1980: a queued run showed a fixed `33s` (a previous attempt's `ended_at`) while others ticked."""
+    from tranibor_cli import activity
+
+    waiting = _entry(
+        "run-queued-0001",
+        status="queued",
+        work_item_key="FIN-13",
+        started_at=_iso(NOW - timedelta(hours=2, minutes=4)),
+        ended_at=_iso(NOW - timedelta(hours=2, minutes=3, seconds=27)),
+    )
+    platform.in_flight = [waiting]
+    app = make_app()
+    async with app.run_test(size=(160, 40)) as pilot:
+        await ready(pilot)
+        await show(pilot, "activity")
+        assert "waiting 2h04m" in screen_text(app)
+        monkeypatch.setattr(activity, "clock", lambda: NOW + timedelta(minutes=3))
+        app.tick()
+        await pilot.pause()
+        assert "waiting 2h07m" in screen_text(app)
