@@ -1,0 +1,6 @@
+# The fixtures are documents, not text to diff: the PDFs are written by hand (make_fixtures.py) and hold
+# bytes outside UTF-8 with no NUL byte, which git would otherwise read as text, and tools/check_english.py
+# with it.
+*.pdf binary
+*.docx binary
+*.xlsx binary
