@@ -210,6 +210,34 @@ def lay_run(
         session.commit()
 
 
+def lay_step(
+    api: Api, console: httpx.Client, project_id: str, title: str, *, kind: str = "approval", user: str = ADMIN
+) -> tuple[str, str]:
+    """A work item waiting for `user` on a human step, as the interpreter leaves it on reaching the task:
+    the item through the real route, the `HumanRequest` row the workflow would write. Returns the item's id
+    and the request's id (what `/me/pending` lists)."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from tranibor_api.db.models import HumanRequest
+    from tranibor_core import utcnow
+
+    made = console.post(f"/api/v1/projects/{project_id}/work-items", json={"title": title, "start": False})
+    assert made.status_code == 201, made.text
+    item_id = str(made.json()["id"])
+    with Session(create_engine(f"sqlite:///{api.database}")) as session:
+        row = HumanRequest(
+            work_item_id=item_id,
+            project_id=project_id,
+            kind=kind,
+            payload={"question": f"{title}?"},
+            requested_at=utcnow(),
+            assignee={"user": user, "group": None},
+        )
+        session.add(row)
+        session.commit()
+        return item_id, str(row.id)
+
+
 def sign_in(api: Api, console: httpx.Client, profile: str = "session") -> None:
     """`choregos login` against the API, as a person does: the CLI shows a code, the person approves it in
     the console (here, the administrator's cookie), and the CLI saves a session of that person's."""

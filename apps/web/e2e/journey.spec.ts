@@ -153,7 +153,7 @@ test("members: a person appears once; a project has its members; org_admin is no
   await page.goto("/admin/members");
   const membres = page.getByTestId("members");
   await expect(membres.getByTestId("member-marc@acme.dev")).toHaveCount(1);
-  await expect(membres.getByTestId("member-marc@acme.dev")).toContainText("checkout-web · Release captain");
+  await expect(membres.getByTestId("member-marc@acme.dev")).toContainText("checkout-web · Approver");
   await expect(page.getByTestId("additive-roles")).toContainText("cannot take anything away");
   // The scope of an invitation is picked among the projects; a project leaves org_admin out.
   await page.getByLabel("Scope").selectOption("billing-api");
