@@ -38,7 +38,7 @@ data:
           {{- else if $.Values.upstream.apiKeySecret }}
           api_key: os.environ/UPSTREAM_API_KEY
           {{- end }}
-        {{- if or (hasKey . "inputCostPerToken") (hasKey . "outputCostPerToken") }}
+        {{- if or (hasKey . "inputCostPerToken") (hasKey . "outputCostPerToken") .modelInfo }}
         {{- /* ADR 0004: a local model is accounted with a configured internal price. The catalogue
                sync reads it back from `/model/info` (`model_info.input_cost_per_token`). */}}
         model_info:
@@ -50,6 +50,12 @@ data:
           {{- end }}
           {{- if hasKey . "outputCostPerToken" }}
           output_cost_per_token: {{ printf "%.12f" (float64 .outputCostPerToken) }}
+          {{- end }}
+          {{- /* The rest of the price sheet, as the operator wrote it: cache read and write prices,
+                 `tiered_pricing` (LiteLLM >= 1.105), a context window. Without them the cost of a cached
+                 or long request is wrong, and a wrong counter is worse than none. */}}
+          {{- with .modelInfo }}
+          {{- toYaml . | nindent 10 }}
           {{- end }}
         {{- else }}
         {{- with .mode }}
@@ -63,11 +69,14 @@ data:
       drop_params: true
       # ADR 0018 §2: each call made with a run's key is a span of the run's trace. Inert until
       # `global.tracing.otlpEndpoint` gives LiteLLM an OTLP endpoint.
+      {{- if .Values.spans.enabled }}
       callbacks: ["choregos_llm_spans.handler"]
+      {{- end }}
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
       database_url: os.environ/DATABASE_URL
       store_model_in_db: false
+    {{- if .Values.guardrail.enabled }}
     # ADR 0084: secrets masked before the provider call and in its answer. On for every request,
     # it acts only for a key whose metadata the platform marked (`sandbox.llm_security_analyzer`).
     # Fails closed.
@@ -77,6 +86,7 @@ data:
           guardrail: choregos_guardrail.ChoregosGuardrail
           mode: [pre_call, post_call]
           default_on: true
+    {{- end }}
   choregos_guardrail.py: |
 {{ $guard | indent 4 }}
   choregos_llm_spans.py: |
@@ -100,19 +110,14 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: gateway
       annotations:
-        checksum/config: {{ print (toJson $models) (toJson .Values.upstream) $guard $spans $otlp | sha256sum }}
+        checksum/config: {{ print (toJson $models) (toJson .Values.upstream) (toJson .Values.guardrail) (toJson .Values.spans) $guard $spans $otlp | sha256sum }}
     spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       # The Kyverno `non-root` rule has been strict since 2026-09-25: the pod context is
       # required. The image runs as uid 1000 (verified: `python -c "import litellm"` under
       # `--user 1000`). v1.105.3 (S40-16g) then v1.105.5 (S40-16i) were run under this context on
       # the dev cluster, in throwaway namespaces: Prisma migrations applied, ready, the guard loaded.
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        seccompProfile: { type: RuntimeDefault }
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: litellm
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -132,13 +137,24 @@ spec:
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "choregos.databasePasswordSecret" . }}
-                  key: password
+                  name: {{ ($.Values.database.passwordSecret).name | default (include "choregos.databasePasswordSecret" .) }}
+                  key: {{ ($.Values.database.passwordSecret).key | default "password" }}
             # DEDICATED database: virtual keys and their consumption have no business in
-            # Choregos' schema. `sslmode=prefer` encrypts when the server can,
-            # without requiring a certificate the bench's PostgreSQL does not have.
+            # Choregos' schema. `sslmode=prefer` encrypts when the server can, without requiring a
+            # certificate the bench's PostgreSQL does not have; `require` for a server that refuses
+            # clear connections (Spilo).
             - name: DATABASE_URL
-              value: "postgresql://{{ .Values.global.database.user }}:$(DATABASE_PASSWORD)@{{ include "choregos.databaseHost" . }}:{{ .Values.global.database.port }}/{{ .Values.database.name }}?sslmode=prefer"
+              value: "postgresql://{{ .Values.database.user | default .Values.global.database.user }}:$(DATABASE_PASSWORD)@{{ .Values.database.host | default (include "choregos.databaseHost" .) }}:{{ .Values.global.database.port }}/{{ .Values.database.name }}?sslmode={{ .Values.database.sslmode }}"
+            {{- if .Values.localModelCostMap }}
+            # The image's price sheet, not `main` on GitHub: a pod with no Internet loses seconds at each
+            # start retrying, and a sheet re-read live would change prices without a review.
+            - name: LITELLM_LOCAL_MODEL_COST_MAP
+              value: "True"
+            {{- end }}
+            {{- range .Values.extraSecretEnv }}
+            - name: {{ .name }}
+              valueFrom: { secretKeyRef: { name: {{ .secretName }}, key: {{ .key }} } }
+            {{- end }}
             # S64-08b: the callback posts the ACP CLIs' context breakdowns to the API's internal routes,
             # each signed for its run with the master key above (never sent).
             - name: CHOREGOS_CONTEXT_API_URL
@@ -154,9 +170,7 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 10
           resources: {{- toYaml .Values.resources | nindent 12 }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: { drop: ["ALL"] }
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           volumeMounts:
             - { name: config, mountPath: /etc/litellm }
       volumes:
