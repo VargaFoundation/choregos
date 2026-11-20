@@ -546,7 +546,7 @@ class Settings(BaseSettings):
         return self.cookies_secure
 
     @model_validator(mode="after")
-    def _legacy_decision_routes_are_the_two_it_names(self) -> Settings:
+    def _legacy_decision_routes_are_ones_that_can_be_reopened(self) -> Settings:
         from .decision_session import LEGACY_ROUTES
 
         unknown = sorted(self.legacy_decision_route_set() - LEGACY_ROUTES)

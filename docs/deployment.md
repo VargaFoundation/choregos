@@ -2401,6 +2401,18 @@ is refused at start. Remove the setting once the clients sign in with `choregos 
 console; the next minor removes it. Before upgrading, look in the audit log for decisions made by a token:
 `workitem.decision` or `assistant.action.confirm` entries whose actor is a machine account.
 
+**Four more routes need the person's session** (#1926, [ADR 0154](adr/0154-the-terminal-is-a-surface-of-the-platform.md)
+§7, amendment of 2026-11-19): the ones that widen what a run or the platform may do. Approving or refusing an
+egress request (`approveOrgEgressRequest`, `refuseOrgEgressRequest`), approving a plugin install
+(`approvePluginInstall`), approving a skill version (`approveSkillVersion`) and deciding an assistant's
+knowledge update (`decideAssistantKnowledgeUpdate`) are refused with `403` and `decision_requires_session` for
+an API token, a machine account, a run token and an outpost. The console already uses its cookie and the
+`choregos` CLI calls none of them, so only a script that decided with a token is affected. Device requests and
+pending memory are unchanged. **For one minor version only**, `CHOREGOS_LEGACY_DECISION_ROUTES` also takes
+`egress_requests`, `plugin_installs`, `skill_versions` and `assistant_knowledge_updates` (a comma-separated
+list with the two names above; anything else is refused at start). Before upgrading, look in the audit log for
+egress, plugin-install, skill-version and knowledge-update decisions made by a machine account.
+
 ## Upgrading to 0.27
 
 One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's

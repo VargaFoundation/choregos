@@ -11,7 +11,8 @@ from fastapi import APIRouter, Path, Query
 from sqlalchemy import select
 
 from ..db.models import KnowledgeUpdateProposal
-from ..deps import Db, Me
+from ..decision_session import KNOWLEDGE_UPDATES, require_person_session
+from ..deps import Config, Db, Me
 from ..errors import not_found
 from ..schemas.assistant_knowledge import KnowledgeUpdate, KnowledgeUpdateList, UpdateDecision
 from ..schemas.assistants import SLUG
@@ -65,8 +66,11 @@ async def list_updates(
     operation_id="decideAssistantKnowledgeUpdate",
 )
 async def decide_update(
-    org: str, slug: Slug, update_id: str, body: UpdateDecision, session: Db, principal: Me
+    org: str, slug: Slug, update_id: str, body: UpdateDecision, session: Db, principal: Me, settings: Config
 ) -> KnowledgeUpdate:
+    require_person_session(
+        principal, "deciding an assistant's knowledge update", settings=settings, legacy=KNOWLEDGE_UPDATES
+    )
     organisation = await organisation_by_slug(session, org)
     row = await service.installation(session, organisation.id, slug)
     service.require_manager(principal, org, row)

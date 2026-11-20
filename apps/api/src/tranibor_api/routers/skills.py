@@ -19,6 +19,7 @@ from tranibor_contracts import skill_file_bytes
 from ..audit import record
 from ..config import Settings
 from ..db.models import Organization, Skill, SkillVersion
+from ..decision_session import SKILL_VERSIONS, require_person_session
 from ..deps import Config, Db, Me
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
@@ -478,13 +479,20 @@ FORCE_REASON_MIN = 10
     operation_id="approveSkillVersion",
 )
 async def approve_skill_version(
-    org: str, slug: Slug, version: int, session: Db, principal: Me, body: SkillApproval | None = None
+    org: str,
+    slug: Slug,
+    version: int,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    body: SkillApproval | None = None,
 ) -> SkillVersionDto:
     """A high-risk version becomes usable: an administrator who is NOT its importer read it.
 
     The importer may force it (`force` and a written `reason`), when no second administrator can
     read it in time; the audit event says it was forced, and why (ADR 0050 amendment).
     """
+    require_person_session(principal, "approving a skill version", settings=settings, legacy=SKILL_VERSIONS)
     body = body or SkillApproval()
     if not principal.can(Permission.AGENT_MANAGE, org):
         raise forbidden("approving a skill version needs the org_admin role")

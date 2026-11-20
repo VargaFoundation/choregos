@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from tranibor_core.plugins import Plugin, PluginError
 
 from ..db.models import OrgPluginApproval
+from ..decision_session import PLUGIN_INSTALLS, require_person_session
 from ..deps import Config, Db, Me
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..schemas.plugins import (
@@ -232,6 +233,7 @@ async def approve_plugin_install(
 ) -> PluginApprovalDto:
     """A second administrator approves: the plugin is obtained again at the exact version, and installed
     (or upgraded) only if its content is the one that was checked."""
+    require_person_session(principal, "approving a plugin install", settings=settings, legacy=PLUGIN_INSTALLS)
     _may_install(principal, org)
     org_id = await installer.org_id_of(session, org)
     request = await approvals.pending_one(session, org_id, approval_id)
