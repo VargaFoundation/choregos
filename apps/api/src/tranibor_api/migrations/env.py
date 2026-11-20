@@ -17,7 +17,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # `fileConfig` disables every logger that already exists and is not named in the ini (its default).
+    # The migration Job does not care, but a process that migrates and then goes on (a test suite, an
+    # embedded start-up) lost `temporalio.workflow` and the like: the log line a replay test waits for
+    # never came, depending on which xdist worker ran the migration first (#2008).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
