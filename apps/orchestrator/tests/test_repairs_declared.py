@@ -6,7 +6,7 @@ agents may act: `t-redo` (the normal path, declared first) and `t-mend`, which d
 `repairs: ci_failed` and whose role, `mend`, is no role the platform ever guessed a repair from. The
 real interpreter, on Temporal's test server, plays `t-mend` on the failure, then merges once the CI
 passes. The history replays, holds the `repairs-declared` marker, and is archived for `tests/replay`
-(`CHOREGOS_RECORD_HISTORY=1`). Without the marker (a history recorded before it), the interpreter
+(`TRANIBOR_RECORD_HISTORY=1`). Without the marker (a history recorded before it), the interpreter
 does not read `repairs:` and the same workflow would take `t-redo`.
 """
 

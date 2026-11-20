@@ -124,7 +124,7 @@ class InternalApi:
         return None
 
     async def fetch_egress_token(self) -> str:
-        return os.environ["CHOREGOS_RUN_S65A_EGRESS"]
+        return os.environ["TRANIBOR_RUN_S65A_EGRESS"]
 
     async def relay_tools(self) -> Relayed:
         return Relayed(200, b'{"tools": []}', "application/json")
@@ -359,7 +359,7 @@ def step(backend: str, origin: Path, crm_token: str) -> StageInput:
             # A gateway alias (`platform/standard`) says nothing of its family, which claude-code checks.
             provider_model=os.environ.get("S65A_PROVIDER_MODEL") or None,
         ),
-        gateway_key="",  # the run's Secret carries it (`CHOREGOS_RUN_GATEWAY_KEY`), as on a cluster
+        gateway_key="",  # the run's Secret carries it (`TRANIBOR_RUN_GATEWAY_KEY`), as on a cluster
         budget=Budget(usd=0.5, max_turns=int(os.environ.get("S65A_MAX_TURNS", "25")), max_minutes=8),
         allowed_paths=["calc.py", "answer.txt"],
         playbook=PlaybookRef(ref="implement@s65a", prompt="You implement the work item, nothing more."),
@@ -377,7 +377,7 @@ def step(backend: str, origin: Path, crm_token: str) -> StageInput:
             max_findings=1,
         ),
         callbacks=Callbacks(
-            api_url="http://127.0.0.1:9/internal", run_token=os.environ["CHOREGOS_RUN_TOKEN"]
+            api_url="http://127.0.0.1:9/internal", run_token=os.environ["TRANIBOR_RUN_TOKEN"]
         ),
     )
 
@@ -490,13 +490,13 @@ def read_json(path: Path) -> Any:
 
 
 async def measure(backend: str, out: Path) -> int:
-    key = os.environ["CHOREGOS_RUN_GATEWAY_KEY"]
+    key = os.environ["TRANIBOR_RUN_GATEWAY_KEY"]
     crm_token = secrets.token_hex(16)
     secret_values = {
         "gateway-key": key,
-        "egress-token": os.environ["CHOREGOS_RUN_S65A_EGRESS"],
+        "egress-token": os.environ["TRANIBOR_RUN_S65A_EGRESS"],
         "mcp-header": crm_token,
-        "run-token": os.environ["CHOREGOS_RUN_TOKEN"],
+        "run-token": os.environ["TRANIBOR_RUN_TOKEN"],
     }
     digests = {label: hashlib.sha256(value.encode()).hexdigest() for label, value in secret_values.items()}
     origin = repository(Path(os.environ.get("S65A_DATA", "/var/tmp/s65a")), digests)
