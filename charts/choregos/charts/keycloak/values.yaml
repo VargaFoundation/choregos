@@ -1,0 +1,47 @@
+# The embedded OIDC provider (ADR 0197). Rendered only when `global.oidc.embedded` is true. To bring
+# your own, leave that off and set `global.oidc.issuer`, `clientId` and `secretRef`.
+image:
+  repository: quay.io/keycloak/keycloak
+  tag: "26.4.7"
+  digest: sha256:9409c59bdfb65dbffa20b11e6f18b8abb9281d480c7ca402f51ed3d5977e6007
+# The realm, imported ONCE, at the first start (Keycloak skips a realm that exists: changing these
+# values later does not change a realm that is running; change it in Keycloak, or delete it and restart).
+realm:
+  name: choregos
+  displayName: Choregos
+  # The bootstrap administrator of the platform: a user of the realm, member of the `org-admins` group
+  # of the bootstrap organisation (`global.bootstrap.org`). Empty email: the first of
+  # `global.bootstrap.admins`. Its password is drawn by the chart (Secret `<release>-keycloak`,
+  # key `realm-admin-password`) and read back on upgrades.
+  adminUser: admin
+  adminEmail: ""
+  # More redirect URIs of the console client (a host an organisation owns, ADR 0175).
+  extraRedirectUris: []
+  # `none` | `external` | `all`. Empty: `external` when `global.publicUrl` is https, else `none`.
+  sslRequired: ""
+# Keycloak's database. Empty host: the embedded PostgreSQL (`global.database.embedded`), whose init
+# script makes the database `keycloak` at its first start. For a PostgreSQL of your own, make the
+# database and name the host and a Secret with `username` and `password`.
+database:
+  host: ""
+  port: 5432
+  name: keycloak
+  secretRef: ""
+ingress:
+  enabled: true
+  className: ""
+  # Empty: `auth.<global.domain>`. It must resolve from the pods too: the API reads the issuer's
+  # discovery document there (add `hostAliases` or a cluster DNS entry where it does not).
+  hostname: ""
+  annotations: {}
+  # The TLS Secret of the host (cert-manager or yours). Empty: no TLS section.
+  tlsSecretName: ""
+# The container writes in its own filesystem (the quarkus build at start): not read-only.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile: { type: RuntimeDefault }
+resources:
+  requests: { cpu: 250m, memory: 768Mi }
+  limits: { cpu: "2", memory: 2Gi }

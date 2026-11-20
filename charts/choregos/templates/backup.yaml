@@ -307,7 +307,7 @@ spec:
               command: ["sh", "/scripts/objects.sh"]
               env:
                 {{- toYaml $env | nindent 16 }}
-                {{- include "choregos.backupRemote" (dict "remote" "OBJECTS" "endpoint" $g.objectStore.endpoint "region" $g.objectStore.region "secretRef" $g.objectStore.secretRef) | nindent 16 }}
+                {{- include "choregos.backupRemote" (dict "remote" "OBJECTS" "endpoint" (include "choregos.objectStoreEndpoint" $) "region" $g.objectStore.region "secretRef" $g.objectStore.secretRef) | nindent 16 }}
                 - { name: OBJECTS_PATH, value: {{ trimPrefix "s3://" $g.objectStore.url | quote }} }
               resources: {{- toYaml $b.resources | nindent 16 }}
               securityContext: {{- toYaml $g.securityContext | nindent 16 }}
@@ -458,7 +458,7 @@ spec:
               command: ["sh", "/scripts/restore-objects.sh"]
               env:
                 {{- toYaml $env | nindent 16 }}
-                {{- include "choregos.backupRemote" (dict "remote" "OBJECTS" "endpoint" $g.objectStore.endpoint "region" $g.objectStore.region "secretRef" $g.objectStore.secretRef) | nindent 16 }}
+                {{- include "choregos.backupRemote" (dict "remote" "OBJECTS" "endpoint" (include "choregos.objectStoreEndpoint" $) "region" $g.objectStore.region "secretRef" $g.objectStore.secretRef) | nindent 16 }}
                 - { name: OBJECTS_PATH, value: {{ trimPrefix "s3://" $g.objectStore.url | quote }} }
               resources: {{- toYaml $b.resources | nindent 16 }}
               securityContext: {{- toYaml $g.securityContext | nindent 16 }}

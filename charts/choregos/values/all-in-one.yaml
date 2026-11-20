@@ -1,0 +1,203 @@
+# ALL-IN-ONE installation (ADR 0197, S80-18): a cluster with nothing but Kubernetes and a default
+# StorageClass gets a working platform from one `helm install`. Everything the platform requires is
+# deployed by the chart: PostgreSQL (with pgvector), Temporal, the LiteLLM gateway, the Ecphoria
+# memory, an S3-compatible object store (RustFS) and an OIDC provider (Keycloak, with a realm, a
+# client for the console and one for the CLI, and a bootstrap administrator). Every Secret is drawn
+# by the chart on the first install and re-read on upgrades; External Secrets is off; the egress
+# proxy and the NetworkPolicies are on; agent stages run as Jobs (`k8s_job`).
+#
+#   helm install choregos charts/choregos -n choregos --create-namespace \
+#     -f charts/choregos/values/all-in-one.yaml -f my-site.yaml
+#
+# What `my-site.yaml` must set: `global.domain`, `global.publicUrl`, `global.apiUrl`, the two
+# ingresses' `hostnames` (and `className` when the cluster has no default IngressClass),
+# `global.bootstrap.org` and `global.bootstrap.admins` (the first admin is the realm's administrator),
+# and the model provider's key (`choregos-litellm.upstream`). Nothing else.
+#
+# Not production-grade, said once here and in `docs/deployment.md`, "All in one": one replica of
+# everything, no high availability, a recovery point of one backup interval, and the backup lands on
+# a volume of the same cluster until `backup.target` is pointed off it. Each embedded piece is
+# overridable: `global.oidc.embedded: false` + `global.oidc.issuer` for your own Keycloak,
+# `global.objectStore.embedded: false` + `endpoint`/`url`/`secretRef` for your own S3,
+# `global.database.embedded: false` + `global.database.secretRef` for your own PostgreSQL.
+#
+# The agent-sandbox operator is NOT installed by this profile: its CRDs are cluster-scoped and the
+# chart cannot lay them down from a namespace. The profile therefore uses the `k8s_job` executor (an
+# agent stage is a Job of the release namespace), and NOTES.txt says so. With the operator
+# installed (`infra/operators/agent-sandbox`), set `global.runner.executor: agent_sandbox`.
+global:
+  environment: prod
+  domain: choregos.example.com
+  publicUrl: https://choregos.example.com
+  apiUrl: https://choregos.example.com
+  # No agent-sandbox operator is installed by this profile: each agent stage is a Job of the release
+  # namespace.
+  runner:
+    executor: k8s_job
+  database:
+    embedded: true
+  temporal:
+    embedded: true
+  gateway:
+    embedded: true
+    # Empty: the chart generates the master key and keeps it from one update to the next.
+    secretRef: ""
+  memory:
+    embedded: true
+  # The platform's own pieces (ADR 0197).
+  allInOne:
+    enabled: true
+  objectStore:
+    embedded: true
+    generateSecret: true
+    url: s3://choregos
+    secretRef: choregos-object-store
+    # Empty: the embedded server's Service.
+    endpoint: ""
+  oidc:
+    embedded: true
+    generateSecret: true
+    secretRef: choregos-oidc
+    # Empty: https://auth.<global.domain>/realms/choregos (the embedded realm).
+    issuer: ""
+  # One node: there is no other node to spread over.
+  antiAffinity: none
+  externalSecrets:
+    enabled: false
+  # The per-run egress proxy (ADR 0070): an agent pod gets out through it and nowhere else, to the
+  # hosts its organisation opened for runners. The NetworkPolicies below make it the only way out.
+  egress:
+    enabled: true
+  rbac:
+    # No Tekton on this machine: nothing to read at cluster scale.
+    clusterScoped: false
+    # The orchestrator creates the agent Jobs in its own namespace.
+    jobRunner: true
+
+# The scheduled backup (`global.allInOne` takes the single-node conditions: no backup, no render). The
+# target is a volume of THIS cluster: it does not survive the loss of the cluster. Point it off the
+# cluster (`kind: s3` and `s3.url`) before you rely on it.
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  keep: 7
+  target:
+    kind: volume
+    volume: { size: 50Gi, storageClass: "" }
+  # The files the workflows produced live in the embedded object store: part of the state.
+  objectStore: true
+
+choregos-api:
+  replicaCount: 1
+  autoscaling: { enabled: false }
+  podDisruptionBudget: { enabled: false }
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { cpu: "2", memory: 2Gi }
+  migrations:
+    # The database is embedded: it does not exist before the installation.
+    hook: post-install,post-upgrade
+  ingress:
+    enabled: true
+    kind: ingress
+    # Empty: the cluster's default IngressClass.
+    className: ""
+    hostnames: ["choregos.example.com"]
+
+choregos-web:
+  replicaCount: 1
+  podDisruptionBudget: { enabled: false }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  ingress:
+    enabled: true
+    kind: ingress
+    className: ""
+    hostnames: ["choregos.example.com"]
+
+choregos-orchestrator:
+  podDisruptionBudget: { enabled: false }
+  queues:
+    - { name: orchestrator, replicas: 1, resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } } }
+    - { name: executor, replicas: 1, resources: { requests: { cpu: 200m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } } }
+    - { name: tracker, replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } } }
+    - { name: memory, replicas: 1, resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } } }
+  runner:
+    # The agents run in the release namespace (the chart's default namespace name).
+    namespacePattern: choregos
+    # The release's per-run egress proxy (`global.egress`), in the agents' namespace.
+    egressProxy: "http://choregos-egress.{namespace}.svc:3128"
+    # At most four agent runs at once; the next ones wait without a pod.
+    maxActive: 4
+    limits: { cpu: "2", memory: 4Gi }
+    # k3s's kube-router applies a new agent pod's egress policy only seconds after it starts (#1854):
+    # the gate holds every agent pod until a direct connection out is refused (S80-07f). Measured on
+    # k3d: open 1.2 to 5.2 s without it. Never turn it off on this profile.
+    egressGate:
+      enabled: true
+
+choregos-postgresql:
+  persistence: { enabled: true, size: 50Gi, storageClass: "" }
+  resources:
+    requests: { cpu: 500m, memory: 2Gi }
+    limits: { cpu: "2", memory: 4Gi }
+
+choregos-temporal:
+  persistence: { enabled: true, size: 10Gi, storageClass: "" }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+choregos-litellm:
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+choregos-ecphoria:
+  persistence: { enabled: true, size: 10Gi, storageClass: "" }
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { cpu: "1", memory: 2Gi }
+
+# The embedded object store and OIDC provider (ADR 0197).
+choregos-objectstore:
+  persistence: { enabled: true, size: 20Gi, storageClass: "" }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+
+choregos-keycloak:
+  ingress:
+    enabled: true
+    className: ""
+    # Empty: auth.<global.domain>. It must resolve from inside the cluster too.
+    hostname: ""
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { cpu: "2", memory: 2Gi }
+
+# The tools sidecar is a Tekton Task: no Tekton here.
+choregos-tools:
+  enabled: false
+
+# No Prometheus operator on a bare k3s.
+monitoring:
+  serviceMonitor: false
+  alerts: false
+  dashboards: false
+
+# The chart's NetworkPolicies, for the embedded layout (ADR 0184, S80-07c). An agent pod (label
+# `app.kubernetes.io/name: choregos-runner`, which the executor sets) reaches DNS, the API, the
+# model gateway, the memory and the egress proxy, and nothing else: not PostgreSQL, not Temporal,
+# not the outside directly. PostgreSQL and Temporal also take connections only from the platform's
+# pods that use them. k3s enforces NetworkPolicies (its embedded kube-router) unless it was started
+# with `--disable-network-policy`: do not.
+networkPolicies:
+  enabled: true
+  # The platform's own pods (never the agents) go wherever the site's services are: the OIDC
+  # provider, the model provider (LiteLLM), the trackers and git hosts, the object store, the backup
+  # bucket, and the Kubernetes API (on k3s the node's address, port 6443, which a NetworkPolicy sees
+  # after the Service's translation). On a cluster, a platform team opens these; here nobody else does.
+  platformEgress:
+    - to: [{ ipBlock: { cidr: 0.0.0.0/0 } }]

@@ -57,6 +57,17 @@ spec:
         {{- if not (include "choregos.outpostsEnabled" .) }}
         {{- $hashed = set (deepCopy .Values) "global" (omit .Values.global "outposts") }}
         {{- end }}
+        {{- /* ADR 0197: the all-in-one keys, when off (their defaults), are no part of what the checksum covers:
+             adding them restarts no API of an install that does not use them. */}}
+        {{- if not (include "choregos.allInOne" .) }}
+        {{- $g := deepCopy $hashed.global }}
+        {{- $oidc := omit $g.oidc "embedded" "generateSecret" }}
+        {{- $store := $g.objectStore }}
+        {{- if not $store.embedded }}{{ $store = omit $store "embedded" "generateSecret" "serviceName" }}{{ end }}
+        {{- if $g.oidc.embedded }}{{ $oidc = $g.oidc }}{{ end }}
+        {{- $hashed = set (deepCopy $hashed) "global" (set (omit $g "allInOne") "oidc" $oidc) }}
+        {{- $_ := set $hashed.global "objectStore" $store }}
+        {{- end }}
         checksum/config: {{ toJson $hashed | sha256sum }}
     spec:
       serviceAccountName: choregos-api
@@ -260,7 +271,7 @@ spec:
             - name: CHOREGOS_CORS_ORIGINS
               value: {{ if .Values.corsOrigins }}{{ join "," .Values.corsOrigins | quote }}{{ else }}{{ .Values.global.publicUrl | default (printf "https://app.%s" .Values.global.domain) | quote }}{{ end }}
             - name: CHOREGOS_OIDC_ISSUER
-              value: {{ .Values.global.oidc.issuer | quote }}
+              value: {{ include "choregos.oidcIssuer" . | quote }}
             - name: CHOREGOS_OIDC_CLIENT_ID
               value: {{ .Values.global.oidc.clientId | quote }}
             - name: CHOREGOS_OIDC_CLIENT_SECRET

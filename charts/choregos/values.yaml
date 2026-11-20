@@ -490,6 +490,15 @@ global:
     # Secret with the keys `access-key` and `secret-key`. Only the API reads and writes the
     # store; a runner never receives these keys. Empty: no signature (an open or IAM-bound store).
     secretRef: ""
+    # ADR 0197. `true`: the chart deploys one S3-compatible server (RustFS), its volume and the Job that
+    # makes the bucket, and `endpoint` may stay empty (it is then the embedded server's Service).
+    # `false` (default): the store is the site's, as above.
+    embedded: false
+    # The embedded server's Service name. Empty: `<release>-objectstore`.
+    serviceName: ""
+    # `true`: the chart draws the Secret `secretRef` names (`access-key`, `secret-key`) on the first
+    # install and re-reads it on upgrades. Leave `false` to provide it yourself.
+    generateSecret: false
   oidc:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos
@@ -497,6 +506,13 @@ global:
     # Organization to attach the NON-prefixed OIDC groups to (`developers`,
     # `org-admins`…). Empty: only `choregos:<org>:<group>` groups give a role.
     defaultOrg: ""
+    # ADR 0197. `true`: the chart deploys one Keycloak with a realm (`choregos-keycloak.realm`), a client
+    # for the console and one for the CLI, and a bootstrap administrator. `issuer` may then stay
+    # empty (it is `https://auth.<global.domain>/realms/choregos`). `false` (default): the provider is the site's.
+    embedded: false
+    # `true`: the chart draws the Secret `secretRef` names (key `client-secret`), shared by the
+    # embedded realm's client and the API. Leave `false` to provide it yourself.
+    generateSecret: false
   # The MCP gateway as an OAuth resource server (ADR 0030, RFC 9728): the console's IdP issues the
   # tokens of Claude Code and claude.ai, with no token to paste. What the IdP must carry (scope
   # `choregos-mcp`, clients): docs/runbooks/keycloak-mcp.md.
@@ -575,6 +591,15 @@ global:
       egress: networkpolicy
       resources:
         limits: { cpu: 500m, memory: 512Mi }
+  # All in one (ADR 0197): a cluster with nothing but Kubernetes and a default StorageClass gets a working
+  # platform in one `helm install -f values/all-in-one.yaml`. This switch does NOT embed anything by
+  # itself (a Helm condition reads values, not templates): the profile sets the `embedded` switches, and
+  # this one (a) lets the chart draw the platform's own Secrets (`apiSecretRef`) for lack of a vault,
+  # (b) relaxes the guard of `staging`/`prod` as the single-node profile does, with the same
+  # conditions (backup, NetworkPolicies, egress proxy), and (c) is the marker the tests and NOTES read.
+  # Each piece stays individually overridable: set `global.oidc.embedded: false` and name your own issuer.
+  allInOne:
+    enabled: false
   # Development login (`/auth/login?as=<email>`), without an IdP. NEVER in production:
   # the API refuses it by itself in staging/prod. `adminEmails`: who receives ORG_ADMIN.
   devLogin:
