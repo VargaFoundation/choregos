@@ -384,7 +384,7 @@
 .flow-ring {
   position: absolute;
   inset: -3px;
-  border-radius: 9999px;
+  border-radius: calc(var(--radius-pill) + 3px); /* the halo of a flow node, a pill: it follows the theme */
   background: conic-gradient(
     from var(--flow-angle),
     transparent 0 45%,
