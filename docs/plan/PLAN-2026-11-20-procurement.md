@@ -294,6 +294,8 @@ Core — `graalsystems/tranibor`, stream S84 (in `docs/plan/08-backlog.yaml`):
 | S84-08 | `feat(procurement)`: `compare` and `tier` | sonnet | M | 07 |
 | S84-09 | `build(procurement)`: the job image, CI, release, chart, compose | sonnet | M | 08 |
 | S84-15 | `feat(core)`: `output_sections`, the sections of a Markdown output | sonnet | S | 05 |
+| S84-16 | `fix(core)`: `numbers_measured` reads no identifier as an amount | sonnet | S | 15 |
+| S84-17 | `feat(procurement)`: `renewals` leaves out a contract already decided | sonnet | S | 12 |
 | S84-10 | `feat(plugins)`: the core ships `procurement` offline and plays its template end to end | sonnet | L | 09, PA-04 |
 | S84-11 | `feat(dev)`: a procurement project with sample offers in the local install; the trade's page | sonnet | M | 10 |
 | S84-12 | `feat(procurement)`: `supplier-check` and `renewals` | sonnet | M | 10 |
@@ -878,6 +880,65 @@ connector (`gate_needs("output_sections") == frozenset()`).
 - [ ] The tests are green; removing the section check turns two red.
 - [ ] `tests/docs/test_guarantee_list.py` is green with the gate named in `docs/concepts.md`.
 - [ ] `make ci` is green; the trade guards are untouched.
+
+### S84-16 · fix(core): `numbers_measured` reads no identifier as an amount
+
+**Wave** 8 · **Worker** sonnet · **Size** S · **Depends on** `S84-15` · **Contract change** no
+
+**PR title:** `fix(core): numbers_measured reads no identifier as an amount (S84-16)`
+
+**Goal.** An agent may cite a reference (`FA-0012`, `PO-2026-0042`, `CTR_17`) without the gate reading its
+digits as an unmeasured number.
+
+**Context.** Found by PA-08 (2026-11-20): `_NUMBER` in `packages/core/src/tranibor_core/gates/__init__.py`
+starts a number after any character but a word character or a dot, so the `0012` of `FA-0012` reads as 12,
+which no source holds, and a qualification citing a framework agreement numbered 10 or more is always
+refused. ISO dates are already removed before the numbers are read (`_ISO_DATE`); identifiers need the
+same treatment, in the outputs and in the sources alike.
+
+**Files.** Modify `packages/core/src/tranibor_core/gates/__init__.py` (`_cited` and the gate's docstring),
+`docs/concepts.md` (one sentence where `numbers_measured` is described). Create
+`packages/core/tests/test_numbers_measured_identifiers.py`.
+
+**Steps.** Remove from a text, before its numbers are read, every identifier token: a letter first, then
+letters, digits and the separators `-`, `_`, `/`, `.`, holding at least one digit and at least one
+separator or letter-digit boundary (`FA-0012`, `PO-2026-0042`, `CTR_17`, `ISO-9001`, `v2.3.1`). A number
+that stands alone, with its sign, its thousands separators, its decimals or its percent, is unchanged.
+
+**Tests.** The identifiers above are not cited; `-12%`, `12,500.50`, `0.95`, `3 suppliers` and `Q3 2026`
+keep their current reading (write down what `Q3` gives today and keep it); a memo citing `FA-0012` beside
+measured amounts passes; an unmeasured amount beside an identifier still fails; the investment-research
+plugin's tests (`plugins/investment-research/tests`) and every existing `numbers_measured` test stay green.
+
+**Acceptance.**
+- [ ] Reverting the change turns the identifier tests red.
+- [ ] `make ci` is green; no existing gate test changes its expectation (say so if one must, and why).
+
+### S84-17 · feat(procurement): `renewals` leaves out a contract already decided
+
+**Wave** 8 · **Worker** sonnet · **Size** S · **Depends on** `S84-12` · **Contract change** no
+
+**PR title:** `feat(procurement): renewals leaves out a contract already decided (S84-17)`
+
+**Goal.** A monthly campaign does not open a second memo for a contract a person decided last month.
+
+**Context.** Found by PA-09 (2026-11-20): `renewals` lists every contract ending within the window, each
+campaign. The decision is recorded by `purchasing.add_contract_note` with a text that starts
+`Renewal decision:` (PA-09's `t-record`). The server's `list_contracts` rows and `get_contract` answer are
+in the agents repository's `plugins/procurement/server/PROFILE.md`; read whether a contract row carries its
+notes or a note count. If it does not, this story stops and reports: the profile needs the field first
+(a story of the agents repository).
+
+**Files.** Modify `plugins/procurement/src/tranibor_procurement/renewals.py`, `cli.py`, `README.md` and
+`tests/test_renewals.py`.
+
+**Steps.** A flag `--skip-decided` (off by default, so a call without it is unchanged): a contract whose
+notes hold one starting `Renewal decision:` within the last `--within-days` days is left out and counted in
+a new fact `contracts_already_decided`; it is listed in `contracts.already_decided`, never in `expiring`.
+
+**Acceptance.**
+- [ ] A contract decided in the window is left out and counted; one decided before the window is listed.
+- [ ] Without the flag the output and the facts are unchanged (a test holds the old output).
 
 ### PA-01 · feat(procurement): the plugin, its two agents, two skills and their evals
 

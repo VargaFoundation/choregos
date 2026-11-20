@@ -6246,3 +6246,25 @@ stories:
       - "The validator refuses an output the transition does not declare and an empty outputs map"
       - "The gate needs no connector, and docs/concepts.md names it"
     notes: "Found by PA-02 on 2026-11-20: markdown_sections reads the documents a diff adds and needs scm, so a workflow without a repository can never satisfy it."
+  - id: S84-16
+    title: "fix(core): numbers_measured reads no identifier as an amount"
+    stream: S84
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S84-15]
+    acceptance:
+      - "An identifier token (FA-0012, PO-2026-0042, CTR_17) is not read as a number, in outputs and sources alike"
+      - "A standalone number keeps its reading; an unmeasured amount beside an identifier still fails"
+    notes: "Found by PA-08 on 2026-11-20: a qualification citing a framework agreement numbered 10 or more was always refused."
+  - id: S84-17
+    title: "feat(procurement): renewals leaves out a contract already decided"
+    stream: S84
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S84-12]
+    acceptance:
+      - "With --skip-decided, a contract whose notes hold a renewal decision within the window is left out and counted"
+      - "Without the flag the output and the facts are unchanged"
+    notes: "Found by PA-09 on 2026-11-20: a monthly campaign reopened a memo for a contract decided the month before."
