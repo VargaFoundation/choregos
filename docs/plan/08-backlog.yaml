@@ -1132,6 +1132,16 @@ stories:
     depends_on: []
     acceptance:
       - "Example files in templates/*/optional/; disabled by default"
+  - id: S13-07
+    title: "Azure DevOps Boards TrackerAdapter (REST 7.1, Services and Server 2022): WIQL, states, tags, comments, custom fields, links, Service Hooks webhook, PAT or Entra service principal (ADR 0198)"
+    stream: S13
+    sprint: 6
+    priority: 7
+    size: L
+    depends_on: [S13-04]
+    acceptance:
+      - "An Azure Boards work item tagged agent-ready starts a workflow; its state, status comment and Cost, Size, Risk and Run fields go back through the connector"
+      - "A Service Hooks delivery is accepted with the shared secret as basic-auth password or X-Choregos-Secret, refused otherwise, and routed by team project"
 
   # ───────────── S14 — Governed change on a data platform (ADR 0028, 2026-10-02) ─────────────
   - id: S14-01
