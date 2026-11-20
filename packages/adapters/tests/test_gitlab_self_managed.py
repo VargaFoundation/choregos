@@ -156,9 +156,14 @@ def test_a_ca_bundle_is_loaded_and_a_bad_one_is_refused(tmp_path: Path) -> None:
         build_client({"token": "t", "ca_bundle": str(junk)})
 
 
-def test_the_registry_builds_the_three_adapters_from_a_self_managed_config(tmp_path: Path) -> None:
+def test_the_registry_builds_the_three_adapters_from_a_self_managed_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from tranibor_adapters import registry
 
+    # `apps/api/tests/conftest.py` sets TRANIBOR_FAKES=1 at import: collected in one session with the
+    # API's tests, the registry would build fakes. This test is about the real adapters.
+    monkeypatch.delenv("TRANIBOR_FAKES", raising=False)
     ca = str(_pem(tmp_path / "ca.pem"))
     cfg = {"base_url": PREFIXED + "/", "project": "ops/billing", "token": "t", "ca_bundle": ca}
     for family, name in (("tracker", "gitlab-issues"), ("scm", "gitlab"), ("ci", "gitlab")):
