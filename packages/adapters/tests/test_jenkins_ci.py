@@ -3,6 +3,9 @@ against a simulated controller whose queue turns into a build."""
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import httpx
 import pytest
 import respx
@@ -289,7 +292,7 @@ def test_a_notification_plugin_payload_becomes_a_ci_event() -> None:
     (done,) = parse_jenkins_event(base)
     assert done.type.value == "ci.run.succeeded" and done.source == "jenkins"
     assert done.project_slug == "app" and done.work_item_key == "northwind/app#12"
-    assert done.payload["sha"] == SHA and done.delivery_id == "jenkins:app:7:ci.run.succeeded"
+    assert done.payload["sha"] == SHA and done.delivery_id == f"jenkins:{BASE}/job/app/7:ci.run.succeeded"
     base["build"] = {**base["build"], "status": "FAILURE"}  # type: ignore[dict-item]
     assert parse_jenkins_event(base)[0].type.value == "ci.run.failed"
     base["build"] = {**base["build"], "phase": "STARTED", "status": ""}  # type: ignore[dict-item]
@@ -297,6 +300,22 @@ def test_a_notification_plugin_payload_becomes_a_ci_event() -> None:
     for ignored in ("QUEUED", "FINALIZED"):
         base["build"] = {**base["build"], "phase": ignored}  # type: ignore[dict-item]
         assert parse_jenkins_event(base) == []
+
+
+def test_the_same_job_and_build_number_on_two_controllers_do_not_share_a_delivery_id() -> None:
+    def event(base: str, **build: Any) -> Any:
+        payload = {
+            "name": "app",
+            "build": {"number": 7, "phase": "STARTED", "full_url": f"{base}/job/app/7/", **build},
+        }
+        return parse_jenkins_event(payload)[0]
+
+    a, b = event("https://jenkins.a.example"), event("https://jenkins.b.example")
+    assert a.delivery_id != b.delivery_id
+    assert a.delivery_id == event("https://jenkins.a.example").delivery_id, "a redelivery keeps its id"
+    flat = {"job": "app", "build_number": 7, "url": "https://jenkins.b.example/job/app/7/"}
+    (flat_event,) = adapter().parse_event({}, json.dumps(flat).encode())
+    assert flat_event.delivery_id == "jenkins:https://jenkins.b.example/job/app/7:ci.run.started"
 
 
 def test_the_flat_payload_names_its_project_and_work_item() -> None:

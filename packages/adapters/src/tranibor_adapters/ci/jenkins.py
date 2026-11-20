@@ -324,7 +324,7 @@ def parse_jenkins_event(payload: dict[str, Any]) -> list[InboundEvent]:
         InboundEvent(
             type=kind,
             source="jenkins",
-            delivery_id=f"jenkins:{flat['job']}:{flat['build_number']}:{kind.value}",
+            delivery_id=_delivery_id(flat, kind),
             project_slug=slug,
             work_item_key=key,
             payload={
@@ -337,3 +337,15 @@ def parse_jenkins_event(payload: dict[str, Any]) -> list[InboundEvent]:
             },
         )
     ]
+
+
+def _delivery_id(flat: dict[str, Any], kind: InboundEventType) -> str:
+    """The id a redelivery of this build event shares, and no other controller's build does.
+
+    A job name and a build number repeat across controllers (two organisations each run `app` #7), and
+    the dedup table is global: the build's absolute URL names the controller as well. A payload with only
+    a relative or no URL falls back to job and number, which cannot tell controllers apart."""
+    url = str(flat["url"] or "")
+    if url.startswith(("http://", "https://")):
+        return f"jenkins:{url.rstrip('/')}:{kind.value}"
+    return f"jenkins:{flat['job']}:{flat['build_number']}:{kind.value}"
