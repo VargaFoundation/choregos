@@ -225,7 +225,9 @@ async def test_two_names_that_slug_to_one_are_refused_together(
     assert await _rows() == [] and not store.objects, "none of the three was kept"
     from tranibor_api.services.handed_files import slug
 
-    assert slug("my quote.pdf") == "my-quote.pdf" and slug("Dévis  n°1 (final).pdf") == "Devis-n1-final-.pdf"
+    assert slug("my quote.pdf") == "my-quote.pdf"
+    accented = "Dévis  n°1 (final).pdf"  # lang: fr-ok - the accents are what the folding removes
+    assert slug(accented) == "Devis-n1-final-.pdf"
     assert slug("../../etc/pass wd.pdf") == "pass-wd.pdf"
     assert slug("...") == "" and slug("日本語") == ""
     assert len(slug("a" * 300 + ".pdf")) == 128 and slug("a" * 300 + ".pdf").endswith(".pdf")
