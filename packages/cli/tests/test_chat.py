@@ -2116,6 +2116,8 @@ async def test_the_footer_keeps_every_key_and_shows_the_palette(platform: Platfo
     app = make_app()
     async with app.run_test(size=(160, 40)) as pilot:
         await ready(pilot)
+        # The footer is drawn after the first refresh: a loaded runner read an empty last line.
+        await until(pilot, lambda: "Quit" in screen_text(app).splitlines()[-1], "the footer")
         footer = screen_text(app).splitlines()[-1]
         assert "Palette" in footer and "Decide" in footer and "New" in footer and "Quit" in footer
 
