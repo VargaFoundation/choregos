@@ -43,7 +43,7 @@ STATE_TTL_S = 900
 INSTALLATION_ACTIONS = {"created", "unsuspend", "suspend", "new_permissions_accepted"}
 GITHUB_WEB = "https://github.com"
 #: Connector types whose `repo` is served by the App.
-GITHUB_TYPES = {("tracker", "github-issues"), ("scm", "github")}
+GITHUB_TYPES = {("tracker", "github-issues"), ("scm", "github"), ("ci", "github-actions")}
 
 _real: dict[tuple[str, str, str, str], GitHubApp] = {}
 

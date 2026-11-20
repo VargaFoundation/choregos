@@ -445,6 +445,21 @@ username, a plugin's server; `null` when the configuration names none. Not yet: 
 who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
 connector's account.
 
+## CI connectors: Jenkins and GitHub Actions (S13-10)
+
+- **Jenkins** is reached with a user's API token (HTTP basic, sealed like any connector secret) and asks for
+  a CSRF crumb before a trigger. Give the user `Job/Read` and `Job/Build` on one job and nothing else: the
+  token can build that job with the connector's parameters, no more. Notifications arrive at
+  `/api/v1/webhooks/jenkins`, authenticated by the shared webhook secret (`X-Choregos-Secret`, or `?token=`
+  for the Notification plugin, whose URL then holds the secret: keep that URL out of logs and screenshots),
+  and refused with 401 on any deployed instance that has no secret.
+- **GitHub Actions** needs no credential of its own: it uses the GitHub App, which now asks for `actions:
+  write` (dispatch and rerun) and the `workflow_run` event. The permission is optional like `statuses`: an
+  installation that did not accept it keeps working and GitHub answers 403 to this connector alone. The
+  `workflow_run` deliveries go through the App's HMAC-signed webhook.
+- A notification, from either, names a commit and a branch; the platform reads it as a hint to signal the
+  work item and never as proof a gate passed: `ci_green` still reads the pull request's checks.
+
 ## A tool call under the person's identity (ADR 0135)
 
 By default a connector is called with its own credential (`service`). A connector may instead be called

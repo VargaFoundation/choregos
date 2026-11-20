@@ -50,9 +50,10 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 
 | Kind | Implementations |
 | :-- | :-- |
-| `tracker` | `github-issues`, `jira`, `gitlab-issues`, `internal`, `fake` |
+| `tracker` | `github-issues`, `jira`, `gitlab-issues`, `azure-boards`, `internal`, `fake` |
 | `scm` | `github`, `gitlab`, `azure-repos`, `fake` |
-| `ci` / `cd` | `tekton`, `gitlab`, `azure-pipelines` / `argocd`, `demo`, `fake` |
+| `ci` | `tekton`, `gitlab`, `azure-pipelines`, `jenkins`, `github-actions`, `fake` |
+| `cd` | `argocd`, `demo`, `fake` |
 | `runtime` | `tekton`, `k8s_job`, `aca`, `local_docker`, `agent_sandbox`, `fake` |
 | `gateway` | `litellm`, `direct`, `fake` |
 | `memory` | `ecphoria`, `lexical`, `fake` |
@@ -60,8 +61,10 @@ A project needs, at minimum: a **tracker** (where humans look), a **workflow** a
 
 A project only needs what its workflows read ([ADR 0034](adr/0034-connectors-by-capability.md)).
 `GET /projects/{id}/requirements` derives it — a guarantee says what it reads (`scope_respected` a
-diff; `ci_green` and `scans_ok` the pull request's checks, read through the `scm`, so GitHub Actions
-needs no `ci` connector), an agent whose role works in a repository needs an `scm`, a release
+diff; `ci_green` and `scans_ok` the pull request's checks, read through the `scm`, so a CI that reports
+its results to the pull request (GitHub Actions, Jenkins with a GitHub plugin) needs no `ci`
+connector for the gate; the `ci` connectors `jenkins` and `github-actions` add what the `scm` cannot
+do: dispatch a run, follow it to its result and console, rerun failed jobs and receive its events), an agent whose role works in a repository needs an `scm`, a release
 train or a production state (`production: true`) needs a `cd`, a transition that opens or merges a
 pull request (`does`) needs an `scm` — and says why for each. An HR project shows
 neither `scm`, nor `ci`, nor `cd`; the settings page lists what is required, what is configured,

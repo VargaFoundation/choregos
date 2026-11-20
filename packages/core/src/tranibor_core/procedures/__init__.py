@@ -68,6 +68,7 @@ WEBHOOK_SOURCES = (
     "argocd",
     "tekton",
     "alertmanager",
+    "jenkins",
 )
 #: `{{name}}` or `{{name:argument}}`: the only forms a body may use, and the only names.
 PLACEHOLDER = re.compile(r"\{\{\s*([a-z_]+)(?::([a-z0-9_/-]+))?\s*\}\}")

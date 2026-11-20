@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `TRANIBOR_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-66 procedures.
+68 procedures.
 
 ## Connectors
 
@@ -14,7 +14,9 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Promote through Argo CD](connector.cd.argocd.md) | the person who operates the platform | `cd/argocd` | 2026-10-16 |
 | [The demo deployment (demonstration only)](connector.cd.demo.md) | anyone | `cd/demo` | 2026-10-16 |
 | [Read and queue runs of Azure Pipelines](connector.ci.azure-pipelines.md) | a project owner | `ci/azure-pipelines` | 2026-11-20 |
+| [Dispatch and follow GitHub Actions workflows](connector.ci.github-actions.md) | a project owner | `ci/github-actions` | 2026-11-20 |
 | [Read pipeline status from GitLab CI](connector.ci.gitlab.md) | a project owner | `ci/gitlab` | 2026-11-04 |
+| [Trigger and follow builds on Jenkins](connector.ci.jenkins.md) | a project owner | `ci/jenkins` | 2026-11-20 |
 | [Read pipeline status from Tekton](connector.ci.tekton.md) | the person who operates the platform | `ci/tekton` | 2026-10-16 |
 | [Connect Confluence Cloud](connector.documents.confluence.md) | an organisation administrator | `documents/confluence` | 2026-10-16 |
 | [Connect a private git repository as a documents source](connector.documents.git.md) | an organisation administrator | `documents/git` | 2026-10-16 |
