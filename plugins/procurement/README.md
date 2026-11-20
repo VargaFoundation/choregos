@@ -104,13 +104,20 @@ require are arguments the workflow writes: there is no default. No bank detail i
 ## `tranibor-procurement renewals`
 
 ```
-tranibor-procurement renewals --within-days N [--max 50]
+tranibor-procurement renewals --within-days N [--max 50] [--skip-decided]
 ```
 
 Calls `purchasing.list_contracts` (`ending_before` today plus N days) through the relay. Output `contracts` =
 `{expiring: [id], by_id: {id: summary}, left_out: [id]}`, ordered by end date (`end_date` of the summary)
 then id; `--max` (1 to 100, the spawn ceiling of ADR 0057) children are listed, the rest are `left_out`.
 Facts: `contracts_expiring`, `contracts_left_out`. No contract is `contracts_expiring: 0` and exit 0.
+
+`--skip-decided` (off by default: a call without it is unchanged) leaves out a contract whose notes hold one
+starting `Renewal decision:` (what `purchasing.add_contract_note` records) dated within the last
+`--within-days` days. It is named in `contracts.already_decided`, never in `expiring`, and counted by the fact
+`contracts_already_decided`; both exist only with the flag. The notes are read with `purchasing.get_contract`,
+asked only for a listed contract whose `note_count` is above 0, so the workflow's job must declare
+`get_contract` (as well as `list_contracts`) in its actor's `tools`.
 
 ### The relay
 

@@ -76,6 +76,11 @@ def _parser() -> argparse.ArgumentParser:
         "--within-days", type=int, required=True, metavar="N", help="contracts ending within N days"
     )
     r.add_argument("--max", type=int, default=50, help=f"the most contracts listed (at most {MAX_CEILING})")
+    r.add_argument(
+        "--skip-decided",
+        action="store_true",
+        help="leave out a contract with a `Renewal decision:` note dated within --within-days days",
+    )
     return p
 
 
@@ -99,7 +104,9 @@ def main(argv: list[str] | None = None, relay: Relay | None = None) -> int:
             job.publish(root, summary=summary, facts=facts, outputs=outputs)
             return 0
         if args.command == "renewals":
-            summary, facts, outputs = renewals(relay or HttpRelay(), args.within_days, args.max)
+            summary, facts, outputs = renewals(
+                relay or HttpRelay(), args.within_days, args.max, skip_decided=args.skip_decided
+            )
             job.publish(root, summary=summary, facts=facts, outputs=outputs)
             return 0
         inputs = job.inputs_dir(root)

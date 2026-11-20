@@ -71,3 +71,54 @@ def test_a_relay_that_fails_is_a_non_zero_exit(workspace: Path) -> None:
 @pytest.mark.parametrize("bad", ["0", "101", "-1"])
 def test_max_above_the_spawn_ceiling_or_below_one_is_a_broken_contract(workspace: Path, bad: str) -> None:
     assert main(["renewals", "--within-days", "30", "--max", bad], relay=lambda o, a: {"contracts": []}) == 2
+
+
+def _decision_relay(notes: dict[str, list[dict[str, str]]], seen: list[str]) -> Any:
+    rows = [
+        {"id": i, "end_date": f"2026-12-0{n}", "note_count": len(v)}
+        for n, (i, v) in enumerate(notes.items(), 1)
+    ]
+
+    def relay(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if operation == "get_contract":
+            seen.append(arguments["contract_id"])
+            return {"contract": {"id": arguments["contract_id"], "notes": notes[arguments["contract_id"]]}}
+        return {"contracts": rows}
+
+    return relay
+
+
+def test_skip_decided_leaves_out_a_contract_decided_in_the_window(workspace: Path) -> None:
+    today = dt.datetime.now(dt.UTC).date()
+    recent = (today - dt.timedelta(days=10)).isoformat() + "T09:00:00Z"
+    old = (today - dt.timedelta(days=60)).isoformat() + "T09:00:00Z"
+    notes = {
+        "c-1": [{"text": "Renewal decision: renew for a year.", "created_at": recent}],
+        "c-2": [{"text": "Renewal decision: renew.", "created_at": old}],
+        "c-3": [{"text": "Called the supplier.", "created_at": recent}],
+        "c-4": [],
+    }
+    seen: list[str] = []
+    relay = _decision_relay(notes, seen)
+    assert main(["renewals", "--within-days", "30", "--skip-decided"], relay=relay) == 0
+    done = _job(workspace)
+    assert done["outputs"]["contracts"]["expiring"] == ["c-2", "c-3", "c-4"]
+    assert done["outputs"]["contracts"]["already_decided"] == ["c-1"]
+    assert "c-1" not in done["outputs"]["contracts"]["by_id"]
+    assert done["facts"] == {"contracts_expiring": 3, "contracts_left_out": 0, "contracts_already_decided": 1}
+    assert sorted(seen) == ["c-1", "c-2", "c-3"]  # c-4 has no note: get_contract is not asked
+
+
+def test_without_the_flag_the_output_and_the_facts_are_unchanged(workspace: Path) -> None:
+    recent = dt.datetime.now(dt.UTC).date().isoformat() + "T09:00:00Z"
+    seen: list[str] = []
+    relay = _decision_relay({"c-1": [{"text": "Renewal decision: renew.", "created_at": recent}]}, seen)
+    assert main(["renewals", "--within-days", "30"], relay=relay) == 0
+    done = _job(workspace)
+    assert done["facts"] == {"contracts_expiring": 1, "contracts_left_out": 0}
+    assert done["outputs"]["contracts"] == {
+        "expiring": ["c-1"],
+        "by_id": {"c-1": {"id": "c-1", "end_date": "2026-12-01", "note_count": 1}},
+        "left_out": [],
+    }
+    assert seen == []
