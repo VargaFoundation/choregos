@@ -1371,8 +1371,23 @@ async def test_a_refused_relaunch_says_why(platform: Platform) -> None:
 
 
 async def expand_run(pilot: Any, text: str = "implement") -> None:
-    await put_cursor_on(pilot, text)
-    await pilot.press("enter")
+    """Open the run whose line reads `text`. A read that lands rebuilds the tree and puts the cursor back
+    only after the next refresh, so Enter could toggle the previous run instead: press it only once the
+    cursor is on the run, and check the run is open."""
+    from tranibor_cli.workspace import FlightTree
+
+    for _ in range(20):
+        await put_cursor_on(pilot, text)
+        target = node_with(pilot.app, text)
+        if target.is_expanded:
+            return
+        if pilot.app.query_one(FlightTree).cursor_node is not target:
+            continue
+        await pilot.press("enter")
+        await pilot.pause()
+        if node_with(pilot.app, text).is_expanded:
+            return
+    raise AssertionError(f"could not open the run {text!r}")
 
 
 def lines_of(app: Any) -> list[str]:

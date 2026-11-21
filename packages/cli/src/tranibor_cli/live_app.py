@@ -296,6 +296,7 @@ class LiveFlowPane(Vertical, can_focus=True):
             except Exception as exc:  # a dropped connection is a state to show, not a crash
                 self.error = f"{type(exc).__name__}: {exc}"
             self.connection = "reconnecting"
+            self.redraw(force=True)  # the drop is said now, not at the next tick
             await asyncio.sleep(RECONNECT_S)
             if self.loaded:
                 with contextlib.suppress(Exception):
