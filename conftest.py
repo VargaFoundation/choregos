@@ -8,6 +8,8 @@ test module reads it (`PG_URL` constants are evaluated at import). Without xdist
 It runs when this file is imported, not in `pytest_configure`: the conftests of the directories
 named on the command line are imported before any `pytest_configure`, and they read the variable.
 
+The `software-delivery` plugin's extension is registered for the whole suite (`_software_delivery`).
+
 Every test also leaves structlog's configuration as it found it, its processors list the same
 instance (`kept_structlog_configuration`).
 """
@@ -60,6 +62,20 @@ def _own_database_per_worker() -> None:
 
 
 _own_database_per_worker()
+
+
+def _software_delivery() -> None:
+    """The `software-delivery` plugin's extension, registered as the API and the worker register it at
+    start-up (ADR 0181, round C2): the suite's workflows name its gates. A run of the core's suite with
+    the plugin uninstalled (round D) finds no module, and registers nothing."""
+    try:
+        from tranibor_software_delivery.extension import register
+    except ImportError:
+        return
+    register()
+
+
+_software_delivery()
 
 
 @contextlib.contextmanager
