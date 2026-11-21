@@ -108,10 +108,8 @@ import type {
   AgentBackendInfo,
   AgentBackendUpdate,
   AgentImageInfo,
-  ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
-  BrowserSession,
   DeviceRequest,
   EndedSessions,
   Artifact,
@@ -190,6 +188,9 @@ import type {
   LinkedAccountPage,
   MembershipPage,
   RemoteCredentialPage,
+  OrgPage,
+  ApiTokenPage,
+  BrowserSessionPage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -549,7 +550,14 @@ export const api = {
     return `${API_BASE}/auth/login${q ? `?${q}` : ""}`;
   },
   logout: () => request<void>("/auth/logout", { method: "POST" }),
-  orgs: () => request<Org[]>("/orgs"),
+  /**
+   * The organisations the caller can see, by slug, one page at a time (ADR 0206). `q` is the server's
+   * filter (slug, name or a former slug, substring); `slug` is the exact address, a former one included.
+   */
+  orgs: (params: { q?: string; slug?: string; cursor?: string; limit?: number } = {}) =>
+    request<OrgPage>(
+      `/orgs${query(compact({ q: params.q, slug: params.slug, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createOrg: (body: OrgCreate) => request<Org>("/orgs", { method: "POST", body: JSON.stringify(body) }),
   /** `PATCH /orgs/{org}`: the name and currency (its administrator), the slug (a platform administrator only). */
   updateOrg: (org: string, body: OrgUpdate) =>
@@ -881,11 +889,19 @@ export const api = {
     request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources/${id}/sync`, { method: "POST" }),
   deleteKnowledgeSource: (org: string, slug: string, id: string) =>
     request<void>(`/orgs/${org}/knowledge/${slug}/sources/${id}`, { method: "DELETE" }),
-  myTokens: () => request<ApiToken[]>("/me/tokens"),
+  /** My tokens, newest first, one page at a time (ADR 0206); `kind`, `q` (name) and `id` filter in SQL. */
+  myTokens: (params: { q?: string; kind?: "mcp" | "api"; id?: string; cursor?: string; limit?: number } = {}) =>
+    request<ApiTokenPage>(
+      `/me/tokens${query(compact({ q: params.q, kind: params.kind, id: params.id, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
-  mySessions: () => request<BrowserSession[]>("/me/sessions"),
+  /** My sessions, most recently active first, one page at a time; `current` keeps this one or all the others. */
+  mySessions: (params: { current?: boolean; cursor?: string; limit?: number } = {}) =>
+    request<BrowserSessionPage>(
+      `/me/sessions${query(compact({ current: params.current?.toString(), cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** My accounts on code forges, and the instances I can link one on (ADR 0161). */
   myLinkedAccounts: () => request<MyLinkedAccounts>("/me/linked-accounts"),
   /** Starts linking my account on an instance: the forge's authorization URL, to open in this browser. */

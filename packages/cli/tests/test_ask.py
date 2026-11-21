@@ -104,7 +104,11 @@ class Platform:
         self.router, self.contract = router, contract
         self.assistants([_assistant("finance")])
         org = contract("Org", {"slug": "acme", "name": "Acme", "currency": "USD"})
-        router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[org]))
+        router.get(f"{V1}/orgs").mock(
+            return_value=Response(
+                200, json={"items": [org], "meta": {"next_cursor": None, "has_more": False}}
+            )
+        )
         self.opened = router.post(f"{V1}/me/assistants/acme/finance/conversations").mock(
             return_value=Response(201, json=contract("Conversation", _summary(turns=0, cost_usd=0.0)))
         )

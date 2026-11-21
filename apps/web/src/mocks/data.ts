@@ -3594,6 +3594,38 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     );
     return { items, meta: { has_more: false, next_cursor: null } } as T;
   }
+  // The three paged lists of the person (ADR 0206): the mock filters and pages as the server does, so a
+  // screen that forgot "More" or filtered in the browser is caught here too.
+  if (method === "GET" && (bare === "/orgs" || bare === "/me/tokens" || bare === "/me/sessions")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const needle = (search.get("q") ?? "").toLowerCase();
+    let rows: unknown[];
+    if (bare === "/orgs") {
+      const slug = search.get("slug");
+      rows = [{ ...mockOrg, aliases: [] as string[] }].filter(
+        (o) =>
+          (!slug || o.slug === slug || o.aliases.includes(slug)) &&
+          (!needle || o.slug.includes(needle) || o.name.toLowerCase().includes(needle)),
+      );
+    } else if (bare === "/me/tokens") {
+      const kind = search.get("kind");
+      const id = search.get("id");
+      rows = myTokens.filter(
+        (t) =>
+          (!id || t.id === id) &&
+          (!needle || t.name.toLowerCase().includes(needle)) &&
+          (kind === null || (t.scopes ?? []).some((x) => x.startsWith("mcp:")) === (kind === "mcp")),
+      );
+    } else {
+      const current = search.get("current");
+      rows = mySessions.filter((x) => current === null || x.current === (current === "true"));
+    }
+    const limit = Number(search.get("limit") ?? 50);
+    const start = Number(search.get("cursor") ?? 0);
+    const items = rows.slice(start, start + limit);
+    const more = start + limit < rows.length;
+    return { items, meta: { has_more: more, next_cursor: more ? String(start + limit) : null } } as T;
+  }
   if (method === "GET" && bare === "/platform/gateway/keys") {
     // Filtered like the server (ADR 0206); the two demo keys fit one page.
     const search = new URLSearchParams(path.split("?")[1] ?? "");
@@ -4568,8 +4600,6 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       /^\/integrations$/,
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
-    [/^\/me\/tokens$/, myTokens],
-    [/^\/me\/sessions$/, mySessions],
     [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
@@ -4586,7 +4616,6 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/ui\/admin-sections$/, [sectionScim, sectionAcmeLayered]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
-    [/^\/orgs$/, [mockOrg]],
     [/^\/orgs\/[^/]+\/members$/, membersOf(path)],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],

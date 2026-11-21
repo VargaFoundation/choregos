@@ -869,7 +869,7 @@ class Workspace(App[None]):
     async def _currency(self) -> str | None:
         """The organisation's currency (`GET /orgs`); `None` when unreadable (own symbols then)."""
         try:
-            listed = await self.api.get("/orgs")
+            listed = await self.api.get_pages("/orgs")
         except (ApiError, httpx.TransportError):
             return None
         self.organisations = [str(o["slug"]) for o in listed or [] if o.get("slug")]

@@ -51,7 +51,7 @@ async def browsers(app: Any) -> AsyncIterator[Any]:
 async def _sessions(browser: AsyncClient) -> list[dict[str, Any]]:
     response = await browser.get("/api/v1/me/sessions")
     assert response.status_code == 200, response.text
-    sessions: list[dict[str, Any]] = response.json()
+    sessions: list[dict[str, Any]] = response.json()["items"]
     return sessions
 
 

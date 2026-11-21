@@ -25,10 +25,11 @@ import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
 import { BUILD_POLL_MS, buildInProgress, latestRuntime } from "@/components/agents/runtime-row";
 import { TagList } from "@/components/agents/tags";
+import { useTokens } from "@/lib/use-tokens";
 import { TokensAndCostPanel } from "@/components/spend/tokens-panel";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
-import { isMcpClient, clientState, readOnly } from "@/components/agents/registry";
+import { clientState, readOnly } from "@/components/agents/registry";
 import {
   Badge,
   Breadcrumbs,
@@ -38,6 +39,7 @@ import {
   ErrorNote,
   ReadState,
   Heading,
+  Input,
   Select,
   StateBadge,
   Table,
@@ -502,11 +504,14 @@ function Clients({ org, slug }: { org: string; slug: string }) {
     queryKey: ["agent-credentials", org, slug],
     queryFn: () => api.agentCredentials(org, slug),
   });
-  const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
+  // The picker asks the server for MCP tokens by name (ADR 0206): the first page, a search, "More".
+  const [recherche, setRecherche] = useState("");
+  const [filtre, setFiltre] = useState("");
+  const tokens = useTokens({ kind: "mcp", q: filtre });
   const [choisi, setChoisi] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
   const rattaches = new Set((links.data ?? []).map((l) => l.token_id));
-  const libres = (tokens.data ?? []).filter((j) => isMcpClient(j) && !rattaches.has(j.id));
+  const libres = tokens.rows.filter((j) => !rattaches.has(j.id));
   async function agir(gesture: () => Promise<unknown>) {
     setErreur(null);
     try {
@@ -547,7 +552,7 @@ function Clients({ org, slug }: { org: string; slug: string }) {
             })}
           </ul>
         )}
-        {libres.length > 0 && (
+        {(libres.length > 0 || filtre !== "" || tokens.hasNextPage) && (
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(event) => {
@@ -569,6 +574,25 @@ function Clients({ org, slug }: { org: string; slug: string }) {
             <Button size="sm" type="submit" disabled={!choisi}>
               Attach
             </Button>
+            <Input
+              type="search"
+              aria-label="Find an MCP token"
+              placeholder="Find a token"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setFiltre(recherche.trim());
+                }
+              }}
+              className="max-w-xs"
+            />
+            {tokens.hasNextPage && (
+              <Button size="sm" type="button" onClick={() => void tokens.fetchNextPage()} disabled={tokens.isFetchingNextPage}>
+                More
+              </Button>
+            )}
           </form>
         )}
         {erreur && <ErrorNote>{erreur}</ErrorNote>}

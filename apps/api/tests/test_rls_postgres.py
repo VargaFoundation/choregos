@@ -601,7 +601,7 @@ async def test_a_user_without_a_membership_reads_themselves(
         assert me.status_code == 200 and me.json()["email"] == "alone@nowhere.test", me.text
         created = await client.post("/api/v1/me/tokens", json={"name": "cli"})
         assert created.status_code == 201, created.text
-        assert [t["name"] for t in (await client.get("/api/v1/me/tokens")).json()] == ["cli"]
+        assert [t["name"] for t in (await client.get("/api/v1/me/tokens")).json()["items"]] == ["cli"]
 
 
 async def test_an_agent_and_its_versions_do_not_leave_their_organisation(

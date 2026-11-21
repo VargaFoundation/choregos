@@ -4030,7 +4030,7 @@ disabled: none of the project's runs is offered them, whatever its policy says.
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
 organisation by its id. A platform administrator granted by an edition extension can rename an
 organisation they do not belong to (the response then carries no `role`). The old slug is kept as an
-**alias** of the organisation (`aliases` in `GET /orgs` and in the `PATCH` response, ADR 0090), so what
+**alias** of the organisation (`aliases` in the `items` of `GET /orgs` and in the `PATCH` response, ADR 0090), so what
 was copied elsewhere keeps working: `/api/v1/orgs/<old>/…` and `/a2a/orgs/<old>` (the response carries
 `Link: <current URL>; rel="canonical"`), MCP addresses and qualified ids `<old>:<project>`, the IdP groups
 `choregos:<old>:<group>`, `oidc.defaultOrg` and `bootstrap.org` when they still name it, and the

@@ -108,7 +108,7 @@ createServer(async (req, res) => {
   if (path === "/__calls") return json(res, 200, calls);
   calls.push({ method: req.method, path, body: payload });
   if (path === "/me") return json(res, 200, { email: "ada@acme.test", memberships: [{ org: "acme", role: "org_admin" }] });
-  if (path === "/orgs") return json(res, 200, [{ slug: "northwind", name: "Northwind" }, { slug: "acme", name: "Acme" }]);
+  if (path === "/orgs") return json(res, 200, { items: [{ slug: "northwind", name: "Northwind" }, { slug: "acme", name: "Acme" }], meta: { has_more: false, next_cursor: null } });
   if (path === "/me/assistants") return json(res, 200, { items: [coach] });
   if (path === "/me/assistants/acme/coach/conversations") return json(res, 201, conversation);
   if (path === "/me/conversations") return json(res, 200, { items: [conversation], meta: { has_more: false } });

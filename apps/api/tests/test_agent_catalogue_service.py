@@ -202,7 +202,7 @@ async def test_connecting_claude_code_creates_the_agent_mints_an_mcp_token_and_a
     assert body["oauth_client_id"] is None
     attachments = (await client.get(f"{ORG}/agents/claude-code/credentials")).json()
     assert [r["token_name"] for r in attachments] == ["Claude Code"]
-    tokens = (await client.get("/api/v1/me/tokens")).json()
+    tokens = (await client.get("/api/v1/me/tokens")).json()["items"]
     assert "token" not in tokens[0], "read back, the token is not shown any more"
 
 

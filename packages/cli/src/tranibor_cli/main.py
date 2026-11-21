@@ -293,7 +293,7 @@ def _saved_organisation(api_url: str) -> str:
 def _choose_organisation(http: Client) -> str:
     """The person's only organisation, or the one they pick in a terminal; "" when it cannot be decided."""
     try:
-        slugs = [str(org["slug"]) for org in http.get("/orgs")]
+        slugs = [str(org["slug"]) for org in http.get_pages("/orgs")]
     except ApiError:
         return ""
     if len(slugs) <= 1:
@@ -361,7 +361,7 @@ def logout() -> None:
         return
     http = TransportSafeClient(profile)
     try:
-        mine = [s for s in http.get("/me/sessions") if s.get("current")]
+        mine = http.get("/me/sessions", params={"current": "true"})["items"]
         for current in mine:
             http.delete(f"/me/sessions/{current['id']}")
     except ApiError as exc:
@@ -390,7 +390,7 @@ def whoami() -> None:
 @orgs_app.command("list")
 def orgs_list() -> None:
     table = Table("organisation", "name", "my role")
-    for org in client().get("/orgs"):
+    for org in client().get_pages("/orgs"):
         table.add_row(org["slug"], org["name"], org.get("role") or "—")
     console.print(table)
 
@@ -554,7 +554,7 @@ def machines_remove(project: str, slug: str) -> None:
 @tokens_app.command("list")
 def tokens_list() -> None:
     table = Table("id", "name", "scope", "project", "created", "expires", "last used", "client")
-    for token in client().get("/me/tokens"):
+    for token in client().get_pages("/me/tokens"):
         table.add_row(
             token["id"],
             token["name"],

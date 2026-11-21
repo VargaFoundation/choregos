@@ -12,6 +12,8 @@ from typing import Any
 
 import httpx
 
+#: The largest page the API serves (ADR 0206): a list read to its end asks for this many rows at a time.
+PAGE_LIMIT = 200
 CONFIG_PATH = Path(os.environ.get("TRANIBOR_CONFIG", Path.home() / ".config" / "choregos" / "config.json"))
 
 
@@ -132,6 +134,21 @@ class Client:
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)
 
+    def get_pages(self, path: str, **kwargs: Any) -> list[Any]:
+        """Every row of a paged list (ADR 0206): `GET path` page after page, following `meta.next_cursor` to
+        the end. A cursor that comes back unchanged stops the loop rather than spinning on it."""
+        params = dict(kwargs.pop("params", None) or {})
+        params.setdefault("limit", PAGE_LIMIT)
+        rows: list[Any] = []
+        while True:
+            page = self.get(path, params=params, **kwargs)
+            rows += page["items"]
+            meta = page.get("meta") or {}
+            cursor = meta.get("next_cursor")
+            if not meta.get("has_more") or not cursor or cursor == params.get("cursor"):
+                return rows
+            params["cursor"] = cursor
+
     def get_raw(self, path: str, **kwargs: Any) -> httpx.Response:
         """A GET whose answer is bytes, not JSON (an artefact's content): the response as served."""
         response = self._client.get(path, **kwargs)
@@ -213,6 +230,20 @@ class AsyncClient:
 
     async def get(self, path: str, **kwargs: Any) -> Any:
         return await self.request("GET", path, **kwargs)
+
+    async def get_pages(self, path: str, **kwargs: Any) -> list[Any]:
+        """`Client.get_pages`, awaited: every row of a paged list, following `meta.next_cursor` to the end."""
+        params = dict(kwargs.pop("params", None) or {})
+        params.setdefault("limit", PAGE_LIMIT)
+        rows: list[Any] = []
+        while True:
+            page = await self.get(path, params=params, **kwargs)
+            rows += page["items"]
+            meta = page.get("meta") or {}
+            cursor = meta.get("next_cursor")
+            if not meta.get("has_more") or not cursor or cursor == params.get("cursor"):
+                return rows
+            params["cursor"] = cursor
 
     async def post(self, path: str, **kwargs: Any) -> Any:
         return await self.request("POST", path, **kwargs)

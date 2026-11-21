@@ -4,13 +4,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { AiClientCatalogue } from "@/components/agents/catalogue";
 import { McpClients } from "@/components/agents/mcp-clients";
-import { isMcpClient } from "@/components/agents/registry";
 import { Glossary } from "@/components/glossary";
-import { Empty } from "@/components/ui";
+import { Button, Empty } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { A2A_ENTRY, estClient } from "@/lib/integrations";
 import { useSession } from "@/lib/session";
+import { useTokens } from "@/lib/use-tokens";
 import { A2aIntegration } from "./a2a";
 import { ClientTabs, IntegrationsPanel } from "./panel";
 
@@ -56,10 +56,15 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
 function OrganisationClients() {
   const { org } = useSession();
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
-  const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
+  const tokens = useTokens({ kind: "mcp" });
   return (
     <>
-      <McpClients org={org} clients={(tokens.data ?? []).filter(isMcpClient)} agents={agents.data ?? []} />
+      <McpClients org={org} clients={tokens.rows} agents={agents.data ?? []} />
+      {tokens.hasNextPage && (
+        <Button size="sm" onClick={() => void tokens.fetchNextPage()} disabled={tokens.isFetchingNextPage}>
+          More MCP clients
+        </Button>
+      )}
       <AiClientCatalogue org={org} />
     </>
   );

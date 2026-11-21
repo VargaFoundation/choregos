@@ -36,7 +36,8 @@ def currency_of(api: Client, organisation: str) -> str | None:
     if key not in _CURRENCIES:
         found: str | None = None
         try:
-            for org in api.get("/orgs", quiet=True) or []:
+            # the server finds it by its slug or a former one (ADR 0206): no list is read to look it up
+            for org in api.get("/orgs", params={"slug": organisation, "limit": 1}, quiet=True)["items"]:
                 if organisation == org.get("slug") or organisation in (org.get("aliases") or []):
                     value = org.get("currency") or "EUR"  # the setting's default (S29-03)
                     found = value if value in SYMBOLS else None

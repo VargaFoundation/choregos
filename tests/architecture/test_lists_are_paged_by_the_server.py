@@ -70,11 +70,8 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listKnowledgeBases",
         "listMachineAccounts",
         "listMemories",
-        "listMyTokens",
-        "listMySessions",
         "listOrgAgentCredentials",
         "listOrgAgentReleases",
-        "listOrgs",
         "listPendingMemory",
         # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
         # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.

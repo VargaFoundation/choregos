@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Monitor, Smartphone, Tablet, Terminal } from "lucide-react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
-import { Badge, Card, ReadState } from "@/components/ui";
+import { Badge, Button, Card, ReadState } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import type { BrowserSession } from "@/lib/types";
@@ -27,10 +27,23 @@ const CHANNELS: Record<string, string> = {
  */
 export function SessionsCard({ className }: { className?: string }) {
   const queryClient = useQueryClient();
-  const sessions = useQuery({ queryKey: ["my-sessions"], queryFn: () => api.mySessions() });
-  const list = sessions.data ?? [];
-  const others = list.filter((s) => !s.current);
-  const listed = list.some((s) => s.current);
+  // The server pages the list, most recently active first (ADR 0206); "More" asks for the next page.
+  const sessions = useInfiniteQuery({
+    queryKey: ["my-sessions", "list"],
+    queryFn: ({ pageParam }) => api.mySessions({ cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  // Whether this browser is listed, and whether others exist, are asked of the server: the loaded pages
+  // may not hold them.
+  const here = useQuery({ queryKey: ["my-sessions", "current"], queryFn: () => api.mySessions({ current: true, limit: 1 }) });
+  const others = useQuery({
+    queryKey: ["my-sessions", "others"],
+    queryFn: () => api.mySessions({ current: false, limit: 2 }),
+  });
+  const list = sessions.data?.pages.flatMap((page) => page.items) ?? [];
+  const otherSessions = others.data?.items ?? [];
+  const listed = (here.data?.items.length ?? 0) > 0;
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["my-sessions"] });
 
   return (
@@ -39,10 +52,10 @@ export function SessionsCard({ className }: { className?: string }) {
       id="sessions"
       className={className}
       action={
-        others.length > 0 && (
+        otherSessions.length > 0 && (
           <ConfirmedGesture
             tonDuBouton="danger"
-            question={`Sign out of ${others.length === 1 ? "your other session" : `your ${others.length} other sessions`}? Each of those browsers is asked to sign in again at its next click; this one stays signed in.`}
+            question={`Sign out of ${otherSessions.length === 1 ? "your other session" : "your other sessions"}? Each of those browsers is asked to sign in again at its next click; this one stays signed in.`}
             confirmer="Sign out of the other sessions"
             action={async () => {
               await api.endOtherSessions();
@@ -63,7 +76,14 @@ export function SessionsCard({ className }: { className?: string }) {
           <SessionRow key={session.id} session={session} onEnded={refresh} />
         ))}
       </ul>
-      {sessions.isSuccess && !listed && (
+      {sessions.hasNextPage && (
+        <div className="mt-3">
+          <Button size="sm" onClick={() => void sessions.fetchNextPage()} disabled={sessions.isFetchingNextPage}>
+            More
+          </Button>
+        </div>
+      )}
+      {sessions.isSuccess && here.isSuccess && !listed && (
         <p className="mt-3 text-xs text-ink-muted">
           This browser signed in before sessions were listed, so it is not shown here. It ends on its own within
           eight hours; signing out of the other sessions keeps it signed in.

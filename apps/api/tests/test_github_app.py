@@ -148,7 +148,7 @@ async def test_repositories_lists_only_claimed_installations(
     client: AsyncClient, admin: str, github: Any
 ) -> None:
     globex = await add_organisation("globex")
-    northwind = (await client.get("/api/v1/orgs")).json()
+    northwind = (await client.get("/api/v1/orgs")).json()["items"]
     assert northwind, "the administrator is signed in"
     from sqlalchemy import select
     from tranibor_api.db.models import Organization

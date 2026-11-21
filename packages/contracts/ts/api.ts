@@ -6480,6 +6480,21 @@ export type RemoteCredentialPage = {
   meta: PageMeta;
 };
 
+export type OrgPage = {
+  items: Array<Org>;
+  meta: PageMeta;
+};
+
+export type ApiTokenPage = {
+  items: Array<ApiToken>;
+  meta: PageMeta;
+};
+
+export type BrowserSessionPage = {
+  items: Array<BrowserSession>;
+  meta: PageMeta;
+};
+
 export type GatewayKeyPage = {
   items: Array<GatewayKeyInfo>;
   meta: PageMeta;
@@ -6977,8 +6992,8 @@ export interface Operations {
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMyLinkedAccounts: { method: "GET"; path: "/me/linked-accounts"; body: never; response: MyLinkedAccounts };
   listMyPending: { method: "GET"; path: "/me/pending"; body: never; response: PendingList };
-  listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
-  listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
+  listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: BrowserSessionPage };
+  listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: ApiTokenPage };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: ActionPage };
   listOrgActivity: { method: "GET"; path: "/orgs/{org}/activity"; body: never; response: ActivityList };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
@@ -6986,7 +7001,7 @@ export interface Operations {
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: OrgConnectorPage };
   listOrgGroupMembers: { method: "GET"; path: "/orgs/{org}/groups/{slug}/members"; body: never; response: OrgGroupMemberList };
   listOrgGroups: { method: "GET"; path: "/orgs/{org}/groups"; body: never; response: OrgGroupList };
-  listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
+  listOrgs: { method: "GET"; path: "/orgs"; body: never; response: OrgPage };
   listOutpostCalls: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/calls"; body: never; response: OutpostCallPage };
   listOutpostEnrolments: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: never; response: OutpostEnrolmentList };
   listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };

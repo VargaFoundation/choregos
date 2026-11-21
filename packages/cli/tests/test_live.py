@@ -245,7 +245,11 @@ class Platform:
         if self.orgs_status != 200:
             return Response(self.orgs_status, json={"title": "Forbidden", "detail": "no"})
         return Response(
-            200, json=[self.contract("Org", {"slug": "acme", "name": "Acme", "currency": self.currency})]
+            200,
+            json={
+                "items": [self.contract("Org", {"slug": "acme", "name": "Acme", "currency": self.currency})],
+                "meta": {"next_cursor": None, "has_more": False},
+            },
         )
 
     def _items(self, request: Any) -> Response:

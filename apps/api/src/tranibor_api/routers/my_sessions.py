@@ -4,40 +4,66 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 
 from ..audit import record
-from ..browser_sessions import active_sessions, end_other_sessions, end_session, open_session
-from ..db.models import User
-from ..deps import Config, Db, Me
+from ..browser_sessions import (
+    LAST_ACTIVE,
+    active_sessions_query,
+    end_other_sessions,
+    end_session,
+    open_session,
+)
+from ..db.models import User, UserSession
+from ..deps import Config, Db, Me, Pagination
 from ..errors import not_found, unauthorized
-from ..schemas import BrowserSessionDto, EndedSessionsDto
+from ..keyset import keyset_page
+from ..schemas import BrowserSessionDto, BrowserSessionPage, EndedSessionsDto
 from ..security import read_session, sign_session
 
 router = APIRouter(tags=["session"])
 
 
-@router.get("/me/sessions", response_model=list[BrowserSessionDto], operation_id="listMySessions")
-async def list_my_sessions(session: Db, principal: Me) -> list[BrowserSessionDto]:
-    """The caller's sessions that still hold, the most recently active first."""
-    return [
-        BrowserSessionDto(
-            id=row.id,
-            channel=row.channel,
-            kind=row.kind,
-            client_name=row.client_name,
-            auth_time=row.auth_time,
-            idle_expires_at=row.idle_expires_at,
-            created_at=row.created_at,
-            expires_at=row.expires_at,
-            last_seen_at=row.last_seen_at,
-            user_agent=row.user_agent,
-            ip=row.ip,
-            current=row.id == principal.session_id,
-        )
-        for row in await active_sessions(session, principal.user_id)
-    ]
+@router.get("/me/sessions", response_model=BrowserSessionPage, operation_id="listMySessions")
+async def list_my_sessions(
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    current: Annotated[bool | None, Query()] = None,
+) -> BrowserSessionPage:
+    """The caller's sessions that still hold, the most recently active first, one page at a time (ADR 0206).
+
+    `current` keeps the session this request came with (`true`: `choregos logout` finds the one to end) or
+    all the others (`false`).
+    """
+    query = active_sessions_query(principal.user_id)
+    if current is True:
+        query = query.where(UserSession.id == (principal.session_id or ""))
+    elif current is False and principal.session_id:
+        query = query.where(UserSession.id != principal.session_id)
+    rows, meta = await keyset_page(session, query, sort=LAST_ACTIVE, tiebreak=UserSession.id, page=page)
+    return BrowserSessionPage(
+        items=[
+            BrowserSessionDto(
+                id=row.id,
+                channel=row.channel,
+                kind=row.kind,
+                client_name=row.client_name,
+                auth_time=row.auth_time,
+                idle_expires_at=row.idle_expires_at,
+                created_at=row.created_at,
+                expires_at=row.expires_at,
+                last_seen_at=row.last_seen_at,
+                user_agent=row.user_agent,
+                ip=row.ip,
+                current=row.id == principal.session_id,
+            )
+            for row in rows
+        ],
+        meta=meta,
+    )
 
 
 @router.delete("/me/sessions/{id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="endMySession")

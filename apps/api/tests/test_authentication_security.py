@@ -275,7 +275,7 @@ async def test_an_api_token_is_issued_used_and_revoked(client: AsyncClient, admi
     me = await bearer.get("/api/v1/me", headers={"Authorization": f"Bearer {body['token']}"})
     assert me.status_code == 200 and me.json()["email"] == admin
 
-    listed = (await client.get("/api/v1/me/tokens")).json()
+    listed = (await client.get("/api/v1/me/tokens")).json()["items"]
     assert [t["name"] for t in listed] == ["ci"]
     assert "token" not in listed[0]
     assert listed[0]["last_used_at"] is not None

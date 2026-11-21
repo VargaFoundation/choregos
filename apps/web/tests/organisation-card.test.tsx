@@ -15,7 +15,7 @@ vi.mock("@/lib/session", () => ({
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
-  return { ...real, api: { ...real.api, updateOrg: vi.fn(), platformIdentity: vi.fn(), orgs: vi.fn().mockResolvedValue([]) } };
+  return { ...real, api: { ...real.api, updateOrg: vi.fn(), platformIdentity: vi.fn(), orgs: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }) } };
 });
 
 const assign = vi.fn();

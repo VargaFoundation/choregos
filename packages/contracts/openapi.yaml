@@ -49,10 +49,20 @@ paths:
     get:
       tags: [session]
       operationId: listMyTokens
-      summary: The caller's API tokens (never their value)
+      summary: The caller's API tokens, newest first, one page at a time (never their value)
+      description: >-
+        Paged by the server (ADR 0206). `q` matches a substring of the token's name; `kind` keeps the MCP clients (a
+        token carrying `mcp:read` or `mcp:write`) or the others; `id` keeps one token.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: kind, in: query, schema: { type: string, enum: [mcp, api] } }
+        - { name: id, in: query, schema: { type: string, maxLength: 64 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ApiToken" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenPage" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [session]
       operationId: createMyToken
@@ -81,10 +91,18 @@ paths:
       tags: [session]
       operationId: listMySessions
       summary: The caller's sessions that still hold (browser, terminal, editor), the most recently active first (ADR 0130, ADR 0154 §6)
-      description: "A developer-surface session (`kind` `cli` or `editor`) is listed with the browser sessions; the person sees it on My account and ends it there."
+      description: >-
+        A developer-surface session (`kind` `cli` or `editor`) is listed with the browser sessions; the person sees it on
+        My account and ends it there. Paged by the server (ADR 0206); `current` keeps the session the request came with
+        (`true`) or all the others (`false`).
+      parameters:
+        - { name: current, in: query, schema: { type: boolean } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BrowserSession" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BrowserSessionPage" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /me/sessions/{id}:
     delete:
       tags: [session]
@@ -229,10 +247,19 @@ paths:
     get:
       tags: [projects]
       operationId: listOrgs
-      summary: The caller's organisations, with their role
+      summary: The caller's organisations, by slug, one page at a time, with their role
+      description: >-
+        Paged by the server (ADR 0206). `q` matches a substring of the slug, the name or a former slug (what the
+        console's switcher types); `slug` keeps the organisation that has that slug, current or former.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: slug, in: query, schema: { type: string, maxLength: 64 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Org" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgPage" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [projects]
       operationId: createOrg
@@ -13410,6 +13437,24 @@ components:
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/RemoteCredential" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    OrgPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Org" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ApiTokenPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ApiToken" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    BrowserSessionPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BrowserSession" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
     GatewayKeyPage:
       type: object

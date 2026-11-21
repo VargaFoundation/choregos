@@ -65,13 +65,13 @@ echo "  the model's reply: $(python3 -c 'import json,sys; print(json.load(open(s
 
 echo "5. check over REST, without believing the model"
 "${API[@]}" "$URL/api/v1/projects/$PROJECT/work-items?q=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))' "$TITLE")" > "$TMP/items.json"
-"${API[@]}" "$URL/api/v1/me/tokens" > "$TMP/tokens.json"
+"${API[@]}" "$URL/api/v1/me/tokens?id=$TOKEN_ID" > "$TMP/tokens.json"
 python3 - "$TMP" "$TITLE" "$TOKEN_ID" <<'PY'
 import json, sys
 tmp, title, token_id = sys.argv[1:4]
 items = [t for t in json.load(open(f"{tmp}/items.json"))["items"] if t["title"] == title]
 assert len(items) == 1, f"work item not found: {title}"
-token = next(t for t in json.load(open(f"{tmp}/tokens.json")) if t["id"] == token_id)
+token = next(t for t in json.load(open(f"{tmp}/tokens.json"))["items"] if t["id"] == token_id)
 assert token["last_used_at"], "the MCP token was never used"
 print(f"  work item {items[0]['tracker_key']} ({items[0]['state']}) ✓")
 print(f"  last use of the token: {token['last_used_at']} by {token.get('last_client')} ✓")

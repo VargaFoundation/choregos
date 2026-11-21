@@ -38,7 +38,7 @@ async def _audit_rows(client: AsyncClient) -> list[dict[str, Any]]:
 
 
 async def _shown(client: AsyncClient) -> Any:
-    (organisation,) = (await client.get(ORG)).json()
+    (organisation,) = (await client.get(ORG)).json()["items"]
     return organisation["tool_scripts"]
 
 
