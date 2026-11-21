@@ -61,9 +61,10 @@ names it.
   the `madr-4` skill. Its extension, `tranibor-software-delivery` in `plugins/software-delivery/` of the
   core's repository, which the published images install, holds the twelve gates that read a diff or a
   CI (`ci_green`, `diff_size_max`, `scope_respected` …) and the context provider that reads the diff and
-  the checks for them. By 1.0 it also holds the repository templates, the step effects `open_pr` and `merge_pr`, the `scm.*`, `ci.*` and `cd.*`
-  event types, the finding types `bug`, `perf`, `tech-debt` and `flaky-test`, the roles `fix_ci`,
-  `address_review`, `release_notes` and `verify_prod`, and the release train.
+  the checks for them, and the step effects `open_pr` and `merge_pr`. By 1.0 it also holds the
+  repository templates, the `scm.*`, `ci.*` and `cd.*` event types, the finding types `bug`, `perf`,
+  `tech-debt` and `flaky-test`, the roles `fix_ci`, `address_review`, `release_notes` and
+  `verify_prod`, and the release train.
 - **IT service management**: `servicenow`. Content only: an ITSM triage agent, its skill, and an MCP
   server that implements the tracker profile, so a project's tickets live in ServiceNow and every write
   the agent makes is a governed operation of that server.
@@ -91,7 +92,8 @@ first-party plugin like any other, in its own distribution, before 1.0.
 | The roles `developer` and `release_captain` | `contributor` and `approver`, in the core |
 | `pr_url` on a work item and a step's result, `repository` fields | `links`, with `rel: change_request`; `workspace` |
 | The twelve gates that read a diff or a CI | `software-delivery`'s extension, under the same names: done (S83-04a, `plugins/software-delivery/`) |
-| `does: open_pr` and `merge_pr`, the `scm.*`, `ci.*`, `cd.*` events | `software-delivery`, under the same names |
+| `does: open_pr` and `merge_pr` | `software-delivery`, under the same names: done (S83-04b) |
+| The `scm.*`, `ci.*`, `cd.*` events | `software-delivery`, under the same names |
 | The release train, its routes and the DORA figures | `software-delivery` |
 | The repository templates | `software-delivery`'s content |
 | `packages/ontology` | removed |

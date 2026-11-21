@@ -158,3 +158,66 @@ def test_the_distribution_is_built_released_and_installed_in_the_images() -> Non
     assert "uv build --all-packages --out-dir dist" in release
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "- 'plugins/software-delivery/**'" in ci
+
+
+# ───────────────────────── the step effects (S83-04b) ─────────────────────────
+
+DOES = """apiVersion: choregos/v1
+kind: Workflow
+metadata: {name: delivery, version: 1}
+actors:
+  platform: {type: system}
+states:
+  todo: {display: To do, kind: wait}
+  done: {display: Done, terminal: true}
+transitions:
+  - {id: t-do, from: todo, to: done, by: platform, does: EFFECT}
+"""
+
+
+@pytest.fixture
+def without_the_effects() -> Iterator[None]:
+    from tranibor_core import step_effects
+
+    step_effects.forget(NAME)
+    try:
+        yield
+    finally:
+        register()
+
+
+def test_open_pr_and_merge_pr_are_registered_by_the_plugin() -> None:
+    from tranibor_contracts import STEP_EFFECTS
+    from tranibor_core.step_effects import ENTERED, PASSED, step_effect_of
+    from tranibor_software_delivery.effects import EFFECTS
+
+    assert set(EFFECTS) == {"open_pr", "merge_pr"}
+    for name, when in (("open_pr", ENTERED), ("merge_pr", PASSED)):
+        found = step_effect_of(name)
+        assert found is not None and found.plugin == NAME and found.when == when, name
+        assert found.needs == {"scm"}
+        assert STEP_EFFECTS.plugin_of(name) == NAME
+        _, report = parse_workflow(DOES.replace("EFFECT", name), strict=False)
+        assert not [e for e in report.errors if e.code == "transition.effect_unavailable"], name
+
+
+def test_without_the_extension_does_naming_one_is_refused_naming_the_plugin(
+    without_the_effects: None,
+) -> None:
+    from tranibor_core.dsl import load_template
+    from tranibor_core.dsl.validator import deployment_issues
+
+    for name in ("open_pr", "merge_pr"):
+        workflow, report = parse_workflow(DOES.replace("EFFECT", name), strict=False)
+        [refused] = [e for e in report.errors if e.code == "transition.effect_unavailable"]
+        assert f"plugin `{NAME}`" in refused.message and f"`{name}`" in refused.message
+        elsewhere, others = deployment_issues(workflow, report)
+        assert refused in elsewhere and refused not in others, "left to the deployment offline"
+    # A state's name that still implies the effect (`merged`, #175) is refused the same way.
+    implied = DOES.replace(", does: EFFECT", "").replace("done:", "merged:").replace("to: done", "to: merged")
+    _, report = parse_workflow(implied, strict=False)
+    assert "transition.effect_unavailable" in {e.code for e in report.errors}
+    # A shipped template still loads where the extension is absent: the deployment refuses it.
+    load_template.cache_clear()
+    assert load_template("default-simple").transitions
+    load_template.cache_clear()
