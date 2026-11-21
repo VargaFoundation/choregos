@@ -58,7 +58,7 @@ beforeEach(() => {
     return proceduresApi("GET", `/procedures?${search}`);
   });
   api.getProcedure.mockImplementation(async (id: string) => proceduresApi("GET", `/procedures/${id}`));
-  api.remoteCredentials.mockResolvedValue([]);
+  api.remoteCredentials.mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } });
   api.projects.mockResolvedValue({ items: [], meta: { has_more: false } });
   api.usableModels.mockResolvedValue([]);
   api.platformModels.mockResolvedValue([]);

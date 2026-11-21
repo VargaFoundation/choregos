@@ -187,6 +187,9 @@ import type {
   OrgConnectorPage,
   ProjectOperationPage,
   ProjectOrgConnectorPage,
+  LinkedAccountPage,
+  MembershipPage,
+  RemoteCredentialPage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -551,17 +554,21 @@ export const api = {
   /** `PATCH /orgs/{org}`: the name and currency (its administrator), the slug (a platform administrator only). */
   updateOrg: (org: string, body: OrgUpdate) =>
     request<Org>(`/orgs/${encodeURIComponent(org)}`, { method: "PATCH", body: JSON.stringify(body) }),
-  /** The organisation's memberships; with `project`, that project's only (S30-06). */
-  members: (org: string, project?: string) =>
-    request<Membership[]>(`/orgs/${org}/members${project ? `?project=${encodeURIComponent(project)}` : ""}`),
+  /** One page of the organisation's memberships, by e-mail (ADR 0206); with `project`, that project's only (S30-06); `q` filters on the e-mail. */
+  members: (org: string, params: { project?: string; q?: string; cursor?: string; limit?: number } = {}) =>
+    request<MembershipPage>(
+      `/orgs/${org}/members${query(compact({ project: params.project, q: params.q, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** Removes a membership, of the organisation or of the one project named. */
   removeMember: (org: string, userId: string, project?: string | null) =>
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
   /** A member's accounts on code forges (ADR 0161): verified by the member, or declared by an administrator. */
-  memberLinkedAccounts: (org: string, userId: string) =>
-    request<LinkedAccount[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`),
+  memberLinkedAccounts: (org: string, userId: string, params: { cursor?: string; limit?: number } = {}) =>
+    request<LinkedAccountPage>(
+      `/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts${query(compact({ cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** An administrator declares a member's account: stored NOT verified. */
   declareMemberLinkedAccount: (org: string, userId: string, body: LinkedAccountDeclare) =>
     request<LinkedAccount>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`, {
@@ -686,7 +693,10 @@ export const api = {
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
-  remoteCredentials: (org: string) => request<RemoteCredential[]>(`/orgs/${org}/remote-credentials`),
+  remoteCredentials: (org: string, params: { cursor?: string; limit?: number } = {}) =>
+    request<RemoteCredentialPage>(
+      `/orgs/${org}/remote-credentials${query(compact({ cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createRemoteCredential: (org: string, body: RemoteCredentialCreate) =>
     request<RemoteCredential>(`/orgs/${org}/remote-credentials`, { method: "POST", body: JSON.stringify(body) }),
   authorizeRemoteCredential: (org: string, name: string) =>

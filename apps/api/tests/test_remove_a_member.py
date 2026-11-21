@@ -22,7 +22,7 @@ async def _member(client: AsyncClient, email: str, role: str, project: str | Non
 
 
 async def _members_of(client: AsyncClient) -> set[tuple[str | None, str | None, str]]:
-    rows = (await client.get("/api/v1/orgs/northwind/members")).json()
+    rows = (await client.get("/api/v1/orgs/northwind/members")).json()["items"]
     return {(m["email"], m.get("project_slug"), m["role"]) for m in rows}
 
 
@@ -36,7 +36,9 @@ async def test_a_member_is_removed_and_the_audit_says_so(client: AsyncClient, ad
 
 
 async def test_the_last_administrator_is_not_removed(client: AsyncClient, admin: str) -> None:
-    me = next(m for m in (await client.get("/api/v1/orgs/northwind/members")).json() if m["email"] == admin)
+    me = next(
+        m for m in (await client.get("/api/v1/orgs/northwind/members")).json()["items"] if m["email"] == admin
+    )
     alone = await client.delete(f"/api/v1/orgs/northwind/members/{me['user_id']}")
     assert alone.status_code == 409 and "last administrator" in alone.text
     await _member(client, "second@northwind.dev", "org_admin")

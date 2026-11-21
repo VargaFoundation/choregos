@@ -23,13 +23,15 @@ from tranibor_adapters.forge_accounts import GITHUB_COM
 
 from ..config import get_settings
 from ..db.models import LinkedAccount, Organization
-from ..deps import Db, Me
+from ..deps import Db, Me, Pagination
 from ..errors import forbidden, not_found
+from ..keyset import keyset_page
 from ..rbac import Permission, Principal
 from ..schemas import (
     ForgeInstanceDto,
     LinkedAccountDeclare,
     LinkedAccountDto,
+    LinkedAccountPage,
     LinkedAccountStart,
     MyLinkedAccounts,
     TrackerIdentityDto,
@@ -103,14 +105,27 @@ async def _rows_of(session: Db, org_id: str, user_id: str) -> list[LinkedAccount
 
 @router.get(
     "/orgs/{org}/members/{user_id}/linked-accounts",
-    response_model=list[LinkedAccountDto],
+    response_model=LinkedAccountPage,
     operation_id="listMemberLinkedAccounts",
 )
 async def list_member_linked_accounts(
-    org: str, user_id: str, session: Db, principal: Me
-) -> list[LinkedAccountDto]:
+    org: str, user_id: str, session: Db, principal: Me, page: Pagination
+) -> LinkedAccountPage:
+    """The member's accounts on forges, by provider then instance, one page at a time (ADR 0206): a
+    member may link any number of self-hosted instances, nothing in the code caps it."""
     organisation = await _organisation_member(session, principal, org, user_id, read=True)
-    return [_dto(organisation.slug, row) for row in await _rows_of(session, organisation.id, user_id)]
+    rows, meta = await keyset_page(
+        session,
+        select(LinkedAccount).where(
+            LinkedAccount.org_id == organisation.id, LinkedAccount.user_id == user_id
+        ),
+        sort=LinkedAccount.provider,
+        then=(LinkedAccount.base_url,),
+        tiebreak=LinkedAccount.id,
+        page=page,
+        descending=False,
+    )
+    return LinkedAccountPage(items=[_dto(organisation.slug, row) for row in rows], meta=meta)
 
 
 @router.post(

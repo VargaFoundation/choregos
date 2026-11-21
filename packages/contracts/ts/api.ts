@@ -6465,6 +6465,21 @@ export type GatewayKeyInfo = {
   created_at: string;
 };
 
+export type MembershipPage = {
+  items: Array<Membership>;
+  meta: PageMeta;
+};
+
+export type LinkedAccountPage = {
+  items: Array<LinkedAccount>;
+  meta: PageMeta;
+};
+
+export type RemoteCredentialPage = {
+  items: Array<RemoteCredential>;
+  meta: PageMeta;
+};
+
 export type GatewayKeyPage = {
   items: Array<GatewayKeyInfo>;
   meta: PageMeta;
@@ -6951,8 +6966,8 @@ export interface Operations {
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
   listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: Array<MachineAccount> };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
-  listMemberLinkedAccounts: { method: "GET"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: never; response: Array<LinkedAccount> };
-  listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
+  listMemberLinkedAccounts: { method: "GET"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: never; response: LinkedAccountPage };
+  listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: MembershipPage };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
   listMyConnectedAccounts: { method: "GET"; path: "/me/connected-accounts"; body: never; response: ConnectedAccountList };
@@ -6991,7 +7006,7 @@ export interface Operations {
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
-  listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: Array<RemoteCredential> };
+  listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: RemoteCredentialPage };
   listRunAgents: { method: "GET"; path: "/runs/{id}/agents"; body: never; response: RunAgentList };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };

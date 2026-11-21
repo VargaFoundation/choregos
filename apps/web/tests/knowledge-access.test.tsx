@@ -63,11 +63,14 @@ function show(value: KnowledgeBase) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.members).mockResolvedValue([
-    { user_id: "u-ana", email: "ana@northwind.dev", org: "northwind", role: "developer" },
-    { user_id: "u-ana", email: "ana@northwind.dev", org: "northwind", project_slug: "billing-api", role: "viewer" },
-    { user_id: "u-bo", email: "bo@northwind.dev", org: "northwind", role: "viewer" },
-  ] as never);
+  vi.mocked(api.members).mockResolvedValue({
+    items: [
+      { user_id: "u-ana", email: "ana@northwind.dev", org: "northwind", role: "developer" },
+      { user_id: "u-ana", email: "ana@northwind.dev", org: "northwind", project_slug: "billing-api", role: "viewer" },
+      { user_id: "u-bo", email: "bo@northwind.dev", org: "northwind", role: "viewer" },
+    ],
+    meta: { has_more: false, next_cursor: null },
+  } as never);
   vi.mocked(api.projects).mockResolvedValue({ items: [{ slug: "checkout-web", name: "Checkout web" }] } as never);
 });
 

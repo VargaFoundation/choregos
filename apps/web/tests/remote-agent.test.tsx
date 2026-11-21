@@ -34,10 +34,23 @@ function wrap(node: React.ReactNode) {
 
 describe("the remote credentials page (ADR 0062)", () => {
   beforeEach(() => {
-    vi.mocked(api.remoteCredentials).mockResolvedValue(remoteCredentials);
+    vi.mocked(api.remoteCredentials).mockResolvedValue({ items: remoteCredentials, meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.authorizeRemoteCredential).mockReset();
     vi.mocked(api.revokeRemoteCredential).mockClear();
     vi.mocked(api.createRemoteCredential).mockClear();
+  });
+
+  it("reads the next page of credentials on More (ADR 0206)", async () => {
+    vi.mocked(api.remoteCredentials)
+      .mockResolvedValueOnce({ items: [remoteCredentials[0]!], meta: { has_more: true, next_cursor: "c1" } })
+      .mockResolvedValueOnce({ items: [remoteCredentials[1]!], meta: { has_more: false, next_cursor: null } });
+    wrap(<RemoteCredentials org="acme" />);
+    const table = await screen.findByTestId("remote-credentials");
+    expect(within(table).queryByText(remoteCredentials[1]!.name)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await within(screen.getByTestId("remote-credentials")).findByText(remoteCredentials[1]!.name)).toBeInTheDocument();
+    expect(api.remoteCredentials).toHaveBeenLastCalledWith("acme", expect.objectContaining({ cursor: "c1" }));
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 
   it("lists each credential with its state and whose permissions it carries", async () => {

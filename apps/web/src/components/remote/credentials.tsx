@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Alert, Badge, Button, Card, Empty, ErrorNote, ReadState, Field, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
@@ -47,7 +47,13 @@ export function RemoteCredentials({
   navigate?: (url: string) => void;
 }) {
   const client = useQueryClient();
-  const credentials = useQuery({ queryKey: ["remote-credentials", org], queryFn: () => api.remoteCredentials(org) });
+  const credentials = useInfiniteQuery({
+    queryKey: ["remote-credentials", org],
+    queryFn: ({ pageParam }) => api.remoteCredentials(org, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const rows = credentials.data?.pages.flatMap((page) => page.items) ?? [];
   const [error, setError] = useState<string | null>(null);
   const refresh = () => client.invalidateQueries({ queryKey: ["remote-credentials", org] });
 
@@ -72,10 +78,10 @@ export function RemoteCredentials({
           access the agent should have.
         </p>
         <ReadState lecture={credentials} quoi="the remote credentials" />
-        {credentials.data?.length === 0 && (
+        {credentials.data && rows.length === 0 && (
           <Empty title="No credential yet">Add one below, then register the agent from Agents, New, Remote agent.</Empty>
         )}
-        {credentials.data && credentials.data.length > 0 && (
+        {rows.length > 0 && (
           <Table aria-label="Remote credentials" data-testid="remote-credentials">
             <THead>
               <TR>
@@ -88,7 +94,7 @@ export function RemoteCredentials({
               </TR>
             </THead>
             <TBody>
-              {credentials.data.map((credential) => (
+              {rows.map((credential) => (
                 <TR key={credential.name}>
                   <TD className="font-mono text-xs" data-verbatim>
                     {credential.name}
@@ -134,6 +140,13 @@ export function RemoteCredentials({
               ))}
             </TBody>
           </Table>
+        )}
+        {credentials.hasNextPage && (
+          <div className="mt-3">
+            <Button size="sm" onClick={() => void credentials.fetchNextPage()} disabled={credentials.isFetchingNextPage}>
+              More
+            </Button>
+          </div>
         )}
         {error && <ErrorNote>{error}</ErrorNote>}
       </Card>

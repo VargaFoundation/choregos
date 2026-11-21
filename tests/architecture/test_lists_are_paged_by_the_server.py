@@ -40,6 +40,11 @@ BOUNDED: dict[str, str] = {
     "listExecutors": "the five executor kinds",
     "listProcedures": "the shipped procedures",
     "listTemplates": "the shipped project templates",
+    "listTrackerIdentities": (
+        "at most one row: the member's GitHub link at github.com, one per member by "
+        "`uq_linked_accounts_member` (db/models/identity.py:259), returned as `[dto] if row else []` "
+        "(routers/linked_accounts.py:300); deprecated by ADR 0161"
+    ),
     "listWorkflowTemplates": "the shipped workflow templates",
 }
 
@@ -64,8 +69,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listImplicitAgents",
         "listKnowledgeBases",
         "listMachineAccounts",
-        "listMemberLinkedAccounts",
-        "listMembers",
         "listMemories",
         "listMyTokens",
         "listMySessions",
@@ -78,10 +81,8 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listPlatformModels",
         "listProjectAgents",
         "listProjectMemories",
-        "listRemoteCredentials",
         "listRuns",
         "listSkills",
-        "listTrackerIdentities",
         "listTriggers",
         # Catalogue rows merged with the gateway's live list and cut by the role/usage policy in Python;
         # its clients are whole-list pickers (agent builder, project profiles). Needs a decision.

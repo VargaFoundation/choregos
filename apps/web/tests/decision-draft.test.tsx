@@ -53,7 +53,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       project: vi
         .fn()
         .mockResolvedValue({ id: "p1", slug: "fon", org: "acme", name: "fon" }),
-      members: vi.fn().mockResolvedValue([
+      members: vi.fn().mockResolvedValue({ meta: { has_more: false, next_cursor: null }, items: [
         {
           user_id: "u2",
           email: "max@acme.dev",
@@ -73,7 +73,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
           org: "acme",
           role: "developer",
         },
-      ]),
+      ] }),
       reassign: vi.fn(),
       discardDraft: vi.fn(),
       decide: vi.fn(),

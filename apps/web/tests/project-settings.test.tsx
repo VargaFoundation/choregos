@@ -87,10 +87,13 @@ vi.mock("@/lib/api", async (importOriginal) => {
       updateProject: vi.fn(async () => projectDto),
       templates: vi.fn(async () => []),
       projectReadiness: vi.fn(async () => readiness),
-      members: vi.fn(async () => [
-        { org: "acme", role: "project_owner", user_id: "u2", email: "lea@acme.dev", project_slug: "dev" },
-        { org: "acme", role: "developer", user_id: "u3", email: "marc@acme.dev", project_slug: "dev" },
-      ]),
+      members: vi.fn(async () => ({
+        items: [
+          { org: "acme", role: "project_owner", user_id: "u2", email: "lea@acme.dev", project_slug: "dev" },
+          { org: "acme", role: "developer", user_id: "u3", email: "marc@acme.dev", project_slug: "dev" },
+        ],
+        meta: { next_cursor: null, has_more: false },
+      })),
       knowledgeBases: vi.fn(async () => []),
       backends: vi.fn(async () => [{ name: "claude-code", enabled: true, capabilities: [] }, { name: "codex", enabled: false, capabilities: [] }]),
       suspendProject: vi.fn(async () => projectDto),

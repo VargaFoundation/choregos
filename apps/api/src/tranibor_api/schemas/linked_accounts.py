@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 ForgeProvider = Literal["github", "gitlab", "forgejo"]
 
@@ -33,6 +33,13 @@ class LinkedAccountDto(Dto):
     connector: str | None = None
     created_by: str | None = None
     created_at: datetime
+
+
+class LinkedAccountPage(Dto):
+    """One page of a member's linked accounts, by provider then instance (ADR 0206)."""
+
+    items: list[LinkedAccountDto]
+    meta: PageMeta
 
 
 class LinkedAccountDeclare(Dto):

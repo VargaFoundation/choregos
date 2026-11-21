@@ -3223,11 +3223,20 @@ paths:
     get:
       tags: [admin]
       operationId: listMembers
-      description: The organisation's memberships — to its members only; with `project`, that project's memberships, to the project's members (S30-06).
+      description: >-
+        The organisation's memberships — to its members only; with `project`, that project's memberships, to the
+        project's members (S30-06). One page at a time, ordered by e-mail then id, so one person's memberships are
+        neighbours (ADR 0206); `q` matches a substring of the e-mail.
       parameters:
         - { name: project, in: query, required: false, schema: { type: string } }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 200 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Membership" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MembershipPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [admin]
       operationId: addMember
@@ -3307,11 +3316,15 @@ paths:
     get:
       tags: [admin]
       operationId: listMemberLinkedAccounts
-      description: "The member's accounts on code forges (ADR 0161): verified (the member signed in to the forge) or declared by an administrator. An `org_admin`, or the member themself."
+      description: "The member's accounts on code forges (ADR 0161): verified (the member signed in to the forge) or declared by an administrator. An `org_admin`, or the member themself. One page at a time, by provider then instance (ADR 0206)."
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/LinkedAccount" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/LinkedAccountPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [admin]
       operationId: declareMemberLinkedAccount
@@ -3519,10 +3532,14 @@ paths:
     get:
       tags: [agents]
       operationId: listRemoteCredentials
-      description: The organisation's credentials for remote agents (ADR 0062). `agent:manage`.
+      description: The organisation's credentials for remote agents (ADR 0062), by name, one page at a time (ADR 0206). `agent:manage`.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RemoteCredential" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RemoteCredentialPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [agents]
       operationId: createRemoteCredential
@@ -13376,6 +13393,24 @@ components:
         expires_at: { type: [string, "null"], format: date-time }
         revoked: { type: boolean, default: false }
         created_at: { type: string, format: date-time }
+    MembershipPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Membership" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    LinkedAccountPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/LinkedAccount" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    RemoteCredentialPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/RemoteCredential" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     GatewayKeyPage:
       type: object
       required: [items, meta]

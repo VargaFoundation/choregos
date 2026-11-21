@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useMemberPicker } from "@/lib/member-pages";
 import { canReassignRequests } from "@/lib/memberships";
 import type { HumanRequest, HumanRequestAssignee } from "@/lib/types";
 
@@ -41,12 +42,14 @@ export function RequestAssignee({
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const org = project.data?.org ?? "";
   const admin = !!me.data && !!org && canReassignRequests(me.data.memberships ?? [], org);
-  const members = useQuery({ queryKey: ["members", org], queryFn: () => api.members(org), enabled: admin });
+  // The person is searched on the server (`q`); the select shows its first page (ADR 0206).
+  const [search, setSearch] = useState("");
+  const members = useMemberPicker(org, search.trim(), admin);
   const [user, setUser] = useState("");
   const [group, setGroup] = useState("");
 
   const who = assigneeInWords(request.assignee);
-  const emails = [...new Set((members.data ?? []).map((m) => m.email).filter((e): e is string => !!e))].sort();
+  const emails = [...new Set(members.rows.map((m) => m.email).filter((e): e is string => !!e))].sort();
 
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2 text-sm" data-testid="request-assignee">
@@ -61,6 +64,13 @@ export function RequestAssignee({
           ton="primary"
           question={
             <span className="flex flex-wrap items-end gap-2">
+              <Input
+                aria-label="Search people"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by e-mail"
+                className="w-auto"
+              />
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-ink-muted">Person</span>
                 <Select
