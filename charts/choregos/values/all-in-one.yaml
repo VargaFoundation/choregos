@@ -1,4 +1,4 @@
-# ALL-IN-ONE installation (ADR 0197, S80-18): a cluster with nothing but Kubernetes and a default
+# ALL-IN-ONE installation (ADR 0208, S80-18): a cluster with nothing but Kubernetes and a default
 # StorageClass gets a working platform from one `helm install`. Everything the platform requires is
 # deployed by the chart: PostgreSQL (with pgvector), Temporal, the LiteLLM gateway, the Ecphoria
 # memory, an S3-compatible object store (RustFS) and an OIDC provider (Keycloak, with a realm, a
@@ -44,7 +44,7 @@ global:
     secretRef: ""
   memory:
     embedded: true
-  # The platform's own pieces (ADR 0197).
+  # The platform's own pieces (ADR 0208).
   allInOne:
     enabled: true
   objectStore:
@@ -160,7 +160,7 @@ choregos-ecphoria:
     requests: { cpu: 100m, memory: 512Mi }
     limits: { cpu: "1", memory: 2Gi }
 
-# The embedded object store and OIDC provider (ADR 0197).
+# The embedded object store and OIDC provider (ADR 0208).
 choregos-objectstore:
   persistence: { enabled: true, size: 20Gi, storageClass: "" }
   resources:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Where the audit entries go (ADR 0196): a `Sink` takes a batch of events, in order, and either accepts
+"""Where the audit entries go (ADR 0207): a `Sink` takes a batch of events, in order, and either accepts
 all of them or raises `SinkError`. The exporter moves its cursor only after `send` returned.
 
 - `HttpJsonSink`: one HTTPS POST per batch, a token in a header. Three bodies, chosen by `format`:

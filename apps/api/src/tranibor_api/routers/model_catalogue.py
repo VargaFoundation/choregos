@@ -22,6 +22,8 @@ from ..deps import Db, Me, require_platform_admin
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas.definitions import (
+    CacheMultipliers,
+    EffectiveCacheMultipliers,
     ModelCatalogue,
     ModelCatalogueEntry,
     ModelCatalogueEntryCreate,
@@ -55,6 +57,29 @@ def _manage(principal: Me, org: str) -> None:
         raise forbidden(f"the model catalogue of {org} is decided by its administrator")
 
 
+def _own_multipliers(row: ModelCatalogueRow) -> CacheMultipliers | None:
+    own = (row.cache_read_multiplier, row.cache_write_5m_multiplier, row.cache_write_1h_multiplier)
+    if all(value is None for value in own):
+        return None
+    return CacheMultipliers(read=own[0], write_5m=own[1], write_1h=own[2])
+
+
+def _effective_multipliers(row: ModelCatalogueRow) -> EffectiveCacheMultipliers:
+    resolved = service.cache_multipliers_of(row)
+    return EffectiveCacheMultipliers(
+        read=resolved.multipliers.read,
+        write_5m=resolved.multipliers.write_5m,
+        write_1h=resolved.multipliers.write_1h,
+        source=resolved.source,
+    )
+
+
+def _set_multipliers(row: ModelCatalogueRow, own: CacheMultipliers | None) -> None:
+    row.cache_read_multiplier = own.read if own else None
+    row.cache_write_5m_multiplier = own.write_5m if own else None
+    row.cache_write_1h_multiplier = own.write_1h if own else None
+
+
 def _dto(row: ModelCatalogueRow) -> ModelCatalogueEntry:
     facts = row.gateway_facts or {}
     override = (
@@ -71,6 +96,8 @@ def _dto(row: ModelCatalogueRow) -> ModelCatalogueEntry:
         allowed_roles=list(row.allowed_roles or []),
         usages=list(row.usages or []),
         price_override=override,
+        cache_multipliers=_own_multipliers(row),
+        effective_cache_multipliers=_effective_multipliers(row),
         max_usd_per_minute=row.max_usd_per_minute,
         gateway=ModelGatewayFacts.model_validate(facts) if facts else None,
         last_seen_at=row.last_seen_at,
@@ -227,6 +254,9 @@ async def add_entry(
         usages=list(body.usages),
         input_per_1k_override=body.price_override.input_per_1k if body.price_override else None,
         output_per_1k_override=body.price_override.output_per_1k if body.price_override else None,
+        cache_read_multiplier=body.cache_multipliers.read if body.cache_multipliers else None,
+        cache_write_5m_multiplier=body.cache_multipliers.write_5m if body.cache_multipliers else None,
+        cache_write_1h_multiplier=body.cache_multipliers.write_1h if body.cache_multipliers else None,
         max_usd_per_minute=body.max_usd_per_minute,
         gateway_facts={},
         notes=body.notes,
@@ -253,7 +283,8 @@ async def update_entry(
     organisation = await organisation_by_slug(session, org)
     row = await _row(session, organisation, entry_id)
     changes = body.model_dump(
-        exclude_unset=True, exclude={"clear_price_override", "clear_max_usd_per_minute"}
+        exclude_unset=True,
+        exclude={"clear_price_override", "clear_max_usd_per_minute", "clear_cache_multipliers"},
     )
     if body.display_name is not None:
         row.display_name = body.display_name
@@ -270,6 +301,10 @@ async def update_entry(
     elif body.price_override is not None:
         row.input_per_1k_override = body.price_override.input_per_1k
         row.output_per_1k_override = body.price_override.output_per_1k
+    if body.clear_cache_multipliers:
+        _set_multipliers(row, None)
+    elif body.cache_multipliers is not None:
+        _set_multipliers(row, body.cache_multipliers)
     if body.clear_max_usd_per_minute:
         row.max_usd_per_minute = None
     elif body.max_usd_per_minute is not None:

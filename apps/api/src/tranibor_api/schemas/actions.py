@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field
 
@@ -37,6 +37,10 @@ class ApprovalSpec(Dto):
     approvers: list[Approver] = Field(default_factory=lambda: [Approver()], min_length=1)
     step_up_minutes: int = Field(default=10, ge=1, le=120)
     separation_of_duties: bool = True
+    #: Who may not decide, whatever their rank (ADR 0196): e-mail addresses, compared without case.
+    excluded: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(
+        default_factory=list, max_length=10
+    )
 
 
 class ActionCreate(Dto):

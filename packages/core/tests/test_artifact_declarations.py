@@ -82,6 +82,11 @@ def test_no_step_may_declare_the_diff() -> None:
     assert "outputs.reserved" in _codes("  severity: { show: tab }", outputs="[diff, severity]")
 
 
+def test_no_step_may_declare_attachments_as_an_output() -> None:
+    """The reserved input name is refused as an output, like `diff` (ADR 0201 §9)."""
+    assert "outputs.reserved" in _codes("  severity: { show: tab }", outputs="[attachments, severity]")
+
+
 def test_a_value_type_needs_its_declaration() -> None:
     assert "output_types.value" in _codes("  severity: { show: tab }", types="{ severity: level }")
 

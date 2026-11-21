@@ -524,7 +524,7 @@ class Settings(BaseSettings):
     action_relay_interval_s: float = 30.0
     #: Seconds between two passes of the assistants' retention purge (S63-16): daily.
     assistant_retention_interval_s: float = 86400.0
-    #: The SIEM export of the audit log (S80-05b, ADR 0196): off by default. On, every API replica runs one
+    #: The SIEM export of the audit log (S80-05b, ADR 0207): off by default. On, every API replica runs one
     #: loop that ships each audit chain, in order of `seq` and at least once, to the one sink below.
     audit_export: bool = False
     #: `https` (a JSON POST: Splunk HEC, Elastic or OpenSearch `_bulk`, or a generic webhook, by

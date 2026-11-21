@@ -1,4 +1,4 @@
-# 0196 — The audit chains are shipped to a SIEM from a durable cursor, by a loop of the API
+# 0207 — The audit chains are shipped to a SIEM from a durable cursor, by a loop of the API
 
 - **Status**: proposed, 2026-11-20 (S80-05b, the SIEM export; not yet reviewed by the product owner)
 - **Concerns**: `tranibor_api.audit_export` (`events`, `sinks`, `exporter`), `audit_chain.links_after`, the

@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import select
+from starlette.datastructures import UploadFile
 from tranibor_adapters.storage import ObjectStoreError
 from tranibor_contracts import Artifact, Control, EventType, HumanDecision, HumanRequestKind, Role
 from tranibor_core import WorkflowEngine, utcnow
@@ -63,6 +64,14 @@ from ..services.artifacts import (
     to_contract,
 )
 from ..services.decision_drafts import compared, may_answer
+from ..services.handed_files import (
+    ENVELOPE,
+    HandedFile,
+    attachments_of,
+    file_limit,
+    hand_files,
+    refuse_start_below_min,
+)
 from ..services.human_assignee import (
     StepAssignee,
     assignee_of_the_request,
@@ -250,6 +259,38 @@ async def list_artifacts(id: str, session: Db, principal: Me) -> list[Artifact]:
     """Every revision of every artifact of the work item, by name then version (ADR 0049)."""
     item = await _readable(session, principal, id)
     return [to_contract(row) for row in await artifacts_of(session, item.id)]
+
+
+@router.post(
+    "/work-items/{id}/files",
+    response_model=list[Artifact],
+    status_code=status.HTTP_201_CREATED,
+    operation_id="attachWorkItemFiles",
+)
+async def attach_files(id: str, request: Request, session: Db, principal: Me) -> list[Artifact]:
+    """A person hands files to the work item, multipart (`files`, repeated): each becomes an input
+    artifact the workflow's steps may read as `attachments` (ADR 0201)."""
+    item, project = await _load(session, id, principal)
+    _, org_slug = await resolve_project(session, project.id)
+    if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
+        raise not_found("Work item", id)  # a work item of an organisation the caller is not in does not exist
+    if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
+        raise forbidden("handing files to a work item needs at least the contributor role")
+    workflow = workflow_model(await work_item_workflow(session, item))
+    declared = attachments_of(workflow)
+    limit = file_limit(project)
+    length = request.headers.get("content-length")
+    if declared is not None and length and length.isdigit() and int(length) > declared.max * limit + ENVELOPE:
+        raise ApiError(413, "Payload too large", f"at most {declared.max} files of {limit} bytes each")
+    sent: list[HandedFile] = []
+    async with request.form(max_files=50, max_fields=2) as form:
+        for upload in form.getlist("files"):
+            if not isinstance(upload, UploadFile):
+                raise unprocessable("`files` holds files, not text fields")
+            # One byte past the limit is enough to refuse it, without reading a whole oversized body.
+            sent.append(HandedFile(upload.filename or "", await upload.read(limit + 1)))
+    rows = await hand_files(session, object_store(), principal, project, item, workflow, sent)
+    return [to_contract(row) for row in rows]
 
 
 @router.get("/work-items/{id}/artifacts/{ref}", response_model=Artifact, operation_id="getWorkItemArtifact")
@@ -748,6 +789,8 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         await _reroute(session, principal, project, item, body)
         return {"status": "accepted", "action": body.action}
     if body.action == "mark_agent_ready":
+        # A start waits for the files its workflow requires (ADR 0201 §7).
+        await refuse_start_below_min(session, workflow_model(await work_item_workflow(session, item)), item)
         payload = {
             "project_id": project.id,
             "project_slug": project.slug,

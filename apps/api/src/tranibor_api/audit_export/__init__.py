@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The audit log leaves the database: the SIEM export (S80-05b, ADR 0196).
+"""The audit log leaves the database: the SIEM export (S80-05b, ADR 0207).
 
 Three parts, each in its own module:
 

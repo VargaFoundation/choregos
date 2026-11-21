@@ -491,7 +491,17 @@ def _content_digest(root: Path) -> str:
         raise SourceError("content", str(exc)) from exc
 
 
-def _validated(root: Path, release: Release, core: str) -> Plugin:
+def installed_extensions() -> frozenset[str]:
+    """The extensions this deployment installed: the names of the `choregos.plugins` entry points, which
+    the API and the worker load at start-up (and refuse to start without, `load_extensions`)."""
+    from importlib import metadata
+
+    from tranibor_adapters import EXTENSION_GROUP
+
+    return frozenset(point.name for point in metadata.entry_points(group=EXTENSION_GROUP))
+
+
+def _validated(root: Path, release: Release, core: str, extensions: frozenset[str] | None = None) -> Plugin:
     found = _content_digest(root)
     if found != release.digest:
         raise SourceError(
@@ -509,6 +519,17 @@ def _validated(root: Path, release: Release, core: str) -> Plugin:
     if not admits(plugin.core, core):
         raise SourceError(
             "core", f"`{plugin.name}` {plugin.version} requires core {plugin.core}; this core is {core}"
+        )
+    # A plugin whose trade needs code inside the platform (ADR 0181): its content without that code
+    # would install and then fail where a work item reaches a gate or an effect nobody serves.
+    missing = [name for name in plugin.extensions if name not in (extensions or installed_extensions())]
+    if missing:
+        raise SourceError(
+            "extension",
+            f"`{plugin.name}` {plugin.version} needs the extension{'s' if len(missing) > 1 else ''} "
+            + ", ".join(f"`{name}`" for name in missing)
+            + ", which this deployment has not installed: install the distribution its publisher ships for "
+            "it (a `choregos.plugins` entry point of that name)",
         )
     return plugin
 

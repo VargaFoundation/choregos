@@ -28,7 +28,7 @@ from ..db.models import (
     Run,
     WorkItem,
 )
-from ..errors import upstream
+from ..errors import unprocessable, upstream
 from ..rbac import Principal
 from ..schemas import (
     DecisionDraft,
@@ -51,6 +51,7 @@ from ..temporal import get_temporal, interpreter_id
 from .costs import estimate_cost
 from .definitions import work_item_workflow, workflow_model
 from .events import persist_event
+from .handed_files import refuse_start_without_files
 from .human_assignee import StepAssignee, actor_of_the_step, assignee_from_actor, assignee_of_row
 from .initiator import of_principal
 from .routing import WorkItemBirth, new_work_item, verify_birth
@@ -410,6 +411,7 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
     initiated_by: str | None = None,
     item_id: str | None = None,
     restricted_knowledge: list[str] | None = None,
+    in_platform: bool = False,
 ) -> WorkItem:
     """Files a work item in Tranibor, whatever the project's tracker (ADR 0059).
 
@@ -426,8 +428,15 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
 
     `restricted_knowledge` marks it at birth (ADR 0114): a fan-out child of a marked parent. An
     external tracker then receives a neutral title and no body; the work item keeps its own.
+
+    `in_platform` (a fan-out's child, ADR 0199): the work item is born in the platform under the `key`
+    the caller gives, whatever the project's tracker — nothing is filed there.
     """
     row, adapter = await project_tracker(session, project)
+    if in_platform:
+        if not key:
+            raise unprocessable("a work item held in the platform is born under the key its caller gives")
+        adapter = None
     url: str | None = None
     if adapter is None:
         # A schedule gives its own key, one per window, so that a second firing finds the first (S38-11).
@@ -446,6 +455,7 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
                 fields=dict(request.fields),
                 budget_usd=request.budget_usd,
             ),
+            start=request.start,
         )
         assert row is not None
         # A schedule gives its own key, one per window (S38-11); an external tracker mints its own.
@@ -477,6 +487,9 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
             item_id=item_id,
         ),
     )
+    if request.start and adapter is None:
+        # An external tracker was checked by `verify_birth`, before its issue was created.
+        refuse_start_without_files(workflow_model(await work_item_workflow(session, item)))
     mark(item, restricted_knowledge or [])
     await persist_event(
         session,

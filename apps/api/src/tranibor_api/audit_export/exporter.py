@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The loop that ships the audit chains to a SIEM (ADR 0196).
+"""The loop that ships the audit chains to a SIEM (ADR 0207).
 
 For each chain (every organisation's, then the platform's) and one sink, `audit_export_cursors` holds the
 `seq` and `hash` of the last entry the sink accepted. A pass, per chain:

@@ -113,6 +113,25 @@ async def test_a_batched_part_is_booked_at_half_the_price_with_its_batch_usage(
     assert sum(r.cost_usd for r in parts) == pytest.approx(full / 2), "50 % off, every token"
 
 
+async def test_a_batched_part_is_booked_once_and_on_no_run_or_work_item_budget(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch, fake: FakeBatches
+) -> None:
+    """ADR 0190, amendment (S4-11): the ledger line Choregos books is the distillation's one cost. The
+    gateway prices the batch too, but under the key that called it: no run key, so `collect_spend` (which
+    reads a run's key) never sees it, and no line here carries a run or a work item to be charged twice."""
+    from tranibor_api.knowledge.distill import distill
+
+    base_id = await _base(client, FOUR, monkeypatch)
+    await _price(0.01, 0.03)
+    await running(base_id)
+    outcome = await distill(*KEY[:1], base_id, KEY[1])
+    assert outcome["status"] == "pending_review"
+    lines = [r for r in await _ledger() if r.kind == "distill"]
+    batched = len(fake.submitted[0][1])
+    assert len(lines) == batched + 1, "one line per part, one for the merge: nothing twice"
+    assert all(r.run_id is None and r.work_item_id is None for r in lines)
+
+
 async def test_a_restart_polls_the_batch_it_has_and_submits_no_second(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch, fake: FakeBatches
 ) -> None:

@@ -1,4 +1,4 @@
-# The embedded object store (ADR 0197). RustFS (Apache-2.0), the S3 server the development stack
+# The embedded object store (ADR 0208). RustFS (Apache-2.0), the S3 server the development stack
 # already uses (`dev/compose.yaml`); the MinIO server image is no longer published.
 # Rendered only when `global.objectStore.embedded` is true. The keys come from the Secret named by
 # `global.objectStore.secretRef` (`access-key`, `secret-key`): the chart draws it when

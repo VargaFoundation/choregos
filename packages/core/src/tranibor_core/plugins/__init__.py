@@ -143,6 +143,11 @@ class Plugin:
     def core(self) -> str:
         return str(self.manifest["metadata"]["core"])
 
+    @property
+    def extensions(self) -> tuple[str, ...]:
+        """The extensions it needs (`requires.extensions`, ADR 0181): `choregos.plugins` entry points."""
+        return tuple(str(name) for name in (self.manifest.get("requires") or {}).get("extensions") or [])
+
 
 def _validator(schema: str) -> Draft202012Validator:
     return Draft202012Validator(load_schema(schema))
