@@ -1,4 +1,4 @@
-"""The SIEM export on the real chain (S80-05b, ADR 0196).
+"""The SIEM export on the real chain (S80-05b, ADR 0207).
 
 PostgreSQL only (`TRANIBOR_TEST_DATABASE_URL`): the migrated schema, the API's non-superuser role under
 forced row-level security, and the trigger that links every entry. What SQLite cannot show: that the text the

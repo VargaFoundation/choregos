@@ -118,6 +118,14 @@
             }
           }
         },
+        "extensions": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "the extensions the plugin needs inside the platform's processes, by the name of their `choregos.plugins` entry point (ADR 0181): a deployment that has not installed one refuses the plugin, naming it. `software-delivery` for the plugin of the same name.",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
         "connectors": {
           "type": "object",
           "additionalProperties": {

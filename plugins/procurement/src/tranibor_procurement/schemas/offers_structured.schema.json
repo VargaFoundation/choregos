@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tranibor.dev/schemas/procurement/offers_structured.schema.json",
+  "title": "offers_structured",
+  "description": "The offers of a request, read by an agent: one entry per supplier, each with its own currency. A number the offer does not state is null, never a default.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["suppliers", "unassigned_files"],
+  "properties": {
+    "suppliers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "currency",
+          "files",
+          "lines",
+          "stated_total",
+          "payment_terms_days",
+          "delivery_days",
+          "validity_date",
+          "exclusions"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "currency": {
+            "description": "This offer's own currency: three upper-case letters, or null when the offer does not say.",
+            "oneOf": [{ "type": "string", "pattern": "^[A-Z]{3}$" }, { "type": "null" }]
+          },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["label", "quantity", "unit", "unit_price", "line_total"],
+              "properties": {
+                "label": { "type": "string" },
+                "quantity": { "type": ["number", "null"] },
+                "unit": { "type": ["string", "null"] },
+                "unit_price": { "type": ["number", "null"] },
+                "line_total": { "type": ["number", "null"] }
+              }
+            }
+          },
+          "stated_total": { "type": ["number", "null"] },
+          "payment_terms_days": { "type": ["integer", "null"] },
+          "delivery_days": { "type": ["integer", "null"] },
+          "validity_date": {
+            "description": "An ISO 8601 date, or null.",
+            "oneOf": [{ "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, { "type": "null" }]
+          },
+          "exclusions": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "unassigned_files": { "type": "array", "items": { "type": "string" } }
+  },
+  "examples": [
+    { "suppliers": [], "unassigned_files": [] },
+    {
+      "suppliers": [
+        {
+          "name": "Alderbrook Supply",
+          "currency": "EUR",
+          "files": ["alderbrook-offer.pdf"],
+          "lines": [
+            { "label": "Steel bracket", "quantity": 100, "unit": "pc", "unit_price": 12.5, "line_total": 1250 }
+          ],
+          "stated_total": 1250,
+          "payment_terms_days": 30,
+          "delivery_days": 14,
+          "validity_date": "2026-12-31",
+          "exclusions": ["Transport"]
+        },
+        {
+          "name": "Brightfield Trading",
+          "currency": null,
+          "files": [],
+          "lines": [{ "label": "Steel bracket", "quantity": null, "unit": null, "unit_price": null, "line_total": null }],
+          "stated_total": null,
+          "payment_terms_days": null,
+          "delivery_days": null,
+          "validity_date": null,
+          "exclusions": []
+        }
+      ],
+      "unassigned_files": ["scan-only.pdf"]
+    }
+  ]
+}

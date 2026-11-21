@@ -14,7 +14,6 @@ function projectOfLocation(): string | null {
   return /^\/p\/([^/]+)/.exec(window.location.pathname)?.[1] ?? null;
 }
 
-/** The owner of an `owner/repo` string, lower-cased, or "" when it is not one yet. */
 /** The connector types the GitHub App serves, and the configuration key naming their repository (ADR 0073). */
 const GITHUB_REPO_KEY: Record<string, string> = {
   github: "repo",
@@ -24,29 +23,22 @@ const GITHUB_REPO_KEY: Record<string, string> = {
 };
 
 /** The repository a GitHub-served connector reaches, or null for any other type. */
-export function githubRepoOf(
-  type: string,
-  config: { [key: string]: unknown } | undefined,
-): string | null {
+export function githubRepoOf(type: string, config: { [key: string]: unknown } | undefined): string | null {
   const key = GITHUB_REPO_KEY[type];
   const value = key ? config?.[key] : undefined;
   return typeof value === "string" && value ? value : null;
 }
 
+/** The owner of an `owner/repo` string, lower-cased, or "" when it is not one yet. */
 export function ownerOf(repo: string): string {
   const [owner, name] = repo.trim().split("/");
   return owner && name ? owner.toLowerCase() : "";
 }
 
 /** Whether the organisation has an installation claimed on this owner (suspended ones do not count). */
-export function hasInstallationOn(
-  status: GitHubAppStatus | undefined,
-  owner: string,
-): boolean {
+export function hasInstallationOn(status: GitHubAppStatus | undefined, owner: string): boolean {
   if (!status || !owner) return true;
-  return status.installations.some(
-    (i) => i.claimed && !i.suspended && i.account_login.toLowerCase() === owner,
-  );
+  return status.installations.some((i) => i.claimed && !i.suspended && i.account_login.toLowerCase() === owner);
 }
 
 /**
@@ -54,11 +46,7 @@ export function hasInstallationOn(
  * carries a signed state made by the API (ADR 0073); it opens in the same tab, since GitHub returns to
  * the Setup URL, which redirects here.
  */
-export function InstallOnGitHub({
-  label = "Install on GitHub",
-}: {
-  label?: string;
-}) {
+export function InstallOnGitHub({ label = "Install on GitHub" }: { label?: string }) {
   const { org } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,28 +55,16 @@ export function InstallOnGitHub({
     setError(null);
     try {
       const { pathname, search } = window.location;
-      const link = await api.githubInstallLink(org, {
-        project: projectOfLocation(),
-        return_to: `${pathname}${search}#connections`,
-      });
+      const link = await api.githubInstallLink(org, { project: projectOfLocation(), return_to: `${pathname}${search}#connections` });
       window.location.assign(link.url);
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "the install link could not be made",
-      );
+      setError(cause instanceof Error ? cause.message : "the install link could not be made");
       setBusy(false);
     }
   }
   return (
     <span className="inline-flex flex-col gap-1">
-      <Button
-        size="sm"
-        tone="primary"
-        disabled={busy}
-        onClick={() => void go()}
-      >
+      <Button size="sm" tone="primary" disabled={busy} onClick={() => void go()}>
         {label}
       </Button>
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -99,11 +75,7 @@ export function InstallOnGitHub({
 /** What the App can see of this organisation, shared by the picker and the connector card. */
 export function useGitHubStatus() {
   const { org } = useSession();
-  return useQuery({
-    queryKey: ["github", org],
-    queryFn: () => api.githubStatus(org),
-    retry: false,
-  });
+  return useQuery({ queryKey: ["github", org], queryFn: () => api.githubStatus(org), retry: false });
 }
 
 /**
@@ -137,17 +109,14 @@ export function GitHubRepoField({
     retry: false,
   });
   const configured = status.data?.configured !== false;
-  const installed =
-    status.data?.installations.some((i) => i.claimed && !i.suspended) ?? false;
+  const installed = status.data?.installations.some((i) => i.claimed && !i.suspended) ?? false;
   const items = repositories.data?.items ?? [];
 
   async function refresh() {
     setRefreshing(true);
     try {
       client.setQueryData(["github", org], await api.githubRefresh(org));
-      await client.invalidateQueries({
-        queryKey: ["github-repositories", org],
-      });
+      await client.invalidateQueries({ queryKey: ["github-repositories", org] });
     } finally {
       setRefreshing(false);
     }
@@ -163,34 +132,19 @@ export function GitHubRepoField({
           placeholder="owner/repo"
           disabled={disabled}
           aria-describedby={describedBy}
-          onChange={(event) =>
-            onChange(event.target.value === "" ? undefined : event.target.value)
-          }
+          onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.value)}
         />
         {!configured && (
-          <p className="text-xs text-ink-muted">
-            This deployment has no GitHub App: type the repository as
-            owner/repo.
-          </p>
+          <p className="text-xs text-ink-muted">This deployment has no GitHub App: type the repository as owner/repo.</p>
         )}
         {configured && owner && !hasInstallationOn(status.data, owner) && (
-          <div
-            className="flex flex-wrap items-center gap-2 text-xs text-warn"
-            role="status"
-          >
-            <span>
-              The Tranibor App is not installed on {owner} for this
-              organisation.
-            </span>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-warn" role="status">
+            <span>The Tranibor App is not installed on {owner} for this organisation.</span>
             <InstallOnGitHub />
           </div>
         )}
         {configured && (
-          <button
-            type="button"
-            className="text-xs underline"
-            onClick={() => setTyped(false)}
-          >
+          <button type="button" className="text-xs underline" onClick={() => setTyped(false)}>
             Pick from the list instead
           </button>
         )}
@@ -207,17 +161,10 @@ export function GitHubRepoField({
       )}
       {status.isSuccess && !installed ? (
         <div className="space-y-2 rounded-md border border-line bg-surface-sunken p-3 text-xs text-ink-muted">
-          <p>
-            The Tranibor App is not installed on any GitHub account of this
-            organisation.
-          </p>
+          <p>The Tranibor App is not installed on any GitHub account of this organisation.</p>
           <div className="flex flex-wrap gap-2">
             <InstallOnGitHub />
-            <Button
-              size="sm"
-              disabled={refreshing}
-              onClick={() => void refresh()}
-            >
+            <Button size="sm" disabled={refreshing} onClick={() => void refresh()}>
               Refresh
             </Button>
           </div>
@@ -233,13 +180,8 @@ export function GitHubRepoField({
             aria-describedby={describedBy}
             onChange={(event) => setQ(event.target.value)}
           />
-          {repositories.error && (
-            <ErrorNote>{String(repositories.error)}</ErrorNote>
-          )}
-          <ul
-            className="max-h-48 divide-y divide-line overflow-auto rounded-md border border-line"
-            aria-label="Matches"
-          >
+          {repositories.error && <ErrorNote>{String(repositories.error)}</ErrorNote>}
+          <ul className="max-h-48 divide-y divide-line overflow-auto rounded-md border border-line" aria-label="Matches">
             {items.map((repo) => (
               <li key={`${repo.installation_id}/${repo.full_name}`}>
                 <button
@@ -250,32 +192,19 @@ export function GitHubRepoField({
                   onClick={() => onChange(repo.full_name)}
                 >
                   <span className="font-mono break-all">{repo.full_name}</span>
-                  <span className="shrink-0 text-xs text-ink-muted">
-                    {repo.private ? "private" : "public"}
-                  </span>
+                  <span className="shrink-0 text-xs text-ink-muted">{repo.private ? "private" : "public"}</span>
                 </button>
               </li>
             ))}
             {repositories.isSuccess && items.length === 0 && (
-              <li className="px-3 py-2 text-xs text-ink-muted">
-                No repository matches.
-              </li>
+              <li className="px-3 py-2 text-xs text-ink-muted">No repository matches.</li>
             )}
           </ul>
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <button
-              type="button"
-              className="underline"
-              onClick={() => setTyped(true)}
-            >
+            <button type="button" className="underline" onClick={() => setTyped(true)}>
               Type it instead
             </button>
-            <button
-              type="button"
-              className="underline"
-              disabled={refreshing}
-              onClick={() => void refresh()}
-            >
+            <button type="button" className="underline" disabled={refreshing} onClick={() => void refresh()}>
               Refresh
             </button>
             <InstallOnGitHub label="Install on another account" />

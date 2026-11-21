@@ -1,4 +1,4 @@
-# 0199 — Pills follow the theme, dots stay round
+# 0210 — Pills follow the theme, dots stay round
 
 - **Status**: accepted, 2026-11-20 (story S39-03d)
 - **Concerns**: the API contract (`Theme.radius.pill`), `apps/web` (`--radius-pill`, `rounded-pill`);

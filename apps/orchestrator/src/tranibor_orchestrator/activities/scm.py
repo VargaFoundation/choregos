@@ -225,6 +225,8 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
         result.artifacts.reports["base"] = found.repo.default_branch
         result.evidence.diff_files = len(diff.files)
         result.evidence.diff_lines = diff.additions + diff.deletions
+        # Both forms for one window (ADR 0181 C2): the fields and the named facts agree.
+        result.evidence = result.evidence.with_facts()
         run.result = result.model_dump(mode="json", by_alias=True)
         await record_the_diff(session, item, run, diff)
         return {"files": len(diff.files)}

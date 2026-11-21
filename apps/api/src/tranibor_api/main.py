@@ -182,7 +182,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     shipping_warmup = asyncio.create_task(warm_shipping(settings))
     # The daily purge of assistants' conversations and memories past their retention (S63-16).
     assistant_retention = asyncio.create_task(retention_loop(settings.assistant_retention_interval_s))
-    # The SIEM export of the audit chains (S80-05b, ADR 0196). Off by default; on, a setting that cannot
+    # The SIEM export of the audit chains (S80-05b, ADR 0207). Off by default; on, a setting that cannot
     # build the sink stops the API here, since a log that was meant to leave and does not is worse than a
     # refusal. PostgreSQL only: SQLite keeps no chain.
     audit_exporter = _audit_exporter(settings)

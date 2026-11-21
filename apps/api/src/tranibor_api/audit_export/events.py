@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""An audit entry as a SIEM receives it (ADR 0196).
+"""An audit entry as a SIEM receives it (ADR 0207).
 
 Every event carries what a receiver needs to verify the chain **without the platform**: the chain's
 place (`seq`), the hash of the entry before it (`prev_hash`) and its own (`hash`), and, unless switched

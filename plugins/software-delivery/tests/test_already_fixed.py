@@ -13,9 +13,10 @@ from typing import Any
 
 import pytest
 from tranibor_contracts import Evidence, StageResult, StageStatus
-from tranibor_core import GateContext, WorkflowEngine, evaluate
+from tranibor_core import WorkflowEngine, evaluate
 from tranibor_core.dsl.parser import parse_workflow
 from tranibor_core.gates import ALREADY_FIXED_GATE, ALREADY_FIXED_UNPROVEN, GateOutcome, unchanged_run
+from tranibor_software_delivery.gates import DeliveryFacts, delivery_context
 
 DEV_SIMPLE = (
     Path(__file__).resolve().parents[3] / "templates/github-software-delivery/workflows/dev-simple.yaml"
@@ -43,7 +44,9 @@ def _result(
 
 
 def _verdict(result: StageResult | None, branch_pushed: bool | None = False) -> GateOutcome:
-    return evaluate(ALREADY_FIXED_GATE, GateContext(result=result, branch_pushed=branch_pushed))
+    return evaluate(
+        ALREADY_FIXED_GATE, delivery_context(DeliveryFacts(branch_pushed=branch_pushed), result=result)
+    )
 
 
 def _dev_simple() -> WorkflowEngine:

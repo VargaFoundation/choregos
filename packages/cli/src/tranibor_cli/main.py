@@ -977,6 +977,21 @@ def workflow_push(
     console.print(f"[green]✓[/green] {published['name']} v{published['version']} published in {project}")
 
 
+def offline_report(workflow: Any, result: Any) -> dict[str, Any]:
+    """A validation report read offline: a gate a plugin serves is not refused here, since the plugin's
+    extension may be installed where the workflow is published (`software-delivery` serves `ci_green`,
+    ADR 0181); it is a warning that says so, and the deployment refuses it if it lacks the extension."""
+    from tranibor_core.dsl.validator import deployment_issues
+
+    elsewhere, others = deployment_issues(workflow, result)
+    warnings = [issue.to_dict() for issue in result.warnings]
+    for issue in elsewhere:
+        found = issue.to_dict()
+        found["message"] = f"{issue.message} (checked offline: the deployment decides; `--remote` asks it)"
+        warnings.append(found)
+    return {"valid": not others, "errors": [issue.to_dict() for issue in others], "warnings": warnings}
+
+
 @workflow_app.command("validate")
 def workflow_validate(
     path: Annotated[Path, typer.Argument()] = Path(".choregos/workflow.yaml"),
@@ -992,12 +1007,8 @@ def workflow_validate(
         from tranibor_core import parse_workflow
 
         try:
-            _, result = parse_workflow(source, strict=False)
-            report = {
-                "valid": result.valid,
-                "errors": [issue.to_dict() for issue in result.errors],
-                "warnings": [issue.to_dict() for issue in result.warnings],
-            }
+            workflow, result = parse_workflow(source, strict=False)
+            report = offline_report(workflow, result)
         except Exception as exc:  # syntax errors: already located
             console.print(f"[red]✗[/red] {exc}")
             raise typer.Exit(1) from exc

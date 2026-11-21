@@ -17,6 +17,7 @@ import type {
   AgentImageInfo,
   RemoteAgentDiscovery,
   RemoteCredential,
+  GatewayKeyInfo,
   GatewayModel,
   ModelCatalogue,
   UsableModel,
@@ -3567,10 +3568,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     } as T;
   }
   if (method === "GET" && bare === "/platform/gateway/keys") {
-    return [
-      { key_id: "gk-7f3a91", run_id: "run-1042", project_slug: "billing-api", budget_usd: 5, spend_usd: 1.37, expires_at: "2026-10-30T12:00:00Z", revoked: false, created_at: "2026-10-29T09:00:00Z" },
-      { key_id: "gk-2c84be", run_id: "run-1031", project_slug: "checkout-web", budget_usd: 2, spend_usd: 2, expires_at: null, revoked: true, created_at: "2026-10-28T14:30:00Z" },
-    ] as T;
+    // Filtered like the server (ADR 0206); the two demo keys fit one page.
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const needle = (search.get("q") ?? "").toLowerCase();
+    const state = search.get("state");
+    const items = mockGatewayKeys.filter(
+      (key) =>
+        (state === null || key.revoked === (state === "revoked")) &&
+        (!needle || [key.key_id, key.run_id, key.project_slug].some((field) => field?.toLowerCase().includes(needle))),
+    );
+    return { items, meta: { has_more: false, next_cursor: null } } as T;
   }
   if (/^\/orgs\/[^/]+\/policy-ceiling$/.test(bare)) {
     if (method === "PUT") {
@@ -3597,6 +3604,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   // The organisation's outposts (ADR 0147): the list, one outpost, its instances and its recent calls.
   if (/^\/orgs\/[^/]+\/outposts(\/|$)/.test(bare)) {
     return structuredClone(outpostsApi(method, bare, path.split("?")[1] ?? "", body, orgConnectors, me.email)) as T;
+  }
+  // A person hands files to a work item (ADR 0201): the stored artifacts, as the API answers 201.
+  const handing = /^\/work-items\/([^/]+)\/files$/.exec(bare);
+  if (method === "POST" && handing && init.body instanceof FormData) {
+    const files = init.body.getAll("files").filter((part): part is File => typeof part !== "string");
+    return files.map((file, index) => ({
+      ...artifactOf(file.name.replace(/[^A-Za-z0-9_.-]+/g, "-"), 1, "file", "file", file.type || "application/octet-stream", file.size, "", "", 0 - index),
+      produced_by: { run_id: "", stage: null, attempt: null, agent: null, agent_version: null },
+      handed_by: "person" as const,
+    })) as T;
   }
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
@@ -4620,3 +4637,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   return {} as T;
 }
+
+const mockGatewayKeys: GatewayKeyInfo[] = [
+  { key_id: "gk-7f3a91", run_id: "run-1042", project_slug: "billing-api", budget_usd: 5, spend_usd: 1.37, expires_at: "2026-10-30T12:00:00Z", revoked: false, created_at: "2026-10-29T09:00:00Z" },
+  { key_id: "gk-2c84be", run_id: "run-1031", project_slug: "checkout-web", budget_usd: 2, spend_usd: 2, expires_at: null, revoked: true, created_at: "2026-10-28T14:30:00Z" },
+];

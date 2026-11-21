@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
 import { fieldsFromSchema, valuesForApi, type Field } from "@/components/workflows/fields";
+import { AttachmentsField } from "@/components/workflows/attachments-field";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 import { api } from "@/lib/api";
+import { attachmentRule } from "@/lib/attachments";
 import type { TrackerInfo } from "@/lib/tracker";
 import type { WorkItemDto } from "@/lib/types";
 
@@ -36,23 +39,40 @@ export function NewWorkItemForm({
   const [entered, setEntered] = useState<Record<string, string | boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [handed, setHanded] = useState<File[]>([]);
+  // Once the work item exists, a failure after it keeps it here: nothing is created twice or retried silently.
+  const [created, setCreated] = useState<WorkItemDto | null>(null);
+  const [attached, setAttached] = useState(false);
   const { definition } = useWorkflow(slug, workflow);
+  const rule = attachmentRule(definition.data?.json?.metadata);
   const fields = fieldsFromSchema(definition.data?.json?.metadata?.inputs as Record<string, unknown> | undefined);
 
   async function file() {
     setBusy(true);
     setError(null);
     try {
-      const created = await api.createWorkItem(slug, {
-        title,
-        body,
-        size: size || null,
-        start,
-        workflow: workflow || null,
-        fields: valuesForApi(fields, entered),
-        budget_usd: budget ? Number(budget) : null,
-      });
-      onDone(created);
+      let item = created;
+      if (!item) {
+        item = await api.createWorkItem(slug, {
+          title,
+          body,
+          size: size || null,
+          // A workflow that takes files is filed first, given them, then started (ADR 0201 §7).
+          start: rule ? false : start,
+          workflow: workflow || null,
+          fields: valuesForApi(fields, entered),
+          budget_usd: budget ? Number(budget) : null,
+        });
+        setCreated(item);
+      }
+      if (rule) {
+        if (!attached && handed.length > 0) {
+          await api.attachWorkItemFiles(item.id, handed);
+          setAttached(true);
+        }
+        if (start) await api.action(item.id, "mark_agent_ready");
+      }
+      onDone(item);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "request refused");
       setBusy(false);
@@ -77,10 +97,11 @@ export function NewWorkItemForm({
         <Select
           aria-label="Workflow"
           value={workflow}
-          disabled={workflows.length <= 1}
+          disabled={workflows.length <= 1 || created !== null}
           onChange={(event) => {
             setWorkflow(event.target.value);
             setEntered({});
+            setHanded([]);
           }}
           className="w-full"
         >
@@ -104,6 +125,7 @@ export function NewWorkItemForm({
           ))}
         </fieldset>
       )}
+      {rule && <AttachmentsField rule={rule} files={handed} onChange={setHanded} disabled={busy || attached} />}
       <Input
         aria-label="Title"
         value={title}
@@ -149,10 +171,18 @@ export function NewWorkItemForm({
         <input type="checkbox" checked={start} onChange={(event) => setStart(event.target.checked)} />
         Start now
       </label>
-      <Button tone="primary" size="sm" type="submit" disabled={busy || !title}>
-        Create and start
+      <Button tone="primary" size="sm" type="submit" disabled={busy || !title || (rule !== null && handed.length < rule.min)}>
+        {created ? "Send the rest" : "Create and start"}
       </Button>
       {error && <ErrorNote>{error}</ErrorNote>}
+      {error && created && (
+        <p className="text-xs" data-testid="created-link">
+          The work item exists, and the files still to send stay here:{" "}
+          <Link className="text-accent underline" href={`/p/${slug}/items/${encodeURIComponent(created.id)}`}>
+            open {created.tracker_key}
+          </Link>
+        </p>
+      )}
     </form>
   );
 }

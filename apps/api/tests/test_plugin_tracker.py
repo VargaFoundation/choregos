@@ -307,3 +307,54 @@ async def test_the_server_s_author_and_fields_reach_the_work_item_as_fields_trac
             "answers": {"site": "Lyon"},
         }
     ]
+
+
+# -- a sender that signs with a bearer token (S84-03, ADR 0198) ------------------------------------------
+
+
+def _parsed_headers(fake: FakePluginTrackerServer) -> list[dict[str, Any]]:
+    return [dict(args["headers"]) for tool, args in fake.calls if tool == "tracker_parse_event"]
+
+
+async def test_the_sender_s_authorization_reaches_no_server_that_did_not_ask_for_it(
+    client: AsyncClient, admin: str, kube: FakeKubernetesApi, dispatched: list[InboundEvent]
+) -> None:
+    fake = await _ready(client, kube)
+    fake.add("INC0000001", "VPN drops")
+    headers = {"X-Choregos-Secret": SECRET, "Authorization": "Bearer sender-signed-jwt"}
+    answered = await client.post(HOOK, content=fake.delivery("INC0000001"), headers=headers)
+    assert answered.status_code == 202, answered.text
+    (seen,) = _parsed_headers(fake)
+    assert not {k.lower() for k in seen} & {"authorization", "cookie"}, seen
+
+
+async def test_a_server_that_declares_it_receives_the_sender_s_authorization(
+    client: AsyncClient,
+    admin: str,
+    kube: FakeKubernetesApi,
+    dispatched: list[InboundEvent],
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    declared = tmp_path / "plugins" / "desk" / "1.0.0" / "servers" / "desk.yaml"
+    text = declared.read_text(encoding="utf-8")
+    assert "webhook: {path: /events}" in text
+    declared.write_text(
+        text.replace("webhook: {path: /events}", "webhook: {path: /events, forward_authorization: true}"),
+        encoding="utf-8",
+    )
+    fake = await _ready(client, kube)
+    fake.add("INC0000001", "VPN drops")
+    headers = {"X-Choregos-Secret": SECRET, "Authorization": "Bearer sender-signed-jwt"}
+    answered = await client.post(HOOK, content=fake.delivery("INC0000001"), headers=headers)
+    assert answered.status_code == 202, answered.text
+    (seen,) = _parsed_headers(fake)
+    assert seen.get("authorization") == "Bearer sender-signed-jwt"
+    assert "cookie" not in {k.lower() for k in seen}
+    assert "sender-signed-jwt" not in caplog.text, "the sender's token is never logged"
+    from tranibor_api.db.models import AuditLog
+    from tranibor_api.db.session import session_scope
+
+    async with session_scope() as session:
+        trail = [str(r.payload) for r in (await session.execute(select(AuditLog))).scalars()]
+    assert not [entry for entry in trail if "sender-signed-jwt" in entry], "nor stored"
