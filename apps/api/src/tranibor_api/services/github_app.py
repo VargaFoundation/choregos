@@ -58,6 +58,7 @@ def repo_of(kind: str, type_: str, config: dict[str, Any]) -> str:
     key = GITHUB_REPO_KEY.get((kind, type_))
     return str(config.get(key) or "") if key else ""
 
+
 _real: dict[tuple[str, str, str, str], GitHubApp] = {}
 
 
