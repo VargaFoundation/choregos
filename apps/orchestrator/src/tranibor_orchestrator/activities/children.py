@@ -157,6 +157,8 @@ async def spawn_children(payload: dict[str, Any]) -> dict[str, Any]:
                         ),
                         canal="fan-out",
                         key=key,
+                        # Born in the platform, whatever the project's tracker (ADR 0199).
+                        in_platform=True,
                         initiated_by=initiator("work_item", parent.tracker_key),
                         # Its title and fields come from the parent's outputs (ADR 0114 §4).
                         restricted_knowledge=list(parent.restricted_knowledge or []),

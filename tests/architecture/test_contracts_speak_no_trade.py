@@ -26,6 +26,12 @@ Vendor names (`github`, `gitlab`, `tekton`) are left out: the ADR classes them (
 linked account names, not a trade. So are `diff` (an output type, a diff of any text), `review` and
 `release` (an agent's release), which the inventory keeps.
 
+A node of the REST contract marked `x-plugin: <plugin>` is a plugin's (ADR 0181 point 5): the release
+train's operations and components, `getRunDiff`, `getProjectDora` and `DoraReport`, and the fields
+`has_release_train` and `trains_pending`, which the core serves for the `software-delivery` plugin until
+round D moves their code. They are outside the core's frozen REST set, so the guard reads neither the
+node nor the key that holds it; `test_plugin_operations.py` says which nodes carry the mark.
+
 The allowlist is a ratchet, checked both ways and counted: a file may hold a term exactly as many times as
 `ALLOWED` says. A count that grows is refused: name the concept neutrally, or, when it is the plugin's,
 put it in the plugin (ADR 0181). A count that drops must be lowered here in the same PR, and an entry that
@@ -128,19 +134,15 @@ ALLOWED: dict[str, dict[str, int]] = {
         "ci": 2,
         "coverage": 1,
         "developer": 2,
-        "dora": 9,
         "max_diff": 2,
         "merge_rate": 2,
-        "pr": 2,
+        "pr": 1,
         "pull_request": 1,
         "release_captain": 2,
-        "release_train": 2,
+        "release_train": 1,
         "repo": 16,
         "repositories": 2,
         "repository": 11,
-        "run_diff": 1,
-        "train": 6,
-        "trains": 14,
     },
     "packages/contracts/schemas/policy.schema.json": {"max_diff": 2, "release_train": 1, "train": 4},
     "packages/contracts/schemas/project.schema.json": {
@@ -240,6 +242,10 @@ ALLOWED: dict[str, dict[str, int]] = {
 
 _TERMS: frozenset[tuple[str, ...]] = frozenset(tuple(term.split("_")) for term in VOCABULARY)
 _LONGEST = max(len(term) for term in _TERMS)
+#: The mark of a node of the REST contract that is a plugin's, not the core's (ADR 0181 point 5): an
+#: operation, a component or a property the core serves for the plugin, outside the frozen REST set. It
+#: names no trade the core speaks, so the guard does not read it, nor the key that holds it.
+PLUGIN_KEY = "x-plugin"
 #: Keys whose value is prose: a description may say "pull request"; a name may not.
 PROSE_KEYS = frozenset({"description", "summary", "title", "$comment", "examples", "example"})
 #: A string that is a name, not a sentence: no space.
@@ -286,8 +292,12 @@ def python_hits(source: str) -> Counter[str]:
 def document_hits(node: Any) -> Counter[str]:
     """The terms of a JSON or YAML document's keys and of its string values that are names."""
     counted: Counter[str] = Counter()
+    if isinstance(node, dict) and PLUGIN_KEY in node:
+        return counted  # a plugin's (a tag of the list of tags, a component): outside the frozen set
     if isinstance(node, dict):
         for key, value in node.items():
+            if isinstance(value, dict) and PLUGIN_KEY in value:
+                continue  # a plugin's, outside the core's frozen set: its key and what it holds
             counted.update(terms_in(str(key)))
             if key not in PROSE_KEYS:
                 counted.update(document_hits(value))

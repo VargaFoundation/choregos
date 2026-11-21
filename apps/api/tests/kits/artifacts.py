@@ -26,6 +26,7 @@ async def _run(
     output_types: dict[str, str] | None = None,
     agent: tuple[str, int] | None = None,
     attempt: int = 1,
+    inputs: list[str] | None = None,
 ) -> dict[str, str]:
     from tranibor_api.db.models import Run
     from tranibor_api.db.session import session_scope
@@ -42,7 +43,13 @@ async def _run(
                 status="running",
                 agent_slug=agent[0] if agent else None,
                 agent_version=agent[1] if agent else None,
-                stage_input={"transition": {"outputs": outputs or [], "output_types": output_types or {}}},
+                stage_input={
+                    "transition": {
+                        "outputs": outputs or [],
+                        "output_types": output_types or {},
+                        **({"inputs": inputs} if inputs is not None else {}),
+                    }
+                },
             )
         )
     token = mint_run_token(

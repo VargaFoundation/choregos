@@ -50,6 +50,9 @@ ARGUMENT_BASES: dict[str, str] = {
     "plugins/investment-research/Dockerfile": (
         "the runner image of the same release, passed by digest by `release.yml` and by CI (ADR 0181 O4-3)"
     ),
+    "plugins/procurement/Dockerfile": (
+        "the runner image of the same release, passed by digest by `release.yml` and by CI (ADR 0202)"
+    ),
 }
 
 #: Exceptions to the rules, as (file, reference): reason. Empty, and meant to stay so.

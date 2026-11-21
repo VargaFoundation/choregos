@@ -56,6 +56,7 @@ streams:
   S80: "From engine to product: the plan of 2026-11-16"
   S81: "The phone is a surface of the platform: an Android app for agents, assistants and voice (ADRs 0192-0194)"
   S83: "The contracts speak no trade: neutral names, software delivery and investment research as plugins, ontology removed (ADR 0181)"
+  S85: "Procurement as a first-party plugin, and the files a person hands a work item (ADRs 0201-0202)"
 
 stories:
 
@@ -5545,7 +5546,7 @@ stories:
     priority: 5
     size: M
     depends_on: [S80-05]
-    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Delivered, partial (ADR 0196, proposed): the SIEM export of the audit chains, in order and at least once from a durable cursor, to HTTPS JSON (webhook, Splunk HEC, Elastic/OpenSearch) or syslog over TLS (RFC 5424, CEF), off by default; proved on simulated receivers and SQLite, the PostgreSQL tests and the migration written and not yet run. Still to do: retention behind a signed checkpoint, checkpoints signed on a schedule, a migration role distinct from the API's, the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash, `seq` and `hash` in `GET /audit` (a contract change)."
+    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Delivered, partial (ADR 0207, proposed): the SIEM export of the audit chains, in order and at least once from a durable cursor, to HTTPS JSON (webhook, Splunk HEC, Elastic/OpenSearch) or syslog over TLS (RFC 5424, CEF), off by default; proved on simulated receivers and SQLite, the PostgreSQL tests and the migration written and not yet run. Still to do: retention behind a signed checkpoint, checkpoints signed on a schedule, a migration role distinct from the API's, the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash, `seq` and `hash` in `GET /audit` (a contract change)."
   - id: S80-03
     title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
     stream: S80
@@ -5766,9 +5767,11 @@ stories:
     priority: 3
     size: L
     depends_on: [S80-12]
+    notes: "Fourth move of ADR 0195. A websearch subchart, off by default. Done."
+
     notes: "Fourth move of ADR 0195. A websearch subchart, off by default."
   - id: S80-18
-    title: "feat(charts): an all-in-one mode that deploys every solution the platform requires, embedded Keycloak and RustFS, generated Secrets (ADR 0197)"
+    title: "feat(charts): an all-in-one mode that deploys every solution the platform requires, embedded Keycloak and RustFS, generated Secrets (ADR 0208)"
     stream: S80
     sprint: 1
     priority: 2
@@ -6065,3 +6068,283 @@ stories:
       - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
       - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
     notes: "ADR 0190, follow-up"
+  # ───────────── S84 — desk seams: approvers from the work item, filing into another project, a webhook's sender identity ─────────────
+  - id: S84-01
+    title: "contract(schemas): an action's approver group reads a field of its work item, and approval.excluded names who may not decide (ADR 0196)"
+    stream: S84
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S20-05, S40-27]
+    acceptance:
+      - "a workflow action's approvers[].group may hold one {{ fields.<declared> }}, rendered at proposal; a field absent or empty refuses the proposal"
+      - "approval.excluded (addresses or one {{ fields.<declared> }} each) is rendered at proposal; an excluded person, organisation administrator included, gets 403"
+      - "the validator refuses any other template in an approval and an undeclared field"
+    notes: "Contract change: workflow.schema.json, ActionApprovalSpec, openapi ApprovalSpec, generated types."
+  - id: S84-02
+    title: "feat(api): the work_item.file effect files a work item in another project of the organisation, whose tracker receives it (ADR 0197)"
+    stream: S84
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S20-05]
+    acceptance:
+      - "work_item.file {project, title, body, labels} creates the work item through the target project's tracker (internal, Jira, GitHub, GitLab or a plugin's) and returns {project, key, url}"
+      - "the target project must list the source in config.accepts_items_from; otherwise the effect is refused"
+      - "a replayed effect files nothing twice"
+    notes: "Generic: names no trade and no tracker."
+  - id: S84-03
+    title: "contract(schemas): a plugin server's webhook may receive its sender's Authorization header (ADR 0198)"
+    stream: S84
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S43-07]
+    acceptance:
+      - "webhook.forward_authorization: true on a server declaration forwards the Authorization header to that server's tracker_parse_event, and to no other"
+      - "the header is never logged nor stored"
+    notes: "For senders that sign with a bearer token in Authorization."
+  - id: S84-04
+    title: "fix(orchestrator): a fan-out's children are the platform's, whatever the project's tracker (ADR 0199)"
+    stream: S84
+    sprint: 1
+    priority: 4
+    size: S
+    depends_on: [S38-12]
+    acceptance:
+      - "spawn_children opens each child under <parent>.<rank> in the platform; an external tracker receives nothing, and a replay finds the children"
+      - "a child's tracker writes (state, status, fields, comments, close) go nowhere when the project's tracker keeps its items elsewhere; the internal tracker still receives them"
+    notes: "Before: children of an external tracker's project were filed there under the tracker's key, so a replay could not find them; a tracker that cannot create items (a plugin's) refused every child."
+  - id: S4-11
+    title: "fix(adapters): the distillation batch runs on LiteLLM's open path, no enterprise licence (ADR 0190)"
+    stream: S4
+    sprint: 1
+    priority: 3
+    size: M
+    depends_on: [S4-09]
+    acceptance:
+      - "GatewayBatches uploads with x-litellm-model, puts the upstream model in each row, and resolves the alias through /v1/model/info once per adapter"
+      - "an alias without a single OpenAI deployment is refused before any upload, so the run falls back to the synchronous path"
+      - "a batched part is booked once in the ledger (kind distill) and on no run or work-item budget; docs/usage.md says no enterprise licence is needed"
+    notes: "ADR 0190 amendment. Read in LiteLLM v1.105.5 source; no live gateway call."
+  - id: S4-12
+    title: "Cache tokens are priced at their own rates — override-priced runs and the 1-hour write"
+    stream: S4
+    sprint: 2
+    priority: 9
+    size: M
+    depends_on: [S4-07]
+    acceptance:
+      - "An `input_per_1k_override` prices cache reads, 5-minute writes and 1-hour writes at their own multipliers (catalogue entry, else gateway cached price, else provider-family default)"
+      - "`cost_ledger.tokens_cache_write_1h` read from the gateway's `cache_creation_token_details`; the cost report carries it (contract PR first)"
+    notes: "ADR 0200; closes #1893 and #1895"
+  - id: S85-00
+    title: "docs(plan): procurement as a first-party plugin, stream S85 and its backlog stories"
+    stream: S85
+    sprint: 0
+    priority: 1
+    size: S
+    depends_on: []
+    acceptance:
+      - "docs/plan/PLAN-2026-11-20-procurement.md is in the repository and every S85 story heading of the plan is a backlog story"
+      - "tests/docs/test_plan_s85_in_backlog.py turns red when a story is removed from the backlog or when a dependency does not come before its story"
+    notes: "PLAN-2026-11-20-procurement. sprint is the plan's wave. The stories of the agents repository (PA-01 to PA-11) have no entry here."
+  - id: S85-01
+    title: "docs(adr): 0201, a person hands files to a work item and a step reads them as attachments"
+    stream: S85
+    sprint: 0
+    priority: 2
+    size: S
+    depends_on: [S85-00]
+    acceptance:
+      - "The record is indexed, names no trade, and says what it refuses: a file type in metadata.inputs, a glob in inputs, a knowledge base per work item"
+    notes: "Generic capability of the core, for any trade. Extends ADR 0049 and ADR 0078 §6."
+  - id: S85-02
+    title: "docs(adr): 0202, procurement is a plugin whose code half is a job image"
+    stream: S85
+    sprint: 0
+    priority: 3
+    size: S
+    depends_on: [S85-00]
+    acceptance:
+      - "The record is indexed and states the three limits a reader must know: no OCR, no injection detector, no write to a third-party system in lot 1"
+      - "docs/site/build/plugins-and-trades.md names the plugin among its examples"
+    notes: "The two halves, the job image with its own environment, agents that never compute, the purchasing profile, untrusted and confidential documents."
+  - id: S85-03
+    title: "contract(contracts): metadata.attachments, the work item files route and the reserved input attachments (ADR 0201)"
+    stream: S85
+    sprint: 0
+    priority: 4
+    size: M
+    depends_on: [S85-01]
+    acceptance:
+      - "A workflow with metadata.attachments parses; min above max and an unknown accepted type are refused; an output named attachments is refused"
+      - "POST /work-items/{id}/files is in the OpenAPI document and the generated types are committed"
+      - "The trade guard of the contracts is green and its allowlist unchanged"
+    notes: "contract-change, human review owed (ADR 0180 §3). No behaviour: the route is served by S85-04."
+  - id: S85-04
+    title: "feat(api): a person attaches files to a work item, and a start waits for them (ADR 0201)"
+    stream: S85
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S85-03]
+    acceptance:
+      - "A file a person sends is an input artifact, checked by type, bytes, size and count, with one audit entry and no content in it"
+      - "The same name again is a new revision, the same bytes again make none; a store that fails leaves no row"
+      - "A workflow that requires files refuses start at creation and refuses mark_agent_ready until they are there"
+    notes: "Right item:control. Green on SQLite and on PostgreSQL."
+  - id: S85-05
+    title: "feat(core,api): a step reads the files handed to its work item as attachments (ADR 0201)"
+    stream: S85
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S85-04]
+    acceptance:
+      - "A run whose transition declares attachments is listed and served every handed file; a run that does not is served none"
+      - "The validator refuses attachments as an output, and as an input of a workflow that can receive no file"
+      - "The artifact flow gives attachments the origin attached"
+    notes: "The runner does not change, and a test proves it. No file under the orchestrator's workflows changes."
+  - id: S85-06
+    title: "feat(web): a person hands files when filing a work item, and sees them on its page (ADR 0201)"
+    stream: S85
+    sprint: 2
+    priority: 2
+    size: M
+    depends_on: [S85-04]
+    acceptance:
+      - "The file control appears only for a workflow that declares attachments, and the form cannot be sent under the minimum"
+      - "Filing creates without starting, sends the files, then starts; a refused upload shows its message and the item's link"
+      - "The work item page lists the handed files and offers to add some while the item is not terminal"
+    notes: "make web-ci. No string of the trade in apps/web."
+  - id: S85-07
+    title: "feat(procurement): the tranibor-procurement distribution and its extract job command (ADR 0202)"
+    stream: S85
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S85-02]
+    acceptance:
+      - "extract turns the files of a step's inputs into one JSON document of text, with measured facts for what could not be read or was cut"
+      - "Amounts in decimal-comma notation are rewritten to decimal-point form; dates, identifiers and phone numbers are untouched; an undecided file is left as written and counted"
+      - "A conversion that hangs is killed at its timeout and counted unreadable"
+      - "The API and runner images still build; the vocabulary guard of the core is green and untouched"
+    notes: "plugins/procurement, a workspace member that is no dependency of the root project and has no extension entry point."
+  - id: S85-08
+    title: "feat(procurement): compare and tier, the numbers of a comparison computed by a job (ADR 0202)"
+    stream: S85
+    sprint: 2
+    priority: 3
+    size: M
+    depends_on: [S85-07]
+    acceptance:
+      - "Totals, mismatches, ranking and spread are computed in decimal arithmetic, to the cent, from the structured offers"
+      - "tier fails without its threshold argument and never defaults to the lighter tier"
+      - "The schema of the structured offers is a file of the distribution, and every example of it validates"
+    notes: "Two outputs: comparison, and award_basis, the document a memo must quote in full."
+  - id: S85-09
+    title: "build(procurement): the procurement job image, built FROM the release's runner (ADR 0202)"
+    stream: S85
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S85-08]
+    acceptance:
+      - "CI builds the image FROM the pull request's runner and the command reads a real PDF inside it"
+      - "The command has its own virtual environment; the runner's environment is unchanged"
+      - "The chart and the local install map the image under the job image name procurement"
+    notes: "Release R1 follows this story; the release is the owner's."
+  - id: S85-10
+    title: "feat(plugins): the core ships the procurement plugin offline and plays its template end to end"
+    stream: S85
+    sprint: 5
+    priority: 1
+    size: L
+    depends_on: [S85-09]
+    acceptance:
+      - "The locked archive is the one the tests read; plugins-check passes offline"
+      - "Three handed offers reach a buyer with a memo whose every number was computed; a total nobody computed, an omitted mismatch and an invented price never reach a person"
+      - "Totals over the threshold reach the committee, and a buyer alone cannot award them"
+      - "An unreadable file stops at a person before any agent runs"
+    notes: "Also waits for PA-04 of the agents repository (procurement 0.1.0 published). Fakes, scripted agents, no real model."
+  - id: S85-11
+    title: "feat(dev): the local install opens a procurement project with three sample offers"
+    stream: S85
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S85-10]
+    acceptance:
+      - "The local-install job reaches the seeded work item and starts it"
+      - "Running the seed twice changes nothing"
+      - "A documentation page walks the journey gate by gate and shows the cost of the work item"
+    notes: "Release R2 follows S85-10 to S85-12."
+  - id: S85-12
+    title: "feat(procurement): supplier-check and renewals, the measured facts of an onboarding and of a renewal campaign"
+    stream: S85
+    sprint: 6
+    priority: 2
+    size: M
+    depends_on: [S85-10]
+    acceptance:
+      - "supplier-check counts missing and expired documents, identity mismatches and duplicates; a relay that fails is an error, never a zero"
+      - "renewals lists the contracts ending in the window, at most the ceiling, and counts the ones left out"
+    notes: "Jobs that call a connector operation through the run's tool relay, as the investment snapshot does."
+  - id: S85-13
+    title: "feat(plugins): procurement 0.2 offline, a governed write and a renewal campaign end to end"
+    stream: S85
+    sprint: 9
+    priority: 1
+    size: L
+    depends_on: [S85-12]
+    acceptance:
+      - "A complete supplier file creates one record after a second person's approval, and replaying the activity creates no second one"
+      - "The reviewer alone cannot approve; a duplicate stops before any approval is asked; a rejected approval writes nothing"
+      - "A renewal campaign opens one child per contract and waits for all"
+    notes: "Also waits for PA-11 of the agents repository (procurement 0.2.0 published). The purchasing server is its fake."
+  - id: S85-14
+    title: "test(live): the purchasing server's profile against a real Odoo, every night"
+    stream: S85
+    sprint: 9
+    priority: 2
+    size: M
+    depends_on: [S85-13]
+    acceptance:
+      - "The nightly job starts the service itself and fails, not skips, when it does not start"
+      - "Every mapped operation of the profile is played, writes and compensations included"
+    notes: "The backend is the owner's decision before wave 7; Odoo is the plan's default."
+  - id: S85-15
+    title: "feat(core): output_sections, a guarantee on the sections of a Markdown output"
+    stream: S85
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S85-05]
+    acceptance:
+      - "A named Markdown output must carry every listed section as a heading, optionally in order; an absent or non-text output fails, naming it"
+      - "The validator refuses an output the transition does not declare and an empty outputs map"
+      - "The gate needs no connector, and docs/concepts.md names it"
+    notes: "Found by PA-02 on 2026-11-20: markdown_sections reads the documents a diff adds and needs scm, so a workflow without a repository can never satisfy it."
+  - id: S85-16
+    title: "fix(core): numbers_measured reads no identifier as an amount"
+    stream: S85
+    sprint: 8
+    priority: 1
+    size: S
+    depends_on: [S85-15]
+    acceptance:
+      - "An identifier token (FA-0012, PO-2026-0042, CTR_17) is not read as a number, in outputs and sources alike"
+      - "A standalone number keeps its reading; an unmeasured amount beside an identifier still fails"
+    notes: "Found by PA-08 on 2026-11-20: a qualification citing a framework agreement numbered 10 or more was always refused."
+  - id: S85-17
+    title: "feat(procurement): renewals leaves out a contract already decided"
+    stream: S85
+    sprint: 8
+    priority: 2
+    size: S
+    depends_on: [S85-12]
+    acceptance:
+      - "With --skip-decided, a contract whose notes hold a renewal decision within the window is left out and counted"
+      - "Without the flag the output and the facts are unchanged"
+    notes: "Found by PA-09 on 2026-11-20: a monthly campaign reopened a memo for a contract decided the month before."

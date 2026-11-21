@@ -1,4 +1,4 @@
-# The embedded OIDC provider (ADR 0197). Rendered only when `global.oidc.embedded` is true. To bring
+# The embedded OIDC provider (ADR 0208). Rendered only when `global.oidc.embedded` is true. To bring
 # your own, leave that off and set `global.oidc.issuer`, `clientId` and `secretRef`.
 image:
   repository: quay.io/keycloak/keycloak

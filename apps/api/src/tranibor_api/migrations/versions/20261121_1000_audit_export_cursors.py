@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The SIEM export's cursor: how far each sink has been given each audit chain (S80-05b, ADR 0196)
+"""The SIEM export's cursor: how far each sink has been given each audit chain (S80-05b, ADR 0207)
 
 `audit_export_cursors` holds, per sink and per chain (an organisation's id, or `''` for the platform's),
 the `seq` and `hash` of the last entry the sink accepted. The export reads the entries after it, ships them,
@@ -12,8 +12,8 @@ evidence, and a lost cursor re-ships a chain from its first entry.
 The downgrade drops the table: the next export of a sink starts from entry 1.
 
 Revision ID: a9c1e3b5d7f0
-Revises: b4d6f8a0c2e5
-Create Date: 2026-11-20 10:00:00+00:00
+Revises: 5c1e9d3a7b42
+Create Date: 2026-11-21 10:00:00+00:00
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a9c1e3b5d7f0"
-down_revision: str | None = "b4d6f8a0c2e5"
+down_revision: str | None = "5c1e9d3a7b42"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

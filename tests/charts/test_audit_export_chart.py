@@ -1,4 +1,4 @@
-"""The SIEM export of the audit log in the chart (S80-05b, ADR 0196): off, nothing; on, the API is told, the
+"""The SIEM export of the audit log in the chart (S80-05b, ADR 0207): off, nothing; on, the API is told, the
 token comes from a Secret by reference, and what the chart can see is wrong is refused at render time.
 
 Each test renders the chart with `helm template`. The API's own `Settings` reads the rendered environment

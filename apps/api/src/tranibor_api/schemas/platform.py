@@ -54,6 +54,13 @@ class GatewayKeyInfo(Dto):
     created_at: datetime
 
 
+class GatewayKeyPage(Dto):
+    """One page of gateway keys, newest first (ADR 0206)."""
+
+    items: list[GatewayKeyInfo]
+    meta: PageMeta
+
+
 class AuditEntry(Dto):
     id: str
     actor_id: str | None = None

@@ -104,7 +104,7 @@ spec:
 {{- $auditEgress := $audit.egress | default dict }}
 {{- if and $audit.enabled (or $auditEgress.cidrs $auditEgress.namespace) }}
 ---
-# The SIEM export of the audit log (ADR 0196): the API, and no other pod, may reach the sink.
+# The SIEM export of the audit log (ADR 0207): the API, and no other pod, may reach the sink.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -264,7 +264,7 @@ call them by design (the model, the memory's MCP), with a per-run key.
 {{- if .Values.global.temporal.embedded }}
 {{- $stores = append $stores (dict "pod" "choregos-temporal" "port" 7233 "clients" (list "choregos-api" "choregos-orchestrator")) }}
 {{- end }}
-{{- /* ADR 0197: the embedded object store takes the API (it is the only reader and writer), the backup
+{{- /* ADR 0208: the embedded object store takes the API (it is the only reader and writer), the backup
        and the Job that makes its bucket. A runner never receives its keys, and the policy keeps it away. */}}
 {{- if (.Values.global.objectStore).embedded }}
 {{- $stores = append $stores (dict "pod" "choregos-objectstore" "port" 9000 "clients" (list "choregos-api" "choregos-backup" "choregos-restore" "choregos-objectstore-bucket")) }}

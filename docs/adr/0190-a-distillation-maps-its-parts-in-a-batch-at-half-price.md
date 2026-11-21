@@ -1,6 +1,6 @@
 # 0190 — A distillation maps its parts in a batch, at half the price
 
-- **Status**: accepted, 2026-11-18 (story S4-09)
+- **Status**: accepted, 2026-11-18 (story S4-09; amended by S4-11, see the end)
 - **Concerns**: `packages/adapters` (a new `batch` package and `fakes/batch.py`), `apps/api`
   (`knowledge/distill.py`, `config.py`), `apps/orchestrator` (`KnowledgeDistill`, two activities); builds on
   [ADR 0008](0008-idempotence-and-run-id.md), [ADR 0005](0005-adapters-and-fakes.md); depends on
@@ -24,7 +24,7 @@ egress), whose aliases map to OpenAI today (`platform/standard` is `openai/gpt-5
    `create_batch`/`retrieve_batch`, `router.py` `acreate_file`, `router_utils/batch_utils.py`
    `replace_model_in_jsonl`). `tranibor_adapters.batch.GatewayBatches` (`BatchBackend`: `submit`, `poll`,
    `results`, `cancel`; `FakeBatches` for ADR 0005) speaks it with the gateway URL and key the distiller
-   already uses: `POST /v1/files` (`purpose=batch`, `target_model_names=<alias>`, JSONL rows
+   already uses: `POST /v1/files` (`purpose=batch`, `target_model_names=<alias>` (amended, S4-11: now `x-litellm-model: <alias>`), JSONL rows
    `{custom_id, method, url: /v1/chat/completions, body}`), `POST /v1/batches`, `GET /v1/batches/{id}`,
    `GET /v1/files/{id}/content` (output and error files), `POST /v1/batches/{id}/cancel`. Naming the alias in
    `target_model_names` makes the router rewrite each row's `body.model` to the model the alias resolves to,
@@ -34,8 +34,7 @@ egress), whose aliases map to OpenAI today (`platform/standard` is `openai/gpt-5
    keyed by `custom_id` (`part-<index>`); results come back in any order and are mapped by it, never by
    position (the fake answers in reverse to prove it).
 3. **Opt-in, default off.** `knowledge_distill_batch` (with `_batch_poll_seconds`, `_batch_max_tokens`).
-   Off because a run lasts up to a day instead of minutes, and because the gateway must run its managed-files
-   hook (a database, which the `litellm-database` image has) for `target_model_names`. When the gateway or its
+   Off because a run lasts up to a day instead of minutes. (Amended, S4-11: no managed-files hook is needed.) When the gateway or its
    upstream refuses the batch, or the key is unset, the run silently takes the synchronous path; a batch that
    ends `failed` yields no result and every part is distilled synchronously.
 4. **One batch, submitted once.** `step_submit_batch` sends every part nobody has stored and keeps the
@@ -80,3 +79,40 @@ egress), whose aliases map to OpenAI today (`platform/standard` is `openai/gpt-5
   these has a durable workflow to park on, so batching them would turn a gate into a day-long wait.
   Not forced: nothing was built. Reopen if a judge moves to a scheduled, non-blocking run (for example a
   nightly rubric sweep); it would then reuse `GatewayBatches` with the submit-once and timer pattern.
+
+## Amendment (S4-11): the open path, and the cost of record
+
+The first version sent `target_model_names` on upload. In LiteLLM that goes through the `managed_files` hook, which
+lives in `litellm_enterprise` under the BerriAI Enterprise licence. Choregos must not need it. Read in the extracted
+v1.105.5 source, the open path is:
+
+- **Upload** (`proxy/openai_files_endpoints/files_endpoints.py` `create_file` / `route_create_file`): the model is
+  taken from the form, `?model=` or the `x-litellm-model` header (`common_utils._extract_model_param`).
+  `get_authorized_credentials_for_model` calls `authorize_model_for_key` (the key's model grants apply), then
+  `router.get_deployment_credentials_with_provider` (`router.py`) returns the deployment's credentials and
+  `litellm_params.model`. `litellm.acreate_file` uploads with them, and the id returned is
+  `encode_file_id_with_model` (`file-<base64 "litellm:<id>;model,<alias>">`). Nothing rewrites the rows on this
+  path (the rewrite, `_litellm_executed_batch_input_model`, belongs to the managed path), so each row's
+  `body.model` must already be the upstream id.
+- **Batch ops** (`proxy/batches_endpoints/endpoints.py` `create_batch` "SCENARIO 1", `retrieve_batch`, cancel,
+  and `get_file_content` via `common_utils.decode_model_from_file_id` / `get_credentials_for_model`): the alias is
+  decoded from the ids, so `POST /v1/batches` and the others need no model header; the batch, output and error
+  ids come back encoded with the alias and are sent back untouched.
+- **Alias to upstream model**: `GET /v1/model/info` (`proxy_server.py` `model_info_v1`, `user_api_key_auth`) lists
+  what the key may use, `litellm_params.model` included (credentials masked). `GatewayBatches.upstream_model`
+  reads it once per alias per adapter and takes `openai/<id>` to `<id>`; none, several or a non-OpenAI deployment
+  is a `BatchError` before any upload, which is the synchronous fallback.
+- **Do not set** `litellm_settings.require_managed_files` (`common_utils.validate_managed_files_requirement`): it
+  makes every `model=` upload answer 400.
+
+**Cost of record.** The Choregos ledger line (`record_cost(kind="distill")`, half the catalogue price, decision 6)
+is the source of truth for a distillation. It is booked on the project or the organisation with `run_id` and
+`work_item_id` both empty, so no run or work-item budget sees it. A run's spend is read from the gateway for the
+run's own key (`collect_spend` / `book_spend` call `gateway.spend(run.gateway_key_id)`); the distiller uses the
+gateway's master key, which nothing reads. LiteLLM does price a retrieved completed batch
+(`litellm_logging.py` async success on `aretrieve_batch`, `batches/batch_utils.py` `batch_cost_is_final` /
+`_handle_completed_batch`) as a spend log under the calling key; that log is informational, the same as for the
+synchronous calls, and is never added to the ledger. Pinned by
+`apps/api/tests/test_knowledge_distillation_batch.py::test_a_batched_part_is_booked_once_and_on_no_run_or_work_item_budget`.
+
+Still not proven: no live gateway or provider call; the open path is read in source only.

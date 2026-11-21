@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tranibor_contracts import Workflow
+from tranibor_contracts import ATTACHMENTS_INPUT, Workflow
 from tranibor_contracts.workflow import HumanActor
 
 #: The documents the platform hands every agent stage, whatever the transition declares
@@ -33,13 +33,29 @@ PULL_REQUEST_SECTIONS: tuple[tuple[str, str | None], ...] = (
 FEEDBACK_DOCUMENT = "human_feedback"
 
 
+def _origin(
+    name: str, produced: dict[str, list[str]], rejecting: list[str], fields: set[str]
+) -> tuple[str, list[str]]:
+    """Where a document comes from, and the transitions that make it."""
+    if name in produced:
+        return "step", produced[name]
+    if name == FEEDBACK_DOCUMENT and rejecting:
+        return "feedback", rejecting
+    if name == ATTACHMENTS_INPUT:
+        return "attached", []
+    if name in fields:
+        return "field", []
+    return "missing", []
+
+
 def artifact_flow(wf: Workflow) -> list[dict[str, Any]]:
     """One entry per document name a workflow produces or reads.
 
     `origin` is `step` (a transition outputs it), `feedback` (`human_feedback`, written by a
-    person's rejection), `field` (a property of `metadata.inputs`) or `missing` (read, but nothing
-    produces it). Sorted by the YAML index of the first producer, then of the first reader, then by
-    name: two calls give the same list.
+    person's rejection), `field` (a property of `metadata.inputs`), `attached` (`attachments`: the
+    files handed to the work item, ADR 0201) or `missing` (read, but nothing produces it).
+    Sorted by the YAML index of the first producer, then of the first reader, then by name:
+    two calls give the same list.
     """
     produced: dict[str, list[str]] = {}
     read: dict[str, list[str]] = {}
@@ -71,14 +87,7 @@ def artifact_flow(wf: Workflow) -> list[dict[str, Any]]:
     pull_request = {name for name, _ in PULL_REQUEST_SECTIONS}
     entries: list[dict[str, Any]] = []
     for name in names:
-        if name in produced:
-            origin, by = "step", produced[name]
-        elif name == FEEDBACK_DOCUMENT and rejecting:
-            origin, by = "feedback", rejecting
-        elif name in fields:
-            origin, by = "field", []
-        else:
-            origin, by = "missing", []
+        origin, by = _origin(name, produced, rejecting, fields)
         entries.append(
             {
                 "name": name,

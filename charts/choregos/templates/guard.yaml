@@ -25,7 +25,7 @@ with its backup: one node, no high availability, a recovery point of one backup 
 the backup it would be the bench under a production label. The bench values (development secrets
 and sign-in, the demonstration fakes) stay refused whatever the profile.
 */ -}}
-{{- /* ADR 0197: the all-in-one mode is a single-node-class installation (one replica of everything, volumes
+{{- /* ADR 0208: the all-in-one mode is a single-node-class installation (one replica of everything, volumes
        beside their owners, the scheduled backup): it takes the same conditions below. */}}
 {{- $allInOne := include "choregos.allInOne" . }}
 {{- $singleNode := or (.Values.singleNode | default dict).enabled $allInOne }}

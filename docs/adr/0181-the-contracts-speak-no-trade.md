@@ -448,3 +448,37 @@ first-class."
    is an addition, which ADR 0168 §2 allows. If D is not merged by 2027-05-28, it can finish after 1.0
    without moving the date. Taking that valve is the project lead's call, because it departs from "all
    before the freeze".
+
+## Round C2, as built (2026-11-21)
+
+Started on 2026-11-21 (planned 2027-02-08) and split into sub-stories of stream S83, each with its row in
+`docs/plan/status/S83.md`:
+
+- **S83-04a (#2053).** The twelve gates are the extension `tranibor-software-delivery`'s, in
+  `plugins/software-delivery/`, with the context provider `delivery` (the reading code left the gate
+  activity, whose name and payload did not change). Three additions to the gate seam, all neutral, came
+  out of what the core still asked of the twelve by name: a gate declares whether it reads the
+  workspace, whether it is judged on a run's writes, what it says in the process view and the parameter
+  it cannot do without (`gate(..., workspace=, run_scoped=, summary=, detail=, requires=)`); a context
+  provider may declare a `judged` hook, called after every evaluation, where its plugin acts on the
+  verdicts (a provider only reads); and a reader that is not the deployment (`load_template`, the CLI
+  offline) leaves to the deployment a gate or an effect whose plugin is absent (`deployment_issues`).
+  These belong to the fifth surface (point 3 of the decision) and are frozen with it.
+- **S83-04b (#2054).** `open_pr` and `merge_pr` are registered by the extension; the core knows them by
+  name only, and refuses at publication a transition whose effect no extension registers. Their
+  activities stay the orchestrator's, played by the interpreter by name, until round D's worker seam.
+- **S83-04c (#2055).** The `scm.*`, `ci.*`, `cd.*` inbound event types, four finding types and two memory
+  kinds are the plugin's; the core's open lists keep them for a window `C2` on the window list
+  (removed in the first release cut on or after 2026-12-14).
+- **S83-04d (#2052).** The release train's operations, `getRunDiff`, `getProjectDora`, their
+  components and the fields `has_release_train` and `trains_pending` carry `x-plugin:
+  software-delivery` in `openapi.yaml`: they are outside the frozen REST set (point 5), and the
+  vocabulary guard does not read them.
+- **Left (S83-04e).** The `delivery` sections of the project, policy, stage-input and stage-result
+  contracts, with dual read; the connector kinds `scm`, `ci`, `cd`; the train's event types and
+  `ReleaseStatus` (with round D).
+- **S83-04w.** The windows are keyed on the releases actually cut, not on version numbers guessed
+  ahead: the release ledger `tools/releases.json`, which `tools/bump_version.py` writes, records each
+  release and its day, and a window closes in the first release cut on or after its `removed_on`, two
+  weeks at least after the release that opened it, patch or minor. C1 opened in 0.27.17 and closes on or
+  after 2026-12-07; C2 opens in the first release after 2026-11-21 and closes on or after 2026-12-14.

@@ -22,6 +22,7 @@ from ..db.models import Project, WorkflowDef, WorkItem
 from ..errors import unprocessable
 from .decision_ledger import record_routing
 from .definitions import active_workflow_named, default_workflow, policy_engine, workflow_model
+from .handed_files import refuse_start_without_files
 from .initiator import initiator
 from .llm_routing import Decision, Item, ask_the_model, book, routing_record
 from .work_item_repository import birth_fields
@@ -191,7 +192,9 @@ async def _budget_at_launch(
     return birth.budget_usd
 
 
-async def verify_birth(session: AsyncSession, project: Project, birth: WorkItemBirth) -> None:
+async def verify_birth(
+    session: AsyncSession, project: Project, birth: WorkItemBirth, *, start: bool = False
+) -> None:
     """Refuses (422) a birth that `new_work_item` would refuse: unknown workflow, invalid fields,
     a budget wider than allowed. Nothing is written, so a caller can run it BEFORE a side effect
     it could not take back (the issue created in an external tracker, S39-16)."""
@@ -201,6 +204,8 @@ async def verify_birth(session: AsyncSession, project: Project, birth: WorkItemB
     workflow = workflow_model(row)
     validate_fields(workflow.metadata.inputs, fields, workflow.metadata.name)
     await _budget_at_launch(session, project, workflow, birth)
+    if start:
+        refuse_start_without_files(workflow)
 
 
 async def new_work_item(session: AsyncSession, project: Project, birth: WorkItemBirth) -> WorkItem:
