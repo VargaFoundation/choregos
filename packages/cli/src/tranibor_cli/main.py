@@ -756,7 +756,7 @@ def items_show(item_id: str) -> None:
     console.print(f"state: {item.get('state_display') or item['state']} · size {item.get('size') or '—'}")
     totals = item.get("totals", {})
     console.print(f"cost: {_pricing(api).text(money.amount(totals))} ({totals.get('runs', 0)} runs)")
-    timeline = api.get(f"/work-items/{item_id}/timeline")
+    timeline = api.get_pages(f"/work-items/{item_id}/timeline")
     table = Table("when", "what", "detail")
     for entry in timeline[-15:]:
         table.add_row(entry["ts"][:19], entry["title"][:40], (entry.get("detail") or "")[:60])
@@ -810,7 +810,7 @@ def items_action(
 @runs_app.command("list")
 def runs_list(item_id: str) -> None:
     api = client()
-    runs = api.get(f"/work-items/{item_id}/runs")
+    runs = api.get_pages(f"/work-items/{item_id}/runs")
     pricing = _pricing(api)
     table = Table("run", "stage", "attempt", "status", "backend · model", "cost")
     for run in runs:

@@ -52,7 +52,7 @@ class ArtifactError(RuntimeError):
 
 def list_artifacts(api: Client, work_item: str) -> list[dict[str, Any]]:
     """Every revision of every artefact of the work item, by name then version (`Artifact`)."""
-    return list(api.get(f"/work-items/{work_item}/artifacts") or [])
+    return list(api.get_pages(f"/work-items/{work_item}/artifacts"))
 
 
 def inbox(api: Client, limit: int = 100) -> list[dict[str, Any]]:

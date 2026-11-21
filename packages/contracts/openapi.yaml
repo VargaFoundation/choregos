@@ -1654,8 +1654,14 @@ paths:
     get:
       tags: [work-items]
       operationId: getWorkItemTimeline
+      description: >-
+        States, runs, decisions and findings of a work item, oldest first, one page at a time (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TimelinePage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/hand-offs:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1665,9 +1671,14 @@ paths:
         The hand-off receipts of a work item (S25-04), output by output: every run that produced it
         and every run that read it, under the SHA-256 digest of the revision it produced or read, and
         the digest of what the output is worth today — an output modified after it was produced no
-        longer has the digest of its last receipt.
+        longer has the digest of its last receipt. A page is a number of outputs (ADR 0206), in the order
+        their first receipt was written; each carries all its receipts.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/HandOff" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HandOffPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /work-items/{id}/artifacts:
@@ -1676,10 +1687,14 @@ paths:
       tags: [work-items]
       operationId: listWorkItemArtifacts
       description: >-
-        Every revision of every artifact of the work item (ADR 0049), by name then version: its type,
-        media type, size, sha256 digest and the run that produced it.
+        The revisions of the work item's artifacts (ADR 0049), by name then version, one page at a time
+        (ADR 0206): its type, media type, size, sha256 digest and the run that produced it.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Artifact" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ArtifactPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /work-items/{id}/artifacts/{ref}:
@@ -1839,8 +1854,14 @@ paths:
     get:
       tags: [runs]
       operationId: listRuns
+      description: >-
+        The runs of a work item, oldest first, one page at a time (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Run" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /runs/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1885,16 +1906,23 @@ paths:
     get:
       tags: [runs]
       operationId: getRunEvents
-      summary: The run's ACP log (SSE when Accept is text/event-stream)
+      summary: The run's ACP log, oldest first, one page at a time (SSE when Accept is text/event-stream)
+      description: >-
+        Events in the order of `seq` (ADR 0206): a client that follows the log passes `after_seq` for what it has not
+        read and `cursor` for the rest of that read. Over SSE the stored events are sent first, then the live ones;
+        `cursor` and `limit` do not apply.
       parameters:
         - { name: after_seq, in: query, schema: { type: integer } }
         - { name: Last-Event-ID, in: header, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
         "200":
           description: OK
           content:
-            application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunEvent" } } }
+            application/json: { schema: { $ref: "#/components/schemas/RunEventPage" } }
             text/event-stream: { schema: { type: string } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /runs/{id}/access:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -6445,31 +6473,13 @@ paths:
       tags: [internal]
       security: [{ runToken: [] }]
       operationId: getRunKnowledge
-      description: The converted documents of the `files` knowledge bases the run's StageInput pins (ADR 0051); the runner recomputes their digest before laying them read-only.
+      description: The converted documents of the `files` knowledge bases the run's StageInput pins (ADR 0051); the runner recomputes their digest before laying them read-only. One base per item, one page at a time (ADR 0206); the runner follows `meta.next_cursor` to the end.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200":
-          description: One entry per knowledge base
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  required: [slug, digest, documents]
-                  properties:
-                    slug: { type: string }
-                    name: { type: string }
-                    digest: { type: string }
-                    documents:
-                      type: array
-                      items:
-                        type: object
-                        required: [path, title, markdown]
-                        properties:
-                          path: { type: string, description: "relative to `.choregos/knowledge/<slug>/`" }
-                          title: { type: string }
-                          filename: { type: string }
-                          markdown: { type: string }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunKnowledgePage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
   /internal/runs/{id}/knowledge/search:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -6523,22 +6533,13 @@ paths:
       tags: [internal]
       security: [{ runToken: [] }]
       operationId: getRunSkills
-      description: The files of the skills the run's StageInput names (ADR 0033); the runner recomputes their digest before writing them.
+      description: The files of the skills the run's StageInput names (ADR 0033); the runner recomputes their digest before writing them. One page at a time (ADR 0206); the runner follows `meta.next_cursor` to the end.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200":
-          description: One entry per skill
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  required: [slug, version, digest, files]
-                  properties:
-                    slug: { type: string }
-                    version: { type: integer }
-                    digest: { type: string }
-                    files: { type: object, additionalProperties: { type: string }, description: "path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text" }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunSkillPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/agent-sessions/{id}/input:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -6739,9 +6740,15 @@ paths:
       operationId: getRunInputs
       description: >-
         The declared inputs of the run that an earlier step produced, latest revision of each (ADR 0049).
-        The runner mounts them as files in `.choregos/inputs/`.
+        The runner mounts them as files in `.choregos/inputs/`. One page at a time (ADR 0206): a page is a number of
+        DECLARED inputs, so one nothing has produced yet leaves it shorter; the runner follows `meta.next_cursor`
+        to the end.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RunInputFile" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunInputFilePage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /internal/runs/{id}/inputs/{name}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -13641,6 +13648,13 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Run" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
+    RunPage:
+      type: object
+      description: One page of a work item's runs, oldest first (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Run" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     AgentCredentialPage:
       type: object
       required: [items, meta]
@@ -13664,6 +13678,82 @@ components:
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    RunEventPage:
+      type: object
+      description: One page of a run's ACP log, in the order of `seq` (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/RunEvent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ArtifactPage:
+      type: object
+      description: One page of a work item's artifact revisions, by name then version (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Artifact" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    TimelinePage:
+      type: object
+      description: One page of a work item's timeline, oldest first (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/TimelineEntry" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    HandOffPage:
+      type: object
+      description: One page of a work item's hand-offs, one per output (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/HandOff" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    RunInputFilePage:
+      type: object
+      description: One page of a run's declared inputs (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/RunInputFile" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    RunSkillPage:
+      type: object
+      description: One page of the skills a run's StageInput names (ADR 0206).
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [slug, version, digest, files]
+            properties:
+              slug: { type: string }
+              version: { type: integer }
+              digest: { type: string }
+              files: { type: object, additionalProperties: { type: string }, description: "path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    RunKnowledgePage:
+      type: object
+      description: One page of the `files` knowledge bases a run's StageInput pins, one base per item (ADR 0206).
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [slug, digest, documents]
+            properties:
+              slug: { type: string }
+              name: { type: string }
+              digest: { type: string }
+              documents:
+                type: array
+                items:
+                  type: object
+                  required: [path, title, markdown]
+                  properties:
+                    path: { type: string, description: "relative to `.choregos/knowledge/<slug>/`" }
+                    title: { type: string }
+                    filename: { type: string }
+                    markdown: { type: string }
         meta: { $ref: "#/components/schemas/PageMeta" }
     AuditEntry:
       type: object

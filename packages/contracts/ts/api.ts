@@ -6580,6 +6580,12 @@ export type AgentRunPage = {
   meta: PageMeta;
 };
 
+/** One page of a work item's runs, oldest first (ADR 0206). */
+export type RunPage = {
+  items: Array<Run>;
+  meta: PageMeta;
+};
+
 export type AgentCredentialPage = {
   items: Array<AgentCredential>;
   meta: PageMeta;
@@ -6597,6 +6603,67 @@ export type AgentEvaluationPage = {
 
 export type ConversationCandidatePage = {
   items: Array<ConversationCandidate>;
+  meta: PageMeta;
+};
+
+/** One page of a run's ACP log, in the order of `seq` (ADR 0206). */
+export type RunEventPage = {
+  items: Array<RunEvent>;
+  meta: PageMeta;
+};
+
+/** One page of a work item's artifact revisions, by name then version (ADR 0206). */
+export type ArtifactPage = {
+  items: Array<Artifact>;
+  meta: PageMeta;
+};
+
+/** One page of a work item's timeline, oldest first (ADR 0206). */
+export type TimelinePage = {
+  items: Array<TimelineEntry>;
+  meta: PageMeta;
+};
+
+/** One page of a work item's hand-offs, one per output (ADR 0206). */
+export type HandOffPage = {
+  items: Array<HandOff>;
+  meta: PageMeta;
+};
+
+/** One page of a run's declared inputs (ADR 0206). */
+export type RunInputFilePage = {
+  items: Array<RunInputFile>;
+  meta: PageMeta;
+};
+
+/** One page of the skills a run's StageInput names (ADR 0206). */
+export type RunSkillPage = {
+  items: Array<{
+    slug: string;
+    version: number;
+    digest: string;
+    /** path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text */
+    files: {
+      [key: string]: string;
+    };
+  }>;
+  meta: PageMeta;
+};
+
+/** One page of the `files` knowledge bases a run's StageInput pins, one base per item (ADR 0206). */
+export type RunKnowledgePage = {
+  items: Array<{
+    slug: string;
+    name?: string;
+    digest: string;
+    documents: Array<{
+      /** relative to `.choregos/knowledge/<slug>/` */
+      path: string;
+      title: string;
+      filename?: string;
+      markdown: string;
+    }>;
+  }>;
   meta: PageMeta;
 };
 
@@ -6955,33 +7022,14 @@ export interface Operations {
   getRunContext: { method: "GET"; path: "/internal/runs/{id}/context"; body: never; response: ContextPack };
   getRunContextBreakdown: { method: "GET"; path: "/runs/{id}/context-breakdown"; body: never; response: RunContext };
   getRunDiff: { method: "GET"; path: "/runs/{id}/diff"; body: never; response: DiffSummary };
-  getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: Array<RunEvent> };
+  getRunEvents: { method: "GET"; path: "/runs/{id}/events"; body: never; response: RunEventPage };
   getRunInput: { method: "GET"; path: "/internal/runs/{id}/input"; body: never; response: StageInput };
   getRunInputContent: { method: "GET"; path: "/internal/runs/{id}/inputs/{name}"; body: never; response: void };
-  getRunInputs: { method: "GET"; path: "/internal/runs/{id}/inputs"; body: never; response: Array<RunInputFile> };
-  getRunKnowledge: { method: "GET"; path: "/internal/runs/{id}/knowledge"; body: never; response: Array<{
-  slug: string;
-  name?: string;
-  digest: string;
-  documents: Array<{
-    /** relative to `.choregos/knowledge/<slug>/` */
-    path: string;
-    title: string;
-    filename?: string;
-    markdown: string;
-  }>;
-}> };
+  getRunInputs: { method: "GET"; path: "/internal/runs/{id}/inputs"; body: never; response: RunInputFilePage };
+  getRunKnowledge: { method: "GET"; path: "/internal/runs/{id}/knowledge"; body: never; response: RunKnowledgePage };
   getRunLogs: { method: "GET"; path: "/runs/{id}/logs"; body: never; response: RunLogs };
   getRunNetwork: { method: "GET"; path: "/internal/runs/{id}/network"; body: never; response: RunNetwork };
-  getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: Array<{
-  slug: string;
-  version: number;
-  digest: string;
-  /** path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text */
-  files: {
-    [key: string]: string;
-  };
-}> };
+  getRunSkills: { method: "GET"; path: "/internal/runs/{id}/skills"; body: never; response: RunSkillPage };
   getRunTicket: { method: "GET"; path: "/internal/runs/{id}/ticket"; body: never; response: RunTicket };
   getRunTools: { method: "GET"; path: "/internal/runs/{id}/tools"; body: never; response: {
   tools?: Array<RunTool>;
@@ -6998,9 +7046,9 @@ export interface Operations {
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
   getWorkItemArtifact: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}"; body: never; response: Artifact };
   getWorkItemArtifactContent: { method: "GET"; path: "/work-items/{id}/artifacts/{ref}/content"; body: never; response: void };
-  getWorkItemHandOffs: { method: "GET"; path: "/work-items/{id}/hand-offs"; body: never; response: Array<HandOff> };
+  getWorkItemHandOffs: { method: "GET"; path: "/work-items/{id}/hand-offs"; body: never; response: HandOffPage };
   getWorkItemJourney: { method: "GET"; path: "/work-items/{id}/journey"; body: never; response: WorkItemJourney };
-  getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: Array<TimelineEntry> };
+  getWorkItemTimeline: { method: "GET"; path: "/work-items/{id}/timeline"; body: never; response: TimelinePage };
   getWorkflow: { method: "GET"; path: "/projects/{id}/workflow"; body: never; response: WorkflowDef };
   getWorkflowActivity: { method: "GET"; path: "/projects/{id}/workflows/{name}/activity"; body: never; response: WorkflowActivity };
   getWorkflowRouting: { method: "GET"; path: "/projects/{id}/workflow-routing"; body: never; response: WorkflowRouting };
@@ -7103,7 +7151,7 @@ export interface Operations {
   listReleases: { method: "GET"; path: "/projects/{id}/releases"; body: never; response: ReleasePage };
   listRemoteCredentials: { method: "GET"; path: "/orgs/{org}/remote-credentials"; body: never; response: RemoteCredentialPage };
   listRunAgents: { method: "GET"; path: "/runs/{id}/agents"; body: never; response: RunAgentList };
-  listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
+  listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: RunPage };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: SkillPage };
   listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
@@ -7111,7 +7159,7 @@ export interface Operations {
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
   listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
-  listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
+  listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: ArtifactPage };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: WorkflowAgentPage };
   listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: Array<WorkflowCatalogueEntry> };

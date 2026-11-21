@@ -106,7 +106,7 @@ async def test_the_artifacts_of_a_work_item_are_listed_and_served(
 
     listed = await client.get(f"/api/v1/work-items/{item['id']}/artifacts")
     assert listed.status_code == 200, listed.text
-    by_name = {a["name"]: a for a in listed.json()}
+    by_name = {a["name"]: a for a in listed.json()["items"]}
     assert set(by_name) == {"deck", "spec_markdown"}
     assert by_name["deck"]["media_type"] == PPTX and by_name["deck"]["size"] == len(DECK)
     assert by_name["deck"]["produced_by"] == {
@@ -158,7 +158,7 @@ async def test_a_run_lists_and_reads_its_declared_inputs_with_a_receipt(
 
     listed = await client.get("/api/v1/internal/runs/run-read/inputs", headers=headers)
     assert listed.status_code == 200, listed.text
-    assert {(e["name"], e["filename"]) for e in listed.json()} == {
+    assert {(e["name"], e["filename"]) for e in listed.json()["items"]} == {
         ("deck", "deck.pptx"),
         ("spec_markdown", "spec_markdown.md"),
     }, "an input nothing produced yet is simply absent"
@@ -172,7 +172,8 @@ async def test_a_run_lists_and_reads_its_declared_inputs_with_a_receipt(
     assert undeclared.status_code in {403, 404}
 
     hand_offs = {
-        h["output"]: h for h in (await client.get(f"/api/v1/work-items/{item['id']}/hand-offs")).json()
+        h["output"]: h
+        for h in (await client.get(f"/api/v1/work-items/{item['id']}/hand-offs")).json()["items"]
     }
     reads = [(e["run_id"], e["digest"]) for e in hand_offs["deck"]["events"] if e["kind"] == "read"]
     assert reads == [("run-read", _digest(DECK))], "the read is receipted under the file's digest"

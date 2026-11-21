@@ -66,7 +66,7 @@ async def test_a_work_item_is_listed_read_and_tells_its_timeline(
         read_back["title"] == "A project manager" and read_back["size"] == "M" and read_back["temporal_wf_id"]
     )
     timeline = await client.get(f"/api/v1/work-items/{item['id']}/timeline")
-    assert timeline.status_code == 200 and isinstance(timeline.json(), list)
+    assert timeline.status_code == 200 and isinstance(timeline.json()["items"], list)
     assert (await client.get("/api/v1/work-items/absent")).status_code == 404
 
 
@@ -194,15 +194,16 @@ async def test_a_run_is_read_with_its_events_its_diff_and_its_accesses(
             )
         )
 
-    runs = (await client.get(f"/api/v1/work-items/{item['id']}/runs")).json()
+    runs = (await client.get(f"/api/v1/work-items/{item['id']}/runs")).json()["items"]
     assert [r["id"] for r in runs] == [run_id]
     assert (await client.get(f"/api/v1/runs/{run_id}")).json()["stage_role"] == "implement"
     assert (await client.get("/api/v1/runs/absent")).status_code == 404
 
-    events = (await client.get(f"/api/v1/runs/{run_id}/events")).json()
+    events = (await client.get(f"/api/v1/runs/{run_id}/events")).json()["items"]
     assert [e["seq"] for e in events] == [1, 2, 3]
     assert [
-        e["seq"] for e in (await client.get(f"/api/v1/runs/{run_id}/events", params={"after_seq": 2})).json()
+        e["seq"]
+        for e in (await client.get(f"/api/v1/runs/{run_id}/events", params={"after_seq": 2})).json()["items"]
     ] == [3]
 
     access_report = (await client.get(f"/api/v1/runs/{run_id}/access")).json()
@@ -655,7 +656,7 @@ async def test_the_timeline_tells_runs_decisions_states_and_findings(
                 status="pending",
             )
         )
-    timeline = (await client.get(f"/api/v1/work-items/{item['id']}/timeline")).json()
+    timeline = (await client.get(f"/api/v1/work-items/{item['id']}/timeline")).json()["items"]
     kinds_seen = [e["kind"] for e in timeline]
     assert {"run", "decision", "state_change", "finding"} <= set(kinds_seen)
     assert kinds_seen.count("decision") == 2, "the request and the decision are two entries"

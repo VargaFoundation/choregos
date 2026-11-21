@@ -4,11 +4,11 @@ item; the storing of a stage's outputs."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_adapters.errors import AdapterError
 from tranibor_contracts import EventType
@@ -29,6 +29,7 @@ from ..db.models import (
     WorkItem,
 )
 from ..errors import unprocessable, upstream
+from ..keyset import keyset_page
 from ..rbac import Principal
 from ..schemas import (
     DecisionDraft,
@@ -39,6 +40,7 @@ from ..schemas import (
     RunDto,
     RunSummary,
     TimelineEntry,
+    TimelinePage,
     ToolConnector,
     Totals,
     TrackerWrite,
@@ -56,6 +58,9 @@ from .human_assignee import StepAssignee, actor_of_the_step, assignee_from_actor
 from .initiator import of_principal
 from .routing import WorkItemBirth, new_work_item, verify_birth
 from .work_item_repository import repository_view
+
+if TYPE_CHECKING:  # `deps` imports the services
+    from ..deps import Page
 
 
 def _decision_detail(decision: dict[str, Any]) -> str:
@@ -569,28 +574,98 @@ def _via(value: Any) -> TrackerWrite | None:
     return TrackerWrite(type=str(value["type"]), account=str(account) if account else None)
 
 
+def _run_entry(run: Run) -> TimelineEntry:
+    summary = (run.result or {}).get("summary", "")
+    return TimelineEntry(
+        ts=run.started_at or run.created_at,
+        kind="run",
+        title=f"{run.stage_role} — tentative {run.attempt}",
+        detail=summary or run.status,
+        actor=run.actor or run.backend,
+        actor_kind="agent",
+        ref_id=run.id,
+        cost_usd=run.cost_usd,
+    )
+
+
+def _request_entry(req: HumanRequest, via: Any) -> TimelineEntry:
+    return TimelineEntry(
+        ts=req.requested_at,
+        kind="decision",
+        title=f"human request: {req.kind}",
+        detail=str(req.payload.get("question") or req.payload.get("summary") or ""),
+        actor=req.decided_by,
+        actor_kind="user",
+        ref_id=req.id,
+        via=_via(via),
+    )
+
+
+def _decision_entry(req: HumanRequest) -> TimelineEntry:
+    assert req.decided_at is not None
+    return TimelineEntry(
+        ts=req.decided_at,
+        kind="decision",
+        title=f"decision: {(req.decision or {}).get('kind', 'answered')}",
+        detail=_decision_detail(req.decision or {}),
+        actor=req.decided_by,
+        actor_kind="user",
+        ref_id=req.id,
+    )
+
+
+def _event_entry(event: Event) -> TimelineEntry | None:
+    if event.type == str(EventType.WORKITEM_STATE_CHANGED):
+        return TimelineEntry(
+            ts=event.ts,
+            kind="state_change",
+            title=f"{event.payload.get('from', '?')} → {event.payload.get('to', '?')}",
+            detail=str(event.payload.get("reason") or ""),
+            actor=str(event.payload.get("by") or "orchestrateur"),
+            actor_kind="system",
+            via=_via(event.payload.get("via")),
+        )
+    if event.type == str(EventType.WORKITEM_STATUS_COMMENT_MISSED):
+        # The work item went on (S62-17): the board may lag until the next state rewrites it (S62-20).
+        return TimelineEntry(
+            ts=event.ts,
+            kind="error",
+            title="the tracker did not take the status comment; the next state rewrites it",
+            detail=str(event.payload.get("error") or ""),
+            actor="orchestrator",
+            actor_kind="system",
+        )
+    return None
+
+
+def _finding_entry(finding: Finding) -> TimelineEntry:
+    return TimelineEntry(
+        ts=finding.created_at,
+        kind="finding",
+        title=f"finding {finding.severity} : {finding.title}",
+        detail=finding.evidence[:300],
+        actor_kind="agent",
+        ref_id=finding.id,
+    )
+
+
+#: The events a timeline shows (the others are the platform's own bookkeeping).
+_TIMELINE_EVENTS = (str(EventType.WORKITEM_STATE_CHANGED), str(EventType.WORKITEM_STATUS_COMMENT_MISSED))
+
+
 async def timeline(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]:
-    """States, runs, decisions, findings: the complete story of a work item, in order."""
+    """States, runs, decisions, findings: the complete story of a work item, in order.
+
+    The whole of it, in memory: for a caller that wants the tail (the MCP door). A list route reads
+    `timeline_page`, one page of it in SQL (ADR 0206).
+    """
     entries: list[TimelineEntry] = []
     runs = (
         (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
         .scalars()
         .all()
     )
-    for run in runs:
-        summary = (run.result or {}).get("summary", "")
-        entries.append(
-            TimelineEntry(
-                ts=run.started_at or run.created_at,
-                kind="run",
-                title=f"{run.stage_role} — tentative {run.attempt}",
-                detail=summary or run.status,
-                actor=run.actor or run.backend,
-                actor_kind="agent",
-                ref_id=run.id,
-                cost_usd=run.cost_usd,
-            )
-        )
+    entries.extend(_run_entry(run) for run in runs)
     requests = (
         (
             await session.execute(
@@ -614,67 +689,97 @@ async def timeline(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]
         if e.type == str(EventType.WORKITEM_HUMAN_REQUESTED) and e.payload.get("via")
     }
     for req in requests:
-        entries.append(
-            TimelineEntry(
-                ts=req.requested_at,
-                kind="decision",
-                title=f"human request: {req.kind}",
-                detail=str(req.payload.get("question") or req.payload.get("summary") or ""),
-                actor=req.decided_by,
-                actor_kind="user",
-                ref_id=req.id,
-                via=_via(via_of_request.get(req.id)),
-            )
-        )
+        entries.append(_request_entry(req, via_of_request.get(req.id)))
         if req.decided_at:
-            entries.append(
-                TimelineEntry(
-                    ts=req.decided_at,
-                    kind="decision",
-                    title=f"decision: {(req.decision or {}).get('kind', 'answered')}",
-                    detail=_decision_detail(req.decision or {}),
-                    actor=req.decided_by,
-                    actor_kind="user",
-                    ref_id=req.id,
-                )
-            )
-    for event in events:
-        if event.type == str(EventType.WORKITEM_STATE_CHANGED):
-            entries.append(
-                TimelineEntry(
-                    ts=event.ts,
-                    kind="state_change",
-                    title=f"{event.payload.get('from', '?')} → {event.payload.get('to', '?')}",
-                    detail=str(event.payload.get("reason") or ""),
-                    actor=str(event.payload.get("by") or "orchestrateur"),
-                    actor_kind="system",
-                    via=_via(event.payload.get("via")),
-                )
-            )
-        elif event.type == str(EventType.WORKITEM_STATUS_COMMENT_MISSED):
-            # The work item went on (S62-17): the board may lag until the next state rewrites it (S62-20).
-            entries.append(
-                TimelineEntry(
-                    ts=event.ts,
-                    kind="error",
-                    title="the tracker did not take the status comment; the next state rewrites it",
-                    detail=str(event.payload.get("error") or ""),
-                    actor="orchestrator",
-                    actor_kind="system",
-                )
-            )
+            entries.append(_decision_entry(req))
+    entries.extend(entry for event in events if (entry := _event_entry(event)) is not None)
     findings = (
         (await session.execute(select(Finding).where(Finding.origin_work_item_id == item.id))).scalars().all()
     )
-    for finding in findings:
-        entries.append(
-            TimelineEntry(
-                ts=finding.created_at,
-                kind="finding",
-                title=f"finding {finding.severity} : {finding.title}",
-                detail=finding.evidence[:300],
-                actor_kind="agent",
-                ref_id=finding.id,
-            )
-        )
+    entries.extend(_finding_entry(finding) for finding in findings)
     return sorted(entries, key=lambda e: e.ts)
+
+
+async def timeline_page(session: AsyncSession, item: WorkItem, page: Page) -> TimelinePage:
+    """One page of the timeline, oldest first (ADR 0206).
+
+    The five sources (runs, requests, decisions, events, findings) are lined up in ONE query, a `UNION ALL`
+    of `(ts, key)` where `key` is `<source>:<row id>`, which breaks a tie between two entries of the same
+    instant; the page is cut over it in SQL, and only the rows of the page are then read in full.
+    """
+    stamps = [
+        select(
+            func.coalesce(Run.started_at, Run.created_at).label("ts"),
+            literal("run:").concat(Run.id).label("key"),
+        ).where(Run.work_item_id == item.id),
+        select(
+            HumanRequest.requested_at.label("ts"), literal("request:").concat(HumanRequest.id).label("key")
+        ).where(HumanRequest.work_item_id == item.id),
+        select(
+            HumanRequest.decided_at.label("ts"), literal("decision:").concat(HumanRequest.id).label("key")
+        ).where(HumanRequest.work_item_id == item.id, HumanRequest.decided_at.is_not(None)),
+        select(Event.ts.label("ts"), literal("event:").concat(Event.id).label("key")).where(
+            Event.work_item_id == item.id, Event.type.in_(_TIMELINE_EVENTS)
+        ),
+        select(Finding.created_at.label("ts"), literal("finding:").concat(Finding.id).label("key")).where(
+            Finding.origin_work_item_id == item.id
+        ),
+    ]
+    lined_up = union_all(*stamps).subquery()
+    heads, meta = await keyset_page(
+        session,
+        select(lined_up.c.ts, lined_up.c.key),
+        sort=lined_up.c.ts,
+        tiebreak=lined_up.c.key,
+        page=page,
+        descending=False,
+        rows=True,
+    )
+    wanted: dict[str, list[str]] = {}
+    for head in heads:
+        source, _, row_id = head.key.partition(":")
+        wanted.setdefault(source, []).append(row_id)
+
+    runs = await _by_id(session, Run, wanted.get("run", []))
+    requests = await _by_id(session, HumanRequest, [*wanted.get("request", []), *wanted.get("decision", [])])
+    events = await _by_id(session, Event, wanted.get("event", []))
+    findings = await _by_id(session, Finding, wanted.get("finding", []))
+    via_of_request: dict[str, Any] = {}
+    if wanted.get("request"):
+        asked = (
+            await session.execute(
+                select(Event).where(
+                    Event.work_item_id == item.id,
+                    Event.type == str(EventType.WORKITEM_HUMAN_REQUESTED),
+                    Event.payload["request_id"].as_string().in_(wanted["request"]),
+                )
+            )
+        ).scalars()
+        via_of_request = {
+            str(e.payload.get("request_id")): e.payload.get("via") for e in asked if e.payload.get("via")
+        }
+
+    entries: list[TimelineEntry] = []
+    for head in heads:
+        source, _, row_id = head.key.partition(":")
+        entry: TimelineEntry | None = None
+        if source == "run":
+            entry = _run_entry(runs[row_id])
+        elif source == "request":
+            entry = _request_entry(requests[row_id], via_of_request.get(row_id))
+        elif source == "decision":
+            entry = _decision_entry(requests[row_id])
+        elif source == "event":
+            entry = _event_entry(events[row_id])
+        elif source == "finding":
+            entry = _finding_entry(findings[row_id])
+        if entry is not None:
+            entries.append(entry)
+    return TimelinePage(items=entries, meta=meta)
+
+
+async def _by_id(session: AsyncSession, model: Any, ids: list[str]) -> dict[str, Any]:
+    if not ids:
+        return {}
+    rows = (await session.execute(select(model).where(model.id.in_(ids)))).scalars().all()
+    return {row.id: row for row in rows}

@@ -74,7 +74,10 @@ class Platform:
         self.router, self.contract = router, contract
 
     def listing(self, *rows: dict[str, Any]) -> None:
-        body = [_valid_artifact(row) for row in rows]
+        body = {
+            "items": [_valid_artifact(row) for row in rows],
+            "meta": {"has_more": False, "next_cursor": None},
+        }
         self.router.get(f"{V1}/work-items/{ITEM}/artifacts").mock(return_value=Response(200, json=body))
 
     def content(

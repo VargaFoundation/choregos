@@ -59,24 +59,16 @@ BOUNDED: dict[str, str] = {
 #: The ceiling: array routes that read without a page. Lowered when one migrates, never raised.
 NOT_YET_PAGED: frozenset[str] = frozenset(
     {
-        "getRunEvents",
-        "getRunInputs",
-        "getRunKnowledge",
-        "getRunSkills",
-        "getWorkItemHandOffs",
-        "getWorkItemTimeline",
         "listAgentCatalogue",
         "listGlobalPendingMemory",
         "listPendingMemory",
         # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
         # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.
         "listPlatformModels",
-        "listRuns",
         "listTriggers",
         # Catalogue rows merged with the gateway's live list and cut by the role/usage policy in Python;
         # its clients are whole-list pickers (agent builder, project profiles). Needs a decision.
         "listUsableModels",
-        "listWorkItemArtifacts",
         "listWorkflowCatalogue",
     }
 )

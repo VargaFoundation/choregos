@@ -239,7 +239,9 @@ class Platform:
         router.get(f"{V1}/projects/acme-web/costs").mock(side_effect=self._costs)
         router.get(f"{V1}/orgs/acme/activity/stream").mock(side_effect=self._stream)
         router.get(url__regex=rf"{V1}/work-items/[^/]+/runs").mock(side_effect=self._runs)
-        router.get(url__regex=rf"{V1}/runs/[^/]+/events").mock(return_value=Response(200, json=[]))
+        router.get(url__regex=rf"{V1}/runs/[^/]+/events").mock(
+            return_value=Response(200, json={"items": [], "meta": {"has_more": False, "next_cursor": None}})
+        )
         router.get(url__regex=rf"{V1}/runs/[^/]+/context-breakdown").mock(
             return_value=Response(404, json={"title": "Not found", "detail": "no breakdown"})
         )
@@ -279,7 +281,7 @@ class Platform:
             "stage_role": "implement",
             "started_at": "2026-11-18T14:57:00Z",
         }
-        return Response(200, json=[run])
+        return Response(200, json={"items": [run], "meta": {"has_more": False, "next_cursor": None}})
 
     def _stream(self, request: Any) -> Response:
         self.stream_opens += 1

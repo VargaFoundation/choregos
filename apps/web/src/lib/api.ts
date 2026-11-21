@@ -158,7 +158,6 @@ import type {
   RunEventDto,
   RunChain,
   RunLogs,
-  TimelineEntry,
   ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
@@ -199,6 +198,11 @@ import type {
   WorkflowAgentPage,
   WorkflowDefPage,
   WorkflowSummaryPage,
+  ArtifactPage,
+  HandOffPage,
+  RunEventPage,
+  RunPage,
+  TimelinePage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -1460,11 +1464,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
-  /** A ticket's handover receipts (S25-04): who produced, who read, under which fingerprint. */
-  handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),
-  /** Every revision of every artifact of a work item (ADR 0049). */
-  artifacts: (id: string) => request<Artifact[]>(`/work-items/${id}/artifacts`),
+  /** One page of a ticket's timeline, oldest first (ADR 0206): a list that scrolls, "More" passes `cursor`. */
+  timeline: (id: string, params: { cursor?: string; limit?: number } = {}) =>
+    request<TimelinePage>(`/work-items/${id}/timeline${pageQuery(params)}`),
+  /**
+   * A ticket's handover receipts (S25-04): who produced, who read, under which fingerprint. Every
+   * page, the cursor followed to the end: the artifacts' readers are looked up in the whole set.
+   */
+  handOffs: (id: string): Promise<HandOff[]> =>
+    everyRow((cursor) => request<HandOffPage>(`/work-items/${id}/hand-offs${pageQuery({ cursor, limit: 200 })}`)),
+  /** Every revision of every artifact of a work item (ADR 0049), every page: they are grouped by name. */
+  artifacts: (id: string): Promise<Artifact[]> =>
+    everyRow((cursor) => request<ArtifactPage>(`/work-items/${id}/artifacts${pageQuery({ cursor, limit: 200 })}`)),
   /** The bytes of one revision (`name@version`), digest checked by the API; a refusal is an `ApiError`. */
   artifactContent: (id: string, ref: string) => artifactContent(id, ref),
   /** The ticket's journey in ITS workflow, in one read: what the animated map draws (S22-01). */
@@ -1502,7 +1513,9 @@ export const api = {
   stopWorkItem: (id: string, reason: string) =>
     request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action: "stop", reason }) }),
 
-  runs: (itemId: string) => request<Run[]>(`/work-items/${itemId}/runs`),
+  /** A ticket's runs, oldest first, every page: the table, the proposal and the journey fold the whole set. */
+  runs: (itemId: string): Promise<Run[]> =>
+    everyRow((cursor) => request<RunPage>(`/work-items/${itemId}/runs${pageQuery({ cursor, limit: 200 })}`)),
   run: (runId: string) => request<Run>(`/runs/${runId}`),
   /**
    * Stops one run now, with a reason (ADR 0142 §2): its work item then waits for a person. 409 when the
@@ -1516,8 +1529,13 @@ export const api = {
   /** The same entries as they change (SSE), with the same filter: the path `useLiveRefresh` listens to. */
   activityStreamPath: (org: string, filter: ActivityFilter = {}) =>
     `/orgs/${encodeURIComponent(org)}/activity/stream${query(compact(filter))}`,
-  runEvents: (runId: string, afterSeq?: number) =>
-    request<RunEventDto[]>(`/runs/${runId}/events${query(afterSeq ? { after_seq: String(afterSeq) } : undefined)}`),
+  /** A run's log, oldest first, every page: the views fold it whole (plan, activity, verdicts). */
+  runEvents: (runId: string, afterSeq?: number): Promise<RunEventDto[]> =>
+    everyRow((cursor) =>
+      request<RunEventPage>(
+        `/runs/${runId}/events${query(compact({ after_seq: afterSeq ? String(afterSeq) : undefined, cursor, limit: "200" }))}`,
+      ),
+    ),
   runDiff: (runId: string) => request<DiffSummary>(`/runs/${runId}/diff`),
   /** What fills the run's model context: the last call's sections and the series of totals (ADR 0141 §6). */
   runContext: (runId: string) => request<RunContext>(`/runs/${runId}/context-breakdown`),
@@ -1698,7 +1716,6 @@ function memoryParams(which?: MemoryChoice): Record<string, string> {
 
 /** How many pending actions the inbox reads at most: five pages of 200. */
 export const ACTIONS_CAP = 1000;
-
 /** How many tickets a project page reads at most: five pages of 200. */
 export const WORK_ITEMS_CAP = 1000;
 
@@ -1719,7 +1736,6 @@ async function allWorkItems(
   } while (hasMore && cursor && items.length < cap);
   return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
 }
-
 
 export type AgentsParams = PageParams & {
   q?: string;

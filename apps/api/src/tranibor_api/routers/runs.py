@@ -17,9 +17,11 @@ from tranibor_core.domain import aware, utcnow
 from tranibor_core.tool_ledger import IN_FLIGHT
 
 from ..db.models import CostLedger, Project, Run, RunEvent, WorkItem
-from ..deps import Db, Me, resolve_project
+from ..db.session import ALL_ORGS, session_scope
+from ..deps import Db, Me, Page, Pagination, resolve_project
 from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
+from ..keyset import keyset_page
 from ..knowledge.marked import readable, require_readable
 from ..rbac import Permission
 from ..schemas import (
@@ -32,7 +34,9 @@ from ..schemas import (
     RunContextPoint,
     RunDto,
     RunEventDto,
+    RunEventPage,
     RunLogsDto,
+    RunPage,
     StopRequest,
 )
 from ..services import run_dto, tool_connectors_of
@@ -60,8 +64,9 @@ async def _run(session: Any, run_id: str, principal: Any) -> tuple[Run, Project]
     return run, project
 
 
-@router.get("/work-items/{id}/runs", response_model=list[RunDto], operation_id="listRuns")
-async def list_runs(id: str, session: Db, principal: Me) -> list[RunDto]:
+@router.get("/work-items/{id}/runs", response_model=RunPage, operation_id="listRuns")
+async def list_runs(id: str, session: Db, principal: Me, page: Pagination) -> RunPage:
+    """The runs of a work item, oldest first, one page at a time (ADR 0206): the order the journey reads."""
     item = await session.get(WorkItem, id)
     if item is None:
         item = (
@@ -74,12 +79,15 @@ async def list_runs(id: str, session: Db, principal: Me) -> list[RunDto]:
     if project is None or not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
     await require_readable(session, principal, item, project.org_id)
-    rows = (
-        (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
-        .scalars()
-        .all()
+    rows, meta = await keyset_page(
+        session,
+        select(Run).where(Run.work_item_id == item.id),
+        sort=Run.created_at,
+        tiebreak=Run.id,
+        page=page,
+        descending=False,
     )
-    return [run_dto(row, project.slug) for row in rows]
+    return RunPage(items=[run_dto(row, project.slug) for row in rows], meta=meta)
 
 
 @router.get("/runs/{id}", response_model=RunDto, operation_id="getRun")
@@ -103,36 +111,70 @@ async def cancel_run(id: str, body: StopRequest, session: Db, principal: Me) -> 
     return run_dto(stopped, project.slug)
 
 
-@router.get("/runs/{id}/events", operation_id="getRunEvents")
+#: How many stored events one read takes while the backlog of a stream is sent (the page limit's ceiling).
+_BACKLOG_CHUNK = 200
+
+
+@router.get("/runs/{id}/events", response_model=RunEventPage, operation_id="getRunEvents")
 async def run_events(
     request: Request,
     id: str,
     session: Db,
     principal: Me,
+    page: Pagination,
     after_seq: Annotated[int | None, Query()] = None,
     last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
 ) -> Any:
-    """The run's ACP log. Over SSE, resumes after `Last-Event-ID` (S6-04)."""
-    run, _ = await _run(session, id, principal)
-    query = select(RunEvent).where(RunEvent.run_id == run.id)
-    if after_seq is not None:
-        query = query.where(RunEvent.seq > after_seq)
-    rows = (await session.execute(query.order_by(RunEvent.seq))).scalars().all()
-    stored = [RunEventDto(seq=r.seq, type=r.type, ts=r.ts, payload=r.payload) for r in rows]
+    """The run's ACP log, oldest first (the order of `seq`), one page at a time (ADR 0206). Over SSE,
+    the stored events are sent in chunks and then the live ones, resuming after `Last-Event-ID` (S6-04).
 
+    A client that follows the log (`choregos live`, the console) passes `after_seq` for what it has not
+    read and `cursor` for the rest of that read: the cursor is stable while events are appended.
+    """
+    run, _ = await _run(session, id, principal)
+    run_id = run.id
     if "text/event-stream" not in request.headers.get("accept", ""):
-        return stored
+        query = select(RunEvent).where(RunEvent.run_id == run_id)
+        if after_seq is not None:
+            query = query.where(RunEvent.seq > after_seq)
+        rows, meta = await keyset_page(
+            session, query, sort=RunEvent.seq, tiebreak=RunEvent.id, page=page, descending=False
+        )
+        return RunEventPage(
+            items=[RunEventDto(seq=r.seq, type=r.type, ts=r.ts, payload=r.payload) for r in rows],
+            meta=meta,
+        )
 
     bus = get_bus()
 
     async def stream() -> Any:
-        for stored_event in stored:
-            yield {
-                "id": f"seq-{stored_event.seq}",
-                "event": "run.event",
-                "data": stored_event.model_dump_json(),
-            }
-        async for live_event in bus.subscribe(f"run:{run.id}", last_event_id):
+        # The request's session is closed once the route returns, before this generator runs: the backlog
+        # is read with its own, after the permission check above.
+        cursor: str | None = None
+        while True:
+            async with session_scope(orgs=ALL_ORGS) as reading:
+                query = select(RunEvent).where(RunEvent.run_id == run_id)
+                if after_seq is not None:
+                    query = query.where(RunEvent.seq > after_seq)
+                rows, meta = await keyset_page(
+                    reading,
+                    query,
+                    sort=RunEvent.seq,
+                    tiebreak=RunEvent.id,
+                    page=Page(cursor=cursor, limit=_BACKLOG_CHUNK),
+                    descending=False,
+                )
+                chunk = [RunEventDto(seq=r.seq, type=r.type, ts=r.ts, payload=r.payload) for r in rows]
+            for stored_event in chunk:
+                yield {
+                    "id": f"seq-{stored_event.seq}",
+                    "event": "run.event",
+                    "data": stored_event.model_dump_json(),
+                }
+            if not meta.has_more:
+                break
+            cursor = meta.next_cursor
+        async for live_event in bus.subscribe(f"run:{run_id}", last_event_id):
             yield sse_format(live_event)
 
     return EventSourceResponse(stream())

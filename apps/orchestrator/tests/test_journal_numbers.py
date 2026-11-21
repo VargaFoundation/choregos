@@ -121,7 +121,7 @@ async def _journal_as_the_console_reads_it(transport: Any, run_id: str) -> list[
         assert callback.status_code == 307, callback.text
         answer = await http.get(f"/api/v1/runs/{run_id}/events")
     assert answer.status_code == 200, answer.text
-    return [(line["seq"], line["type"]) for line in answer.json()]
+    return [(line["seq"], line["type"]) for line in answer.json()["items"]]
 
 
 async def _stored(run_id: str) -> list[tuple[int, str]]:

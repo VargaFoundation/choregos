@@ -384,7 +384,9 @@ async def _request(client: AsyncClient, item_id: str) -> dict[str, Any]:
 
 
 async def _artifact(client: AsyncClient, item_id: str, name: str) -> dict[str, Any]:
-    listed = (await client.get(f"/api/v1/work-items/{item_id}/artifacts")).json()
+    listed = (await client.get(f"/api/v1/work-items/{item_id}/artifacts", params={"limit": 200})).json()[
+        "items"
+    ]
     found = [a for a in listed if a["name"] == name]
     assert found, f"no artifact `{name}` in {[a['name'] for a in listed]}"
     return dict(found[-1])
