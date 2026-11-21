@@ -306,6 +306,18 @@ def _check_plugin_tracker(cfg: dict[str, Any]) -> None:
             raise ConfigurationError(f"a plugin tracker needs `{field}`, a plugin or server name")
 
 
+def _check_jira(cfg: dict[str, Any]) -> None:
+    """Cloud needs the email of the token's account; Data Center does not (a bearer token), and
+    refuses the Cloud-only settings."""
+    flavor = str(cfg.get("flavor") or "cloud")
+    if flavor not in {"cloud", "datacenter"}:
+        raise ConfigurationError(f"`flavor` is `cloud` or `datacenter`, not `{flavor}`")
+    if flavor == "cloud" and not str(cfg.get("email") or "").strip():
+        raise ConfigurationError("a Jira Cloud connector needs `email`, the account of the API token")
+    if flavor == "datacenter" and (cfg.get("auth") == "scoped" or cfg.get("cloud_id")):
+        raise ConfigurationError("`auth: scoped` and `cloud_id` are Jira Cloud settings, not Data Center's")
+
+
 #: The configuration of a `demo` type: nothing, or the address of the process that serves the fakes.
 _DEMO_CONFIGURATION = _object_schema(
     {
@@ -370,15 +382,32 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ),
     ("tracker", "internal"): ConnectorTypeSpec("internal (Tranibor holds the work items)", ("tracker",)),
     ("tracker", "jira"): ConnectorTypeSpec(
-        "Jira Cloud",
+        "Jira (Cloud, Data Center / Server)",
         ("tracker",),
         _object_schema(
             {
+                "flavor": {
+                    "type": "string",
+                    "enum": ["cloud", "datacenter"],
+                    "default": "cloud",
+                    "description": "`datacenter` for Jira Data Center / Server 9.x or 10.x: REST API v2, "
+                    "wiki-markup bodies, `api_token` is a personal access token sent as Bearer",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "Data Center only: the PEM file of the internal CA that signed the "
+                    "site's certificate",
+                },
                 "base_url": {
                     "type": "string",
-                    "description": "the site, https://<site>.atlassian.net, even with a scoped token",
+                    "description": "Cloud: the site, https://<site>.atlassian.net, even with a scoped "
+                    "token. Data Center: its base URL, with the context path if any "
+                    "(https://jira.example.org/jira)",
                 },
-                "email": {"type": "string", "description": "the account the API token belongs to"},
+                "email": {
+                    "type": "string",
+                    "description": "Cloud only: the account the API token belongs to",
+                },
                 "project_key": _TEXT,
                 "auth": {
                     "type": "string",
@@ -404,10 +433,11 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "an issue here; a project without them takes the issues no other claims",
                 },
             },
-            ("base_url", "email", "project_key"),
+            ("base_url", "project_key"),
         ),
         ("api_token", "webhook_secret"),
         egress=_atlassian_egress,
+        check_config=_check_jira,
     ),
     ("tracker", "azure-boards"): ConnectorTypeSpec(
         "Azure DevOps Boards",
@@ -474,7 +504,21 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         "GitLab Issues",
         ("tracker",),
         _object_schema(
-            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXT}, ("project",)
+            {
+                "base_url": {
+                    "type": "string",
+                    "default": "https://gitlab.com",
+                    "description": "self-managed: its URL, with the path prefix if any "
+                    "(https://tools.example.org/gitlab); GitLab 15.0 or later",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "self-managed only: the PEM file of the internal CA that signed the "
+                    "instance's certificate (verification is never switched off)",
+                },
+                "project": _TEXT,
+            },
+            ("project",),
         ),
         ("token", "webhook_secret"),
     ),
@@ -503,7 +547,17 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("scm",),
         _object_schema(
             {
-                "base_url": {"type": "string", "default": "https://gitlab.com"},
+                "base_url": {
+                    "type": "string",
+                    "default": "https://gitlab.com",
+                    "description": "self-managed: its URL, with the path prefix if any "
+                    "(https://tools.example.org/gitlab); GitLab 15.0 or later",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "self-managed only: the PEM file of the internal CA that signed the "
+                    "instance's certificate (verification is never switched off)",
+                },
                 "project": _TEXT,
                 "default_branch": {"type": "string", "default": "main"},
             },
@@ -568,7 +622,21 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         "GitLab CI",
         ("ci",),
         _object_schema(
-            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXT}, ("project",)
+            {
+                "base_url": {
+                    "type": "string",
+                    "default": "https://gitlab.com",
+                    "description": "self-managed: its URL, with the path prefix if any "
+                    "(https://tools.example.org/gitlab); GitLab 15.0 or later",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "self-managed only: the PEM file of the internal CA that signed the "
+                    "instance's certificate (verification is never switched off)",
+                },
+                "project": _TEXT,
+            },
+            ("project",),
         ),
         ("token",),
     ),

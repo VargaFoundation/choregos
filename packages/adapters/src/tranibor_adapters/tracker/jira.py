@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The Jira Cloud TrackerAdapter: issues, transitions, comments, custom fields.
+"""The Jira TrackerAdapter (Cloud, and Data Center / Server): issues, transitions, comments, custom fields.
 
 Jira has neither scoped labels like GitHub nor free columns: the DSL state becomes a workflow
 **transition**, and the structured fields (cost, size, risk, run) are named custom fields,
@@ -8,7 +8,11 @@ resolved once and then cached.
 Comments go out in Atlassian Document Format through the v3 API: the status table (§4.3) is
 converted, otherwise Jira would display raw markdown.
 
-Credentials: an API token with its account's email, as HTTP Basic. A classic token is sent to the
+Jira Data Center and Server (9.x, 10.x; `flavor: datacenter`) are the second flavour: REST API v2
+(wiki markup bodies, `markdown_to_wiki`), a personal access token as Bearer, users told by `name` or
+`key` rather than `accountId`, the DC webhook format and its HMAC signature. Cloud is unchanged.
+
+Credentials (Cloud): an API token with its account's email, as HTTP Basic. A classic token is sent to the
 site itself; a *scoped* token (the only kind an Atlassian service account has) is refused there and
 goes through the gateway, `api.atlassian.com/ex/jira/<cloud_id>` (`JiraGatewayClient`).
 """
@@ -28,10 +32,14 @@ from .adf import markdown_to_adf, text_of_adf
 from .fields import COST, FORMER_NAMES, RISK, RUN, SIZE, current_name
 from .jira_events import parse_jira_event, person_of
 from .ticket_fields import TRACKER_FIELD, jira_answers, person, tracker_block
+from .wiki import markdown_to_wiki, text_of_wiki
 
 STATUS_COMMENT_MARKER = "[choregos:status]"
 GATEWAY = "https://api.atlassian.com"
 AGENT_READY_LABEL = "agent-ready"
+Flavor = Literal["cloud", "datacenter"]
+#: The oldest Jira Data Center / Server the DC flavour is written for (9.0, REST API v2 with PAT).
+MIN_DC_VERSION = (9, 0)
 
 
 # Jira's three status categories have keys that are stable in every language; their names, on the
@@ -66,7 +74,8 @@ class JiraGatewayClient(RestClient):
 
 
 class JiraTracker:
-    """Jira Cloud (REST v3). `project_key` is the prefix of the keys (`BILL-42`)."""
+    """Jira Cloud (REST v3) or Data Center / Server (REST v2). `project_key` is the prefix of the
+    keys (`BILL-42`)."""
 
     owns_items = True
 
@@ -80,9 +89,14 @@ class JiraTracker:
         agent_ready_label: str = AGENT_READY_LABEL,
         site_url: str | None = None,
         candidates_jql: str | None = None,
+        flavor: Flavor = "cloud",
     ) -> None:
         if not project_key:
             raise ConfigurationError("`project_key` is required for the Jira tracker")
+        if flavor not in ("cloud", "datacenter"):
+            raise ConfigurationError(f"unknown Jira flavor `{flavor}`: `cloud` or `datacenter`")
+        self.flavor: Flavor = flavor
+        self._api = "/rest/api/3" if flavor == "cloud" else "/rest/api/2"
         self.client = client
         # Where a person opens an issue: the site, even when the API is called through the gateway.
         self.site_url = (site_url or getattr(client, "site", None) or client.base_url).rstrip("/")
@@ -103,12 +117,25 @@ class JiraTracker:
         self.candidates_jql = (candidates_jql or "").strip() or None
         self._fields: dict[str, str] | None = None
 
+    # ───────────────────────── flavour ─────────────────────────
+
+    @property
+    def _datacenter(self) -> bool:
+        return self.flavor == "datacenter"
+
+    def _body(self, markdown: str) -> Any:
+        """A text field as the API of the flavour wants it: ADF (v3) or wiki markup (v2)."""
+        return markdown_to_wiki(markdown) if self._datacenter else markdown_to_adf(markdown)
+
+    def _text(self, value: Any) -> str:
+        return text_of_wiki(value) if self._datacenter else text_of_adf(value)
+
     # ───────────────────────── lecture ─────────────────────────
 
     async def fetch_item(self, key: str) -> WorkItemData:
         # `names`: the display name of each custom field, which keys the form's answers (S51-04).
         issue = await self.client.request(
-            "GET", f"/rest/api/3/issue/{key}", params={"fields": "*all", "expand": "renderedFields,names"}
+            "GET", f"{self._api}/issue/{key}", params={"fields": "*all", "expand": "renderedFields,names"}
         )
         fields = issue.get("fields", {}) or {}
         comments = ((fields.get("comment") or {}).get("comments")) or []
@@ -124,7 +151,7 @@ class JiraTracker:
         return WorkItemData(
             key=key,
             title=fields.get("summary", ""),
-            body=text_of_adf(fields.get("description")),
+            body=self._text(fields.get("description")),
             url=f"{self.site_url}/browse/{key}",
             state=((fields.get("status") or {}).get("name")),
             labels=labels,
@@ -139,9 +166,9 @@ class JiraTracker:
                 Comment(
                     id=str(comment.get("id")),
                     author=((comment.get("author") or {}).get("displayName", "")),
-                    body=text_of_adf(comment.get("body")),
+                    body=self._text(comment.get("body")),
                     marker=STATUS_COMMENT_MARKER
-                    if STATUS_COMMENT_MARKER in text_of_adf(comment.get("body"))
+                    if STATUS_COMMENT_MARKER in self._text(comment.get("body"))
                     else None,
                 )
                 for comment in comments
@@ -163,7 +190,10 @@ class JiraTracker:
         )
 
         payload = await self.client.request(
-            "GET", "/rest/api/3/search/jql", params={"jql": jql, "maxResults": 100, "fields": "key"}
+            "GET",
+            # `/search/jql` is Cloud's; Data Center keeps the classic `/search`.
+            f"{self._api}/search" if self._datacenter else f"{self._api}/search/jql",
+            params={"jql": jql, "maxResults": 100, "fields": "key"},
         )
         return [str(issue["key"]) for issue in payload.get("issues", [])]
 
@@ -174,14 +204,17 @@ class JiraTracker:
             "fields": {
                 "project": {"key": self.project_key},
                 "summary": data.title,
-                "description": markdown_to_adf(data.body),
+                "description": self._body(data.body),
                 "issuetype": {"name": data.fields.get("issue_type", "Task")},
                 "labels": list(data.labels),
             }
         }
         if data.assignees:
-            payload["fields"]["assignee"] = {"accountId": data.assignees[0]}
-        issue = await self.client.request("POST", "/rest/api/3/issue", json=payload)
+            # Data Center names a user by login (`name`), Cloud by `accountId`.
+            payload["fields"]["assignee"] = (
+                {"name": data.assignees[0]} if self._datacenter else {"accountId": data.assignees[0]}
+            )
+        issue = await self.client.request("POST", f"{self._api}/issue", json=payload)
         return str(issue["key"])
 
     async def set_state(self, key: str, state_mapping: TrackerStateMapping) -> None:
@@ -189,12 +222,12 @@ class JiraTracker:
         if state_mapping.status:
             await self._transition(key, state_mapping.status)
         if state_mapping.label or state_mapping.remove_labels:
-            issue = await self.client.request("GET", f"/rest/api/3/issue/{key}", params={"fields": "labels"})
+            issue = await self.client.request("GET", f"{self._api}/issue/{key}", params={"fields": "labels"})
             current = list((issue.get("fields") or {}).get("labels") or [])
             keep = [name for name in current if name not in state_mapping.remove_labels]
             if state_mapping.label and state_mapping.label not in keep:
                 keep.append(state_mapping.label)
-            await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": {"labels": keep}})
+            await self.client.request("PUT", f"{self._api}/issue/{key}", json={"fields": {"labels": keep}})
 
     async def close_item(self, key: str) -> None:
         """Nothing to do: in Jira, closing IS a status. The workflow's terminal state already carries it
@@ -222,7 +255,7 @@ class JiraTracker:
         "in progress" statuses (one in progress, one in review) are not told apart by chance, they raise an
         error that names them.
         """
-        payload = await self.client.request("GET", f"/rest/api/3/issue/{key}/transitions")
+        payload = await self.client.request("GET", f"{self._api}/issue/{key}/transitions")
         transitions = payload.get("transitions", [])
         wanted = status.casefold()
 
@@ -262,7 +295,7 @@ class JiraTracker:
     async def _apply(self, key: str, transition: dict[str, Any]) -> None:
         await self.client.request(
             "POST",
-            f"/rest/api/3/issue/{key}/transitions",
+            f"{self._api}/issue/{key}/transitions",
             json={"transition": {"id": transition["id"]}},
         )
 
@@ -271,23 +304,23 @@ class JiraTracker:
     ) -> None:
         """A single status comment, rewritten at every stage (§4.3)."""
         body = markdown if marker in markdown else f"{marker}\n{markdown}"
-        document = markdown_to_adf(body)
+        document = self._body(body)
         comments = await self.client.request(
-            "GET", f"/rest/api/3/issue/{key}/comment", params={"maxResults": 100}
+            "GET", f"{self._api}/issue/{key}/comment", params={"maxResults": 100}
         )
         for comment in comments.get("comments", []):
-            if marker in text_of_adf(comment.get("body")):
+            if marker in self._text(comment.get("body")):
                 await self.client.request(
                     "PUT",
-                    f"/rest/api/3/issue/{key}/comment/{comment['id']}",
+                    f"{self._api}/issue/{key}/comment/{comment['id']}",
                     json={"body": document},
                 )
                 return
-        await self.client.request("POST", f"/rest/api/3/issue/{key}/comment", json={"body": document})
+        await self.client.request("POST", f"{self._api}/issue/{key}/comment", json={"body": document})
 
     async def comment(self, key: str, markdown: str) -> str:
         created = await self.client.request(
-            "POST", f"/rest/api/3/issue/{key}/comment", json={"body": markdown_to_adf(markdown)}
+            "POST", f"{self._api}/issue/{key}/comment", json={"body": self._body(markdown)}
         )
         return str(created.get("id", ""))
 
@@ -296,7 +329,7 @@ class JiraTracker:
         link_type = {"origin": "Relates", "duplicate": "Duplicate", "blocks": "Blocks"}[relation]
         await self.client.request(
             "POST",
-            "/rest/api/3/issueLink",
+            f"{self._api}/issueLink",
             json={
                 "type": {"name": link_type},
                 "inwardIssue": {"key": b},
@@ -314,7 +347,7 @@ class JiraTracker:
                 continue  # a missing field is not a failure: Tranibor writes what it can
             payload[field_id] = str(value) if not isinstance(value, int | float) else value
         if payload:
-            await self.client.request("PUT", f"/rest/api/3/issue/{key}", json={"fields": payload})
+            await self.client.request("PUT", f"{self._api}/issue/{key}", json={"fields": payload})
 
     def _present_name(self, logical: str, present: Mapping[str, Any], *, casefold: bool = False) -> str:
         """The Jira name of the field: the configured one, otherwise (when it is not configured and
@@ -328,7 +361,7 @@ class JiraTracker:
 
     async def _field_ids(self) -> dict[str, str]:
         if self._fields is None:
-            fields = await self.client.request("GET", "/rest/api/3/field")
+            fields = await self.client.request("GET", f"{self._api}/field")
             self._fields = {
                 str(field.get("name", "")).casefold(): str(field["id"]) for field in fields if field.get("id")
             }
@@ -338,9 +371,23 @@ class JiraTracker:
 
     async def test(self) -> dict[str, Any]:
         """Can the account read the project? The connector's **Test** button: it proves the email,
-        the token, its scopes and the account's place in the project in one call."""
+        the token, its scopes and the account's place in the project in one call. On Data Center it
+        also checks the server's version against `MIN_DC_VERSION`."""
+        if self._datacenter:
+            try:
+                info = await self.client.request("GET", f"{self._api}/serverInfo")
+            except UpstreamError as error:
+                return {"ok": False, "reason": _refusal(error.status_code, self.project_key)}
+            version = _dc_version(info)
+            if version is None or version < MIN_DC_VERSION:
+                found = info.get("version", "unknown") if isinstance(info, dict) else "unknown"
+                wanted = ".".join(str(n) for n in MIN_DC_VERSION)
+                return {
+                    "ok": False,
+                    "reason": f"Jira {found} is not supported: Data Center / Server {wanted} or later",
+                }
         try:
-            project = await self.client.request("GET", f"/rest/api/3/project/{self.project_key}")
+            project = await self.client.request("GET", f"{self._api}/project/{self.project_key}")
         except UpstreamError as error:
             return {"ok": False, "reason": _refusal(error.status_code, self.project_key)}
         cloud_id = getattr(self.client, "cloud_id", None)
@@ -348,21 +395,52 @@ class JiraTracker:
             "ok": True,
             "project": project.get("name") or self.project_key,
             **({"cloud_id": cloud_id} if cloud_id else {}),
+            **({"version": str(info.get("version"))} if self._datacenter else {}),
         }
 
     # ───────────────────────── webhooks ─────────────────────────
 
     def parse_webhook(self, headers: Mapping[str, str], body: bytes) -> list[InboundEvent]:
+        import hashlib
         import json
 
-        return parse_jira_event(headers.get("X-Atlassian-Webhook-Identifier", ""), json.loads(body or b"{}"))
+        lowered = {k.lower(): v for k, v in headers.items()}
+        delivery = lowered.get("x-atlassian-webhook-identifier", "")
+        if not delivery and self._datacenter:
+            # Data Center sends no delivery identifier: the body's digest is stable across retries.
+            delivery = hashlib.sha256(body or b"").hexdigest()[:32]
+        return parse_jira_event(delivery, json.loads(body or b"{}"))
 
     def verify_webhook(self, headers: Mapping[str, str], body: bytes) -> bool:
-        """Jira Cloud does not sign its webhooks: a shared secret is required in a header."""
+        """Jira Cloud does not sign its webhooks: a shared secret is required in a header.
+
+        Data Center signs a delivery that has a secret (`X-Hub-Signature: sha256=<hmac>`): when that
+        header is there it must verify, and no shared-secret header can stand in for it. A Data Center
+        version that does not sign still works through the shared-secret header, as on Cloud."""
+        import hashlib
         import hmac
 
-        provided = headers.get("X-Choregos-Secret", headers.get("x-choregos-secret", ""))
-        return bool(self.webhook_secret) and hmac.compare_digest(self.webhook_secret, provided or "")
+        if not self.webhook_secret:
+            return False
+        lowered = {k.lower(): v for k, v in headers.items()}
+        signature = lowered.get("x-hub-signature", "")
+        if self._datacenter and signature:
+            method, _, digest = signature.partition("=")
+            expected = hmac.new(self.webhook_secret.encode(), body or b"", hashlib.sha256).hexdigest()
+            return method == "sha256" and hmac.compare_digest(expected, digest)
+        provided = lowered.get("x-choregos-secret", "")
+        return hmac.compare_digest(self.webhook_secret, provided or "")
+
+
+def _dc_version(info: Any) -> tuple[int, ...] | None:
+    """`versionNumbers` of `/serverInfo` (`[9, 12, 4]`), else the dotted `version` string."""
+    if not isinstance(info, dict):
+        return None
+    numbers = info.get("versionNumbers")
+    if isinstance(numbers, list) and numbers and all(isinstance(n, int) for n in numbers):
+        return tuple(numbers)
+    parts = str(info.get("version") or "").split("-")[0].split(".")
+    return tuple(int(p) for p in parts) if parts and all(p.isdigit() for p in parts) else None
 
 
 def _refusal(status_code: int | None, project_key: str) -> str:

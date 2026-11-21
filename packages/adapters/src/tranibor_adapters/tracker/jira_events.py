@@ -43,7 +43,7 @@ def _base(delivery_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         # The Tranibor project carries the same slug as the Jira project key, in lower case.
         "project_slug": str(key).split("-")[0].lower() if key else None,
         "work_item_key": key,
-        "actor": user.get("displayName") or user.get("accountId"),
+        "actor": user.get("displayName") or user.get("accountId") or user.get("name"),
     }
 
 
@@ -140,7 +140,7 @@ def _added_labels(item: dict[str, Any]) -> list[str]:
 
 def _commented(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
     comment = payload.get("comment", {}) or {}
-    author = (comment.get("author") or {}).get("displayName")
+    author = (comment.get("author") or {}).get("displayName") or (comment.get("author") or {}).get("name")
     text = text_of_adf(comment.get("body"))
     common = _base(delivery_id, payload)
     events = [

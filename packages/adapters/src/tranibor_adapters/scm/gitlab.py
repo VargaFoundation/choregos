@@ -25,6 +25,7 @@ from ..ci.gitlab import _JOB_RUN
 from ..errors import ConfigurationError, HeadMovedError, UpstreamError
 from ..http import RestClient
 from ..tracker.gitlab_events import parse_gitlab_event
+from ..tracker.gitlab_instance import check_instance
 
 log = structlog.get_logger(__name__)
 
@@ -300,8 +301,11 @@ class GitLabScm:
         return parse_gitlab_event(event, delivery, json.loads(body or b"{}"))
 
     async def test(self) -> dict[str, Any]:
+        verdict = await check_instance(self.client)
+        if not verdict["ok"]:
+            return verdict
         project = await self.client.request("GET", self._base)
-        return {"ok": bool(project), "project": self.project}
+        return {"ok": bool(project), "project": self.project, "version": verdict["version"]}
 
 
 def _expired(expires_at: Any, today: date) -> bool:
