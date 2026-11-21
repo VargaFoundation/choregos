@@ -25,7 +25,7 @@ export default function ProjectFlowPage({ params }: { params: Promise<{ slug: st
   const chosen = list.find((w) => w.name === search.get("workflow")) ?? fallback;
   if (workflows.isSuccess && !chosen) return <Empty>This project has no workflow yet.</Empty>;
   if (!chosen) return <p className="text-sm text-ink-muted">Reading the workflows.</p>;
-  const pill = "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm no-underline whitespace-nowrap";
+  const pill = "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-sm no-underline whitespace-nowrap";
   return (
     <div className="space-y-4">
       <nav aria-label="Flow workflow" className="flex flex-wrap items-center gap-1.5">

@@ -49,7 +49,7 @@ export function EditionBadge({
 }) {
   return (
     <span
-      className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-muted"
+      className="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-muted"
       title={
         edition === "enterprise" && publisher
           ? `Enterprise edition, published by ${publisher}`

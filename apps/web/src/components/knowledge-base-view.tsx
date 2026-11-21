@@ -238,7 +238,7 @@ export function KnowledgeBaseView({
                     aria-pressed={active === f.key}
                     onClick={() => setFilter(f.key)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                      "inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-xs font-medium",
                       active === f.key ? "border-line-strong bg-surface-muted text-ink" : "border-line text-ink-muted hover:text-ink",
                     )}
                   >

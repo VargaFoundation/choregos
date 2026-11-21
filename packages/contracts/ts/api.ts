@@ -135,6 +135,8 @@ export type Theme = {
     control?: number;
     /** px; absent = the console default */
     surface?: number;
+    /** px, on badges, chips, counters and bars (dots and avatars stay round); absent = round */
+    pill?: number;
   };
   /** The mono font stays Geist Mono */
   fonts?: {
@@ -4495,6 +4497,8 @@ export type ModelMatrix = {
     median_tokens_in?: number | null;
     /** Cache-read input tokens from the ledger. */
     median_tokens_cached?: number | null;
+    /** Cache-write input tokens from the ledger, part of the input tokens (S4-13); null when no case was metered. */
+    median_tokens_cache_write?: number | null;
     median_tokens_out?: number | null;
     median_turns?: number | null;
   }>;
@@ -5375,7 +5379,10 @@ export type WorkItem = {
 export type Totals = {
   tokens_in?: number;
   tokens_out?: number;
+  /** the input tokens read from the provider's cache, part of tokens_in */
   tokens_cached?: number;
+  /** the input tokens written to the provider's cache, part of tokens_in (S4-13) */
+  tokens_cache_write?: number;
   cost_usd?: number;
   cost_eur?: number;
   duration_s?: number;
@@ -6157,7 +6164,10 @@ export type ActivityFailure = {
 export type SpendSoFar = {
   tokens_in: number;
   tokens_out: number;
+  /** the input tokens read from the provider's cache, part of tokens_in */
   tokens_cached: number;
+  /** the input tokens the provider wrote to its cache, part of tokens_in (S4-13); 0 when the provider reports none or the entry predates S4-07 */
+  tokens_cache_write?: number;
   cost_usd: number;
   /** when the gateway was asked; at most every 30 s per run */
   read_at: string;
@@ -6450,6 +6460,11 @@ export type GatewayKeyInfo = {
   created_at: string;
 };
 
+export type GatewayKeyPage = {
+  items: Array<GatewayKeyInfo>;
+  meta: PageMeta;
+};
+
 export type AuditEntry = {
   id: string;
   actor_id?: string | null;
@@ -6550,6 +6565,12 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  azureBoardsWebhook: { method: "POST"; path: "/webhooks/azure-boards"; body: {
+  [key: string]: unknown;
+}; response: WebhookAck };
+  azureDevopsWebhook: { method: "POST"; path: "/webhooks/azure-devops"; body: {
+  [key: string]: unknown;
+}; response: WebhookAck };
   bindAssistantKnowledge: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/knowledge-bindings/{name}"; body: AssistantKnowledgeBind; response: Assistant };
   bindAssistantLaunch: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/launches/{launch}"; body: AssistantLaunchBind; response: Assistant };
   bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
@@ -6865,6 +6886,9 @@ export interface Operations {
   installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
   installPlugin: { method: "POST"; path: "/orgs/{org}/plugins/install"; body: PluginInstall; response: InstalledPlugin };
   installSkillCatalogueEntry: { method: "POST"; path: "/orgs/{org}/skill-catalogue/{entry_id}/install"; body: SkillCatalogueInstall; response: Skill };
+  jenkinsWebhook: { method: "POST"; path: "/webhooks/jenkins"; body: {
+  [key: string]: unknown;
+}; response: WebhookAck };
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -6893,7 +6917,7 @@ export interface Operations {
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
-  listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: GatewayKeyPage };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };

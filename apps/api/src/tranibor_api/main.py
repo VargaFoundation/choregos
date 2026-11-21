@@ -23,8 +23,9 @@ from tranibor_core.production import refuse_fakes_in_production
 from . import __version__
 from .a2a.push import push_loop
 from .adapter_wiring import attach_lexical_memory, attach_outposts
+from .audit_export.exporter import Exporter, export_loop
 from .bootstrap import bootstrap_installation
-from .config import DEFAULT_DOCS_URL, get_settings
+from .config import DEFAULT_DOCS_URL, Settings, get_settings
 from .db.session import create_all, dispose_engine
 from .errors import REQUEST_ID_PATTERN, install_error_handlers, internal_error
 from .events import PostgresRelay
@@ -123,6 +124,15 @@ API_PREFIX = "/api/v1"
 logger = get_logger("choregos.api")
 
 
+def _audit_exporter(settings: Settings) -> Exporter | None:
+    if not settings.audit_export:
+        return None
+    if settings.is_sqlite:
+        logger.warning("audit.export.sqlite", detail="SQLite keeps no audit chain: nothing to export")
+        return None
+    return Exporter.from_settings(settings)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
@@ -172,6 +182,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     shipping_warmup = asyncio.create_task(warm_shipping(settings))
     # The daily purge of assistants' conversations and memories past their retention (S63-16).
     assistant_retention = asyncio.create_task(retention_loop(settings.assistant_retention_interval_s))
+    # The SIEM export of the audit chains (S80-05b, ADR 0207). Off by default; on, a setting that cannot
+    # build the sink stops the API here, since a log that was meant to leave and does not is worse than a
+    # refusal. PostgreSQL only: SQLite keeps no chain.
+    audit_exporter = _audit_exporter(settings)
+    audit_export = asyncio.create_task(export_loop(settings, audit_exporter)) if audit_exporter else None
     # Calls through an outpost that ran out of time where nobody polls or calls any more (ADR 0149 §5).
     background = [asyncio.create_task(outpost_rendezvous.sweep_loop())] if settings.outposts else []
     yield
@@ -188,6 +203,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         shipping_warmup,
         assistant_retention,
         assistant_task_loop,
+        *([audit_export] if audit_export else []),
         plugin_defaults,
         osv_mirror,
         shipping_warmup,

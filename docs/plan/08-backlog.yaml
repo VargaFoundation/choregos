@@ -41,6 +41,7 @@ streams:
   S36: "Agent logs: transcript stored, pod logs and termination reason archived, a logs tab (plan 2026-10-12)"
   S37: "Fewer tokens per run: rtk and headroom, measured, switchable at every level (ADR 0055)"
   S38: "Investment research: deterministic steps, market data, gates on measured numbers, a campaign template (plan 2026-10-14)"
+  S39: "The enterprise edition in production, governed agents, catalogues (plan 2026-10-15)"
   S45: "English everywhere, finished (plan 2026-10-27, ADR 0098)"
   S46: "Consuming an external MCP gateway (plan 2026-10-27, ADR 0105)"
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
@@ -1133,6 +1134,16 @@ stories:
     depends_on: []
     acceptance:
       - "Example files in templates/*/optional/; disabled by default"
+  - id: S13-07
+    title: "Azure DevOps Boards TrackerAdapter (REST 7.1, Services and Server 2022): WIQL, states, tags, comments, custom fields, links, Service Hooks webhook, PAT or Entra service principal (ADR 0209)"
+    stream: S13
+    sprint: 6
+    priority: 7
+    size: L
+    depends_on: [S13-04]
+    acceptance:
+      - "An Azure Boards work item tagged agent-ready starts a workflow; its state, status comment and Cost, Size, Risk and Run fields go back through the connector"
+      - "A Service Hooks delivery is accepted with the shared secret as basic-auth password or X-Choregos-Secret, refused otherwise, and routed by team project"
 
   # ───────────── S14 — Governed change on a data platform (ADR 0028, 2026-10-02) ─────────────
   - id: S14-01
@@ -5546,7 +5557,7 @@ stories:
     priority: 5
     size: M
     depends_on: [S80-05]
-    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Also: the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash; `seq` and `hash` in `GET /audit` (a contract change)."
+    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Delivered, partial (ADR 0207, proposed): the SIEM export of the audit chains, in order and at least once from a durable cursor, to HTTPS JSON (webhook, Splunk HEC, Elastic/OpenSearch) or syslog over TLS (RFC 5424, CEF), off by default; proved on simulated receivers and SQLite, the PostgreSQL tests and the migration written and not yet run. Still to do: retention behind a signed checkpoint, checkpoints signed on a schedule, a migration role distinct from the API's, the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash, `seq` and `hash` in `GET /audit` (a contract change)."
   - id: S80-03
     title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
     stream: S80
@@ -5768,6 +5779,25 @@ stories:
     size: L
     depends_on: [S80-12]
     notes: "Fourth move of ADR 0195. A websearch subchart, off by default. Done."
+
+    notes: "Fourth move of ADR 0195. A websearch subchart, off by default."
+  - id: S80-18
+    title: "feat(charts): an all-in-one mode that deploys every solution the platform requires, embedded Keycloak and RustFS, generated Secrets (ADR 0208)"
+    stream: S80
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S80-12]
+    notes: "values/all-in-one.yaml, subcharts choregos-objectstore and choregos-keycloak. The agent-sandbox operator is not vendored (k8s_job fallback). Proven by rendering only."
+
+  - id: S80-19
+    title: "feat(plugins): a HashiCorp Vault Transit key wrapper as an extension, rotation through rewrap, Kubernetes and token auth (ADR 0103)"
+    stream: S80
+    sprint: 1
+    priority: 3
+    size: L
+    depends_on: []
+    notes: "Closes the no-native-Vault gap without a Vault client in the core. plugins/vault-transit, a fake Vault transport, docs for External Secrets Operator and for the wrapper. Fixes POST /platform/secrets/rewrap ignoring a store set through set_secret_store. Not done: a run against a real Vault, a published wheel or image, an async KeyWrapper protocol."
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
     stream: S81
@@ -6338,3 +6368,51 @@ stories:
       - "With --skip-decided, a contract whose notes hold a renewal decision within the window is left out and counted"
       - "Without the flag the output and the facts are unchanged"
     notes: "Found by PA-09 on 2026-11-20: a monthly campaign reopened a memo for a contract decided the month before."
+
+  - id: S13-08
+    title: "Azure DevOps Repos SCM adapter and Azure Pipelines CI adapter (PAT or Entra service principal, service hooks for pull requests and builds, ci_green from Azure Pipelines results)"
+    stream: S13
+    sprint: 5
+    priority: 8
+    size: L
+    depends_on: [S13-05]
+    acceptance:
+      - "A work item's pull request opens, is judged at its head commit and is completed at that commit on Azure Repos; a head that moved is refused"
+      - "ci_green reads Azure Pipelines results (policies, statuses, builds of the head commit); a partially succeeded build is not green by default"
+      - "A run can be queued with parameters on a branch or commit and its state and logs read; build and pull request service hooks reach the right project"
+
+  - id: S13-09
+    title: "Jira Data Center / Server flavour and self-managed GitLab (base URL prefix, custom CA, version floor)"
+    stream: S13
+    sprint: 5
+    priority: 6
+    size: M
+    depends_on: [S13-04]
+    acceptance:
+      - "`flavor: datacenter` uses REST v2, wiki markup, a bearer PAT, users by name/key and a signed webhook; Cloud unchanged"
+      - "GitLab tracker, SCM and CI accept a base URL under a path prefix and a ca_bundle, and refuse an instance older than 15.0"
+      - "Tests against simulated transports for both flavours; supported versions in docs/integrations.md"
+
+  - id: S13-10
+    title: "Jenkins and GitHub Actions CI adapters (trigger, follow to the result, rerun, inbound events)"
+    stream: S13
+    sprint: 8
+    priority: 3
+    size: L
+    depends_on: [S13-04]
+    acceptance:
+      - "ci/jenkins: a parameterised or multibranch job is triggered with a CSRF crumb and an API token, its queue item is followed to the build, result and console URL are read, and Notification-plugin and flat payloads arrive at /webhooks/jenkins under the shared secret"
+      - "ci/github-actions: a workflow is dispatched on a ref with inputs, the run it started is found, run and job conclusions are read, failed jobs are rerun, and workflow_run deliveries arrive through the GitHub App webhook"
+      - "Both types are registered with specs, setup procedures and egress; the App asks for actions:write and the workflow_run event"
+
+  - id: S39-03d
+    title: "Pills follow the theme: Theme.radius.pill, --radius-pill and rounded-pill (ADR 0210)"
+    stream: S39
+    sprint: 8
+    priority: 3
+    size: M
+    depends_on: [S39-03b]
+    acceptance:
+      - "contract-change: Theme.radius.pill is an optional integer 0..999 px; absent keeps the pills round; the API refuses a value out of bounds and serves the one a provider returns"
+      - "The console emits --radius-pill from the served theme and every badge, chip, counter and bar uses rounded-pill; dots, avatars, spinners and circular icons stay rounded-full"
+      - "A web test fails when a pill-shaped component goes back to rounded-full"

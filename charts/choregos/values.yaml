@@ -301,6 +301,53 @@ global:
     # External gateway: the CIDRs the API and the workers may reach.
     cidrs: []
     ports: [443]
+  # The SIEM export of the audit log (ADR 0207, docs/deployment.md#siem-export-of-the-audit-log): every API
+  # replica ships each audit chain (every organisation's and the platform's), in order and at least once, to
+  # one sink, from a durable cursor. Off by default: nothing is rendered and the API ships nothing.
+  auditExport:
+    enabled: false
+    # The sink's name, the key of its cursors: another name ships everything again from entry 1.
+    name: siem
+    # `https` (a JSON POST) or `syslog` (RFC 5424 over TLS).
+    sink: https
+    # https: `webhook` (default), `splunk-hec` or `elastic-bulk`. syslog: `rfc5424` (default) or `cef`.
+    format: ""
+    # https: the receiver's address, `https://` only (`.../services/collector/event` for Splunk HEC,
+    # the cluster's address for Elastic or OpenSearch: `/_bulk` is added).
+    url: ""
+    # Splunk's `index`, or the Elastic index (default `choregos-audit`).
+    index: ""
+    syslog:
+      host: ""
+      port: 6514
+    token:
+      # The Secret that carries the receiver's token, and its entry: `secretKeyRef`, never a value.
+      # Empty: no token is sent (a receiver that trusts the network or a client certificate).
+      secretRef: ""
+      key: audit-export-token
+      # The header and the scheme before the token: `Authorization: Bearer <token>` by default;
+      # Splunk HEC wants `scheme: Splunk`, Elastic `scheme: ApiKey`; an empty scheme sends the bare token.
+      header: Authorization
+      scheme: Bearer
+    # A PEM bundle that signs the receiver's certificate when it is not in the system's roots: a path in
+    # the API pod, mounted with `choregos-api.extraVolumes`.
+    caFile: ""
+    # The organisations exported, by slug; empty: all of them. The platform's chain (sign-ins, tokens) is
+    # exported unless `platform: false`.
+    organisations: []
+    platform: true
+    # Each event carries `canonical`, the text its hash covers, so the receiver verifies the chain.
+    canonical: true
+    # A label put on every event.
+    source: choregos
+    intervalSeconds: 10
+    batch: 500
+    # Egress to the sink, for `networkPolicies.enabled`: CIDRs or a namespace. None given: no policy is
+    # rendered and the cluster's own rules apply. `ports` default to 443 (https) or 6514 (syslog).
+    egress:
+      cidrs: []
+      namespace: ''
+      ports: []
   # Outposts (ADRs 0147-0149, docs/deployment.md#outposts-adrs-0147-0149): places an organisation enrols,
   # which only dial out to this platform, through a door of their own (`/outposts/v1`). Off by default:
   # nothing of the door is rendered and no process is told to serve it. It lives under `global` because
@@ -490,6 +537,15 @@ global:
     # Secret with the keys `access-key` and `secret-key`. Only the API reads and writes the
     # store; a runner never receives these keys. Empty: no signature (an open or IAM-bound store).
     secretRef: ""
+    # ADR 0208. `true`: the chart deploys one S3-compatible server (RustFS), its volume and the Job that
+    # makes the bucket, and `endpoint` may stay empty (it is then the embedded server's Service).
+    # `false` (default): the store is the site's, as above.
+    embedded: false
+    # The embedded server's Service name. Empty: `<release>-objectstore`.
+    serviceName: ""
+    # `true`: the chart draws the Secret `secretRef` names (`access-key`, `secret-key`) on the first
+    # install and re-reads it on upgrades. Leave `false` to provide it yourself.
+    generateSecret: false
   oidc:
     issuer: https://keycloak.choregos.local/realms/choregos
     clientId: choregos
@@ -497,6 +553,13 @@ global:
     # Organization to attach the NON-prefixed OIDC groups to (`developers`,
     # `org-admins`…). Empty: only `choregos:<org>:<group>` groups give a role.
     defaultOrg: ""
+    # ADR 0208. `true`: the chart deploys one Keycloak with a realm (`choregos-keycloak.realm`), a client
+    # for the console and one for the CLI, and a bootstrap administrator. `issuer` may then stay
+    # empty (it is `https://auth.<global.domain>/realms/choregos`). `false` (default): the provider is the site's.
+    embedded: false
+    # `true`: the chart draws the Secret `secretRef` names (key `client-secret`), shared by the
+    # embedded realm's client and the API. Leave `false` to provide it yourself.
+    generateSecret: false
   # The MCP gateway as an OAuth resource server (ADR 0030, RFC 9728): the console's IdP issues the
   # tokens of Claude Code and claude.ai, with no token to paste. What the IdP must carry (scope
   # `choregos-mcp`, clients): docs/runbooks/keycloak-mcp.md.
@@ -575,6 +638,15 @@ global:
       egress: networkpolicy
       resources:
         limits: { cpu: 500m, memory: 512Mi }
+  # All in one (ADR 0208): a cluster with nothing but Kubernetes and a default StorageClass gets a working
+  # platform in one `helm install -f values/all-in-one.yaml`. This switch does NOT embed anything by
+  # itself (a Helm condition reads values, not templates): the profile sets the `embedded` switches, and
+  # this one (a) lets the chart draw the platform's own Secrets (`apiSecretRef`) for lack of a vault,
+  # (b) relaxes the guard of `staging`/`prod` as the single-node profile does, with the same
+  # conditions (backup, NetworkPolicies, egress proxy), and (c) is the marker the tests and NOTES read.
+  # Each piece stays individually overridable: set `global.oidc.embedded: false` and name your own issuer.
+  allInOne:
+    enabled: false
   # Development login (`/auth/login?as=<email>`), without an IdP. NEVER in production:
   # the API refuses it by itself in staging/prod. `adminEmails`: who receives ORG_ADMIN.
   devLogin:

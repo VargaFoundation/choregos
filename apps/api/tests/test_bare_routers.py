@@ -597,7 +597,7 @@ async def test_backends_and_executors_are_listed_and_set(client: AsyncClient, ad
             method, "/api/v1/platform/executors", json={"kind": "aca", "enabled": True}
         )
         assert gone.status_code == 405, method
-    assert (await client.get("/api/v1/platform/gateway/keys")).json() == []
+    assert (await client.get("/api/v1/platform/gateway/keys")).json()["items"] == []
 
 
 async def test_the_platform_settings_are_reserved_to_administrators(client: AsyncClient, org: str) -> None:

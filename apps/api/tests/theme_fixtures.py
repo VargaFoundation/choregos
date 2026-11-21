@@ -25,7 +25,7 @@ SAMPLE_THEME: dict[str, Any] = {
             "focus": "#5fd3a6",
         },
     },
-    "radius": {"control": 2, "surface": 4},
+    "radius": {"control": 2, "surface": 4, "pill": 0},
     "fonts": {
         "title": {
             "family": "Sample Serif",

@@ -1,0 +1,160 @@
+{{- /*
+One RustFS replica, one volume, an S3 API on 9000 (ADR 0208). The keys are the Secret
+`global.objectStore.secretRef` (`access-key`, `secret-key`), the same one the API and the backup read.
+Only the API's pods (and the backup) reach it: the chart's NetworkPolicy walls it when they are on.
+The console of the server (9001) is not exposed by a Service.
+*/}}
+{{- $g := .Values.global }}
+{{- $name := include "choregos.objectStoreServiceName" . }}
+{{- if not $g.objectStore.secretRef }}
+{{- fail "global.objectStore.embedded=true needs global.objectStore.secretRef: the Secret (keys `access-key`, `secret-key`) the server starts with and the API signs with. `global.objectStore.generateSecret: true` lets the chart draw it." }}
+{{- end }}
+{{- $secret := $g.objectStore.secretRef }}
+{{- $bucket := include "choregos.objectStoreBucket" . }}
+{{- if not $bucket }}
+{{- fail "global.objectStore.url must be `s3://<bucket>[/prefix]`: the embedded object store makes that bucket." }}
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: choregos-objectstore
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: s3, port: 9000, targetPort: s3 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # One volume, one writer.
+  strategy: { type: Recreate }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-objectstore
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-objectstore
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/part-of: choregos
+        app.kubernetes.io/component: object-store
+    spec:
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      {{- with .Values.podSecurityContext }}
+      securityContext: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: rustfs
+          image: {{ include "choregos.pinnedImage" .Values.image }}
+          args: ["/data"]
+          env:
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: {{ $secret }}, key: access-key } }
+            - name: RUSTFS_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: {{ $secret }}, key: secret-key } }
+          ports:
+            - { name: s3, containerPort: 9000 }
+          readinessProbe:
+            tcpSocket: { port: s3 }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: s3 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim: { claimName: {{ .Values.persistence.existingClaim | default $name }} }
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources: { requests: { storage: {{ .Values.persistence.size }} } }
+{{- end }}
+---
+{{- /*
+The bucket. `rclone mkdir` is idempotent (an existing bucket is not an error), so the hook may run on
+every install and upgrade. It retries while the server starts. A hook, so it runs after the Service
+and the Deployment exist; the API has no bucket to write to until it has run.
+*/}}
+{{- $buckets := prepend .Values.bucketJob.extraBuckets $bucket | uniq }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}-bucket
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-objectstore-bucket
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/part-of: choregos
+    spec:
+      restartPolicy: OnFailure
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: bucket
+          image: {{ include "choregos.pinnedImage" .Values.bucketJob.image }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              for b in {{ range $buckets }}{{ . | quote }} {{ end }}; do
+                n=0
+                until rclone mkdir "S3:$b"; do
+                  n=$((n+1)); [ "$n" -lt 30 ] || { echo "no bucket $b after 30 tries"; exit 1; }
+                  sleep 5
+                done
+                echo "bucket $b ready"
+              done
+          env:
+            - { name: HOME, value: /tmp }
+            - { name: RCLONE_CONFIG, value: /tmp/rclone.conf }
+            {{- include "choregos.backupRemote" (dict "remote" "S3" "endpoint" (include "choregos.objectStoreEndpoint" $) "region" $g.objectStore.region "secretRef" $secret) | nindent 12 }}
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}

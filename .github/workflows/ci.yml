@@ -81,6 +81,7 @@ jobs:
               - 'plugins/investment-research/**'
               - 'plugins/software-delivery/**'
               - 'plugins/procurement/**'
+              - 'plugins/vault-transit/**'
               # The scan lives in this workflow: changing it must run it (S40-16e).
               - '.github/workflows/ci.yml'
               # The lockfiles the Dockerfiles copy: a dependency bump changes the image (#857).

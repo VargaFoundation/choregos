@@ -1,0 +1,199 @@
+{{- /*
+One Keycloak replica with a realm for the platform (ADR 0208). Everything the API needs from an IdP
+(docs/deployment.md, "Identity"): a confidential client with the redirect URI
+`<apiUrl>/api/v1/auth/callback`, a `groups` claim of the form `choregos:<org>:<role>`, `sub`, `email`
+and `email_verified`. The realm is imported once from a ConfigMap; secrets are environment
+substitutions (`${NAME}`), never written into it.
+*/}}
+{{- $g := .Values.global }}
+{{- $name := printf "%s-keycloak" .Release.Name }}
+{{- $host := include "choregos.oidcHost" . }}
+{{- $https := hasPrefix "https://" ($g.publicUrl | default "") }}
+{{- $org := $g.bootstrap.org | default "" }}
+{{- $email := .Values.realm.adminEmail | default (index (splitList "," ($g.bootstrap.admins | default "")) 0 | trim) }}
+{{- if or (not $org) (not $email) }}
+{{- fail "global.oidc.embedded=true needs global.bootstrap.org and global.bootstrap.admins: the realm's administrator is the first bootstrap admin, member of the group choregos:<org>:org-admins. Without them nobody could sign in and create the first organisation." }}
+{{- end }}
+{{- if not $g.oidc.secretRef }}
+{{- fail "global.oidc.embedded=true needs global.oidc.secretRef: the Secret (key `client-secret`) the console's client is imported with and the API signs in with. `global.oidc.generateSecret: true` lets the chart draw it." }}
+{{- end }}
+{{- if not (hasPrefix "http" ($g.publicUrl | default "")) }}
+{{- fail "global.oidc.embedded=true needs global.publicUrl (https://...): the realm's redirect URIs and the issuer's scheme come from it." }}
+{{- end }}
+{{- $kcDb := .Values.database }}
+{{- if and (not $g.database.embedded) (not $kcDb.host) }}
+{{- fail "choregos-keycloak.database.host is empty and global.database.embedded is off: Keycloak has no database. Name a PostgreSQL (and make the database `keycloak`), or embed the platform's." }}
+{{- end }}
+{{- $dbHost := $kcDb.host | default (printf "%s-postgresql" .Release.Name) }}
+{{- $dbSecret := $kcDb.secretRef | default (printf "%s-postgresql" .Release.Name) }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name }}
+{{- $admin := "" }}{{- $realmAdmin := "" }}
+{{- if $existing }}
+{{- $admin = index $existing.data "admin-password" | b64dec }}
+{{- $realmAdmin = index $existing.data "realm-admin-password" | b64dec }}
+{{- else }}
+{{- $admin = randAlphaNum 32 }}{{- $realmAdmin = randAlphaNum 24 }}
+{{- end }}
+{{- $console := $g.oidc.clientId | default "choregos" }}
+{{- $apiUrl := trimSuffix "/" ($g.apiUrl | default $g.publicUrl) }}
+{{- $publicUrl := trimSuffix "/" $g.publicUrl }}
+{{- $redirects := concat (list (printf "%s/api/v1/auth/callback" $apiUrl) (printf "%s/api/v1/auth/callback" $publicUrl)) .Values.realm.extraRedirectUris | uniq }}
+{{- $origins := list $publicUrl $apiUrl | uniq }}
+{{- $groupMapper := dict "name" "groups" "protocol" "openid-connect" "protocolMapper" "oidc-group-membership-mapper" "config" (dict "full.path" "false" "claim.name" "groups" "access.token.claim" "true" "id.token.claim" "true" "userinfo.token.claim" "true") }}
+{{- $groups := list }}
+{{- range (list "org-admins" "product-owners" "approvers" "contributors" "viewers") }}{{ $groups = append $groups (dict "name" (printf "choregos:%s:%s" $org .)) }}{{ end }}
+{{- $realm := dict
+  "realm" .Values.realm.name
+  "enabled" true
+  "displayName" .Values.realm.displayName
+  "registrationAllowed" false
+  "sslRequired" (.Values.realm.sslRequired | default (ternary "external" "none" $https))
+  "groups" $groups
+  "clients" (list
+    (dict "clientId" $console "name" "Choregos console" "enabled" true "publicClient" false "protocol" "openid-connect"
+          "secret" "${CHOREGOS_OIDC_CLIENT_SECRET}" "standardFlowEnabled" true "directAccessGrantsEnabled" false
+          "redirectUris" $redirects "webOrigins" $origins "rootUrl" $publicUrl
+          "attributes" (dict "pkce.code.challenge.method" "S256")
+          "protocolMappers" (list $groupMapper))
+    (dict "clientId" (printf "%s-cli" $console) "name" "Choregos CLI" "enabled" true "publicClient" true "protocol" "openid-connect"
+          "standardFlowEnabled" false "directAccessGrantsEnabled" false
+          "attributes" (dict "oauth2.device.authorization.grant.enabled" "true")
+          "protocolMappers" (list $groupMapper)))
+  "users" (list
+    (dict "username" .Values.realm.adminUser "enabled" true "email" $email "emailVerified" true
+          "credentials" (list (dict "type" "password" "value" "${CHOREGOS_REALM_ADMIN_PASSWORD}" "temporary" false))
+          "groups" (list (printf "/choregos:%s:org-admins" $org)))) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  # The `admin` of the master realm (Keycloak's own console), and the platform administrator's password.
+  admin-password: {{ $admin | quote }}
+  realm-admin-password: {{ $realmAdmin | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-realm
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+data:
+  realm.json: |
+    {{- toPrettyJson $realm | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: choregos-keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-keycloak
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: choregos-keycloak
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/part-of: choregos
+        app.kubernetes.io/component: identity
+      annotations:
+        # A new realm file is a new pod: the import runs at start (and only for a realm that is absent).
+        checksum/realm: {{ toPrettyJson $realm | sha256sum }}
+    spec:
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: keycloak
+          image: {{ include "choregos.pinnedImage" .Values.image }}
+          args:
+            - start
+            - --import-realm
+            - --http-enabled=true
+            - --http-port=8080
+            - --hostname={{ ternary "https" "http" $https }}://{{ $host }}
+            - --proxy-headers=xforwarded
+            - --health-enabled=true
+          env:
+            - { name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin }
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $name }}, key: admin-password } }
+            - { name: KC_DB, value: postgres }
+            - { name: KC_DB_URL_HOST, value: {{ $dbHost | quote }} }
+            - { name: KC_DB_URL_PORT, value: {{ $kcDb.port | quote }} }
+            - { name: KC_DB_URL_DATABASE, value: {{ $kcDb.name | quote }} }
+            - name: KC_DB_USERNAME
+              valueFrom: { secretKeyRef: { name: {{ $dbSecret }}, key: username } }
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $dbSecret }}, key: password } }
+            # Substituted into the imported realm (`${NAME}`): the client's secret is the very Secret the API reads.
+            - name: CHOREGOS_OIDC_CLIENT_SECRET
+              valueFrom: { secretKeyRef: { name: {{ $g.oidc.secretRef }}, key: client-secret } }
+            - name: CHOREGOS_REALM_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ $name }}, key: realm-admin-password } }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 9000 }
+          startupProbe:
+            httpGet: { path: /health/started, port: management }
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            periodSeconds: 30
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
+      volumes:
+        - name: realm
+          configMap: { name: {{ $name }}-realm }
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tlsSecretName }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: {{ $name }}, port: { name: http } }
+{{- end }}

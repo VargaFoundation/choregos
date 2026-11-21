@@ -1,0 +1,80 @@
+---
+id: connector.ci.azure-pipelines
+title: Read and queue runs of Azure Pipelines
+applies_to: {connector: ci/azure-pipelines}
+audience: project_owner
+version: 1
+reviewed: 2026-11-20
+vendor_docs:
+  - {title: "Pipelines runs REST API", url: "https://learn.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs"}
+  - {title: "Builds REST API", url: "https://learn.microsoft.com/en-us/rest/api/azure/devops/build/builds"}
+  - {title: "Use personal access tokens", url: "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"}
+  - {title: "Service hooks events (build completed, run state changed)", url: "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"}
+egress: ["dev.azure.com, or your Azure DevOps Server host", "login.microsoftonline.com (service principal)"]
+values: ["webhook_url:azure-devops"]
+fields:
+  base_url: "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)"
+  project: "the Azure DevOps team project"
+  repository: "optional: only the builds of this Azure Repos repository, by name or id"
+  pipeline: "optional: the pipeline, by name or id, whose builds are read and which is queued when none is named"
+  auth: "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only"
+  tenant_id: "`entra` only: the Entra tenant (directory) id"
+  client_id: "`entra` only: the service principal's application (client) id"
+  partially_succeeded: "how a build that partially succeeded counts for the gates: `failure` (the default) or `neutral`"
+  pat: "the personal access token, typed once (`auth: pat`)"
+  client_secret: "the service principal's client secret, typed once (`auth: entra`)"
+---
+
+## Before you start
+
+- An Azure DevOps team project with at least one pipeline, and an account **dedicated to Tranibor**.
+- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates
+  Tranibor, if you want build events. A service hook does not sign its deliveries.
+
+## At Azure DevOps
+
+1. **The credential.** A personal access token of the dedicated account, scopes **Build: Read & execute**
+   and **Project and Team: Read**. Or, on the Services only, a Microsoft Entra service principal added to
+   the organisation and to the project.
+2. **The pipeline.** Note its name or its id (the number in its address). The account needs **View builds**
+   and **Queue builds** on it.
+3. **Service hooks** (optional). **Project settings**, **Service hooks**, **Create subscription**, **Web
+   Hooks**: **Build completed** (and **Run state changed** if you use it). URL:
+   `<api_url>/api/v1/webhooks/azure-devops`; basic authentication password: the platform's shared webhook
+   secret. This path has not been exercised against a live organisation from this repository.
+
+## Permissions
+
+**How a result is read.** For a commit, the platform reads the latest build of each pipeline that built it.
+`succeeded` is green, `failed` is red, `canceled` is an error, and anything not finished is pending. A
+build that **partially succeeded** (a task set to continue on error failed) is **red** unless you set
+`partially_succeeded: neutral`. Only the 100 most recent builds are searched, so a commit older than them
+reads as unknown.
+
+**Queueing.** A run is queued on a branch or at a commit, with the pipeline's runtime parameters and plain
+variables. A run id is a build id: its logs are fetched step by step and joined.
+
+## In Tranibor
+
+1. Project settings, Connectors, **CI**, type **Azure Pipelines**.
+2. `base_url`, `project`; `repository` and `pipeline` to narrow what is read. `auth`: `pat` (the default) or
+   `entra`, with `tenant_id` and `client_id`.
+3. `pat` (or `client_secret`) in the password field (sealed, shown once).
+4. A work item on an Azure Repos repository reads its checks through the **SCM** connector of type **Azure
+   DevOps Repos**; this connector is what queues runs and reads their state and logs.
+
+## Test it
+
+Press **Test**: the connector lists the project's pipelines and answers `ok`. Then queue a run of a
+pipeline and read its state.
+
+## When it fails
+
+- `401` or a sign-in page (`203`): a wrong, expired or revoked token, or a service principal that is not a
+  member of the organisation.
+- `403`: the account lacks **View builds** or **Queue builds**, or the token lacks **Build: Read &
+  execute**.
+- `no pipeline named ...`: the name differs from the pipeline's (a folder is not part of it); use its id.
+- A run queued but never started: the project has no free agent, or the pipeline waits for an approval.
+- A timeout: the egress allowlist must open `dev.azure.com` (or your Server) and, for a service principal,
+  `login.microsoftonline.com`.

@@ -89,6 +89,27 @@ class AuditCheckpoint(Base, PkMixin):
     signature: Mapped[str | None] = mapped_column(String(86), nullable=True)
 
 
+class AuditExportCursor(Base):
+    """How far one SIEM sink has been given one audit chain (ADR 0207): the chain's `seq` and `hash` of the
+    last entry the sink accepted, so a restart resumes there.
+
+    Moved only after the sink accepted a batch, in the transaction that holds this row's lock: at-least-once,
+    never ahead of the sink. Not evidence (the chain is): losing the row re-ships the chain from its first
+    entry. `chain` is the organisation's id, or `''` for the platform's chain, as `audit_chain_heads`."""
+
+    __tablename__ = "audit_export_cursors"
+
+    #: The sink's name (`TRANIBOR_AUDIT_EXPORT_NAME`): another name is another cursor, shipped from entry 1.
+    sink: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chain: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    seq: Mapped[int] = mapped_column(BigInteger, default=0)
+    hash: Mapped[str] = mapped_column(String(64), default="0" * 64)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class NetworkDecision(Base, PkMixin, TimestampMixin):
     """What reached or was refused at the network, aggregated per run (ADR 0070).
 

@@ -412,7 +412,11 @@
           "type": "string"
         },
         "base_url": {
-          "description": "the site, https://<site>.atlassian.net, even with a scoped token",
+          "description": "Cloud: the site, https://<site>.atlassian.net, even with a scoped token. Data Center: its base URL, with the context path if any (https://jira.example.org/jira)",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "Data Center only: the PEM file of the internal CA that signed the site's certificate",
           "type": "string"
         },
         "candidates_jql": {
@@ -424,7 +428,7 @@
           "type": "string"
         },
         "email": {
-          "description": "the account the API token belongs to",
+          "description": "Cloud only: the account the API token belongs to",
           "type": "string"
         },
         "field_names": {
@@ -432,6 +436,15 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "flavor": {
+          "default": "cloud",
+          "description": "`datacenter` for Jira Data Center / Server 9.x or 10.x: REST API v2, wiki-markup bodies, `api_token` is a personal access token sent as Bearer",
+          "enum": [
+            "cloud",
+            "datacenter"
+          ],
+          "type": "string"
         },
         "match_labels": {
           "description": "when several projects share this Jira project, the labels that send an issue here; a project without them takes the issues no other claims",
@@ -446,15 +459,14 @@
       },
       "required": [
         "base_url",
-        "email",
         "project_key"
       ],
       "type": "object"
     },
     "deprecated": false,
     "dev_only": false,
-    "display": "Jira Cloud",
-    "has_check_config": false,
+    "display": "Jira (Cloud, Data Center / Server)",
+    "has_check_config": true,
     "has_egress": true,
     "has_factory": true,
     "kind": "tracker",
@@ -465,6 +477,81 @@
       "webhook_secret"
     ],
     "type": "jira"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {
+        "area_path": {
+          "description": "optional: only the work items under this area path (Project\\Team)",
+          "type": "string"
+        },
+        "auth": {
+          "default": "pat",
+          "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal (client credentials), Azure DevOps Services only",
+          "enum": [
+            "pat",
+            "entra"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+          "type": "string"
+        },
+        "candidates_wiql": {
+          "description": "the WIQL conditions of the work items to take on without a service hook (polled every minute, within the project); empty: the items tagged agent-ready",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "`entra` only: the service principal's application (client) id",
+          "type": "string"
+        },
+        "field_names": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "match_labels": {
+          "description": "when several projects share this team project, the tags that send a work item here; a project without them takes the items no other claims",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "project": {
+          "description": "the Azure DevOps team project",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "`entra` only: the Entra tenant (directory) id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure DevOps Boards",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "pat",
+      "client_secret",
+      "webhook_secret"
+    ],
+    "type": "azure-boards"
   },
   {
     "capabilities": [
@@ -507,6 +594,11 @@
       "properties": {
         "base_url": {
           "default": "https://gitlab.com",
+          "description": "self-managed: its URL, with the path prefix if any (https://tools.example.org/gitlab); GitLab 15.0 or later",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "self-managed only: the PEM file of the internal CA that signed the instance's certificate (verification is never switched off)",
           "type": "string"
         },
         "project": {
@@ -583,6 +675,11 @@
       "properties": {
         "base_url": {
           "default": "https://gitlab.com",
+          "description": "self-managed: its URL, with the path prefix if any (https://tools.example.org/gitlab); GitLab 15.0 or later",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "self-managed only: the PEM file of the internal CA that signed the instance's certificate (verification is never switched off)",
           "type": "string"
         },
         "default_branch": {
@@ -611,6 +708,163 @@
       "token"
     ],
     "type": "gitlab"
+  },
+  {
+    "capabilities": [
+      "scm"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "pat",
+          "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal (client credentials), Azure DevOps Services only",
+          "enum": [
+            "pat",
+            "entra"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "`entra` only: the service principal's application (client) id",
+          "type": "string"
+        },
+        "default_branch": {
+          "default": "main",
+          "type": "string"
+        },
+        "delete_source_branch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "merge_strategy": {
+          "default": "squash",
+          "description": "how a pull request is completed; auto-complete is never set and no branch policy is bypassed",
+          "enum": [
+            "squash",
+            "noFastForward",
+            "rebase",
+            "rebaseMerge"
+          ],
+          "type": "string"
+        },
+        "partially_succeeded": {
+          "default": "failure",
+          "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+          "enum": [
+            "failure",
+            "neutral"
+          ],
+          "type": "string"
+        },
+        "project": {
+          "description": "the Azure DevOps team project",
+          "type": "string"
+        },
+        "repository": {
+          "description": "the Azure Repos Git repository (name or id)",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "`entra` only: the Entra tenant (directory) id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "project",
+        "repository"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure DevOps Repos",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "scm",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "pat",
+      "client_secret",
+      "run_token"
+    ],
+    "type": "azure-repos"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "pat",
+          "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal (client credentials), Azure DevOps Services only",
+          "enum": [
+            "pat",
+            "entra"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "`entra` only: the service principal's application (client) id",
+          "type": "string"
+        },
+        "partially_succeeded": {
+          "default": "failure",
+          "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+          "enum": [
+            "failure",
+            "neutral"
+          ],
+          "type": "string"
+        },
+        "pipeline": {
+          "description": "optional: the pipeline (name or id) whose builds are read and which is queued when none is named",
+          "type": "string"
+        },
+        "project": {
+          "description": "the Azure DevOps team project",
+          "type": "string"
+        },
+        "repository": {
+          "description": "optional: only the builds of this Azure Repos repository (name or id)",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "`entra` only: the Entra tenant (directory) id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure Pipelines",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "pat",
+      "client_secret"
+    ],
+    "type": "azure-pipelines"
   },
   {
     "capabilities": [
@@ -648,6 +902,11 @@
       "properties": {
         "base_url": {
           "default": "https://gitlab.com",
+          "description": "self-managed: its URL, with the path prefix if any (https://tools.example.org/gitlab); GitLab 15.0 or later",
+          "type": "string"
+        },
+        "ca_bundle": {
+          "description": "self-managed only: the PEM file of the internal CA that signed the instance's certificate (verification is never switched off)",
           "type": "string"
         },
         "project": {
@@ -672,6 +931,110 @@
       "token"
     ],
     "type": "gitlab"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "description": "the controller, https://jenkins.example.com",
+          "type": "string"
+        },
+        "crumb": {
+          "default": true,
+          "type": "boolean"
+        },
+        "job": {
+          "description": "the job's path, folder/app; the multibranch folder when `multibranch`",
+          "type": "string"
+        },
+        "multibranch": {
+          "default": false,
+          "type": "boolean"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "build parameters sent with every trigger",
+          "type": "object"
+        },
+        "ref_parameter": {
+          "default": "BRANCH",
+          "description": "the build parameter that receives the ref (unused by a multibranch job)",
+          "type": "string"
+        },
+        "user": {
+          "description": "the user the API token belongs to",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "job",
+        "user"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Jenkins",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "jenkins"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "api_url": {
+          "default": "https://api.github.com",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "workflow_dispatch inputs sent with every trigger",
+          "type": "object"
+        },
+        "repo": {
+          "description": "owner/repo, picked among the repositories the App can see",
+          "format": "github-repo",
+          "type": "string"
+        },
+        "workflow": {
+          "description": "the workflow file (ci.yml) to dispatch and to read; empty reads them all",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitHub Actions",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "github-actions"
   },
   {
     "capabilities": [

@@ -227,7 +227,7 @@ proj-{slug}-runners
 - name: CHOREGOS_OBJECT_STORE_URL
   value: {{ .Values.global.objectStore.url | quote }}
 - name: CHOREGOS_OBJECT_STORE_ENDPOINT
-  value: {{ .Values.global.objectStore.endpoint | default "" | quote }}
+  value: {{ include "choregos.objectStoreEndpoint" . | quote }}
 - name: CHOREGOS_OBJECT_STORE_REGION
   value: {{ .Values.global.objectStore.region | default "us-east-1" | quote }}
 {{- with .Values.global.objectStore.secretRef }}
@@ -387,6 +387,82 @@ its Secret by reference, and is not optional: a door that could sign nothing wou
   value: {{ toJson $announced | quote }}
 - name: CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE
   value: {{ if hasKey $door "ratePerMinute" }}{{ int64 $door.ratePerMinute | quote }}{{ else }}"1200"{{ end }}
+{{- end -}}
+
+{{/*
+The SIEM export of the audit log (ADR 0207): what the API is told when `global.auditExport.enabled`. The
+token comes from a Secret by reference (`secretKeyRef`), never a value; the API refuses to start on a sink
+it cannot build, so the mistakes the chart can see are refused here, at render time.
+*/}}
+{{- define "choregos.auditExportEnv" -}}
+{{- $x := .Values.global.auditExport | default dict -}}
+{{- $sink := $x.sink | default "https" -}}
+{{- if not (has $sink (list "https" "syslog")) -}}
+{{- fail (printf "global.auditExport.sink: %q is not https or syslog" $sink) -}}
+{{- end -}}
+{{- $format := $x.format | default (ternary "webhook" "rfc5424" (eq $sink "https")) -}}
+{{- if not (has $format (ternary (list "webhook" "splunk-hec" "elastic-bulk") (list "rfc5424" "cef") (eq $sink "https"))) -}}
+{{- fail (printf "global.auditExport.format: %q does not fit the %s sink (https: webhook, splunk-hec, elastic-bulk; syslog: rfc5424, cef)" $format $sink) -}}
+{{- end -}}
+{{- if and (eq $sink "https") (not (hasPrefix "https://" (toString ($x.url | default "")))) -}}
+{{- fail "global.auditExport.url: an https:// address is required (the log is not sent in clear)" -}}
+{{- end -}}
+{{- if and (eq $sink "syslog") (not (($x.syslog | default dict).host)) -}}
+{{- fail "global.auditExport.syslog.host: required for the syslog sink" -}}
+{{- end -}}
+{{- $token := $x.token | default dict -}}
+- name: CHOREGOS_AUDIT_EXPORT
+  value: "true"
+- name: CHOREGOS_AUDIT_EXPORT_SINK
+  value: {{ $sink | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_NAME
+  value: {{ $x.name | default "siem" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_FORMAT
+  value: {{ $format | quote }}
+{{- if eq $sink "https" }}
+- name: CHOREGOS_AUDIT_EXPORT_URL
+  value: {{ $x.url | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_HEADER
+  value: {{ $token.header | default "Authorization" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_SCHEME
+  value: {{ if hasKey $token "scheme" }}{{ $token.scheme | quote }}{{ else }}"Bearer"{{ end }}
+{{- with $x.index }}
+- name: CHOREGOS_AUDIT_EXPORT_INDEX
+  value: {{ . | quote }}
+{{- end }}
+{{- else }}
+- name: CHOREGOS_AUDIT_EXPORT_SYSLOG_HOST
+  value: {{ $x.syslog.host | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_SYSLOG_PORT
+  value: {{ int (($x.syslog).port | default 6514) | quote }}
+{{- end }}
+{{- with $token.secretRef }}
+- name: CHOREGOS_AUDIT_EXPORT_TOKEN
+  valueFrom: { secretKeyRef: { name: {{ . | quote }}, key: {{ $token.key | default "audit-export-token" | quote }} } }
+{{- end }}
+{{- with $x.caFile }}
+- name: CHOREGOS_AUDIT_EXPORT_CA_FILE
+  value: {{ . | quote }}
+{{- end }}
+- name: CHOREGOS_AUDIT_EXPORT_ORGS
+  value: {{ toJson ($x.organisations | default list) | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_PLATFORM
+  value: {{ ne (toString $x.platform) "false" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_CANONICAL
+  value: {{ ne (toString $x.canonical) "false" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_SOURCE
+  value: {{ $x.source | default "choregos" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_INTERVAL_S
+  value: {{ $x.intervalSeconds | default 10 | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_BATCH
+  value: {{ int ($x.batch | default 500) | quote }}
+{{- end -}}
+
+{{/*
+The names `choregos.auditExportEnv` sets: `global.extraEnv` may not set them a second time.
+*/}}
+{{- define "choregos.auditExportOwnedEnv" -}}
+CHOREGOS_AUDIT_EXPORT CHOREGOS_AUDIT_EXPORT_SINK CHOREGOS_AUDIT_EXPORT_NAME CHOREGOS_AUDIT_EXPORT_FORMAT CHOREGOS_AUDIT_EXPORT_URL CHOREGOS_AUDIT_EXPORT_HEADER CHOREGOS_AUDIT_EXPORT_SCHEME CHOREGOS_AUDIT_EXPORT_INDEX CHOREGOS_AUDIT_EXPORT_SYSLOG_HOST CHOREGOS_AUDIT_EXPORT_SYSLOG_PORT CHOREGOS_AUDIT_EXPORT_TOKEN CHOREGOS_AUDIT_EXPORT_CA_FILE CHOREGOS_AUDIT_EXPORT_ORGS CHOREGOS_AUDIT_EXPORT_PLATFORM CHOREGOS_AUDIT_EXPORT_CANONICAL CHOREGOS_AUDIT_EXPORT_SOURCE CHOREGOS_AUDIT_EXPORT_INTERVAL_S CHOREGOS_AUDIT_EXPORT_BATCH
 {{- end -}}
 
 {{/*
@@ -661,6 +737,23 @@ template: `choregos.alertRules` stays plain YAML, which a test reads as such.
 {{- end }}
 
 {{/*
+The alert of the SIEM export (ADR 0207), rendered only while `global.auditExport.enabled`: entries are waiting
+and no cursor has moved for half an hour, which a sink that is down or refusing looks like. Plain YAML, like
+the other rule lists.
+*/}}
+{{- define "choregos.auditExportAlertRules" -}}
+- alert: ChoregosAuditExportStalled
+  expr: |
+    max by (sink) (choregos_audit_export_lag_entries) > 0
+    and on (sink) (time() - max by (sink) (choregos_audit_export_progress_timestamp_seconds)) > 1800
+  for: 10m
+  labels: { severity: warning }
+  annotations:
+    summary: "The audit log is not reaching the SIEM: entries wait and no cursor has moved for 30 minutes"
+    description: "Sink {{ "{{" }} $labels.sink {{ "}}" }}: the API logs `audit.export.failed` with the sink's own error for each chain it could not ship. Nothing is lost: the cursor stays and the batch is sent again."
+{{- end }}
+
+{{/*
 Image pull secrets, for private registries.
 
 The chart declared none (`rg imagePullSecrets charts/`: zero). As long as all the images
@@ -739,6 +832,13 @@ its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in 
 - { name: temporal, port: 7233, namespace: choregos-temporal, pod: choregos-temporal, embedded: {{ $g.temporal.embedded | default false }} }
 - { name: gateway, port: 4000, namespace: choregos-gateway, pod: choregos-litellm, embedded: {{ $g.gateway.embedded | default false }} }
 - { name: memory, port: 8432, namespace: choregos-memory, pod: choregos-ecphoria, embedded: {{ $g.memory.embedded | default false }} }
+{{- /* ADR 0208: listed only when embedded, so an install that does not embed them renders what it always did. */}}
+{{- if ($g.objectStore).embedded }}
+- { name: objectstore, port: 9000, namespace: choregos-objectstore, pod: choregos-objectstore, embedded: true }
+{{- end }}
+{{- if ($g.oidc).embedded }}
+- { name: oidc, port: 8080, namespace: choregos-oidc, pod: choregos-keycloak, embedded: true }
+{{- end }}
 {{- end -}}
 
 {{/* The NetworkPolicy peer of one of `choregos.networkDependencies`. */}}
@@ -747,5 +847,51 @@ its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in 
 { podSelector: { matchLabels: { app.kubernetes.io/name: {{ .dependency.pod }} } } }
 {{- else -}}
 { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .dependency.namespace }} } } }
+{{- end -}}
+{{- end -}}
+
+{{/*
+All in one (ADR 0208): the pieces the chart can embed beyond the data stores, each one switched by its
+own `embedded` and each one overridable by the setting that names the site's own.
+*/}}
+{{- define "choregos.allInOne" -}}
+{{- if ((.Values.global.allInOne | default dict).enabled) -}}true{{- end -}}
+{{- end -}}
+
+{{/* An image by tag and, when the digest is known, by digest too: `repo:tag@sha256:...`. */}}
+{{- define "choregos.pinnedImage" -}}
+{{ .repository }}:{{ .tag }}{{ with .digest }}@{{ . }}{{ end }}
+{{- end -}}
+
+{{- define "choregos.objectStoreServiceName" -}}
+{{- (.Values.global.objectStore).serviceName | default (printf "%s-objectstore" .Release.Name) -}}
+{{- end -}}
+
+{{/* The bucket the object store URL names: `s3://bucket/prefix` gives `bucket`. */}}
+{{- define "choregos.objectStoreBucket" -}}
+{{- regexReplaceAll "/.*" (trimPrefix "s3://" (.Values.global.objectStore.url | default "")) "" -}}
+{{- end -}}
+
+{{/* The endpoint the API, the backup and the bucket Job use: the site's, else the embedded server's. */}}
+{{- define "choregos.objectStoreEndpoint" -}}
+{{- if .Values.global.objectStore.endpoint -}}
+{{ .Values.global.objectStore.endpoint }}
+{{- else if .Values.global.objectStore.embedded -}}
+http://{{ include "choregos.objectStoreServiceName" . }}.{{ .Release.Namespace }}.svc:9000
+{{- end -}}
+{{- end -}}
+
+{{/* The embedded Keycloak's public host: `choregos-keycloak.ingress.hostname`, else `auth.<global.domain>`. */}}
+{{- define "choregos.oidcHost" -}}
+{{- $kc := index .Values "choregos-keycloak" | default dict -}}
+{{- (($kc.ingress | default dict).hostname) | default (printf "auth.%s" .Values.global.domain) -}}
+{{- end -}}
+
+{{/* The issuer the API and the realm agree on: the site's `global.oidc.issuer`, else the embedded realm's. */}}
+{{- define "choregos.oidcIssuer" -}}
+{{- if .Values.global.oidc.issuer -}}
+{{ .Values.global.oidc.issuer }}
+{{- else if .Values.global.oidc.embedded -}}
+{{ ternary "https" "http" (hasPrefix "https://" (.Values.global.publicUrl | default "")) }}://{{ include "choregos.oidcHost" . }}/realms/{{ ((index .Values "choregos-keycloak" | default dict).realm | default dict).name | default "choregos" }}
 {{- end -}}
 {{- end -}}

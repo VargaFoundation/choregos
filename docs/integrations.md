@@ -591,6 +591,32 @@ cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and 
 fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
 real service yet (`tests/live/test_rovo_a2a_live.py`, run by hand once the consent is given).
 
+## Azure DevOps Boards, as the board (ADR 0209)
+
+The other direction from the MCP doors above: Tranibor reads and writes an Azure Boards project the way it
+does a Jira project. Connector **Tracker**, type **Azure DevOps Boards** (`azure-boards`); the setup, with
+the permissions, is the procedure `connector.tracker.azure-boards` (`docs/procedures/`).
+
+- **Where.** Azure DevOps Services (`https://dev.azure.com/<organisation>`) or an Azure DevOps Server 2022
+  collection (`https://<server>/<path>/<collection>`), both through REST API 7.1, selected only by `base_url`.
+- **Credential.** `auth: pat`, a personal access token (scopes *Work Items: Read & write* and *Project and
+  Team: Read*), on both; or `auth: entra`, a Microsoft Entra service principal (`tenant_id`, `client_id`,
+  sealed `client_secret`, added to the organisation and the project), Services only.
+- **What it does.** A work item tagged `agent-ready` (or matching `candidates_wiql` or a start rule, within
+  the team project and the optional `area_path`) starts one workflow. The workflow's state is written to
+  `System.State` (by the state's exact name, by its category, or as `To Do` / `In Progress` / `Done`), the
+  labels are tags, the status comment is one HTML comment rewritten at each stage, `Cost (€)`, `Size`,
+  `Risk` and `Run` are custom fields of your process (a missing one is skipped), and links are real work
+  item relations.
+- **Inbound.** Create a **Web Hooks** service-hook subscription for *Work item created*, *updated* and
+  *commented on* to `<api_url>/api/v1/webhooks/azure-boards`, with basic authentication whose password is
+  `TRANIBOR_GENERIC_WEBHOOK_SECRET` (any user name), or a custom `X-Choregos-Secret` header. A delivery
+  reaches the project whose connector holds the team project; several projects on one team project are told
+  apart by the organisation, the `area_path`, then `match_labels`.
+- **Limits, said plainly.** Built against a scripted server and payloads taken from Microsoft's
+  documentation; **no live Azure DevOps organisation or Server has run it yet**. Comments use the 7.1
+  *preview* endpoint, which is the only one. Repos and Pipelines are not part of this connector (S13-08).
+
 ## Your organisation's MCP gateway (ADR 0105)
 
 Some MCP servers cannot be called directly: they need hosting, or OAuth, or their credential must
@@ -729,6 +755,66 @@ verify that a server honours the key: the statement is the administrator's.
   Tranibor holds no upstream credential and opens no upstream connection.
 - **An outpost does not keep data where it is.** A tool's result travels to Tranibor, is bounded and
   screened there, and is read by a model.
+
+## Azure DevOps Repos and Azure Pipelines, as connectors (S13-08)
+
+Two connector types put a team project's code and builds under the platform's gates: `scm/azure-repos` (Git
+repositories, pull requests, votes, completion) and `ci/azure-pipelines` (queueing a run, its state, its
+logs). They speak the REST API 7.1 and work on Azure DevOps Services (`https://dev.azure.com/<organisation>`)
+and on an Azure DevOps Server 2022 collection; the credential is a **personal access token** or, on the
+Services, a **Microsoft Entra service principal** (`auth: entra`). The setup procedures are
+[Azure Repos](procedures/connector.scm.azure-repos.md) and [Azure Pipelines](procedures/connector.ci.azure-pipelines.md).
+
+- **What is merged is what was judged** ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)). A pull
+  request is *completed* at the commit the gates judged (`lastMergeSourceCommit`), with the connector's merge
+  strategy; auto-complete is never set and no branch policy is bypassed. A head that moved is a `HeadMoved`.
+- **`ci_green` reads Azure Pipelines.** The pull request's checks are its statuses of the current iteration,
+  its Build and Status branch policies, and the builds of its source branch at its head commit. A build that
+  *partially succeeded* is **red** unless the connector says `partially_succeeded: neutral`.
+- **A run gets no per-run token.** Azure DevOps cannot make a scoped, short-lived credential: a run clones and
+  pushes with the connector's separate `run_token` (a PAT limited to *Code: Read & write*), and without one the
+  connector refuses to mint a token. The connector's own credential never reaches a run.
+- **Service hooks** go to `POST /api/v1/webhooks/azure-devops` (pull request created and updated, build
+  completed, run state changed), authenticated by the platform's shared webhook secret as the password of the
+  subscription's basic authentication. A delivery reaches the project whose connector holds the team project,
+  then the repository.
+- **Not proven against a live organisation.** Everything above is tested against a scripted server written from
+  Microsoft's reference; the status row of S13-08 lists what a real organisation may still change.
+
+## Jira Data Center and self-managed GitLab (S13-09)
+
+Two trackers have a second deployment flavour, for the instances a company runs itself. Both are built
+and tested against **simulated transports**; neither has been run against a real Data Center or
+self-managed instance yet (the row in `docs/plan/status/S13.md` says so).
+
+| Connector | Flavour | Supported versions | Configuration |
+| :-- | :-- | :-- | :-- |
+| `tracker/jira` | Jira Cloud (default) | the current Cloud | `base_url`, `email`, `api_token`, optional `auth: scoped`, `cloud_id` |
+| `tracker/jira` | Jira Data Center / Server | **9.0 and later** (9.x, 10.x) | `flavor: datacenter`, `base_url` (with the context path if any, `https://jira.example.org/jira`), `api_token` = a personal access token, optional `ca_bundle` |
+| `tracker/gitlab-issues`, `scm/gitlab`, `ci/gitlab` | gitlab.com | current | `project`, `token` |
+| same three | self-managed | **GitLab 15.0 and later** | `base_url` (with its path prefix if any, `https://tools.example.org/gitlab`), `project`, `token`, optional `ca_bundle` |
+
+**Jira Data Center** speaks REST API v2, not Cloud's v3. Concretely: descriptions and comments are
+written in **wiki markup** (the status table becomes a `||header||` table, `**x**` becomes `*x*`)
+instead of Atlassian Document Format; the token is sent as `Authorization: Bearer`, so no `email` is
+asked; a person is its login or key (`name`, `key`) rather than an `accountId`, and the assignee of a
+created issue is `{"name": ...}`; candidates are polled with the classic `/rest/api/2/search`; custom
+fields (Size, Risk, ...) are still found by their name through `/rest/api/2/field`. The **Test**
+button reads `/rest/api/2/serverInfo` and refuses a server older than 9.0.
+
+Webhooks on Data Center: a delivery that carries `X-Hub-Signature: sha256=<hmac>` is verified with the
+connector's `webhook_secret`, and a bad signature is never rescued by another header. A server that does
+not sign still works through the `X-Choregos-Secret` header, as on Cloud. Data Center sends no delivery
+identifier: the digest of the body stands in for it, so a retry is recognised. Whether a given 9.x
+release signs its webhooks is **not verified here**; use the shared-secret header if yours does not.
+
+**Self-managed GitLab**: `base_url` may carry a path prefix (a relative URL root) and a port; the
+adapters call `<base_url>/api/v4/...`. `ca_bundle` is the path of a PEM file (inside the pod) holding the
+internal CA that signed the instance's certificate: TLS verification is never switched off, and a file
+that is missing or not a PEM bundle refuses the connector. The **Test** button reads `/api/v4/version`
+and refuses an instance older than **15.0** (project access tokens on every tier, issue links with a
+`link_type`), and reports an untrusted certificate or an unreachable host as a verdict. Webhook
+verification is unchanged: the shared `X-Gitlab-Token`.
 
 ## Limits
 

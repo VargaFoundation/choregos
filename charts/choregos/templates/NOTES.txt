@@ -24,3 +24,29 @@ delete it outside a rotation (docs/deployment.md, "Outposts").
 
 ⚠ `global.fakes` is on: the connectors are simulated. Use only in development.
 {{- end }}
+{{- if include "choregos.allInOne" . }}
+
+All in one (ADR 0208): this release deploys what the platform requires. One replica of everything:
+not production-grade (docs/deployment.md, "All in one").
+{{- if .Values.global.oidc.embedded }}
+
+  Sign-in    {{ include "choregos.oidcIssuer" . }} (the embedded Keycloak, realm {{ ((index .Values "choregos-keycloak").realm).name }})
+             platform administrator: {{ ((index .Values "choregos-keycloak").realm).adminUser }}, password in
+             kubectl -n {{ .Release.Namespace }} get secret {{ .Release.Name }}-keycloak -o jsonpath='{.data.realm-admin-password}' | base64 -d
+{{- end }}
+{{- if .Values.global.objectStore.embedded }}
+
+  Files      {{ include "choregos.objectStoreEndpoint" . }} (the embedded object store, bucket {{ include "choregos.objectStoreBucket" . }}); keys in the Secret {{ .Values.global.objectStore.secretRef }}
+{{- end }}
+{{- if eq (include "choregos.executorKind" .) "k8s_job" }}
+
+  Agents     the executor is `k8s_job`: each agent stage is a Job of this namespace. The agent-sandbox
+             operator is not installed by this chart (its CRDs are cluster-scoped); install it
+             (infra/operators/agent-sandbox) and set global.runner.executor=agent_sandbox to use it.
+{{- end }}
+{{- if not (.Values.backup.target.kind | eq "s3") }}
+
+  Backup     the scheduled backup lands on a volume of this cluster: point backup.target at a bucket
+             off the cluster before you rely on it.
+{{- end }}
+{{- end }}

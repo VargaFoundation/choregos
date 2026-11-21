@@ -71,9 +71,9 @@ export function KnowledgeStatusBanner({ base }: { base: KnowledgeBase }) {
             aria-valuemin={0}
             aria-valuemax={health.progress.total}
             aria-valuenow={health.progress.done}
-            className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-surface"
+            className="h-1.5 w-full max-w-md overflow-hidden rounded-pill bg-surface"
           >
-            <div className="h-full rounded-full bg-running transition-[width] duration-500" style={{ width: `${share}%` }} />
+            <div className="h-full rounded-pill bg-running transition-[width] duration-500" style={{ width: `${share}%` }} />
           </div>
         )}
       </div>
@@ -110,7 +110,7 @@ export function KnowledgeUsedBy({ base }: { base: KnowledgeBase }) {
                   <li key={agent.agent}>
                     <Link
                       href={`/agents/${agent.agent}`}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-agent-line bg-agent-soft px-2 py-0.5 text-xs font-medium text-agent-ink hover:underline"
+                      className="inline-flex items-center gap-1.5 rounded-pill border border-agent-line bg-agent-soft px-2 py-0.5 text-xs font-medium text-agent-ink hover:underline"
                     >
                       <Bot aria-hidden className="size-3.5" strokeWidth={1.75} />
                       {agent.display_name}

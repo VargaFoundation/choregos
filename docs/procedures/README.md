@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `TRANIBOR_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-63 procedures.
+68 procedures.
 
 ## Connectors
 
@@ -13,7 +13,10 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [The demo badge readers (demonstration only)](connector.access_control.demo.md) | anyone | `access_control/demo` | 2026-10-16 |
 | [Promote through Argo CD](connector.cd.argocd.md) | the person who operates the platform | `cd/argocd` | 2026-10-16 |
 | [The demo deployment (demonstration only)](connector.cd.demo.md) | anyone | `cd/demo` | 2026-10-16 |
+| [Read and queue runs of Azure Pipelines](connector.ci.azure-pipelines.md) | a project owner | `ci/azure-pipelines` | 2026-11-20 |
+| [Dispatch and follow GitHub Actions workflows](connector.ci.github-actions.md) | a project owner | `ci/github-actions` | 2026-11-20 |
 | [Read pipeline status from GitLab CI](connector.ci.gitlab.md) | a project owner | `ci/gitlab` | 2026-11-04 |
+| [Trigger and follow builds on Jenkins](connector.ci.jenkins.md) | a project owner | `ci/jenkins` | 2026-11-20 |
 | [Read pipeline status from Tekton](connector.ci.tekton.md) | the person who operates the platform | `ci/tekton` | 2026-10-16 |
 | [Connect Confluence Cloud](connector.documents.confluence.md) | an organisation administrator | `documents/confluence` | 2026-10-16 |
 | [Connect a private git repository as a documents source](connector.documents.git.md) | an organisation administrator | `documents/git` | 2026-10-16 |
@@ -44,9 +47,11 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Run agent stages as Kubernetes Jobs](connector.runtime.k8s_job.md) | the person who operates the platform | `runtime/k8s_job` | 2026-10-16 |
 | [Run agent stages in local Docker (development)](connector.runtime.local_docker.md) | the person who operates the platform | `runtime/local_docker` | 2026-10-16 |
 | [Run agent stages as Tekton PipelineRuns](connector.runtime.tekton.md) | the person who operates the platform | `runtime/tekton` | 2026-10-16 |
+| [Use Azure DevOps Repos for branches and pull requests](connector.scm.azure-repos.md) | a project owner | `scm/azure-repos` | 2026-11-20 |
 | [Use GitHub for branches, pull requests and checks](connector.scm.github.md) | a project owner | `scm/github` | 2026-11-12 |
 | [Use GitLab for branches, merge requests and auto-merge](connector.scm.gitlab.md) | a project owner | `scm/gitlab` | 2026-11-04 |
 | [The demo carrier (demonstration only)](connector.shipping.demo.md) | anyone | `shipping/demo` | 2026-10-16 |
+| [Use Azure DevOps Boards as the board](connector.tracker.azure-boards.md) | a project owner | `tracker/azure-boards` | 2026-11-20 |
 | [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-11-12 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Tranibor hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |

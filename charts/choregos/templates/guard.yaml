@@ -25,7 +25,16 @@ with its backup: one node, no high availability, a recovery point of one backup 
 the backup it would be the bench under a production label. The bench values (development secrets
 and sign-in, the demonstration fakes) stay refused whatever the profile.
 */ -}}
-{{- $singleNode := (.Values.singleNode | default dict).enabled }}
+{{- /* ADR 0208: the all-in-one mode is a single-node-class installation (one replica of everything, volumes
+       beside their owners, the scheduled backup): it takes the same conditions below. */}}
+{{- $allInOne := include "choregos.allInOne" . }}
+{{- $singleNode := or (.Values.singleNode | default dict).enabled $allInOne }}
+{{- if and $allInOne (.Values.global.oidc.embedded) (or (not .Values.global.bootstrap.org) (not .Values.global.bootstrap.admins)) }}
+{{- fail "global.allInOne.enabled with the embedded OIDC provider needs global.bootstrap.org and global.bootstrap.admins: the realm's administrator is the first of them." }}
+{{- end }}
+{{- if and $allInOne (eq (toString (.Values.global.externalSecrets).enabled) "true") }}
+{{- fail "global.allInOne.enabled needs global.externalSecrets.enabled=false: the chart draws the platform's Secrets itself, and an ExternalSecret would also own them." }}
+{{- end }}
 {{- if and $singleNode (not (.Values.backup | default dict).enabled) }}
 {{- fail "singleNode.enabled=true needs backup.enabled=true: a single node without a scheduled backup loses everything with its disk (ADR 0184)." }}
 {{- end }}

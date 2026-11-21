@@ -33,15 +33,19 @@ Repository permissions:
 - `checks`: write
 - `metadata`: read
 - `statuses`: read
+- `actions`: write
 
 `statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it
 keeps working, and those statuses are not read.
+
+`actions` lets the platform dispatch, rerun and read GitHub Actions workflows (the `github-actions` CI
+connector); an App without it keeps working, minus that connector.
 
 Organization permissions, only if the same App serves the Projects v2 board:
 
 - `organization_projects`: write
 
-Subscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.
+Subscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run`.
 
 Add `workflows: write` only if agents edit `.github/workflows`.
 

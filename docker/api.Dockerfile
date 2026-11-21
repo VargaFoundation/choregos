@@ -41,6 +41,7 @@ COPY apps/orchestrator apps/orchestrator
 # `choregos.plugins` entry point, so no deployment loses a connector type when it leaves the core.
 COPY plugins/investment-research plugins/investment-research
 COPY plugins/software-delivery plugins/software-delivery
+COPY plugins/vault-transit plugins/vault-transit
 # The project templates (manifest, scaffold): provisioning reads them at run time.
 # The image lacked them — `provisioning.py` looked for `/app/templates`, which did not exist,
 # and no project with a template could be provisioned from a pod (stocktake of 2026-09-24,

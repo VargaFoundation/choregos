@@ -13,6 +13,11 @@ from typing import Any
 
 from tranibor_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATTERN
 
+from .azure_devops import azure_boards_egress as _azure_boards_egress
+from .azure_devops import azure_egress as _azure_egress
+from .azure_devops import check_azure_boards as _check_azure_boards
+from .azure_devops import check_azure_pipelines as _check_azure_pipelines
+from .azure_devops import check_azure_repos as _check_azure_repos
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .forge_accounts import DEFAULT_BASE_URL as _FORGE_DEFAULTS
@@ -301,6 +306,18 @@ def _check_plugin_tracker(cfg: dict[str, Any]) -> None:
             raise ConfigurationError(f"a plugin tracker needs `{field}`, a plugin or server name")
 
 
+def _check_jira(cfg: dict[str, Any]) -> None:
+    """Cloud needs the email of the token's account; Data Center does not (a bearer token), and
+    refuses the Cloud-only settings."""
+    flavor = str(cfg.get("flavor") or "cloud")
+    if flavor not in {"cloud", "datacenter"}:
+        raise ConfigurationError(f"`flavor` is `cloud` or `datacenter`, not `{flavor}`")
+    if flavor == "cloud" and not str(cfg.get("email") or "").strip():
+        raise ConfigurationError("a Jira Cloud connector needs `email`, the account of the API token")
+    if flavor == "datacenter" and (cfg.get("auth") == "scoped" or cfg.get("cloud_id")):
+        raise ConfigurationError("`auth: scoped` and `cloud_id` are Jira Cloud settings, not Data Center's")
+
+
 #: The configuration of a `demo` type: nothing, or the address of the process that serves the fakes.
 _DEMO_CONFIGURATION = _object_schema(
     {
@@ -316,6 +333,35 @@ _DEMO_CONFIGURATION = _object_schema(
 #: configuration (the one the console draws its form from) and its SECRET fields, which are only
 #: written as a reference. These schemas used to live in the API's router, duplicating the
 #: registry and disagreeing with it (jira was "unavailable" there while it is registered).
+_AZURE_CONNECTION: dict[str, Any] = {
+    "base_url": {
+        "type": "string",
+        "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of "
+        "an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+    },
+    "project": {"type": "string", "description": "the Azure DevOps team project"},
+    "auth": {
+        "type": "string",
+        "enum": ["pat", "entra"],
+        "default": "pat",
+        "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal "
+        "(client credentials), Azure DevOps Services only",
+    },
+    "tenant_id": {"type": "string", "description": "`entra` only: the Entra tenant (directory) id"},
+    "client_id": {
+        "type": "string",
+        "description": "`entra` only: the service principal's application (client) id",
+    },
+    "partially_succeeded": {
+        "type": "string",
+        "enum": ["failure", "neutral"],
+        "default": "failure",
+        "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is "
+        "read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+    },
+}
+
+
 _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("tracker", "github-issues"): ConnectorTypeSpec(
         "GitHub Issues + Projects v2",
@@ -336,15 +382,32 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ),
     ("tracker", "internal"): ConnectorTypeSpec("internal (Tranibor holds the work items)", ("tracker",)),
     ("tracker", "jira"): ConnectorTypeSpec(
-        "Jira Cloud",
+        "Jira (Cloud, Data Center / Server)",
         ("tracker",),
         _object_schema(
             {
+                "flavor": {
+                    "type": "string",
+                    "enum": ["cloud", "datacenter"],
+                    "default": "cloud",
+                    "description": "`datacenter` for Jira Data Center / Server 9.x or 10.x: REST API v2, "
+                    "wiki-markup bodies, `api_token` is a personal access token sent as Bearer",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "Data Center only: the PEM file of the internal CA that signed the "
+                    "site's certificate",
+                },
                 "base_url": {
                     "type": "string",
-                    "description": "the site, https://<site>.atlassian.net, even with a scoped token",
+                    "description": "Cloud: the site, https://<site>.atlassian.net, even with a scoped "
+                    "token. Data Center: its base URL, with the context path if any "
+                    "(https://jira.example.org/jira)",
                 },
-                "email": {"type": "string", "description": "the account the API token belongs to"},
+                "email": {
+                    "type": "string",
+                    "description": "Cloud only: the account the API token belongs to",
+                },
                 "project_key": _TEXT,
                 "auth": {
                     "type": "string",
@@ -370,10 +433,60 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "an issue here; a project without them takes the issues no other claims",
                 },
             },
-            ("base_url", "email", "project_key"),
+            ("base_url", "project_key"),
         ),
         ("api_token", "webhook_secret"),
         egress=_atlassian_egress,
+        check_config=_check_jira,
+    ),
+    ("tracker", "azure-boards"): ConnectorTypeSpec(
+        "Azure DevOps Boards",
+        ("tracker",),
+        _object_schema(
+            {
+                "base_url": {
+                    "type": "string",
+                    "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the "
+                    "collection of an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+                },
+                "project": {"type": "string", "description": "the Azure DevOps team project"},
+                "area_path": {
+                    "type": "string",
+                    "description": "optional: only the work items under this area path (Project\\Team)",
+                },
+                "auth": {
+                    "type": "string",
+                    "enum": ["pat", "entra"],
+                    "default": "pat",
+                    "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service "
+                    "principal (client credentials), Azure DevOps Services only",
+                },
+                "tenant_id": {
+                    "type": "string",
+                    "description": "`entra` only: the Entra tenant (directory) id",
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "`entra` only: the service principal's application (client) id",
+                },
+                "candidates_wiql": {
+                    "type": "string",
+                    "description": "the WIQL conditions of the work items to take on without a service hook "
+                    "(polled every minute, within the project); empty: the items tagged agent-ready",
+                },
+                "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
+                "match_labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "when several projects share this team project, the tags that send "
+                    "a work item here; a project without them takes the items no other claims",
+                },
+            },
+            ("base_url", "project"),
+        ),
+        ("pat", "client_secret", "webhook_secret"),
+        egress=_azure_boards_egress,
+        check_config=_check_azure_boards,
     ),
     ("tracker", "plugin"): ConnectorTypeSpec(
         "a plugin's server (tracker profile, S43-07)",
@@ -391,7 +504,21 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         "GitLab Issues",
         ("tracker",),
         _object_schema(
-            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXT}, ("project",)
+            {
+                "base_url": {
+                    "type": "string",
+                    "default": "https://gitlab.com",
+                    "description": "self-managed: its URL, with the path prefix if any "
+                    "(https://tools.example.org/gitlab); GitLab 15.0 or later",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "self-managed only: the PEM file of the internal CA that signed the "
+                    "instance's certificate (verification is never switched off)",
+                },
+                "project": _TEXT,
+            },
+            ("project",),
         ),
         ("token", "webhook_secret"),
     ),
@@ -420,13 +547,71 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("scm",),
         _object_schema(
             {
-                "base_url": {"type": "string", "default": "https://gitlab.com"},
+                "base_url": {
+                    "type": "string",
+                    "default": "https://gitlab.com",
+                    "description": "self-managed: its URL, with the path prefix if any "
+                    "(https://tools.example.org/gitlab); GitLab 15.0 or later",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "self-managed only: the PEM file of the internal CA that signed the "
+                    "instance's certificate (verification is never switched off)",
+                },
                 "project": _TEXT,
                 "default_branch": {"type": "string", "default": "main"},
             },
             ("project",),
         ),
         ("token",),
+    ),
+    ("scm", "azure-repos"): ConnectorTypeSpec(
+        "Azure DevOps Repos",
+        ("scm",),
+        _object_schema(
+            {
+                **_AZURE_CONNECTION,
+                "repository": {
+                    "type": "string",
+                    "description": "the Azure Repos Git repository (name or id)",
+                },
+                "default_branch": {"type": "string", "default": "main"},
+                "merge_strategy": {
+                    "type": "string",
+                    "enum": ["squash", "noFastForward", "rebase", "rebaseMerge"],
+                    "default": "squash",
+                    "description": "how a pull request is completed; auto-complete is never set and no "
+                    "branch policy is bypassed",
+                },
+                "delete_source_branch": {"type": "boolean", "default": False},
+            },
+            ("base_url", "project", "repository"),
+        ),
+        ("pat", "client_secret", "run_token"),
+        egress=_azure_egress,
+        check_config=_check_azure_repos,
+    ),
+    ("ci", "azure-pipelines"): ConnectorTypeSpec(
+        "Azure Pipelines",
+        ("ci",),
+        _object_schema(
+            {
+                **_AZURE_CONNECTION,
+                "repository": {
+                    "type": "string",
+                    "description": "optional: only the builds of this Azure Repos repository (name or id)",
+                },
+                "pipeline": {
+                    "type": "string",
+                    "description": "optional: the pipeline (name or id) whose builds are read and which is "
+                    "queued when none is named",
+                },
+            },
+            ("base_url", "project"),
+        ),
+        ("pat", "client_secret"),
+        egress=_azure_egress,
+        check_config=_check_azure_pipelines,
     ),
     ("ci", "tekton"): ConnectorTypeSpec(
         "Tekton Pipelines",
@@ -437,9 +622,75 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         "GitLab CI",
         ("ci",),
         _object_schema(
-            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXT}, ("project",)
+            {
+                "base_url": {
+                    "type": "string",
+                    "default": "https://gitlab.com",
+                    "description": "self-managed: its URL, with the path prefix if any "
+                    "(https://tools.example.org/gitlab); GitLab 15.0 or later",
+                },
+                "ca_bundle": {
+                    "type": "string",
+                    "description": "self-managed only: the PEM file of the internal CA that signed the "
+                    "instance's certificate (verification is never switched off)",
+                },
+                "project": _TEXT,
+            },
+            ("project",),
         ),
         ("token",),
+    ),
+    ("ci", "jenkins"): ConnectorTypeSpec(
+        "Jenkins",
+        ("ci",),
+        _object_schema(
+            {
+                "base_url": {"type": "string", "description": "the controller, https://jenkins.example.com"},
+                "job": {
+                    "type": "string",
+                    "description": "the job's path, folder/app; the multibranch folder when `multibranch`",
+                },
+                "user": {"type": "string", "description": "the user the API token belongs to"},
+                "multibranch": {"type": "boolean", "default": False},
+                "ref_parameter": {
+                    "type": "string",
+                    "default": "BRANCH",
+                    "description": "the build parameter that receives the ref (unused by a multibranch job)",
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "build parameters sent with every trigger",
+                },
+                "crumb": {"type": "boolean", "default": True},
+            },
+            ("base_url", "job", "user"),
+        ),
+        ("token",),
+    ),
+    ("ci", "github-actions"): ConnectorTypeSpec(
+        "GitHub Actions",
+        ("ci",),
+        _object_schema(
+            {
+                "repo": {
+                    "type": "string",
+                    "format": "github-repo",
+                    "description": "owner/repo, picked among the repositories the App can see",
+                },
+                "workflow": {
+                    "type": "string",
+                    "description": "the workflow file (ci.yml) to dispatch and to read; empty reads them all",
+                },
+                "inputs": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "workflow_dispatch inputs sent with every trigger",
+                },
+                "api_url": {"type": "string", "default": "https://api.github.com"},
+            },
+            ("repo",),
+        ),
     ),
     ("cd", "argocd"): ConnectorTypeSpec(
         "Argo CD + Rollouts",

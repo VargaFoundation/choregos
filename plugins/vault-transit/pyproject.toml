@@ -1,0 +1,19 @@
+[project]
+name = "tranibor-vault-transit"
+version = "0.27.17"
+description = "An extension: the HashiCorp Vault Transit key wrapper for the connector secrets (ADR 0103, ADR 0201)"
+requires-python = ">=3.12,<3.13"
+license = { text = "Apache-2.0" }
+dependencies = ["tranibor-api", "httpx>=0.27"]
+
+# The extension's one seam (ADR 0093, `choregos.plugins`): the API and the worker load it at start-up.
+# Unconfigured (no `TRANIBOR_VAULT_ADDR`) it does nothing; the core's keyring stays the wrapper.
+[project.entry-points."choregos.plugins"]
+vault-transit = "tranibor_vault_transit.extension:register"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tranibor_vault_transit"]

@@ -46,6 +46,11 @@ data:
     EOSQL
   01-litellm.sql: |
     CREATE DATABASE litellm OWNER {{ .Values.global.database.user }};
+  {{- if (.Values.global.oidc).embedded }}
+  # ADR 0208: the embedded Keycloak keeps its realm, users and sessions in its own database.
+  03-keycloak.sql: |
+    CREATE DATABASE keycloak OWNER {{ .Values.global.database.user }};
+  {{- end }}
   # pgvector is not a trusted extension: created here, as the administration role, for the knowledge
   # index (ADR 0051). An image without it keeps working: the index then serves full-text only.
   02-pgvector.sh: |

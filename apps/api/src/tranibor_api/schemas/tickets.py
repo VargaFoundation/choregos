@@ -44,6 +44,7 @@ class Totals(Dto):
     tokens_in: int = 0
     tokens_out: int = 0
     tokens_cached: int = 0
+    tokens_cache_write: int = 0
     cost_usd: float = 0.0
     cost_eur: float = 0.0
     duration_s: float = 0.0

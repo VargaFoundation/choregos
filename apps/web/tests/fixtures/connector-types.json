@@ -13,7 +13,19 @@
  },
  {
   "kind": "ci",
+  "type": "azure-pipelines"
+ },
+ {
+  "kind": "ci",
+  "type": "github-actions"
+ },
+ {
+  "kind": "ci",
   "type": "gitlab"
+ },
+ {
+  "kind": "ci",
+  "type": "jenkins"
  },
  {
   "kind": "ci",
@@ -149,6 +161,10 @@
  },
  {
   "kind": "scm",
+  "type": "azure-repos"
+ },
+ {
+  "kind": "scm",
   "type": "github"
  },
  {
@@ -158,6 +174,10 @@
  {
   "kind": "shipping",
   "type": "demo"
+ },
+ {
+  "kind": "tracker",
+  "type": "azure-boards"
  },
  {
   "kind": "tracker",

@@ -2238,7 +2238,7 @@ paths:
         - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
         - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
-        "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
+        "200": { description: "Cost report as CSV. Columns, by position: the grouping key, cout_usd, cout_eur, tokens_in, tokens_out, tokens_caches (the cache reads), runs, then tokens_cache_write (S4-13, appended last so a consumer that reads by position keeps working). The total line leaves the runs cell empty.", content: { text/csv: { schema: { type: string } } } }
   /projects/{id}/metrics/cross-backend:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -2331,7 +2331,7 @@ paths:
         - { name: work_item, in: query, schema: { type: string, minLength: 1, maxLength: 128 }, description: "only the lines of this work item (its id)" }
         - { name: assistant, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: "only the lines of this assistant installation (its id; ADR 0141 §1): its conversations' turns and its tasks" }
       responses:
-        "200": { description: Cost report as CSV, content: { text/csv: { schema: { type: string } } } }
+        "200": { description: "Cost report as CSV. Columns, by position: the grouping key, cout_usd, cout_eur, tokens_in, tokens_out, tokens_caches (the cache reads), runs, then tokens_cache_write (S4-13, appended last so a consumer that reads by position keeps working). The total line leaves the runs cell empty.", content: { text/csv: { schema: { type: string } } } }
   /orgs/{org}/egress:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -2615,8 +2615,18 @@ paths:
     get:
       tags: [admin]
       operationId: listGatewayKeys
+      description: >-
+        The keys the gateway minted, newest first, one page at a time (ADR 0206). `q` matches a substring of the key
+        id, the run id or the project slug; `state` keeps the active or the revoked keys. Platform administrators only.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: state, in: query, schema: { type: string, enum: [active, revoked] } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GatewayKeyPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/policy-ceiling:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -5944,6 +5954,16 @@ paths:
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/azure-boards:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: azureBoardsWebhook
+      parameters:
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; the password of the service hook's basic authentication may carry it instead" }
+        - { name: Authorization, in: header, required: false, schema: { type: string }, description: "`Basic` whose password is the shared webhook secret" }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/gitlab:
     post:
       tags: [webhooks]
@@ -5954,6 +5974,19 @@ paths:
         - { name: X-Gitlab-Event, in: header, required: true, schema: { type: string } }
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/azure-devops:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: azureDevopsWebhook
+      description: The service hooks of Azure Repos pull requests (`git.pullrequest.*`) and of Azure Pipelines builds and runs (`build.complete`, `ms.vss-pipelines.run-state-changed-event`).
+      parameters:
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; the password of the service hook's basic authentication may carry it instead" }
+        - { name: Authorization, in: header, required: false, schema: { type: string }, description: "`Basic` whose password is the shared webhook secret" }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /webhooks/tekton:
     post:
       tags: [webhooks]
@@ -5964,6 +5997,16 @@ paths:
         - { name: ce-id, in: header, required: true, schema: { type: string } }
         - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; `token` may carry it instead" }
         - { name: token, in: query, required: false, schema: { type: string }, description: "The shared webhook secret, for a sink that is set by a URL and adds no header" }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/jenkins:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: jenkinsWebhook
+      parameters:
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; `token` may carry it instead" }
+        - { name: token, in: query, required: false, schema: { type: string }, description: "The shared webhook secret, for a Notification plugin endpoint that is set by a URL and adds no header" }
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/argocd:
@@ -6921,6 +6964,7 @@ components:
           properties:
             control: { type: integer, minimum: 0, maximum: 8, description: "px; absent = the console default" }
             surface: { type: integer, minimum: 0, maximum: 12, description: "px; absent = the console default" }
+            pill: { type: integer, minimum: 0, maximum: 999, description: "px, on badges, chips, counters and bars (dots and avatars stay round); absent = round" }
         fonts:
           type: object
           description: The mono font stays Geist Mono
@@ -11197,6 +11241,7 @@ components:
               metered: { type: [integer, "null"], description: Cases the gateway's ledger has a measure for. }
               median_tokens_in: { type: [number, "null"], description: "Input tokens from the ledger, cache reads included." }
               median_tokens_cached: { type: [number, "null"], description: Cache-read input tokens from the ledger. }
+              median_tokens_cache_write: { type: [number, "null"], description: "Cache-write input tokens from the ledger, part of the input tokens (S4-13); null when no case was metered." }
               median_tokens_out: { type: [number, "null"] }
               median_turns: { type: [number, "null"] }
     Org:
@@ -12117,7 +12162,8 @@ components:
       properties:
         tokens_in: { type: integer, default: 0 }
         tokens_out: { type: integer, default: 0 }
-        tokens_cached: { type: integer, default: 0 }
+        tokens_cached: { type: integer, default: 0, description: "the input tokens read from the provider's cache, part of tokens_in" }
+        tokens_cache_write: { type: integer, default: 0, description: "the input tokens written to the provider's cache, part of tokens_in (S4-13)" }
         cost_usd: { type: number, default: 0 }
         cost_eur: { type: number, default: 0 }
         duration_s: { type: number, default: 0 }
@@ -12965,7 +13011,8 @@ components:
       properties:
         tokens_in: { type: integer }
         tokens_out: { type: integer }
-        tokens_cached: { type: integer }
+        tokens_cached: { type: integer, description: "the input tokens read from the provider's cache, part of tokens_in" }
+        tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache, part of tokens_in (S4-13); 0 when the provider reports none or the entry predates S4-07" }
         cost_usd: { type: number }
         read_at: { type: string, format: date-time, description: "when the gateway was asked; at most every 30 s per run" }
         booked: { type: boolean, default: false, description: "true once the ledger holds it (the entry has ended)" }
@@ -13273,6 +13320,12 @@ components:
         expires_at: { type: [string, "null"], format: date-time }
         revoked: { type: boolean, default: false }
         created_at: { type: string, format: date-time }
+    GatewayKeyPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     AuditEntry:
       type: object
       required: [id, actor_kind, action, ts]

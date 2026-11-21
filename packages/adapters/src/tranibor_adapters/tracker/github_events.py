@@ -231,6 +231,48 @@ def _check_suite(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent
     ]
 
 
+#: A workflow run's `conclusion`s that do not block a merge: GitHub treats `neutral` and `skipped` as passing.
+PASSING_CONCLUSIONS = frozenset({"success", "neutral", "skipped"})
+
+
+def _workflow_run(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
+    """`workflow_run` (GitHub Actions): `requested` and `in_progress` are a start, `completed` a success
+    or a failure by its conclusion. `run_attempt` is in the payload: a rerun of the same run is a new
+    attempt, not a duplicate."""
+    run = payload.get("workflow_run", {}) or {}
+    action = payload.get("action")
+    if action == "completed":
+        kind = (
+            InboundEventType.CI_SUCCEEDED
+            if run.get("conclusion") in PASSING_CONCLUSIONS
+            else InboundEventType.CI_FAILED
+        )
+    elif action in {"requested", "in_progress"}:
+        kind = InboundEventType.CI_STARTED
+    else:
+        return []
+    head_branch = run.get("head_branch") or ""
+    key = _work_item_from_branch(head_branch, payload)
+    common = _base(delivery_id, payload, key)
+    return [
+        InboundEvent(
+            type=kind,
+            payload={
+                "run_id": run.get("id"),
+                "run_attempt": run.get("run_attempt"),
+                "workflow": run.get("name"),
+                "conclusion": run.get("conclusion"),
+                "sha": run.get("head_sha"),
+                "branch": head_branch,
+                "event": run.get("event"),
+                "pr_numbers": [pr.get("number") for pr in run.get("pull_requests", []) or []],
+                "url": run.get("html_url"),
+            },
+            **common,
+        )
+    ]
+
+
 BRANCH_KEY_RE = re.compile(r"choregos/(?P<number>\d+)")
 
 
@@ -250,4 +292,5 @@ _HANDLERS = {
     "pull_request_review": _pull_request_review,
     "check_suite": _check_suite,
     "check_run": _check_suite,
+    "workflow_run": _workflow_run,
 }

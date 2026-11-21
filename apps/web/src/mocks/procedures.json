@@ -824,6 +824,161 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.ci.azure-pipelines",
+    "title": "Read and queue runs of Azure Pipelines",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/azure-pipelines"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure DevOps team project with at least one pipeline, and an account **dedicated to Tranibor**.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want build events. A service hook does not sign its deliveries."
+      },
+      {
+        "key": "at",
+        "title": "At Azure DevOps",
+        "markdown": "1. **The credential.** A personal access token of the dedicated account, scopes **Build: Read & execute**\n   and **Project and Team: Read**. Or, on the Services only, a Microsoft Entra service principal added to\n   the organisation and to the project.\n2. **The pipeline.** Note its name or its id (the number in its address). The account needs **View builds**\n   and **Queue builds** on it.\n3. **Service hooks** (optional). **Project settings**, **Service hooks**, **Create subscription**, **Web\n   Hooks**: **Build completed** (and **Run state changed** if you use it). URL:\n   `<api_url>/api/v1/webhooks/azure-devops`; basic authentication password: the platform's shared webhook\n   secret. This path has not been exercised against a live organisation from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "**How a result is read.** For a commit, the platform reads the latest build of each pipeline that built it.\n`succeeded` is green, `failed` is red, `canceled` is an error, and anything not finished is pending. A\nbuild that **partially succeeded** (a task set to continue on error failed) is **red** unless you set\n`partially_succeeded: neutral`. Only the 100 most recent builds are searched, so a commit older than them\nreads as unknown.\n\n**Queueing.** A run is queued on a branch or at a commit, with the pipeline's runtime parameters and plain\nvariables. A run id is a build id: its logs are fetched step by step and joined."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **CI**, type **Azure Pipelines**.\n2. `base_url`, `project`; `repository` and `pipeline` to narrow what is read. `auth`: `pat` (the default) or\n   `entra`, with `tenant_id` and `client_id`.\n3. `pat` (or `client_secret`) in the password field (sealed, shown once).\n4. A work item on an Azure Repos repository reads its checks through the **SCM** connector of type **Azure\n   DevOps Repos**; this connector is what queues runs and reads their state and logs."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector lists the project's pipelines and answers `ok`. Then queue a run of a\npipeline and read its state."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or a sign-in page (`203`): a wrong, expired or revoked token, or a service principal that is not a\n  member of the organisation.\n- `403`: the account lacks **View builds** or **Queue builds**, or the token lacks **Build: Read &\n  execute**.\n- `no pipeline named ...`: the name differs from the pipeline's (a folder is not part of it); use its id.\n- A run queued but never started: the project has no free agent, or the pipeline waits for an approval.\n- A timeout: the egress allowlist must open `dev.azure.com` (or your Server) and, for a service principal,\n  `login.microsoftonline.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:azure-devops": "https://choregos.example.com/api/v1/webhooks/azure-devops"
+    },
+    "egress": [
+      "dev.azure.com, or your Azure DevOps Server host",
+      "login.microsoftonline.com (service principal)"
+    ],
+    "fields": {
+      "base_url": "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)",
+      "project": "the Azure DevOps team project",
+      "repository": "optional: only the builds of this Azure Repos repository, by name or id",
+      "pipeline": "optional: the pipeline, by name or id, whose builds are read and which is queued when none is named",
+      "auth": "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only",
+      "tenant_id": "`entra` only: the Entra tenant (directory) id",
+      "client_id": "`entra` only: the service principal's application (client) id",
+      "partially_succeeded": "how a build that partially succeeded counts for the gates: `failure` (the default) or `neutral`",
+      "pat": "the personal access token, typed once (`auth: pat`)",
+      "client_secret": "the service principal's client secret, typed once (`auth: entra`)"
+    },
+    "vendor_docs": [
+      {
+        "title": "Pipelines runs REST API",
+        "url": "https://learn.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs"
+      },
+      {
+        "title": "Builds REST API",
+        "url": "https://learn.microsoft.com/en-us/rest/api/azure/devops/build/builds"
+      },
+      {
+        "title": "Use personal access tokens",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+      },
+      {
+        "title": "Service hooks events (build completed, run state changed)",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.ci.github-actions",
+    "title": "Dispatch and follow GitHub Actions workflows",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/github-actions"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The same **GitHub App** as the `scm` connector: no other credential. See \"Use GitHub for branches, pull\n  requests and checks\". The App must have the `actions` permission and the `workflow_run` event.\n- A workflow with `on: workflow_dispatch` (and its `inputs`) on the default branch, to be dispatched.\n  Reading the runs of pull requests needs nothing more."
+      },
+      {
+        "key": "at",
+        "title": "At GitHub",
+        "markdown": "1. In the App's settings, grant **Actions: Read and write** (to dispatch, rerun and read), and subscribe to\n   **Workflow run**. An App created from the console after this version already has both; an App created\n   earlier must be updated, and its installations must accept the new permission.\n2. The webhook is the App's own: `https://choregos.example.com/api/v1/webhooks/github`. No second webhook."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- `actions`: write. Without it the platform still works, minus this connector's dispatch, rerun and reads: a\n  token is asked again without the permission when the installation lacks it, and GitHub then answers 403."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **CI**, type **GitHub Actions**.\n2. `repo`, and `workflow` (the file name, for example `ci.yml`). `inputs`: the dispatch inputs, if the\n   workflow declares any."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the workflow and answers `ok`. Then dispatch it on a branch: the run\nappears, its jobs follow, and `workflow_run` deliveries move the work item."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `403` on dispatch or rerun: the App lacks `actions: write`, or the installation has not accepted it.\n- `422` on dispatch: the workflow has no `workflow_dispatch` trigger on that ref, or an input is unknown or\n  missing.\n- \"started no run that could be found\": the dispatch was accepted but no new run of that workflow appeared on\n  that ref in time. Look at the Actions tab.\n- Status stays `unknown`: no workflow ran on that commit."
+      }
+    ],
+    "values": {
+      "webhook_url:github": "https://choregos.example.com/api/v1/webhooks/github"
+    },
+    "egress": [
+      "api.github.com"
+    ],
+    "fields": {
+      "repo": "owner/repo, picked from the repositories the App's installations show",
+      "workflow": "the workflow file to dispatch and read, for example ci.yml; empty reads every workflow",
+      "inputs": "workflow_dispatch inputs sent with every trigger",
+      "api_url": "https://api.github.com, or your GitHub Enterprise Server API"
+    },
+    "vendor_docs": [
+      {
+        "title": "GitHub Actions workflow runs API",
+        "url": "https://docs.github.com/en/rest/actions/workflow-runs"
+      },
+      {
+        "title": "Create a workflow dispatch event",
+        "url": "https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event"
+      },
+      {
+        "title": "The workflow_dispatch event",
+        "url": "https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#workflow_dispatch"
+      },
+      {
+        "title": "The workflow_run webhook event",
+        "url": "https://docs.github.com/en/webhooks/webhook-events-and-payloads#workflow_run"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.ci.gitlab",
     "title": "Read pipeline status from GitLab CI",
     "version": 1,
@@ -888,6 +1043,82 @@
       {
         "title": "GitLab webhooks",
         "url": "https://docs.gitlab.com/user/project/integrations/webhooks/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.ci.jenkins",
+    "title": "Trigger and follow builds on Jenkins",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/jenkins"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Jenkins controller the platform can reach, and a job that builds the project. A plain job should be\n  **parameterised** (a string parameter for the branch); a multibranch job is built on the branch itself.\n- A Jenkins user for the platform, allowed to build and read that job (`Job/Build`, `Job/Read`).\n- For notifications, the platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever\n  operates Tranibor."
+      },
+      {
+        "key": "at",
+        "title": "At Jenkins",
+        "markdown": "1. Create a user for the platform, then **Configure, API Token, Add new Token**. Copy it when it is shown.\n2. Optional, to be told when a build starts and ends instead of polling: install the **Notification plugin** and\n   add the endpoint `https://choregos.example.com/api/v1/webhooks/jenkins?token=<the shared webhook secret>` (format JSON, protocol HTTP,\n   events Job Started and Job Completed). A pipeline can instead post `{\"job\", \"build_number\", \"result\",\n   \"sha\", \"branch\", \"project\", \"work_item\"}` to that URL with the `X-Choregos-Secret` header.\n3. Name the commit in the build so the platform can find a commit's build: a pipeline that checks out a\n   revision records it (the SCM revision is read), or pass the commit as a build parameter."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The user needs `Overall/Read`, `Job/Read` and `Job/Build` on the job, and nothing else.\n- An API token needs no CSRF crumb on a recent Jenkins; the connector still asks for one and goes without\n  when the controller has none (`crumb: false` skips the request)."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **CI**, type **Jenkins**.\n2. `base_url`, `job` (for example `team/app`), `user`. Tick `multibranch` for a multibranch folder: the\n   branch is then the last segment of the job path.\n3. `token`: the API token, in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the job and answers `ok`. Then trigger a build and watch it leave the\nqueue and finish."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or `403`: the user or token is wrong, or the user may not build the job. A `403` mentioning the crumb:\n  the controller wants a crumb and `crumb` is off.\n- `404` on the job: check the path; a folder is `folder/app`, never `/job/folder/job/app`.\n- A trigger answered `400` or `500`: the job is not parameterised and `ref_parameter` is set, or a required\n  parameter is missing from `parameters`.\n- Status stays `unknown`: no recent build recorded the commit. Only the last builds of the job are read.\n- Notifications ignored with `401`: the token in the URL is not the platform's shared webhook secret."
+      }
+    ],
+    "values": {
+      "webhook_url:jenkins": "https://choregos.example.com/api/v1/webhooks/jenkins"
+    },
+    "egress": [],
+    "fields": {
+      "base_url": "your Jenkins controller, for example https://jenkins.example.com",
+      "job": "the job's path (folder/app), or the multibranch folder",
+      "user": "the Jenkins user the API token belongs to",
+      "multibranch": "true when `job` is a multibranch pipeline, built branch by branch",
+      "ref_parameter": "the build parameter that receives the branch or tag (BRANCH by default)",
+      "parameters": "build parameters sent with every trigger",
+      "crumb": "true to ask for a CSRF crumb before a trigger (the default)",
+      "token": "the user's API token, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Jenkins remote access API",
+        "url": "https://www.jenkins.io/doc/book/using/remote-access-api/"
+      },
+      {
+        "title": "Jenkins CSRF protection",
+        "url": "https://www.jenkins.io/doc/book/security/csrf-protection/"
+      },
+      {
+        "title": "Jenkins Notification plugin",
+        "url": "https://plugins.jenkins.io/notification/"
+      },
+      {
+        "title": "Jenkins multibranch pipelines",
+        "url": "https://www.jenkins.io/doc/book/pipeline/multibranch/"
       }
     ],
     "origin": "shipped"
@@ -2725,6 +2956,91 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.scm.azure-repos",
+    "title": "Use Azure DevOps Repos for branches and pull requests",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "scm/azure-repos"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure DevOps organisation (Azure DevOps Services) or an Azure DevOps Server 2022 collection, a Git\n  repository the agents change, and an account **dedicated to Tranibor**.\n- **Two credentials, not one.** The connector's own (`pat`, or a service principal) reads and writes pull\n  requests and stays on the platform. Azure DevOps cannot make a short-lived, repository-scoped credential,\n  so the platform makes none: **a run is given `run_token`, or nothing**. Create a second personal access\n  token, for a second account if you can, scoped to **Code: Read & write** only. Without `run_token`, runs\n  cannot clone or push, and the connector says why.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor, if you want pull request events. A service hook does not sign its deliveries."
+      },
+      {
+        "key": "at",
+        "title": "At Azure DevOps",
+        "markdown": "1. **The credential.** A personal access token of the dedicated account (works on the Services and on\n   Server), scopes **Code: Read & write**, **Code: Status**, **Build: Read** and **Project and Team: Read**.\n   Or, on the Services only, a Microsoft Entra service principal added to the organisation and to the\n   project's Contributors.\n2. **The run token.** A second personal access token, scope **Code: Read & write** only.\n3. **Branch policies on the target branch** (Repos, Branches, the branch's **Branch policies**): add a\n   **Build validation** policy for your pipeline. This is where the pull request's checks come from: the\n   platform reads the Build and Status policies of the pull request, and Azure refuses to complete it while\n   they are not met. Tranibor never bypasses a policy and never sets auto-complete.\n4. **Service hooks** (optional). **Project settings**, **Service hooks**, **Create subscription**, **Web\n   Hooks**: one each for **Pull request created** and **Pull request updated**. URL:\n   `<api_url>/api/v1/webhooks/azure-devops`; basic authentication password: the platform's shared webhook\n   secret. This path has not been exercised against a live organisation from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "On the repository, for the dedicated account: **Read**, **Contribute**, **Create branch**, **Contribute to\npull requests**. **Bypass policies when completing pull requests** must be left denied. A reviewer is\nasked by sign-in name or e-mail, resolved through the organisation's identities.\n\n**What a merge means here.** The platform completes the pull request at the commit its guarantees judged\n(`lastMergeSourceCommit`): if someone pushed meanwhile, nothing is completed and the work item is judged\nagain. Completion is asynchronous on Azure's side; the platform waits a few seconds and, if it is still\nqueued, a replay finds it done."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **SCM**, type **Azure DevOps Repos**.\n2. `base_url`, `project`, `repository`, `default_branch`, and `merge_strategy` if your repository forbids\n   squash. `auth`: `pat` (the default) or `entra`, with `tenant_id` and `client_id`.\n3. `pat` (or `client_secret`) and `run_token`: in the password fields (sealed, shown once).\n4. The pull request's CI is read from its Build policy and from the builds of its branch; add a **CI**\n   connector of type **Azure Pipelines** on the same team project to queue runs and read their logs."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the repository and answers `ok` with its default branch. Then start a\nrun: a branch is pushed with the run token, a pull request opens, and its checks appear once the Build\npolicy has queued the pipeline."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` or a sign-in page (`203`): a wrong, expired or revoked token, or a service principal that is not a\n  member of the organisation.\n- `403` on the pull request: the account lacks **Contribute to pull requests**; on a push, **Contribute**.\n- `404` on the repository: wrong `project` or `repository`, or the account is not in the project.\n- `scm/azure-repos mints no token`: set `run_token` on the connector.\n- Completion refused with a policy message: a branch policy is not met yet (a required build, a minimum\n  number of reviewers). The platform does not bypass it; the gates wait or fail as for any other forge.\n- A build with warnings (`partiallySucceeded`) holds the gates back: that is the default. Set\n  `partially_succeeded: neutral` only if your pipelines use warnings for things that are not failures.\n- A timeout: the egress allowlist must open `dev.azure.com` (or your Server), `vssps.dev.azure.com` and, for\n  a service principal, `login.microsoftonline.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:azure-devops": "https://choregos.example.com/api/v1/webhooks/azure-devops"
+    },
+    "egress": [
+      "dev.azure.com, or your Azure DevOps Server host",
+      "vssps.dev.azure.com (reviewers are looked up there)",
+      "login.microsoftonline.com (service principal)"
+    ],
+    "fields": {
+      "base_url": "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)",
+      "project": "the Azure DevOps team project",
+      "repository": "the Azure Repos Git repository, by name or id",
+      "default_branch": "the branch pull requests target (default `main`)",
+      "merge_strategy": "how a pull request is completed: `squash` (the default), `noFastForward`, `rebase` or `rebaseMerge`",
+      "delete_source_branch": "delete the work branch when the pull request is completed (default off)",
+      "auth": "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only",
+      "tenant_id": "`entra` only: the Entra tenant (directory) id",
+      "client_id": "`entra` only: the service principal's application (client) id",
+      "partially_succeeded": "how a build that partially succeeded counts for the gates: `failure` (the default) or `neutral`",
+      "pat": "the connector's personal access token, typed once (`auth: pat`)",
+      "client_secret": "the service principal's client secret, typed once (`auth: entra`)",
+      "run_token": "a second, narrower personal access token that runs clone and push with, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "Azure Repos Git REST API (pull requests)",
+        "url": "https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests"
+      },
+      {
+        "title": "Branch policies and settings",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/repos/git/branch-policies"
+      },
+      {
+        "title": "Use personal access tokens",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+      },
+      {
+        "title": "Service hooks events (pull request, build)",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.scm.github",
     "title": "Use GitHub for branches, pull requests and checks",
     "version": 2,
@@ -2748,7 +3064,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\nOrganization permissions, only if the same App serves the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents edit `.github/workflows`."
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n- `actions`: write\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\n`actions` lets the platform dispatch, rerun and read GitHub Actions workflows (the `github-actions` CI\nconnector); an App without it keeps working, minus that connector.\n\nOrganization permissions, only if the same App serves the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run`.\n\nAdd `workflows: write` only if agents edit `.github/workflows`."
       },
       {
         "key": "in_choregos",
@@ -2923,6 +3239,89 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.tracker.azure-boards",
+    "title": "Use Azure DevOps Boards as the board",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "tracker/azure-boards"
+    },
+    "link": null,
+    "reviewed": "2026-11-20",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- An Azure DevOps organisation (Azure DevOps Services) or an Azure DevOps Server 2022 collection, and\n  an account **dedicated to Tranibor**: its permissions are what the platform may do in the project,\n  and comments and state changes appear under its name.\n- The team project's name, and the area path if Tranibor should see only one team's work.\n- The platform's shared webhook secret (`TRANIBOR_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Tranibor. A service hook does not sign its deliveries, so the platform accepts one only if it carries\n  this secret: as the **password** of the subscription's basic authentication (any user name), or in an\n  `X-Choregos-Secret` header."
+      },
+      {
+        "key": "at",
+        "title": "At Azure DevOps",
+        "markdown": "1. **The credential.**\n   - A **personal access token** (works on the Services and on Server): the dedicated account, **User\n     settings**, **Personal access tokens**, **New token**. Scopes: **Work Items: Read & write** and\n     **Project and Team: Read**, nothing else. Pick the longest expiry offered and **note the date**.\n   - A **Microsoft Entra service principal** (Services only, no licence-bound user, no token to rotate by\n     hand): register an application in Entra, create a client secret, then add the service principal\n     to the organisation (**Organization settings**, **Users**, **Add users**) with the *Basic* access\n     level, and to the project's **Contributors**. Tranibor asks Entra for a token for the Azure DevOps\n     resource with the client credentials grant.\n2. **The project.** Add the account (or the service principal) to the project with a group that holds the\n   permissions below. **A token's scopes give no right on a project by themselves.**\n3. **Service hook.** **Project settings**, **Service hooks**, **Create subscription**, **Web Hooks**.\n   Create one subscription for each of **Work item created**, **Work item updated** and **Work item\n   commented on**, filtered on the area path if you set one. URL: `<api_url>/api/v1/webhooks/azure-boards`.\n   Basic authentication user name: anything; password: the platform's shared webhook secret. Leave\n   *Resource details to send* on **All**. This path has not been exercised against a live organisation\n   from this repository."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "On the project, for the dedicated account: **View work items in this node**, **Edit work items in this\nnode**, **Create work items** (if Tranibor files items), **View project-level information**.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nthe REST API 7.1, under the dedicated account: the state, the tags, the status comment, the `Cost (€)`,\n`Size`, `Risk` and `Run` fields, the questions to a person, the close-out. The state is written as it is\n(Azure Boards has no transitions to look for): Tranibor first reads the states of the item's type and\nnames the available ones in the error if the workflow's state is not among them. A state can be\ndesignated by its exact name, by its category (`category:Proposed`, `category:InProgress`,\n`category:Resolved`, `category:Completed`) or by the canonical `To Do`, `In Progress`, `Done`.\n\nThe custom fields must exist in your process (an inherited process: **Organization settings**,\n**Process**, add fields `Cost (€)`, `Size`, `Risk`, `Run`). A field the project does not have is skipped,\nnever a failure."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Tranibor",
+        "markdown": "1. Project settings, Connectors, **Tracker**, type **Azure DevOps Boards**.\n2. `base_url`: `https://dev.azure.com/<organisation>`, or the collection URL of a Server. `project`: the\n   team project. `area_path`: optional. `auth`: `pat` (the default) or `entra`; with `entra`, `tenant_id`\n   and `client_id` too.\n3. `pat`, or `client_secret`: the secret, in the password field (sealed, shown once).\n4. `field_names`: only if your process names the custom fields differently. They are `Cost (€)`, `Size`,\n   `Risk` and `Run`.\n5. Tag a work item `agent-ready`: the platform starts one workflow per work item. A delivery reaches\n   the project whose Azure Boards connector holds the item's team project, whatever the project's slug;\n   two projects on one team project are told apart by the organisation, then `area_path`, then `match_labels`.\n6. Or skip the service hook and the tag: set `candidates_wiql`, for example\n   `[System.Parent] = 1234 AND [System.Tags] CONTAINS 'form-a'`. Every minute the platform runs it within\n   the team project, among the items not Completed or Removed, and starts one workflow per new item.\n7. Nothing to set for what the agents learn about an item: when the platform takes one on it keeps, as\n   `fields.tracker`, the creator, the tags and the **answers**: every non-empty custom field (`Custom.*`),\n   keyed by its display name, as text, each cut at 2000 characters. It is the requester's text, never an\n   instruction."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test** on the connector. It reads the project with the credential, which proves the token (or the\nservice principal), its scopes and its place in the project at once. Then tag a work item `agent-ready`\nand watch it appear on the board."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401`: an expired or revoked token, or a service principal that is not a member of the organisation.\n- `403`: the token lacks **Work Items: Read & write** or **Project and Team: Read**, or the account lacks\n  a project permission above.\n- `404` on the project: wrong `project`, or the account is not in the project.\n- `auth: entra` refused on save: Azure DevOps Server has no Entra sign-in for an application, use `pat`.\n- `no state of the type ... is \"X\"`: the workflow names a state your process does not have; the error lists\n  the ones it has. Several states in one category: name the one you want.\n- A service hook answered `401 invalid shared secret`: the subscription's password differs from the\n  platform's shared secret.\n- Nothing starts after tagging: the tag must be exactly `agent-ready`, and the hook must reach this platform.\n- A timeout: the egress allowlist must open `dev.azure.com` (or your Server) and, for a service principal,\n  `login.microsoftonline.com`."
+      }
+    ],
+    "values": {
+      "webhook_url:azure-boards": "https://choregos.example.com/api/v1/webhooks/azure-boards"
+    },
+    "egress": [
+      "dev.azure.com, or your Azure DevOps Server host",
+      "login.microsoftonline.com (service principal)"
+    ],
+    "fields": {
+      "base_url": "https://dev.azure.com/<organisation>, or the collection of an Azure DevOps Server 2022 (https://<server>/<path>/<collection>)",
+      "project": "the Azure DevOps team project",
+      "area_path": "optional: only the work items under this area path (Project\\Team)",
+      "auth": "`pat` (the default) for a personal access token; `entra` for a Microsoft Entra service principal, Azure DevOps Services only",
+      "tenant_id": "`entra` only: the Entra tenant (directory) id",
+      "client_id": "`entra` only: the service principal's application (client) id",
+      "candidates_wiql": "optional: WIQL conditions of the work items the platform takes on by itself, without a service hook",
+      "match_labels": "optional: when several projects share this team project, the tags that send a work item here; the project without them takes the rest",
+      "field_names": "a map of the custom fields Tranibor writes (Cost, Size, Risk, Run) to their names in your process",
+      "pat": "the personal access token, typed once (`auth: pat`)",
+      "client_secret": "the service principal's client secret, typed once (`auth: entra`)",
+      "webhook_secret": "not used by the service-hook endpoint: the platform's shared webhook secret is"
+    },
+    "vendor_docs": [
+      {
+        "title": "Use personal access tokens",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate"
+      },
+      {
+        "title": "Use service principals and managed identities in Azure DevOps",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity"
+      },
+      {
+        "title": "Service hooks events (work item created, updated, commented)",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/events"
+      },
+      {
+        "title": "Create a web hooks subscription",
+        "url": "https://learn.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.tracker.github-issues",
     "title": "Use GitHub Issues and Projects v2 as the board",
     "version": 3,
@@ -2946,7 +3345,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Tranibor GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
+        "markdown": "Repository permissions:\n\n- `contents`: write\n- `issues`: write\n- `pull_requests`: write\n- `checks`: write\n- `metadata`: read\n- `statuses`: read\n- `actions`: write\n\n`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it\nkeeps working, and those statuses are not read.\n\n`actions` lets the platform dispatch, rerun and read GitHub Actions workflows (the `github-actions` CI\nconnector); an App without it keeps working, minus that connector.\n\nOrganization permissions, for the Projects v2 board:\n\n- `organization_projects`: write\n\nSubscribe to these events: `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run`.\n\nAdd `workflows: write` only if agents must edit files under `.github/workflows`; without it GitHub\nrefuses such a push.\n\n**What Tranibor writes, and as whom.** The workflow's bookkeeping goes through this connector, through\nGitHub's REST API, as the Tranibor GitHub App (`<app>[bot]` on GitHub): the board column and labels,\nthe status comment, the questions to a person, the close-out. The connector card names the account\nwhose installation it goes through, and each line of a work item's timeline that wrote to GitHub says\n\"via GitHub Issues\". An agent's own actions do not go through this connector: they go through the MCP\ntools its version names, under each tool connector's account, listed on its run."
       },
       {
         "key": "in_choregos",

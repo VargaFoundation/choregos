@@ -17,6 +17,7 @@ and an optional MCP tools sidecar — plus four dependencies it can either **emb
 | The agent-sandbox operator | v1.0.6 | **Required by default.** `global.runner.executor` defaults to `agent_sandbox`, and the chart refuses to render when the cluster lacks the `extensions.agents.x-k8s.io/v1beta1/SandboxTemplate` API; its CRDs are cluster-scoped, so a platform team installs it ([the `agent_sandbox` executor](#the-agent_sandbox-executor-the-default)). Not needed with `global.runner.executor: k8s_job` |
 | External Secrets Operator | — | **Required by default.** `global.externalSecrets.enabled` is `true`: the chart renders an `ExternalSecret` (`external-secrets.io/v1beta1`) against the `ClusterSecretStore` named by `global.externalSecrets.storeRef`. Optional with `global.externalSecrets.enabled: false`, when the tenant provides the Secrets itself ([Secrets](#secrets)) |
 | An S3-compatible object store | — | Needed for **file artifacts** (decks, spreadsheets, images; `global.objectStore`; AWS S3, RustFS, MinIO, Ceph). Only the API talks to it. The chart renders without one; an in-memory store (`memory://` URL, or `TRANIBOR_FAKES=1`) is for a bench and is lost on restart |
+| All of the above in one install | — | `values/all-in-one.yaml` embeds the OIDC provider and the object store, draws the Secrets and uses `k8s_job` ([All in one](#all-in-one)); a cluster then needs only a default StorageClass |
 | Kyverno | 1.12 | **Optional for the chart**: nothing in the chart's default render needs it (`hostedCosignPolicy` renders a Kyverno `ClusterPolicy` only when switched on). Needed only to install the admission policies of `infra/policies` ("Installing the admission policies", under *Running agent stages*) |
 
 Optional but recommended in production: a model gateway (LiteLLM), a memory service
@@ -266,6 +267,99 @@ by default `^CONNECTOR_[A-Z0-9_]+$`, set as `TRANIBOR_SECRET_ENV_PATTERN`. Widen
 an upgrade, a stored reference outside the pattern stops resolving (the connector shows in error):
 rename its variable or widen the pattern.
 
+### Platform secrets from Vault (External Secrets Operator)
+
+The chart's `ExternalSecret` (`global.externalSecrets.enabled`, on by default) builds `global.apiSecretRef`
+from a `ClusterSecretStore` named `global.externalSecrets.storeRef` (default `choregos-cluster-store`),
+reading the properties of the Vault KV v2 secret `choregos/api` (`session-secret`,
+`run-token-private-key`, `github-app-private-key`, and `secrets-keks` when
+`global.secrets.keksInExternalSecret` is on). The store is the operator's, installed with the External
+Secrets Operator; this one reads Vault's KV v2 with the Kubernetes auth method:
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: choregos-cluster-store
+spec:
+  provider:
+    vault:
+      server: https://vault.example.com:8200
+      path: secret            # the KV v2 mount; the chart reads `secret/data/choregos/api`
+      version: v2
+      # namespace: team-a     # Vault Enterprise
+      caProvider: { type: ConfigMap, name: vault-ca, key: ca.crt, namespace: external-secrets }
+      auth:
+        kubernetes:
+          mountPath: kubernetes
+          role: external-secrets
+          serviceAccountRef: { name: external-secrets, namespace: external-secrets }
+```
+
+The Vault side: a policy that reads only the platform's path, bound to the operator's service account.
+
+```bash
+vault policy write choregos-platform - <<'HCL'
+path "secret/data/choregos/*" { capabilities = ["read"] }
+HCL
+vault write auth/kubernetes/role/external-secrets \
+  bound_service_account_names=external-secrets bound_service_account_namespaces=external-secrets \
+  policies=choregos-platform ttl=1h
+vault kv put secret/choregos/api session-secret="$(openssl rand -base64 48)" run-token-private-key=@run-token.pem
+```
+
+The chart renders its `ExternalSecret` with `external-secrets.io/v1beta1`; the store above may be
+`v1` on a recent operator, the two are served together. A missing property fails the whole
+`ExternalSecret` sync, so turn on the optional entries (`keksInExternalSecret`, `sessionSecretPrevious`) only
+once Vault holds them. This path is checked by the chart's rendering tests; no External Secrets Operator
+or Vault ran against it for this page.
+
+### Connector secrets sealed under Vault Transit
+
+Connector secrets typed in the console are sealed with an envelope whose data key is wrapped by a key
+wrapper ([ADR 0103](adr/0103-secret-keks-sit-behind-a-key-wrapper.md)). With `TRANIBOR_SECRETS_KEKS` the
+key-encryption key is in the deployment's environment; to keep it in Vault instead, install the extension
+`plugins/vault-transit` (the distribution `tranibor-vault-transit`) in the API and worker images. The
+core ships no Vault client, and without the extension nothing changes. The wheel is built from this
+repository (`uv build --package tranibor-vault-transit`) and installed in an image derived FROM the
+published API and worker images; the release workflow does not publish it.
+
+```bash
+vault secrets enable transit
+vault write -f transit/keys/choregos type=aes256-gcm96      # name: at most 24 characters
+vault policy write choregos-transit - <<'HCL'
+path "transit/encrypt/choregos" { capabilities = ["update"] }
+path "transit/decrypt/choregos" { capabilities = ["update"] }
+path "transit/rewrap/choregos"  { capabilities = ["update"] }
+path "transit/keys/choregos"    { capabilities = ["read"] }
+HCL
+vault write auth/kubernetes/role/choregos bound_service_account_names=choregos-api,choregos-orchestrator \
+  bound_service_account_namespaces=choregos policies=choregos-transit ttl=1h
+```
+
+Then the API and the workers get the settings (`global.extraEnv`; the same list reaches both):
+
+| Variable | Meaning |
+| :-- | :-- |
+| `TRANIBOR_VAULT_ADDR` | Vault's address; setting it enables the extension, an invalid setting stops the start |
+| `TRANIBOR_VAULT_TRANSIT_KEY` | the transit key, `choregos` above |
+| `TRANIBOR_VAULT_AUTH` | `kubernetes` (default), with `TRANIBOR_VAULT_K8S_ROLE` (and `_K8S_MOUNT`, `_K8S_JWT_PATH`), or `token` with `TRANIBOR_VAULT_TOKEN` or `TRANIBOR_VAULT_TOKEN_FILE` |
+| `TRANIBOR_VAULT_TRANSIT_MOUNT`, `TRANIBOR_VAULT_NAMESPACE`, `TRANIBOR_VAULT_CACERT` | the engine's mount (`transit`), a Vault Enterprise namespace, a CA bundle |
+| `TRANIBOR_VAULT_BIND_CONTEXT` | `true` when the key was created with `derived=true`: Vault itself then refuses a wrapped key moved to another row |
+
+To move an installation that already has sealed secrets, keep `TRANIBOR_SECRETS_KEKS` set while you
+roll out: it becomes the extension's legacy wrapper, so existing rows still open, then run
+`choregos admin secrets rewrap`. It answers the rows moved; run it again for `0`, and only then remove the
+old keyring (the same backup rule as [the rotation runbook](runbooks/secret-rotation.md#connector-secrets-key-secrets-keks)).
+To rotate the Vault key: `vault write -f transit/keys/choregos/rotate`, wait for the API's cache (30 s), run
+`choregos admin secrets rewrap` (it uses transit `rewrap`: the data keys never reach the platform), and raise
+`min_decryption_version` only when it answers `0` and no backup older than the rewrap can be restored.
+
+Know the limits: the key wrapper seam is synchronous, so each `put` and `get_many` holds the API's event
+loop for one Vault round trip per secret (the HTTP client is async, on a private loop); Vault being down makes
+typing and resolving connector secrets fail with `409`, not the rest of the API. Proved against a simulated Vault,
+not a real one.
+
 ## The GitHub App
 
 One App serves the deployment: the tracker, the pull requests, the checks and the run's git token go
@@ -305,8 +399,8 @@ What the platform puts in the manifest, derived from the instance and the adapte
 
 | Manifest key | Value |
 | :-- | :-- |
-| `default_permissions` | Repository: `contents` write, `issues` write, `pull_requests` write, `checks` write, `metadata` read, `statuses` read; organisation: `organization_projects` write |
-| `default_events` | `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run` (`installation` and `installation_repositories` are delivered to every App; nobody subscribes to them) |
+| `default_permissions` | Repository: `contents` write, `issues` write, `pull_requests` write, `checks` write, `metadata` read, `statuses` read, `actions` write; organisation: `organization_projects` write |
+| `default_events` | `issues`, `issue_comment`, `projects_v2_item`, `pull_request`, `pull_request_review`, `check_suite`, `check_run`, `workflow_run` (`installation` and `installation_repositories` are delivered to every App; nobody subscribes to them) |
 | `hook_attributes.url` | `<api_url>/api/v1/webhooks/github` |
 | `callback_urls` | `<api_url>/api/v1/github/setup`: where GitHub sends a person after an installation |
 | `request_oauth_on_install` | `true`: the person who installs authorises the App, the proof a claim needs on an instance with several organisations (no Setup URL then: GitHub uses the callback URL) |
@@ -626,7 +720,9 @@ enterprise feature: an extension calls `tranibor_api.extensions.declare_theme_pr
 `fn(session, org) -> dict | None` and the core validates what it returns (schema, then the
 console's contrast budget on the effective colours). An invalid theme is replaced by the default
 (`X-Choregos-Theme: fallback`, with the violations in the API log); an extension can check a theme
-itself with `tranibor_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
+itself with `tranibor_api.theme.validate_theme`. The radii a theme may set are `radius.control` (0 to 8 px),
+`radius.surface` (0 to 12 px) and `radius.pill` (0 to 999 px, on badges, chips, counters and bars; absent
+keeps them round, 0 makes them square; dots and avatars always stay round, S39-03d, ADR 0210). A theme cannot change the mono font, the layout or
 the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
 CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes` (S39-03c).
 The console reads the instance theme on the server before drawing anything (`TRANIBOR_API_URL`,
@@ -1225,6 +1321,57 @@ read-only root filesystem, no capability), and only its state and its audit log 
 (`tests/charts/test_outpost_chart.py`). An instance that exits with code 3 (the door no longer
 serves its protocol) or 4 (revoked) restarts in a loop on purpose: the chart's notes say so.
 
+## SIEM export of the audit log
+
+([ADR 0207](adr/0207-the-audit-chains-are-shipped-to-a-siem-from-a-durable-cursor.md), S80-05b.) The audit
+log's hash chains ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md)) can be shipped
+to a SIEM. It is off, and PostgreSQL only (SQLite keeps no chain). One sink per deployment; each API replica
+runs the loop, a lock on the chain's cursor lets one of them ship a chain at a time.
+
+```yaml
+global:
+  auditExport:
+    enabled: true
+    sink: https                  # https | syslog
+    format: splunk-hec           # https: webhook | splunk-hec | elastic-bulk; syslog: rfc5424 | cef
+    url: https://splunk.example:8088/services/collector/event
+    index: audit                 # Splunk's index, or the Elastic index (default choregos-audit)
+    token:
+      secretRef: siem-token      # a Secret you create; the token is read by reference, never written here
+      key: audit-export-token
+      scheme: Splunk             # Authorization: Splunk <token>; Elastic wants ApiKey, a webhook Bearer
+    egress:
+      cidrs: [10.20.0.0/24]      # with networkPolicies.enabled: the API may reach the sink, and only it
+```
+
+A syslog sink: `sink: syslog`, `syslog: {host: siem.example, port: 6514}`, `format: cef` for CEF. A CA that
+is not in the system's roots is a path in the API pod (`caFile`, mounted with
+[`choregos-api.extraVolumes`](#extra-volumes-for-the-api)). `organisations: [a, b]` limits the export to
+those slugs (default: every organisation) and `platform: false` leaves the platform's chain out (sign-ins,
+tokens).
+
+What a receiver gets: one event per entry, in the order of `seq` within its chain, **at least once**.
+Every event carries `org`, `org_id`, `seq`, `prev_hash`, `hash`, the entry's fields and `canonical`; keep the
+last `hash` of each chain and check `sha256(prev_hash + canonical) == hash` and `prev_hash == the last hash`.
+A repeat has the same `seq` and `hash`. Elastic and OpenSearch documents are named `<org id>:<seq>`, so a
+repeat overwrites its first copy. Splunk HEC and a webhook can show a repeat: deduplicate on `(org_id, seq)`.
+
+Operating it. The cursors are the rows of `audit_export_cursors`, one per sink name and chain. Changing
+`name` ships everything again from entry 1; deleting a cursor does the same for its chain. A receiver that is
+down stretches the wait between passes (doubling, to five minutes) and nothing is lost: the cursor stays.
+`/metrics` carries `choregos_audit_export_lag_entries{sink}` (entries written and not yet accepted, the same
+on every replica), `choregos_audit_export_progress_timestamp_seconds{sink}` (when a cursor last moved),
+`choregos_audit_export_events_total` and `choregos_audit_export_failures_total` (per process). Logs:
+`audit.export.shipped`, `audit.export.failed`, `audit.export.pass_failed` and
+`audit.export.chain_discontinuity` (the entry after a cursor does not follow the one the cursor stands on).
+With `monitoring.alerts` on, the alert `ChoregosAuditExportStalled` fires when entries wait and no cursor has
+moved for half an hour.
+A setting the API cannot build a sink from (a plain `http://` URL, an unknown format) stops it at start.
+
+Not part of this: a retention rule for the log, checkpoints signed on a schedule, a migration role distinct
+from the API's own, and the chain in `GET /audit`. Against a real Splunk, Elastic or syslog server nothing
+here has been run yet: the sinks are tested against simulated receivers.
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
@@ -1628,6 +1775,66 @@ this bench does **not** prove.
 | `choregos-orchestrator.runner.toolScripts.allowed` | `TRANIBOR_TOOL_SCRIPTS_ALLOWED` | `true` | The **hard brake**. `false`: no run of any organisation is offered tool scripts, whatever its setting says. |
 
 Before S57-05b, `enabled: false` refused tool scripts to every run; it now only sets the default, and an organisation administrator can enable them for their organisation. To keep them refused everywhere — while the runner image predates the bridge (S57-07: an older runner refuses a stage input that carries `tools.scripts`), or in an emergency — set `allowed: false`. The API does not know these values: the console says "the deployment's default" without saying which.
+
+## All in one
+
+A cluster with nothing but Kubernetes (1.29 or later is advised) and a **default StorageClass** gets a working
+platform from one `helm install` ([ADR 0208](adr/0208-the-chart-deploys-every-solution-the-platform-requires-in-one-install.md)).
+The profile `charts/choregos/values/all-in-one.yaml` embeds, beside the PostgreSQL (pgvector), Temporal, LiteLLM
+and Ecphoria the chart already carried, the two pieces a bare cluster lacked:
+
+| Prerequisite (table above) | In all-in-one mode |
+|:--|:--|
+| An OIDC provider | **Keycloak** (`choregos-keycloak`): one replica, its database `keycloak` in the embedded PostgreSQL, a realm `choregos` with a confidential client for the console (`choregos`), a public client for the CLI (the console's client id followed by `-cli`, device grant), the `groups` claim in the form `choregos:<org>:<role>`, the five role groups of the bootstrap organisation, and one administrator (the first of `global.bootstrap.admins`, in `choregos:<org>:org-admins`). Served at `https://auth.<global.domain>` by its own Ingress |
+| An S3-compatible object store | **RustFS** (`choregos-objectstore`): one replica, one volume, an S3 API on 9000 (no Service for its console), and a hook Job that makes the bucket of `global.objectStore.url` |
+| The agent-sandbox operator | **Not installed**: its CRDs are cluster-scoped, which a chart installed into a namespace cannot lay down. The profile falls back to the `k8s_job` executor (each agent stage is a Job of the release namespace) and `NOTES.txt` says so. Install `infra/operators/agent-sandbox` and set `global.runner.executor: agent_sandbox` to use the operator |
+| External Secrets Operator | **Off** (`global.externalSecrets.enabled: false`, and the render refuses it on). The chart draws every Secret itself: `choregos-api-secrets` (session secret, run-token signing key, connector-secret key, egress report key), `choregos-oidc` (the client secret, shared by the realm and the API), `choregos-object-store` (access and secret keys), the PostgreSQL, gateway and memory Secrets, and `<release>-keycloak` (the master realm's `admin-password` and the platform administrator's `realm-admin-password`). Each is drawn once and **re-read** on upgrades |
+| Kyverno | Optional, unchanged: not needed |
+| The egress proxy and NetworkPolicies | **On**, with the egress gate; the object store and Keycloak are walled like the PostgreSQL (the store admits only the API, the backup and its bucket Job; a runner reaches neither) |
+
+```bash
+helm install choregos oci://ghcr.io/graalsystems/charts/choregos --version 0.28.0 \
+  -n choregos --create-namespace \
+  -f values/all-in-one.yaml -f my-site.yaml     # all-in-one.yaml is in charts/choregos/values/ of the chart
+```
+
+`my-site.yaml` sets what only you know: `global.domain`, `global.publicUrl`, `global.apiUrl`, the two ingresses'
+`hostnames` (and `className` when the cluster has no default IngressClass), `global.bootstrap.org` and
+`global.bootstrap.admins` (the render is refused without them: nobody could otherwise sign in and create the first
+organisation), and the model provider's key (`choregos-litellm.upstream`). The DNS name `auth.<domain>` must resolve
+**from inside the cluster too**: the API reads the issuer's discovery document there (`choregos-keycloak.ingress.hostname`
+changes the host; `choregos-api.hostAliases` is the escape where DNS cannot).
+
+After the install: `kubectl -n choregos get secret choregos-keycloak -o jsonpath='{.data.realm-admin-password}' | base64 -d`
+gives the administrator's password; sign in at `global.publicUrl` as the first bootstrap admin.
+
+**Each piece is overridable**, so a customer brings their own:
+
+| Bring your own | Set |
+|:--|:--|
+| Keycloak or another OIDC provider | `global.oidc.embedded: false`, `global.oidc.generateSecret: false`, `global.oidc.issuer`, `clientId`, `secretRef` (your Secret) |
+| An S3 | `global.objectStore.embedded: false`, `generateSecret: false`, `url`, `endpoint`, `secretRef` |
+| A PostgreSQL | `global.database.embedded: false`, `secretRef`; the embedded Keycloak then needs `choregos-keycloak.database.host` and `secretRef` (the database `keycloak` made by you) |
+| Temporal, the gateway, the memory | their `embedded` switches, as in [Dependencies](#dependencies-embedded-or-external) |
+
+**Sizing.** One node of 8 vCPU, 32 GiB and 250 GB is the same as the single-node profile, plus Keycloak
+(requests 250m and 768 MiB, limit 2 GiB) and RustFS (requests 100m and 256 MiB, 20 GiB volume); the PostgreSQL volume
+is 50 GiB, the backup volume 50 GiB. The volumes use the default StorageClass.
+
+**What is not production-grade.** Single replicas everywhere, no high availability, no rolling upgrade of the
+volumes' owners (`Recreate`). The recovery point is the backup interval (24 h), and the backup lands on a volume
+of the same cluster until `backup.target` points off it (`kind: s3`). The backup pod mounts the embedded volumes
+beside their owners, which a one-node cluster allows and a multi-node one may not. The realm is imported **once**,
+at Keycloak's first start: later changes to `choregos-keycloak.realm` do not alter a realm that exists. The
+NetworkPolicies need a CNI that enforces them (the egress gate holds every agent pod until a direct connection out
+is refused, and holds forever where nothing refuses it). `RustFS` and `Keycloak`'s images are pinned by tag and digest
+(`choregos-objectstore.image`, `choregos-keycloak.image`); RustFS names its user instead of numbering it, so an
+admission policy that demands a numeric `runAsUser` needs `choregos-objectstore.podSecurityContext`.
+
+**What was verified.** The render, by `tests/charts/test_all_in_one.py`: the objects, the wiring between them, the
+guards, the pins, and that an install without the mode renders what it did. Nothing has been installed on a real
+cluster: that Keycloak imports the realm and the API signs in through it, that RustFS starts with the generated
+keys and serves the bucket, and that the profile runs end to end are **not proven**.
 
 ## The first organisation, and the first token
 
@@ -2165,7 +2372,9 @@ the chart already assumes.
 ### Webhook secrets
 
 `TRANIBOR_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `TRANIBOR_GENERIC_WEBHOOK_SECRET` is
-the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
+the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, Azure DevOps Boards, Repos
+and Pipelines (the password of the service hook's basic authentication, or an `X-Choregos-Secret` header),
+Jenkins (`…/api/v1/webhooks/jenkins`, the secret in `X-Choregos-Secret` or `?token=`) and **Tekton since
 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
 the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (the former spelling was removed in 0.24.0,
 see "Upgrading to 0.24"). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its
@@ -2741,7 +2950,7 @@ FQDN rule. The deploy repository sets `global.egress.enabled` and `runner.egress
 ### Rate limits on sign-in and webhooks
 
 The routes without a principal are rate-limited: sign-in (`/api/v1/auth/*`) and every webhook under
-`/api/v1/webhooks/` (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab, and the plugin tracker route
+`/api/v1/webhooks/` (GitHub, Tekton, Argo CD, Alertmanager, Jira, GitLab, Azure DevOps, and the plugin tracker route
 `POST /api/v1/webhooks/plugins/{org}/{plugin}/{server}`, whose deliveries come from outside providers
 through the ingress). Past `TRANIBOR_RATE_LIMIT_PER_MINUTE` requests (600 by default; 0 switches it
 off) in a sliding minute from one client, the API answers `429` with `Retry-After`. Authenticated routes

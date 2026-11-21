@@ -848,7 +848,7 @@ function StepButton({
             <span
               data-testid={`tour-${step.id}`}
               className={cn(
-                "whitespace-nowrap rounded-full border px-1.5 text-[11px] font-medium",
+                "whitespace-nowrap rounded-pill border px-1.5 text-[11px] font-medium",
                 state.status === "done"
                   ? "border-succeeded-line bg-succeeded-soft text-succeeded-ink"
                   : "border-retrying-line bg-retrying-soft text-retrying-ink",
@@ -892,7 +892,7 @@ function Exceptions({ model, instant }: { model: JourneyModel; instant: Instant 
             key={exception.id}
             data-status={here ? "active" : gone ? "past" : "upcoming"}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5",
+              "inline-flex items-center gap-1.5 rounded-pill border px-2 py-0.5",
               here
                 ? "border-running-line bg-running-soft font-medium text-running-ink"
                 : gone
@@ -941,7 +941,7 @@ function Phases({
                 onClick={() => onGoTo(index)}
                 data-testid={`phase-${i}`}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                  "inline-flex items-center gap-2 rounded-pill border px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                   current ? "border-running-line text-ink" : "border-line text-ink-muted hover:text-ink",
                 )}
               >

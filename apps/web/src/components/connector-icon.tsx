@@ -44,6 +44,7 @@ export type ConnectorIconChoice =
 const BRAND_OF_TYPE: Record<string, Brand> = {
   "github-issues": "github",
   github: "github",
+  "github-actions": "github",
   "gitlab-issues": "gitlab",
   gitlab: "gitlab",
   // A forge's sign-in, through which a member links their account (ADR 0161).

@@ -227,7 +227,7 @@ function WorkflowSwitcher({
   workflows: { name: string; is_default: boolean }[];
 }) {
   const several = workflows.length > 1;
-  const pill = "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm no-underline whitespace-nowrap";
+  const pill = "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-sm no-underline whitespace-nowrap";
   return (
     <nav aria-label="Board workflow" className="flex flex-wrap items-center gap-1.5">
       {several && (

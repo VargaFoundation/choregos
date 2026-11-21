@@ -38,7 +38,7 @@ organisations must assume **a member of one will try to read another**.
 | lying about evidence | the runner **runs** the tests and overwrites declared evidence; gates read the diff, not the prose | `dod.py`, `result.py`, `gates/` |
 | reading another organisation | PostgreSQL row-level security, **fail-closed**: every session declares the organisations it may see, an undeclared session sees nothing | `db/session.py`, `deps.py`, migrations `b2d4f6a8c0e1` and `c3e5a7f9b1d4` |
 | reading another organisation's audit trail | `audit_log` carries an organisation and is under the same policy; `GET /audit` additionally restricts to the organisations where the caller really holds `audit:read` — being a member is not enough. Platform-level rows (`org_id IS NULL`: logins, API tokens) are returned only when that right covers every organisation of the instance | `routers/admin.py`, `audit.py`, migration `c3e5a7f9b1d4` |
-| changing or erasing the audit trail after the fact | on PostgreSQL the log is a hash chain per organisation (and one for the platform's entries) that the database links at every insert, whoever writes; `UPDATE` and `TRUNCATE` are revoked from the API's role and refused by a trigger, and an entry is deleted only by its organisation's own deletion; `choregos-admin audit verify` reports the first altered, missing, forked or unlinked entry, and checkpoints signed with a key kept outside the database see a rewrite of the whole chain ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md); [below](#the-audit-log-as-evidence)) | migration `e2a4c6b8d0f3`, `audit_chain.py`, `admin_cli.py`, `apps/api/tests/test_audit_chain_postgres.py`, `apps/api/tests/test_audit_chain.py` |
+| changing or erasing the audit trail after the fact | on PostgreSQL the log is a hash chain per organisation (and one for the platform's entries) that the database links at every insert, whoever writes; `UPDATE` and `TRUNCATE` are revoked from the API's role and refused by a trigger, and an entry is deleted only by its organisation's own deletion; `choregos-admin audit verify` reports the first altered, missing, forked or unlinked entry, and checkpoints signed with a key kept outside the database see a rewrite of the whole chain; an opt-in export ships every chain to a SIEM with the hashes the receiver verifies ([ADR 0182](adr/0182-the-audit-log-is-a-hash-chain-the-database-keeps.md), [ADR 0207](adr/0207-the-audit-chains-are-shipped-to-a-siem-from-a-durable-cursor.md); [below](#the-audit-log-as-evidence)) | migration `e2a4c6b8d0f3`, `audit_chain.py`, `admin_cli.py`, `apps/api/tests/test_audit_chain_postgres.py`, `apps/api/tests/test_audit_chain.py`, `audit_export/`, `apps/api/tests/test_audit_export.py` |
 | a governed action running without a kept approval, or an approval never run | its workflow starts only after the approval commits, a relay in every API replica starts an action left `approved` (every `TRANIBOR_ACTION_RELAY_INTERVAL_S`, 30 s by default; two API processes relaying it still run it once, S40-23j), and the workflow's first activity runs nothing for an action that is not `approved` (a failed commit, a hand-made start, a finished action); an audit row and an event commit with the change they record, or not at all ([ADR 0085](adr/0085-the-approved-row-is-the-outbox-of-a-governed-action.md)) | `db/session.py`, `services/action_relay.py`, `activities/actions.py` |
 | an extension running code in the console | an extension's screens are **data** — forms, tables, actions, secrets shown once — rendered by the console's own blocks; the CSP stays `script-src 'self'`; a section naming a path no route serves stops start-up | `extensions.py`, `routers/ui.py`, `main.py`, ADR 0032 |
 | an organisation left without an administrator | the last `org_admin` of an organisation cannot be removed (409) | `routers/admin.py` |
@@ -51,7 +51,7 @@ organisations must assume **a member of one will try to read another**.
 | a process that outlives its run (a cancel that failed, a pod slow to die, a queued pod that starts late) writing as that run | when the orchestrator stops waiting it closes the run's row first — a terminal status, the end date and the result the workflow is told, committed before the executor is asked to cancel, whatever the cancel then does; a closed run's API answers 409 `run_closed` on every route but its two append-only journals (`events`, `network/decisions`) and `POST …/result`, whose idempotent answer changes neither the run nor its work item; a closed run has no network, and the runner refused at its first call exits with 0 ([ADR 0143](adr/0143-a-run-that-ended-stays-ended.md)) | `tranibor_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/api/tests/test_run_closed_postgres.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
 | a project reaching objects of the cluster that are not its own | which cluster the platform talks to (`kubernetes`) and what a run's pod is given from it (`env_from_secrets`, `image_pull_secrets`, `service_account`) are the deployment's to set ([ADR 0172](adr/0172-a-connector-never-sets-what-the-deployment-sets.md)): a `runtime` connector's configuration that sets one is refused when it is declared (422) and again when a stored one is built, the factories take the pod's Secrets, pull secrets and account from the deployment alone, and the pod's service-account token is sent to its own cluster's API server only | `registry.refuse_deployment_fields`, `builtins._register_runtimes`, `executor/tekton.is_own_cluster` |
 | an agent passing off the pod's files as its deliverables | nothing in `.choregos/outputs` is followed, and neither is the folder: `.choregos` and `outputs` are opened one component at a time with `O_NOFOLLOW`, each file is read the same way, and a symbolic link in place of the folder or of a file is refused, when it is listed and again when it is read (S65-04b's `safe_files`, held to this case by S65-06) | `runner/outputs.py`, `runner/safe_files.py`, `packages/runner/tests/test_outputs_follow_no_link.py` |
-| merging a commit the gates did not judge | a gate evaluation reads the head of the work item's branch once and judges that commit: the diff and the run's scope are compared at its SHA, a pull request's checks count only when its head is that commit, and each verdict and check-run is recorded on it; the merge then names it (`sha` on GitHub's and GitLab's merge, `expectedHeadOid` on GitHub's auto-merge), so a pull request whose head has moved is refused — a typed `HeadMoved`, not retried, nothing merged — and its gates judge the new head when the work item is started again; a connector that cannot name a commit is never asked to merge ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)) | `activities/gates.py`, `activities/scm.py`, `activities/judged.py`, `scm/github.py`, `scm/gitlab.py`, `apps/orchestrator/tests/test_merged_is_what_was_judged.py` |
+| merging a commit the gates did not judge | a gate evaluation reads the head of the work item's branch once and judges that commit: the diff and the run's scope are compared at its SHA, a pull request's checks count only when its head is that commit, and each verdict and check-run is recorded on it; the merge then names it (`sha` on GitHub's and GitLab's merge, `expectedHeadOid` on GitHub's auto-merge, `lastMergeSourceCommit` on an Azure Repos completion), so a pull request whose head has moved is refused — a typed `HeadMoved`, not retried, nothing merged — and its gates judge the new head when the work item is started again; a connector that cannot name a commit is never asked to merge ([ADR 0171](adr/0171-what-is-merged-is-what-was-judged.md)) | `activities/gates.py`, `activities/scm.py`, `activities/judged.py`, `scm/github.py`, `scm/gitlab.py`, `scm/azure_repos.py`, `apps/orchestrator/tests/test_merged_is_what_was_judged.py` |
 | a run writing its own verdicts in the journal a person reads | a run's journal has two authors, told apart by the type of a line ([ADR 0173](adr/0173-a-run-does-not-write-the-platform-s-lines-of-its-journal.md)): what the platform writes there — the verdict of each guarantee (`gate.outcome`), the memories it left out (`memory.skipped`) — lives in namespaces reserved whole (`gate.`, `memory.`), and the run's own door (`POST /internal/runs/{id}/events`) refuses a batch that carries one, entirely, for a closed run too. The console's guarantees panel therefore shows the platform's verdicts and no one else's. The gateway's count of an ACP CLI's context (`context.breakdown`, a type both write) is told apart by its source: the door refuses a breakdown that says `source: gateway` (S65-08b), so the console's context panel shows as the gateway's what the gateway counted | `tranibor_core/run_journal.py`, `routers/internal.py`, `services/context_breakdown.py`, `activities/gates.py`, `activities/stage.py`, `apps/api/tests/test_run_journal_authors.py`, `apps/api/tests/test_gateway_lines_of_a_run_journal.py`, `tests/architecture/test_run_journal_authors.py` |
 
 ## What a coding agent can run
@@ -444,6 +444,21 @@ Two kinds of writes reach a tracker, under two different accounts ([ADR
 username, a plugin's server; `null` when the configuration names none. Not yet: acting as the person
 who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
 connector's account.
+
+## CI connectors: Jenkins and GitHub Actions (S13-10)
+
+- **Jenkins** is reached with a user's API token (HTTP basic, sealed like any connector secret) and asks for
+  a CSRF crumb before a trigger. Give the user `Job/Read` and `Job/Build` on one job and nothing else: the
+  token can build that job with the connector's parameters, no more. Notifications arrive at
+  `/api/v1/webhooks/jenkins`, authenticated by the shared webhook secret (`X-Choregos-Secret`, or `?token=`
+  for the Notification plugin, whose URL then holds the secret: keep that URL out of logs and screenshots),
+  and refused with 401 on any deployed instance that has no secret.
+- **GitHub Actions** needs no credential of its own: it uses the GitHub App, which now asks for `actions:
+  write` (dispatch and rerun) and the `workflow_run` event. The permission is optional like `statuses`: an
+  installation that did not accept it keeps working and GitHub answers 403 to this connector alone. The
+  `workflow_run` deliveries go through the App's HMAC-signed webhook.
+- A notification, from either, names a commit and a branch; the platform reads it as a hint to signal the
+  work item and never as proof a gate passed: `ci_green` still reads the pull request's checks.
 
 ## A tool call under the person's identity (ADR 0135)
 
@@ -991,8 +1006,23 @@ not linking to the one before, outside the chain (inserted with the trigger off)
 vouched for, or entries deleted from the end. A checkpoint whose signature does not verify, or whose key is
 not among the `--trust` keys, fails the verdict too.
 
-Not yet: an export to a SIEM, a retention rule for the log, checkpoints signed on a schedule, the chain
-in `GET /audit`, and a migration role distinct from the API's own (each its own story).
+### Shipping the log to a SIEM
+
+([ADR 0207](adr/0207-the-audit-chains-are-shipped-to-a-siem-from-a-durable-cursor.md), S80-05b.) Off by
+default. Switched on (`global.auditExport`, [deployment](deployment.md#siem-export-of-the-audit-log)), every
+API replica runs a loop that ships each chain, the platform's too, to one sink: an HTTPS JSON endpoint
+(Splunk HEC, Elasticsearch or OpenSearch `_bulk`, a generic webhook) or syslog over TLS (RFC 5424, optionally
+CEF). Each event carries its `seq`, its `prev_hash` and its `hash`, and `canonical`, the text the hash
+covers, so the receiver checks the chain with SHA-256 alone and sees a missing, reordered or altered entry
+without calling the platform. The guarantee is **in order per chain and at least once** from a cursor kept in
+the database; a receiver tells a repeat by its `seq`. A copy outside the database is what a rewrite by
+whoever holds the database cannot reach, as a signed checkpoint is, but only for entries the sink already
+has: the export narrows the window, it does not close it. Syslog over TLS has no acknowledgement of the
+receiver's: a message in flight when the connection breaks can be lost, and the receiver sees the missing
+`seq`. The token is read from a Secret by reference.
+
+Not yet: a retention rule for the log, checkpoints signed on a schedule, the chain in `GET /audit`, and a
+migration role distinct from the API's own (each its own story).
 
 ## Secrets
 
@@ -1107,6 +1137,16 @@ in `GET /audit`, and a migration role distinct from the API's own (each its own 
   built with a wrapper); core ships no KMS client. The wrapper's `kek_id` is stored in `org_secrets`
   and is at most 32 characters; `rewrap` moves the rows whose `kek_id` differs from the wrapper's
   active id.
+  The repository ships one: `plugins/vault-transit`, a Vault Transit wrapper (an extension, not part of
+  the core: the core imports no Vault client, `tests/architecture/test_core_ships_no_vault_client.py`).
+  The data key is wrapped by transit `encrypt` and the KEK never leaves Vault; a rotation is
+  `transit/keys/<key>/rotate` then `choregos admin secrets rewrap`, which uses transit `rewrap` so the data
+  keys are never in the platform's memory; the API authenticates with its pod's service account (Vault
+  Kubernetes auth) or a token. It is proved against a simulated Vault only, and `put`/`get_many` block the
+  API's event loop for one Vault round trip per secret (the seam is synchronous). Setup:
+  [Deployment](deployment.md#connector-secrets-sealed-under-vault-transit). The **platform's own** secrets
+  (session key, run-token key, GitHub App key) are a different path: they come from Vault through the
+  External Secrets Operator, [Deployment](deployment.md#platform-secrets-from-vault-external-secrets-operator).
 - GitHub App installations are tenant boundaries ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
   one App serves the deployment, so a token for `owner/repo` is minted only through an installation
   **claimed** by the organisation of the connector or run. With several organisations the claim needs
@@ -1115,7 +1155,11 @@ in `GET /audit`, and a migration role distinct from the API's own (each its own 
   for a runner's clone. The callback's `installation_id` is never trusted alone, and the install
   `state` is HMAC-signed, short-lived and bound to the signed-in person.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
-  unconfigured GitHub webhook is refused in `staging`/`prod`.
+  unconfigured GitHub webhook is refused in `staging`/`prod`. An Azure DevOps service hook carries the
+  shared secret as the password of its basic authentication (or `X-Choregos-Secret`), compared in constant
+  time; with no secret configured every delivery is refused. The Azure Boards credentials (a personal access
+  token, or an Entra service principal's client secret) are sealed connector secrets, and an Entra token is
+  held in memory only, until a minute before it expires ([ADR 0209](adr/0209-the-azure-devops-family-boards-first-then-repos-and-pipelines.md)).
 - Rotations: [`runbooks/secret-rotation.md`](runbooks/secret-rotation.md).
 
 ## Supply chain

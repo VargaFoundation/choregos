@@ -10,6 +10,7 @@ package, never through a copy.
 from __future__ import annotations
 
 import os
+import ssl
 from collections.abc import Callable
 from typing import Any
 
@@ -48,23 +49,96 @@ def _names(listed: str) -> list[str]:
 
 
 def _jira_tracker(cfg: dict[str, Any]) -> Any:
-    """Jira Cloud: the email and the API token as Basic, the token from the vault, never from the
-    repository. A scoped token goes through the Atlassian gateway, a classic one to the site."""
+    """Jira. Cloud (default): the email and the API token as Basic, the token from the vault, never
+    from the repository; a scoped token goes through the Atlassian gateway, a classic one to the
+    site. `flavor: datacenter` (Data Center / Server 9.x, 10.x): a personal access token as Bearer,
+    REST API v2, an optional `ca_bundle` for an internal CA."""
     from .http import RestClient
     from .tracker.jira import JiraGatewayClient, JiraTracker
 
-    auth = (str(cfg["email"]), str(cfg["api_token"]))
-    client = (
-        JiraGatewayClient(cfg["base_url"], cloud_id=cfg.get("cloud_id"), auth=auth, service="jira")
-        if cfg.get("auth") == "scoped"
-        else RestClient(cfg["base_url"], auth=auth, service="jira")
-    )
+    flavor = str(cfg.get("flavor") or "cloud")
+    if flavor not in {"cloud", "datacenter"}:
+        raise ConfigurationError(f"unknown Jira flavor `{flavor}`: `cloud` or `datacenter`")
+    if flavor == "datacenter":
+        ca_bundle = str(cfg.get("ca_bundle") or "").strip() or None
+        if ca_bundle is not None and not os.path.isfile(ca_bundle):
+            raise ConfigurationError(f"`ca_bundle` is not a readable file: {ca_bundle}")
+        try:
+            client: RestClient = RestClient(
+                cfg["base_url"],
+                headers={"Authorization": f"Bearer {cfg['api_token']}"},
+                service="jira",
+                ca_bundle=ca_bundle,
+            )
+        except ssl.SSLError as error:  # a file that is not a PEM bundle
+            raise ConfigurationError(
+                f"`ca_bundle` {ca_bundle} holds no usable certificate: {error}"
+            ) from error
+    else:
+        auth = (str(cfg["email"]), str(cfg["api_token"]))
+        client = (
+            JiraGatewayClient(cfg["base_url"], cloud_id=cfg.get("cloud_id"), auth=auth, service="jira")
+            if cfg.get("auth") == "scoped"
+            else RestClient(cfg["base_url"], auth=auth, service="jira")
+        )
     return JiraTracker(
         client,
         cfg["project_key"],
         webhook_secret=cfg.get("webhook_secret", ""),
         field_names=cfg.get("field_names"),
         candidates_jql=cfg.get("candidates_jql"),
+        flavor="datacenter" if flavor == "datacenter" else "cloud",
+    )
+
+
+def _azure_boards_tracker(cfg: dict[str, Any]) -> Any:
+    """Azure DevOps Boards: a personal access token as Basic, or an Entra service principal's token, the
+    secrets from the vault, never from the repository."""
+    from .azure_devops import azure_client, check_azure_boards
+    from .tracker.azure_boards import AzureBoardsTracker
+
+    check_azure_boards(cfg)
+    client = azure_client(cfg, service="azure-boards")
+    return AzureBoardsTracker(
+        client,
+        cfg["project"],
+        area_path=cfg.get("area_path"),
+        webhook_secret=cfg.get("webhook_secret", ""),
+        field_names=cfg.get("field_names"),
+        candidates_wiql=cfg.get("candidates_wiql"),
+    )
+
+
+def _azure_repos_scm(cfg: dict[str, Any]) -> Any:
+    """Azure DevOps Repos: a PAT or an Entra service principal, secrets from the vault. The run token is a
+    separate, narrower PAT: a run never receives the connector's own credential."""
+    from .azure_devops import azure_client, check_azure_repos
+    from .scm.azure_repos import AzureReposScm
+
+    check_azure_repos(cfg)
+    return AzureReposScm(
+        azure_client(cfg, service="azure-repos"),
+        cfg["project"],
+        cfg["repository"],
+        default_branch=cfg.get("default_branch", "main"),
+        merge_strategy=cfg.get("merge_strategy", "squash"),
+        delete_source_branch=bool(cfg.get("delete_source_branch", False)),
+        run_token=str(cfg.get("run_token") or ""),
+        partially_succeeded=cfg.get("partially_succeeded", "failure"),
+    )
+
+
+def _azure_pipelines_ci(cfg: dict[str, Any]) -> Any:
+    from .azure_devops import azure_client, check_azure_pipelines
+    from .ci.azure_pipelines import AzurePipelinesCi
+
+    check_azure_pipelines(cfg)
+    return AzurePipelinesCi(
+        azure_client(cfg, service="azure-pipelines"),
+        cfg["project"],
+        repository=str(cfg.get("repository") or ""),
+        pipeline=str(cfg.get("pipeline") or ""),
+        partially_succeeded=cfg.get("partially_succeeded", "failure"),
     )
 
 
@@ -513,7 +587,9 @@ def _register_fakes() -> None:
 def _register_forges() -> None:
     """Trackers, source control, CI and CD."""
     from .cd.argocd import ArgoCdAdapter
+    from .ci.github_actions import GitHubActionsCi
     from .ci.gitlab import GitLabCi
+    from .ci.jenkins import JenkinsCi
     from .ci.tekton import TektonCi
     from .executor.tekton import KubernetesClient
     from .http import RestClient
@@ -521,6 +597,7 @@ def _register_forges() -> None:
     from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
+    from .tracker.gitlab_instance import build_client as build_gitlab_client
     from .tracker.internal import InternalTracker
 
     register("tracker", "github-issues", _SHIPPED_SPECS[("tracker", "github-issues")])(
@@ -534,14 +611,11 @@ def _register_forges() -> None:
     )
     register("tracker", "internal", _SHIPPED_SPECS[("tracker", "internal")])(lambda cfg: InternalTracker())
     register("tracker", "jira", _SHIPPED_SPECS[("tracker", "jira")])(_jira_tracker)
+    register("tracker", "azure-boards", _SHIPPED_SPECS[("tracker", "azure-boards")])(_azure_boards_tracker)
     register("tracker", "plugin", _SHIPPED_SPECS[("tracker", "plugin")])(_plugin_tracker)
     register("tracker", "gitlab-issues", _SHIPPED_SPECS[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(
-            RestClient(
-                cfg.get("base_url", "https://gitlab.com"),
-                headers={"PRIVATE-TOKEN": cfg["token"]},
-                service="gitlab",
-            ),
+            build_gitlab_client(cfg),
             cfg["project"],
             webhook_secret=cfg.get("webhook_secret", ""),
         )
@@ -556,15 +630,13 @@ def _register_forges() -> None:
     )
     register("scm", "gitlab", _SHIPPED_SPECS[("scm", "gitlab")])(
         lambda cfg: GitLabScm(
-            RestClient(
-                cfg.get("base_url", "https://gitlab.com"),
-                headers={"PRIVATE-TOKEN": cfg["token"]},
-                service="gitlab",
-            ),
+            build_gitlab_client(cfg),
             cfg["project"],
             default_branch=cfg.get("default_branch", "main"),
         )
     )
+    register("scm", "azure-repos", _SHIPPED_SPECS[("scm", "azure-repos")])(_azure_repos_scm)
+    register("ci", "azure-pipelines", _SHIPPED_SPECS[("ci", "azure-pipelines")])(_azure_pipelines_ci)
     register("ci", "tekton", _SHIPPED_SPECS[("ci", "tekton")])(
         lambda cfg: TektonCi(
             KubernetesClient(**cfg.get("kubernetes", {})),
@@ -574,12 +646,30 @@ def _register_forges() -> None:
     )
     register("ci", "gitlab", _SHIPPED_SPECS[("ci", "gitlab")])(
         lambda cfg: GitLabCi(
-            RestClient(
-                cfg.get("base_url", "https://gitlab.com"),
-                headers={"PRIVATE-TOKEN": cfg["token"]},
-                service="gitlab",
-            ),
+            build_gitlab_client(cfg),
             cfg["project"],
+        )
+    )
+    register("ci", "jenkins", _SHIPPED_SPECS[("ci", "jenkins")])(
+        lambda cfg: JenkinsCi(
+            RestClient(
+                cfg["base_url"],
+                auth=(cfg["user"], cfg["token"]),
+                service="jenkins",
+            ),
+            cfg["job"],
+            multibranch=bool(cfg.get("multibranch", False)),
+            parameters=cfg.get("parameters"),
+            ref_parameter=cfg.get("ref_parameter", "BRANCH"),
+            crumb=bool(cfg.get("crumb", True)),
+        )
+    )
+    register("ci", "github-actions", _SHIPPED_SPECS[("ci", "github-actions")])(
+        lambda cfg: GitHubActionsCi(
+            _github_client(cfg),
+            cfg["repo"],
+            workflow=cfg.get("workflow", ""),
+            inputs=cfg.get("inputs"),
         )
     )
     register("cd", "argocd", _SHIPPED_SPECS[("cd", "argocd")])(
