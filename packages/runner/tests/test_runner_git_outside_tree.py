@@ -238,3 +238,31 @@ async def test_a_replay_removes_a_planted_link_without_following_it(
     await Workspace(workspace_path).prepare(stage_input, token=GIT_TOKEN)
     assert (outside / "keep").read_text(encoding="utf-8") == "kept"
     assert not (workspace_path / ".git").is_symlink()
+
+
+def test_the_default_root_is_the_user_s_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/var/tmp` is shared: one fixed name made a second user's runner fail on the first one's 0700
+    directory. The default carries the user id."""
+    import os
+
+    monkeypatch.delenv(workspace_module.GIT_DIR_ROOT_VARIABLE, raising=False)
+    assert Path(f"/var/tmp/choregos-git-{os.getuid()}") == workspace_module.DEFAULT_GIT_DIR_ROOT
+    assert git_dir_for(Path("/w")).parent == workspace_module.DEFAULT_GIT_DIR_ROOT
+
+
+@pytest.mark.parametrize("planted", ["writable", "link"])
+async def test_a_root_writable_by_others_or_a_link_is_refused(tmp_path: Path, planted: str) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    if planted == "writable":
+        root = real
+        root.chmod(0o777)
+    else:
+        root = tmp_path / "root"
+        root.symlink_to(real, target_is_directory=True)
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    space = Workspace(tree, git_dir=root / "repo")
+    with pytest.raises(workspace_module.WorkspaceError, match=r"refused|writable by others"):
+        await space._init("main")
+    assert not (real / "repo").exists(), "nothing is written there"
