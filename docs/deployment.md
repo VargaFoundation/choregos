@@ -2277,7 +2277,8 @@ the chart already assumes.
 ### Webhook secrets
 
 `TRANIBOR_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `TRANIBOR_GENERIC_WEBHOOK_SECRET` is
-the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
+the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, Azure DevOps Boards (the
+password of the service hook's basic authentication, or an `X-Choregos-Secret` header), and **Tekton since
 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
 the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (the former spelling was removed in 0.24.0,
 see "Upgrading to 0.24"). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its

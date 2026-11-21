@@ -68,6 +68,36 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
     )
 
 
+def _azure_boards_tracker(cfg: dict[str, Any]) -> Any:
+    """Azure DevOps Boards: a personal access token as Basic, or an Entra service principal's token, the
+    secrets from the vault, never from the repository."""
+    from .specs import _check_azure_boards
+    from .tracker.azure_boards import AzureBoardsTracker, AzureDevOpsClient, EntraClientCredentials
+
+    _check_azure_boards(cfg)
+    entra = (
+        EntraClientCredentials(
+            str(cfg["tenant_id"]),
+            str(cfg["client_id"]),
+            str(cfg.get("client_secret") or ""),
+            login_url=str(cfg.get("login_url") or "https://login.microsoftonline.com"),
+        )
+        if cfg.get("auth") == "entra"
+        else None
+    )
+    client = AzureDevOpsClient(
+        cfg["base_url"], pat=None if entra else str(cfg.get("pat") or ""), entra=entra, service="azure-boards"
+    )
+    return AzureBoardsTracker(
+        client,
+        cfg["project"],
+        area_path=cfg.get("area_path"),
+        webhook_secret=cfg.get("webhook_secret", ""),
+        field_names=cfg.get("field_names"),
+        candidates_wiql=cfg.get("candidates_wiql"),
+    )
+
+
 def _github_client(config: dict[str, Any]) -> Any:
     """Builds the GitHub client from the connector's configuration or the deployment's App.
 
@@ -534,6 +564,7 @@ def _register_forges() -> None:
     )
     register("tracker", "internal", _SHIPPED_SPECS[("tracker", "internal")])(lambda cfg: InternalTracker())
     register("tracker", "jira", _SHIPPED_SPECS[("tracker", "jira")])(_jira_tracker)
+    register("tracker", "azure-boards", _SHIPPED_SPECS[("tracker", "azure-boards")])(_azure_boards_tracker)
     register("tracker", "plugin", _SHIPPED_SPECS[("tracker", "plugin")])(_plugin_tracker)
     register("tracker", "gitlab-issues", _SHIPPED_SPECS[("tracker", "gitlab-issues")])(
         lambda cfg: GitLabTracker(

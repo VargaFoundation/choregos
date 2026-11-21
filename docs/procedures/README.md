@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `TRANIBOR_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-63 procedures.
+64 procedures.
 
 ## Connectors
 
@@ -47,6 +47,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use GitHub for branches, pull requests and checks](connector.scm.github.md) | a project owner | `scm/github` | 2026-11-12 |
 | [Use GitLab for branches, merge requests and auto-merge](connector.scm.gitlab.md) | a project owner | `scm/gitlab` | 2026-11-04 |
 | [The demo carrier (demonstration only)](connector.shipping.demo.md) | anyone | `shipping/demo` | 2026-10-16 |
+| [Use Azure DevOps Boards as the board](connector.tracker.azure-boards.md) | a project owner | `tracker/azure-boards` | 2026-11-20 |
 | [Use GitHub Issues and Projects v2 as the board](connector.tracker.github-issues.md) | a project owner | `tracker/github-issues` | 2026-11-12 |
 | [Use GitLab Issues as the board](connector.tracker.gitlab-issues.md) | a project owner | `tracker/gitlab-issues` | 2026-10-16 |
 | [Let Tranibor hold the work items](connector.tracker.internal.md) | a project owner | `tracker/internal` | 2026-10-16 |

@@ -1130,7 +1130,11 @@ migration role distinct from the API's own (each its own story).
   for a runner's clone. The callback's `installation_id` is never trusted alone, and the install
   `state` is HMAC-signed, short-lived and bound to the signed-in person.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
-  unconfigured GitHub webhook is refused in `staging`/`prod`.
+  unconfigured GitHub webhook is refused in `staging`/`prod`. An Azure DevOps service hook carries the
+  shared secret as the password of its basic authentication (or `X-Choregos-Secret`), compared in constant
+  time; with no secret configured every delivery is refused. The Azure Boards credentials (a personal access
+  token, or an Entra service principal's client secret) are sealed connector secrets, and an Entra token is
+  held in memory only, until a minute before it expires ([ADR 0209](adr/0209-the-azure-devops-family-boards-first-then-repos-and-pipelines.md)).
 - Rotations: [`runbooks/secret-rotation.md`](runbooks/secret-rotation.md).
 
 ## Supply chain

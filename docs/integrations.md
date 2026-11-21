@@ -591,6 +591,32 @@ cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and 
 fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
 real service yet (`tests/live/test_rovo_a2a_live.py`, run by hand once the consent is given).
 
+## Azure DevOps Boards, as the board (ADR 0209)
+
+The other direction from the MCP doors above: Tranibor reads and writes an Azure Boards project the way it
+does a Jira project. Connector **Tracker**, type **Azure DevOps Boards** (`azure-boards`); the setup, with
+the permissions, is the procedure `connector.tracker.azure-boards` (`docs/procedures/`).
+
+- **Where.** Azure DevOps Services (`https://dev.azure.com/<organisation>`) or an Azure DevOps Server 2022
+  collection (`https://<server>/<path>/<collection>`), both through REST API 7.1, selected only by `base_url`.
+- **Credential.** `auth: pat`, a personal access token (scopes *Work Items: Read & write* and *Project and
+  Team: Read*), on both; or `auth: entra`, a Microsoft Entra service principal (`tenant_id`, `client_id`,
+  sealed `client_secret`, added to the organisation and the project), Services only.
+- **What it does.** A work item tagged `agent-ready` (or matching `candidates_wiql` or a start rule, within
+  the team project and the optional `area_path`) starts one workflow. The workflow's state is written to
+  `System.State` (by the state's exact name, by its category, or as `To Do` / `In Progress` / `Done`), the
+  labels are tags, the status comment is one HTML comment rewritten at each stage, `Cost (€)`, `Size`,
+  `Risk` and `Run` are custom fields of your process (a missing one is skipped), and links are real work
+  item relations.
+- **Inbound.** Create a **Web Hooks** service-hook subscription for *Work item created*, *updated* and
+  *commented on* to `<api_url>/api/v1/webhooks/azure-boards`, with basic authentication whose password is
+  `TRANIBOR_GENERIC_WEBHOOK_SECRET` (any user name), or a custom `X-Choregos-Secret` header. A delivery
+  reaches the project whose connector holds the team project; several projects on one team project are told
+  apart by the organisation, the `area_path`, then `match_labels`.
+- **Limits, said plainly.** Built against a scripted server and payloads taken from Microsoft's
+  documentation; **no live Azure DevOps organisation or Server has run it yet**. Comments use the 7.1
+  *preview* endpoint, which is the only one. Repos and Pipelines are not part of this connector (S13-08).
+
 ## Your organisation's MCP gateway (ADR 0105)
 
 Some MCP servers cannot be called directly: they need hosting, or OAuth, or their credential must

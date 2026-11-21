@@ -5954,6 +5954,16 @@ paths:
       parameters: [{ name: X-Choregos-Secret, in: header, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/azure-boards:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: azureBoardsWebhook
+      parameters:
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; the password of the service hook's basic authentication may carry it instead" }
+        - { name: Authorization, in: header, required: false, schema: { type: string }, description: "`Basic` whose password is the shared webhook secret" }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/gitlab:
     post:
       tags: [webhooks]
