@@ -75,7 +75,7 @@ describe("the console's primitives", () => {
   it("a state that waits for someone is an amber pill, no longer a white square", () => {
     render(<StateBadge state="awaiting_spec_approval" display="Spec to approve" kind="wait" />);
     const pastille = screen.getByText("Spec to approve").closest("span");
-    expect(pastille).toHaveClass("rounded-full", "bg-waiting-soft", "text-waiting-ink");
+    expect(pastille).toHaveClass("rounded-pill", "bg-waiting-soft", "text-waiting-ink");
   });
 
   it("a running state is blue, a blocked state red, a final state green", () => {
@@ -91,15 +91,15 @@ describe("the console's primitives", () => {
     expect(screen.getByText("Done").closest("span")).toHaveClass("bg-succeeded-soft");
   });
 
-  it("a pill and its dot are round", () => {
+  it("a pill follows the theme (rounded-pill), its dot stays round", () => {
     const { container } = render(
       <>
         <Badge tone="ok">ok</Badge>
         <Dot tone="agent" />
       </>,
     );
-    expect(screen.getByText("ok").closest("span")).toHaveClass("rounded-full");
-    expect(container.querySelectorAll(".rounded-full").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByText("ok").closest("span")).toHaveClass("rounded-pill");
+    expect(container.querySelectorAll(".rounded-full").length).toBeGreaterThanOrEqual(2); // the dots
   });
 
   it("a button is sans with 4 px corners, 32 px — 44 to the finger —, the action in iris and not an inverted white slab", () => {

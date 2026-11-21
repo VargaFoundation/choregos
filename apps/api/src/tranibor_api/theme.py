@@ -105,6 +105,8 @@ class ThemeFont(_Strict):
 class ThemeRadius(_Strict):
     control: int | None = Field(default=None, ge=0, le=8)
     surface: int | None = Field(default=None, ge=0, le=12)
+    #: Badges, chips, counters and bars (`rounded-pill`); dots and avatars stay round. None = round.
+    pill: int | None = Field(default=None, ge=0, le=999)
 
 
 class ThemeFonts(_Strict):

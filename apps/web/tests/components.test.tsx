@@ -53,7 +53,7 @@ describe("journal ACP", () => {
   it("highlights refused permissions: a pill, and a rule on the row", () => {
     render(<LiveLog events={events.slice(0, 3)} />);
     const refusal = screen.getByText("Denied");
-    expect(refusal).toHaveClass("rounded-full", "text-failed-ink");
+    expect(refusal).toHaveClass("rounded-pill", "text-failed-ink");
     expect(refusal.closest("[data-testid='live-log'] > div > div")).toHaveClass("border-l-failed");
   });
 

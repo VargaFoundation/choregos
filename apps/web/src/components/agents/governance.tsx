@@ -39,7 +39,7 @@ export function ScopeFilter({
 }) {
   const count = (scope: AgentScope) => agents.filter((a) => (a.scope ?? "org") === scope).length;
   const chip = (active: boolean) =>
-    `rounded-full border px-3 py-1 text-xs ${active ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`;
+    `rounded-pill border px-3 py-1 text-xs ${active ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`;
   return (
     <div role="group" aria-label="Filter by scope" className="flex flex-wrap gap-2" data-testid="scope-filter">
       <button type="button" className={chip(value === null)} aria-pressed={value === null} onClick={() => onChange(null)}>

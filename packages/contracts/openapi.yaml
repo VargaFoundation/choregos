@@ -6964,6 +6964,7 @@ components:
           properties:
             control: { type: integer, minimum: 0, maximum: 8, description: "px; absent = the console default" }
             surface: { type: integer, minimum: 0, maximum: 12, description: "px; absent = the console default" }
+            pill: { type: integer, minimum: 0, maximum: 999, description: "px, on badges, chips, counters and bars (dots and avatars stay round); absent = round" }
         fonts:
           type: object
           description: The mono font stays Geist Mono

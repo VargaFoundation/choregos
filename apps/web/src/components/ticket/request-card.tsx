@@ -140,7 +140,7 @@ function TrackerFacts({ tracker }: { tracker: Tracker }) {
           <dt className="text-ink-muted">Labels</dt>
           <dd className="flex flex-wrap gap-1">
             {tracker.labels.map((label) => (
-              <span key={label} className="rounded-full border border-line px-2 py-0.5 font-mono text-xs">
+              <span key={label} className="rounded-pill border border-line px-2 py-0.5 font-mono text-xs">
                 {label}
               </span>
             ))}
