@@ -73,10 +73,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
     }
 )
 
-#: The ceiling of `page.slice(` calls in the routers (in-memory pages). Lowered when one migrates.
-#: The one left is `listOutpostCalls`: its 1000-call window is stated by the contract, the console, the CLI
-#: and docs/usage.md, so lifting it is a contract decision, not a refactor.
-SLICE_CEILING = 1
 
 
 def _array_routes() -> set[str]:
@@ -113,9 +109,10 @@ def test_the_ceiling_drops_when_a_route_is_paged() -> None:
     assert not set(BOUNDED) & NOT_YET_PAGED
 
 
-def test_in_memory_pages_only_decrease() -> None:
-    count = sum(path.read_text().count("page.slice(") for path in ROUTERS.rglob("*.py"))
-    assert count <= SLICE_CEILING, (
-        f"{count} `page.slice(` calls, ceiling {SLICE_CEILING}: page in SQL (ADR 0206)"
-    )
-    assert count == SLICE_CEILING, f"{count} `page.slice(` calls: lower SLICE_CEILING to {count}"
+def test_no_page_is_cut_in_memory() -> None:
+    """`Page.slice` read a capped list and cut it in Python; the last route left it with `listOutpostCalls`."""
+    from tranibor_api.deps import Page
+
+    assert not hasattr(Page, "slice"), "Page.slice is back: page in SQL with keyset_page (ADR 0206)"
+    count = sum(path.read_text().count(".slice(") for path in ROUTERS.rglob("*.py"))
+    assert count == 0, f"{count} `.slice(` calls in the routers: page in SQL (ADR 0206)"

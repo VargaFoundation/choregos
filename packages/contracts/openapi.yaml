@@ -3269,9 +3269,9 @@ paths:
       description: >-
         The recent calls routed to this outpost, newest first, with how each ended: its state, the outcome its
         instance reported or the code of its refusal. Digests only: no arguments and no result, which the
-        platform deletes when a call completes (ADR 0148 §11). The list reads the newest 1000 calls of the
-        outpost (of the given `state`, when one is given) and pages within them: a cursor that ends says that
-        no older call is in that window, not that none exists. `outpost:manage`.
+        platform deletes when a call completes (ADR 0148 §11). Paged in SQL (ADR 0206): every call the platform
+        holds for the outpost (of the given `state`, when one is given) is reached by following `next_cursor`,
+        and the last page is the oldest call. `outpost:manage`.
       parameters:
         - { $ref: "#/components/parameters/Cursor" }
         - { $ref: "#/components/parameters/Limit" }

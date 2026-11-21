@@ -614,7 +614,7 @@ def test_instances_names_the_token_each_enrolled_with_and_the_approvals_window()
 
 
 @respx.mock
-def test_calls_says_the_window_it_reads_when_the_pages_end() -> None:
+def test_the_last_page_of_calls_names_no_window() -> None:
     respx.get(f"{ONE}/calls").mock(
         return_value=Response(
             200, json={"items": [_call()], "meta": {"next_cursor": None, "has_more": False}}
@@ -622,4 +622,5 @@ def test_calls_says_the_window_it_reads_when_the_pages_end() -> None:
     )
     shown = _run("calls", "factory-floor")
     assert shown.exit_code == 0, shown.output
-    assert "the list reads the newest 1000 calls of the outpost" in " ".join(shown.output.split())
+    said = " ".join(shown.output.split())
+    assert "older calls:" not in said and "1000" not in said, "the API pages every call (ADR 0206)"

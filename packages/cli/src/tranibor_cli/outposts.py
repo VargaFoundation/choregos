@@ -30,8 +30,6 @@ POLICY_FILE = "/etc/choregos-outpost/policy.yaml"
 CONSOLE_PAGE = "Administration → Outposts"
 #: The code of the API's 403 when a token tries to approve (S65-24): a refusal of rights has none.
 APPROVAL_REQUIRES_SESSION = "approval_requires_session"
-#: How many of an outpost's calls the API reads back, newest first: the window `calls` pages within.
-RECENT_CALLS = 1000
 
 OrgOption = Annotated[str | None, typer.Option("--org", help="the organisation; the profile's otherwise")]
 InstanceArgument = Annotated[
@@ -412,8 +410,8 @@ def calls(
 ) -> None:
     """The recent calls routed to the outpost, newest first: their state and the code of a refusal.
 
-    Digests only: the platform keeps no arguments and no result of a call. The API reads the newest
-    1000 calls of the outpost and pages within them: the last page is the end of that window.
+    Digests only: the platform keeps no arguments and no result of a call. One page at a time: `--cursor`
+    reads the older calls, down to the oldest one.
     """
     api, organisation = _target(org)
     params: dict[str, str] = {"limit": str(limit)}
@@ -422,7 +420,6 @@ def calls(
     if cursor:
         params["cursor"] = cursor
     page = api.get(f"/orgs/{organisation}/outposts/{slug}/calls", params=params)
-    read = len(page["items"])
     table = Table(
         "when", "call", "endpoint", "connector", "state", "outcome", "refusal", "write", "arguments"
     )
@@ -443,6 +440,3 @@ def calls(
     meta = page.get("meta") or {}
     if meta.get("has_more") and meta.get("next_cursor"):
         _verbatim(f"older calls: choregos outposts calls {slug} --cursor {meta['next_cursor']}")
-    elif read or cursor:
-        # The API reads the newest calls only: the end of the pages is the end of that window (S65-24).
-        _verbatim(f"the list reads the newest {RECENT_CALLS} calls of the outpost: older ones are not shown")
