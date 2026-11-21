@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""S84-00: the procurement plan and the backlog describe the same stories, in an order that can run.
+"""S85-00: the procurement plan and the backlog describe the same stories, in an order that can run.
 
 `docs/plan/PLAN-2026-11-20-procurement.md` is handed to parallel workers one story block at a time,
 and its waves are only safe if every story's dependencies are done before it starts. Three properties:
-every `S84` story heading of the plan is a backlog story, the backlog holds no `S84` story the plan
+every `S85` story heading of the plan is a backlog story, the backlog holds no `S85` story the plan
 does not describe, and in the backlog every dependency of a story comes before it. "Before" is the
 backlog's own order: a lower `sprint` (the plan's wave), or the same wave and a lower `priority`,
 since stories of one wave and one stream are sequential.
@@ -23,8 +23,8 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PLAN = ROOT / "docs" / "plan" / "PLAN-2026-11-20-procurement.md"
 BACKLOG = ROOT / "docs" / "plan" / "08-backlog.yaml"
-STREAM = "S84"
-#: `### S84-04 · feat(api): …`
+STREAM = "S85"
+#: `### S85-04 · feat(api): …`
 HEADING = re.compile(rf"^### ({STREAM}-\d+[a-z]?) ·", re.M)
 #: `### PA-02 · feat(procurement): …`
 OTHER_REPOSITORY = re.compile(r"^### (PA-\d+) ·", re.M)

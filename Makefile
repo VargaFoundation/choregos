@@ -121,7 +121,7 @@ headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases 
 	  -o docker/headroom/requirements.txt
 
 .PHONY: procurement-lock
-procurement-lock:  ## Re-export plugins/procurement/requirements.txt from uv.lock (hashes; the job image installs it, ADR 0198)
+procurement-lock:  ## Re-export plugins/procurement/requirements.txt from uv.lock (hashes; the job image installs it, ADR 0202)
 	$(UV) export --frozen --package tranibor-procurement --no-dev --no-emit-workspace --no-header \
 	  --no-annotate -o plugins/procurement/requirements.txt
 

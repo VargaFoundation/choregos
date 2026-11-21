@@ -455,7 +455,7 @@ jobs:
           cosign sign --yes "${IMAGE}@${digest}"
 
   procurement-job-image:
-    # The `procurement` plugin's job image (ADR 0198, ADR 0056): the runner image this release has just
+    # The `procurement` plugin's job image (ADR 0202, ADR 0056): the runner image this release has just
     # published and signed, plus the plugin's `tranibor-procurement` in its own environment. Built HERE for
     # the same reason as the `investment-research` one above: a job image carrying another release's runner
     # would speak another version of the stage protocol.
@@ -536,7 +536,7 @@ jobs:
       - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: meta
         with:
-          # One name: the image is new with the plugin (ADR 0198), it has no former name to carry.
+          # One name: the image is new with the plugin (ADR 0202), it has no former name to carry.
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}}

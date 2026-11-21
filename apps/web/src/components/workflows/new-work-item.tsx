@@ -57,7 +57,7 @@ export function NewWorkItemForm({
           title,
           body,
           size: size || null,
-          // A workflow that takes files is filed first, given them, then started (ADR 0197 §7).
+          // A workflow that takes files is filed first, given them, then started (ADR 0201 §7).
           start: rule ? false : start,
           workflow: workflow || null,
           fields: valuesForApi(fields, entered),

@@ -1,4 +1,4 @@
-"""`POST /work-items/{id}/files`: a person hands files to a work item, a start waits (S84-04, ADR 0197)."""
+"""`POST /work-items/{id}/files`: a person hands files to a work item, a start waits (S85-04, ADR 0201)."""
 
 from __future__ import annotations
 

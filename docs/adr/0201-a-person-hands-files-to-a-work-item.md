@@ -1,6 +1,6 @@
-# 0197 — A person hands files to a work item, and a step reads them as `attachments`
+# 0201 — A person hands files to a work item, and a step reads them as `attachments`
 
-- **Status**: proposed, 2026-11-20 (written by story S84-01 from the product owner's request of the
+- **Status**: proposed, 2026-11-20 (written by story S85-01 from the product owner's request of the
   same day; accepted when the owner merges it)
 - **Concerns**: the workflow DSL (`workflow.schema.json`: a new `metadata.attachments`, a reserved
   input name), the REST contract (a new `POST /work-items/{id}/files`), `services/artifacts.py`, the
@@ -9,7 +9,7 @@
   [ADR 0049](0049-an-artifact-is-typed-stored-and-traced.md) (artifacts) and
   [ADR 0078](0078-governed-workflows-as-a2a-skills.md) §6 (files sent through the A2A door); leaves
   [ADR 0031](0031-several-workflows-per-project.md) as it is (`metadata.inputs` stays fields);
-  stories S84-03 to S84-06
+  stories S85-03 to S85-06
 
 ## Context
 

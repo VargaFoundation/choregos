@@ -1030,12 +1030,12 @@ def _numbers_measured(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     `must_quote` source is also a source of the check above. A number is quoted when it is written
     exactly (`0.95`, or `95%`), not merely rounded to: a "1" must not quote a bar of 0.95.
 
-    `identifiers: skip` (S84-16) reads an identifier (`FA-0012`, `PO-2026-0042`, `CTR_17`, `v2.3.1`) as
+    `identifiers: skip` (S85-16) reads an identifier (`FA-0012`, `PO-2026-0042`, `CTR_17`, `v2.3.1`) as
     a reference, not an amount: its digits are read neither in the outputs nor in the sources. It is off by
     default (`identifiers: read`) because it is a hole a workflow opens knowingly: `EUR-99999` is an
     identifier to this rule, so an amount glued to letters by a separator is no longer checked.
     """
-    # `identifiers: skip` (S84-16); the validator refuses any value but `read` and `skip`.
+    # `identifiers: skip` (S85-16); the validator refuses any value but `read` and `skip`.
     skip = params.get("identifiers") == "skip"
     must_quote = [str(s) for s in (params.get("must_quote") or [])]
     sources = [str(s) for s in (params.get("sources") or [])]

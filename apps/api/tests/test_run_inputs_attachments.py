@@ -1,4 +1,4 @@
-"""A step that declares `attachments` reads the files handed to its work item (S84-05, ADR 0197 §8)."""
+"""A step that declares `attachments` reads the files handed to its work item (S85-05, ADR 0201 §8)."""
 
 from __future__ import annotations
 

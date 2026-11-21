@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# The `procurement` job image (ADR 0198, ADR 0056): the image the operator maps for the plugin's job
+# The `procurement` job image (ADR 0202, ADR 0056): the image the operator maps for the plugin's job
 # steps (`TRANIBOR_JOB_IMAGES`, chart `global.images.jobs.procurement`). A job step runs the runner, which
 # runs the step's command: so the image is the SAME release's runner image plus the plugin's
 # `tranibor-procurement`, and the release builds it FROM the runner it has just published

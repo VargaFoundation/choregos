@@ -40,7 +40,7 @@ class WorkflowCatalogueInfo(Strict):
 
 
 class WorkflowAttachments(Strict):
-    """The files a workflow takes from a person (ADR 0197 §1): which types, and how many.
+    """The files a workflow takes from a person (ADR 0201 §1): which types, and how many.
 
     A workflow without the block takes no file from a person. `metadata.inputs` stays the fields.
     """
@@ -78,7 +78,7 @@ class WorkflowMetadata(Strict):
     #: position of an onboarding, for example. Validated at the ticket's birth, passed to the agents.
     inputs: dict[str, Any] | None = None
     catalogue: WorkflowCatalogueInfo | None = None
-    #: The files a person may hand to a work item of this workflow (ADR 0197); absent: none.
+    #: The files a person may hand to a work item of this workflow (ADR 0201); absent: none.
     attachments: WorkflowAttachments | None = None
 
 

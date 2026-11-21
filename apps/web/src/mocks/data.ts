@@ -3598,7 +3598,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (/^\/orgs\/[^/]+\/outposts(\/|$)/.test(bare)) {
     return structuredClone(outpostsApi(method, bare, path.split("?")[1] ?? "", body, orgConnectors, me.email)) as T;
   }
-  // A person hands files to a work item (ADR 0197): the stored artifacts, as the API answers 201.
+  // A person hands files to a work item (ADR 0201): the stored artifacts, as the API answers 201.
   const handing = /^\/work-items\/([^/]+)\/files$/.exec(bare);
   if (method === "POST" && handing && init.body instanceof FormData) {
     const files = init.body.getAll("files").filter((part): part is File => typeof part !== "string");

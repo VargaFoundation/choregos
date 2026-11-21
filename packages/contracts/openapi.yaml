@@ -1639,7 +1639,7 @@ paths:
       tags: [work-items]
       operationId: attachWorkItemFiles
       description: >-
-        A person hands one or several files to the work item (ADR 0197), for whoever holds `item:control` on its
+        A person hands one or several files to the work item (ADR 0201), for whoever holds `item:control` on its
         project. Each file becomes an input artifact of the work item, produced by `person:<user id>`, stored before
         its row is written. The files of one request are the repeated multipart part `files`. A file is checked before
         it is stored: its type must be in the workflow's `metadata.attachments.accept`, its bytes must be what its type

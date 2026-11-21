@@ -431,7 +431,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         fields={data.fields}
       />
 
-      {/* The files a person (or an application) handed to the work item (ADR 0197 §11). */}
+      {/* The files a person (or an application) handed to the work item (ADR 0201 §11). */}
       {(attachmentRule(workflow.data?.json?.metadata) !== null || handedFiles(artifacts.data ?? []).length > 0) && (
         <Card id="files" title="Files">
           <FilesCard

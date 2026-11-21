@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`tier`: the approval tier, derived from a threshold the workflow writes (ADR 0198)."""
+"""`tier`: the approval tier, derived from a threshold the workflow writes (ADR 0202)."""
 
 from __future__ import annotations
 

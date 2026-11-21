@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`tranibor-procurement extract|compare|tier|supplier-check|renewals`, job steps (ADR 0198).
+"""`tranibor-procurement extract|compare|tier|supplier-check|renewals`, job steps (ADR 0202).
 
 Exit codes: 0 the contract is kept (files may be unreadable: see the facts), 2 it is broken.
 """

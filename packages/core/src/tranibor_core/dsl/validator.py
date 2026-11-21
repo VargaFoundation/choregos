@@ -509,7 +509,7 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
 
 
 def _check_attachments(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """`attachments` is the files handed to a work item (ADR 0197 §9): a step reads them, none writes
+    """`attachments` is the files handed to a work item (ADR 0201 §9): a step reads them, none writes
     them, and a workflow that could never be handed one cannot ask for them."""
     can_receive = wf.metadata.attachments is not None or wf.a2a is not None
     for index, t in enumerate(wf.transitions):
@@ -1019,7 +1019,7 @@ def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -
 
 
 def _check_numbers_identifiers(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """`numbers_measured`'s `identifiers:` is `read` (the default) or `skip` (S84-16): any other value would
+    """`numbers_measured`'s `identifiers:` is `read` (the default) or `skip` (S85-16): any other value would
     silently read identifiers, which is not what its author asked."""
     for index, t in enumerate(wf.transitions):
         for g_index, g in enumerate(t.gates):

@@ -27,7 +27,7 @@ const artifacts = [file("quote-a.pdf", "person"), file("quote-b.pdf", "a2a"), fi
 
 beforeEach(() => vi.clearAllMocks());
 
-describe("the Files card of a work item (ADR 0197)", () => {
+describe("the Files card of a work item (ADR 0201)", () => {
   it("lists the handed files with who handed them and a download link, not the step outputs", () => {
     render(<FilesCard itemId="w1" artifacts={artifacts} rule={rule} terminal={false} onChanged={vi.fn()} />);
     const rows = screen.getByTestId("handed-files").querySelectorAll("li");

@@ -1,4 +1,4 @@
-"""`attachments` is a reserved input: read by a step, written by none (S84-05, ADR 0197 §9)."""
+"""`attachments` is a reserved input: read by a step, written by none (S85-05, ADR 0201 §9)."""
 
 from __future__ import annotations
 

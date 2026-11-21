@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A job workspace with the fixtures handed as inputs, as the runner mounts them (ADR 0197)."""
+"""A job workspace with the fixtures handed as inputs, as the runner mounts them (ADR 0201)."""
 
 from __future__ import annotations
 

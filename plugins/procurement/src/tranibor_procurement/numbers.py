@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""One notation for the amounts of a document (ADR 0198 point 3).
+"""One notation for the amounts of a document (ADR 0202 point 3).
 
 An amount is written `12 500,50` as readily as `12,500.50`, and the `numbers_measured` gate reads the
 second notation only. Per file, `detect` decides the notation from the amounts the text holds, and

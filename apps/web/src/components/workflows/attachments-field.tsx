@@ -7,7 +7,7 @@ import { humanSize } from "@/lib/artifacts";
 import { type AttachmentRule, acceptAttribute, acceptedSentence, fileRefusal } from "@/lib/attachments";
 
 /**
- * The files a person hands with a work item (ADR 0197): a drop zone that states what the workflow
+ * The files a person hands with a work item (ADR 0201): a drop zone that states what the workflow
  * accepts, the files chosen so far, and a courtesy check before the send. The API is the judge.
  */
 export function AttachmentsField({

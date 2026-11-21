@@ -83,7 +83,7 @@ def test_no_step_may_declare_the_diff() -> None:
 
 
 def test_no_step_may_declare_attachments_as_an_output() -> None:
-    """The reserved input name is refused as an output, like `diff` (ADR 0197 §9)."""
+    """The reserved input name is refused as an output, like `diff` (ADR 0201 §9)."""
     assert "outputs.reserved" in _codes("  severity: { show: tab }", outputs="[attachments, severity]")
 
 

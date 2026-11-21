@@ -1,4 +1,4 @@
-"""`numbers_measured` (S84-16): with `identifiers: skip`, an identifier is a reference, not an amount.
+"""`numbers_measured` (S85-16): with `identifiers: skip`, an identifier is a reference, not an amount.
 
 Off by default: a workflow opens that hole knowingly (`EUR-99999` is an identifier to the rule).
 """

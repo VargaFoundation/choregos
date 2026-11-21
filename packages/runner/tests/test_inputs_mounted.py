@@ -107,7 +107,7 @@ async def test_an_unsafe_file_name_is_refused(stage_input: StageInput, runner_se
 async def test_two_handed_files_listed_for_attachments_are_mounted_and_named_in_the_task(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    """The runner needs no knowledge of `attachments` (S84-05, ADR 0197 §8): the API lists the handed
+    """The runner needs no knowledge of `attachments` (S85-05, ADR 0201 §8): the API lists the handed
     files like any input, and they are mounted under `.choregos/inputs/` and listed in `task.md`."""
     quote_a = b"%PDF-1.4\n% Halden Industrial quote A\n%%EOF\n"
     quote_b = b"%PDF-1.4\n% Halden Industrial quote B\n%%EOF\n"

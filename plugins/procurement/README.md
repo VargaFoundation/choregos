@@ -1,6 +1,6 @@
 # tranibor-procurement
 
-The code half of the `procurement` plugin ([ADR 0198](../../docs/adr/0198-procurement-is-a-plugin-whose-code-half-is-a-job-image.md)):
+The code half of the `procurement` plugin ([ADR 0202](../../docs/adr/0202-procurement-is-a-plugin-whose-code-half-is-a-job-image.md)):
 a command that job steps run. It registers nothing through `choregos.plugins`, and the API and the
 workers never import it. The plugin's content (agents, template, evals) is published from the agents
 repository.

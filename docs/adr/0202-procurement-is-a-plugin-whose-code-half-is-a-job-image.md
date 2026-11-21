@@ -1,6 +1,6 @@
-# 0198 — Procurement is a plugin whose code half is a job image
+# 0202 — Procurement is a plugin whose code half is a job image
 
-- **Status**: proposed, 2026-11-20 (written by story S84-02 from the product owner's request of the
+- **Status**: proposed, 2026-11-20 (written by story S85-02 from the product owner's request of the
   same day; accepted when the owner merges it)
 - **Concerns**: a new plugin `procurement` in the agents repository (content) and in
   `plugins/procurement/` here (the distribution `tranibor-procurement` and its job image); applies
@@ -8,8 +8,8 @@
   [ADR 0056](0056-a-deterministic-step.md) (a deterministic step and its measured facts),
   [ADR 0096](0096-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md) (a plugin's server) and
   [ADR 0035](0035-governed-actions-in-the-core.md) (governed writes); builds on
-  [ADR 0197](0197-a-person-hands-files-to-a-work-item.md) (the files a person hands); stories S84-07
-  to S84-14 and the stories `PA-01` to `PA-11` of
+  [ADR 0201](0201-a-person-hands-files-to-a-work-item.md) (the files a person hands); stories S85-07
+  to S85-14 and the stories `PA-01` to `PA-11` of
   [the plan of 2026-11-20](../plan/PLAN-2026-11-20-procurement.md)
 
 ## Context
@@ -83,7 +83,7 @@ documents are **European as often as not**: an amount is written `12 500,50` as 
    trade and stays a human process.
 9. **Supplier documents are untrusted and confidential.** The plugin's agents declare no web tool, no
    catalogue tool and **no memory**: an offer must not reach another consultation through a shared
-   memory. The template's policy is the closed sandbox. Files reach a step as files (ADR 0197). Each
+   memory. The template's policy is the closed sandbox. Files reach a step as files (ADR 0201). Each
    agent's evals carry a document with an injected instruction, which the agent must report and not
    follow.
 

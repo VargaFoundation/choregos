@@ -269,7 +269,7 @@ async def list_artifacts(id: str, session: Db, principal: Me) -> list[Artifact]:
 )
 async def attach_files(id: str, request: Request, session: Db, principal: Me) -> list[Artifact]:
     """A person hands files to the work item, multipart (`files`, repeated): each becomes an input
-    artifact the workflow's steps may read as `attachments` (ADR 0197)."""
+    artifact the workflow's steps may read as `attachments` (ADR 0201)."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
@@ -789,7 +789,7 @@ async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me)
         await _reroute(session, principal, project, item, body)
         return {"status": "accepted", "action": body.action}
     if body.action == "mark_agent_ready":
-        # A start waits for the files its workflow requires (ADR 0197 §7).
+        # A start waits for the files its workflow requires (ADR 0201 §7).
         await refuse_start_below_min(session, workflow_model(await work_item_workflow(session, item)), item)
         payload = {
             "project_id": project.id,

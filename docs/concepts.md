@@ -49,7 +49,7 @@ A workflow also says, from its YAML alone, how documents travel between its step
 flow, `graph.artifacts`): for each name, the transitions that output it, the ones that list it in
 `inputs`, and where it comes from. `step`: some transition outputs it; `feedback`: `human_feedback`,
 written by a person's rejection; `field`: a property of the work item's fields
-(`metadata.inputs`); `attached`: `attachments`, the files handed to the work item (ADR 0197), never
+(`metadata.inputs`); `attached`: `attachments`, the files handed to the work item (ADR 0201), never
 `missing`; `missing`: read, but nothing produces it. A transition that lists `attachments` in `inputs`
 gets every handed file mounted, the latest revision of each name; no transition may output it, a
 workflow with neither `metadata.attachments` nor an `a2a:` block cannot read it, and `artifacts:`

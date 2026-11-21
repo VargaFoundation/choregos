@@ -3659,7 +3659,7 @@ once) and a box to fire it with a payload.
 ### Handing files to a work item
 
 A workflow that works from documents a person received says so in its metadata
-([ADR 0197](adr/0197-a-person-hands-files-to-a-work-item.md)):
+([ADR 0201](adr/0201-a-person-hands-files-to-a-work-item.md)):
 
 ```yaml
 metadata:

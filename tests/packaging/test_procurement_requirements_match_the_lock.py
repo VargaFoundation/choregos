@@ -1,4 +1,4 @@
-"""Does the procurement job image install exactly what `uv.lock` locks, by hash? (ADR 0198, S84-09)
+"""Does the procurement job image install exactly what `uv.lock` locks, by hash? (ADR 0202, S85-09)
 
 The image installs `tranibor-procurement`'s dependencies into `/opt/procurement` from
 `plugins/procurement/requirements.txt`, with `--require-hashes`. That file is not written by hand: it is

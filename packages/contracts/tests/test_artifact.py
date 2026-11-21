@@ -109,7 +109,7 @@ def test_the_workflow_schema_knows_every_type() -> None:
     assert set(transition["enum"]) == set(ARTIFACT_TYPES)
 
 
-# ───────────────────────── files handed to a work item (ADR 0197) ─────────────────────────
+# ───────────────────────── files handed to a work item (ADR 0201) ─────────────────────────
 
 
 def _workflow(attachments: object) -> dict[str, object]:

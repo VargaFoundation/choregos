@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`extract`: the files of `.choregos/inputs/` as one document of normalised text (ADR 0198 point 3).
+"""`extract`: the files of `.choregos/inputs/` as one document of normalised text (ADR 0202 point 3).
 
 Extraction does not judge: a sentence in an offer that talks to its reader is text like any other, kept
 unchanged. What it measures is what could not be read, and the workflow's gate decides what to do.

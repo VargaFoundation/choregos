@@ -1,7 +1,7 @@
 [project]
 name = "tranibor-procurement"
 version = "0.27.17"
-description = "The code of the procurement plugin: the tranibor-procurement job command (ADR 0198)"
+description = "The code of the procurement plugin: the tranibor-procurement job command (ADR 0202)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 # What the knowledge bases of the API already pin for document conversion (`apps/api/pyproject.toml`).
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 # The command a job step runs (ADR 0056). No `choregos.plugins` entry point, on purpose: the plugin
-# registers nothing, and the API and the workers never import this distribution (ADR 0198 point 1).
+# registers nothing, and the API and the workers never import this distribution (ADR 0202 point 1).
 [project.scripts]
 tranibor-procurement = "tranibor_procurement.cli:main"
 

@@ -79,8 +79,8 @@ names it.
   `plugins/investment-research/` of the core's repository, which the published images install. Its
   template's deterministic steps run `choregos-quant` in the plugin's job image,
   `tranibor-investment-research`, which each release builds FROM its own runner image.
-- **Procurement**: `procurement`, planned ([ADR 0198](../../adr/0198-procurement-is-a-plugin-whose-code-half-is-a-job-image.md),
-  stream S84), a first-party plugin with a code half and no extension. Content: a template that compares
+- **Procurement**: `procurement`, planned ([ADR 0202](../../adr/0202-procurement-is-a-plugin-whose-code-half-is-a-job-image.md),
+  stream S85), a first-party plugin with a code half and no extension. Content: a template that compares
   the supplier offers a person hands a work item, two agents that never compute, their skills and
   evals, later an MCP server for the organisation's purchasing system. Code: the distribution
   `tranibor-procurement`, whose only product is the command its deterministic steps run, in the

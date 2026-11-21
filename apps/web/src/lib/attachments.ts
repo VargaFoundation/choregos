@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Files a person hands to a work item (ADR 0197): what the workflow declares in
+ * Files a person hands to a work item (ADR 0201): what the workflow declares in
  * `metadata.attachments`, which of a person's files fit it, and which artifacts on a work item's
  * page are handed files. The API is the judge of every limit; this is the courtesy before the send.
  */
 import { humanSize } from "./artifacts";
 import type { Artifact } from "./types";
 
-/** `metadata.attachments` with its defaults filled in (ADR 0197 §1). */
+/** `metadata.attachments` with its defaults filled in (ADR 0201 §1). */
 export type AttachmentRule = { accept: string[]; min: number; max: number };
 
-/** The extensions each artifact type is recognised by, as the API reads a file name (ADR 0197 §3). */
+/** The extensions each artifact type is recognised by, as the API reads a file name (ADR 0201 §3). */
 const EXTENSIONS: Record<string, string[]> = {
   markdown: ["md", "markdown"],
   json: ["json"],

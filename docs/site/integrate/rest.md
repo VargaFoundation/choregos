@@ -76,7 +76,7 @@ choregos items create acme:billing-api --workflow ship-a-change --title "Add cre
 
 ## 2 bis. Hand files to a work item
 
-A workflow that declares `metadata.attachments` takes files from a person (ADR 0197). File the work
+A workflow that declares `metadata.attachments` takes files from a person (ADR 0201). File the work
 item with `"start": false`, send the files, then start it with the `mark_agent_ready` action; a start
 is refused while fewer than `min` files were handed.
 

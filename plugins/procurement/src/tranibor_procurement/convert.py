@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""One file to Markdown, in a child process with a timeout (ADR 0198 point 3).
+"""One file to Markdown, in a child process with a timeout (ADR 0202 point 3).
 
 The file comes on stdin, `python -m tranibor_procurement.convert <kind>` answers one JSON object on
 stdout. The parent kills the child past its timeout and gives it a bare environment: a hostile

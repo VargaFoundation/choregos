@@ -10,13 +10,13 @@ import { type AttachmentRule, handedFiles } from "@/lib/attachments";
 import { shortDate } from "@/lib/format";
 import type { Artifact } from "@/lib/types";
 
-/** Who handed a file, in words (ADR 0197 §2). */
+/** Who handed a file, in words (ADR 0201 §2). */
 function handedBy(artifact: Artifact): string {
   return artifact.handed_by === "a2a" ? "an application" : "a person";
 }
 
 /**
- * The files handed to a work item (ADR 0197): name, type, size, who handed each and when, a download
+ * The files handed to a work item (ADR 0201): name, type, size, who handed each and when, a download
  * through the content route, and "Add files" while the work item is not terminal.
  */
 export function FilesCard({

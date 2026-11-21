@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The relay: a job step's way to a connector operation, through the platform's API (ADR 0198 point 7).
+"""The relay: a job step's way to a connector operation, through the platform's API (ADR 0202 point 7).
 
 `POST {TRANIBOR_API_URL}/runs/{TRANIBOR_RUN_ID}/tools/{connector}__{operation}` with the run token. The
 name is the one the API gives a brokered tool (`services.broker.SEPARATOR`): the connector's name, two
@@ -21,7 +21,7 @@ from typing import Any, Final
 
 from tranibor_procurement import job
 
-#: The connector of the plugin's server (ADR 0198 point 7).
+#: The connector of the plugin's server (ADR 0202 point 7).
 CONNECTOR: Final = "purchasing"
 #: The separator of a tool's name: the connector, then the operation (`services.broker.SEPARATOR`).
 SEPARATOR: Final = "__"

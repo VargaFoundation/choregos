@@ -367,7 +367,7 @@ async def store_file(
 SENT_BY_A2A = "a2a:"
 
 
-#: The producer of a file a person handed to the work item (ADR 0197 §2): `person:<user id>`.
+#: The producer of a file a person handed to the work item (ADR 0201 §2): `person:<user id>`.
 SENT_BY_PERSON = "person:"
 
 
@@ -420,7 +420,7 @@ async def record_input_file(
     """The input artefact of a file a caller sent: stored like a step's file, produced by no run.
 
     Its producer is `a2a:<work item id>`, or `person:<user id>` when `person` names who handed it
-    (ADR 0197 §2); a step reads it by declaring its name in `inputs`.
+    (ADR 0201 §2); a step reads it by declaring its name in `inputs`.
     """
     return await _record(
         session,

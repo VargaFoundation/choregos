@@ -40,7 +40,7 @@
     "handed_by": {
       "type": ["string", "null"],
       "enum": ["person", "a2a", null],
-      "description": "Who handed this file to the work item (ADR 0197 §2): a person or an application's A2A task; null for a step's output."
+      "description": "Who handed this file to the work item (ADR 0201 §2): a person or an application's A2A task; null for a step's output."
     },
     "value": {
       "type": ["string", "number", "null"],

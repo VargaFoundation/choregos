@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """`tranibor-procurement` runs in the plugin's own job image, built by the core's release FROM its runner
-(S84-09, ADR 0198, ADR 0056).
+(S85-09, ADR 0202, ADR 0056).
 
 The image is the same release's runner plus this distribution in an environment of its own,
 `/opt/procurement`, with the dependencies the lock gives, by hash. Remove the release job, give the
@@ -26,7 +26,7 @@ IMAGE = PUBLISHING.image(f"{PUBLISHING.image_prefix}-procurement")
 def test_the_distribution_declares_the_command() -> None:
     data = tomllib.loads((PLUGIN / "pyproject.toml").read_text(encoding="utf-8"))
     assert data["project"]["scripts"]["tranibor-procurement"] == "tranibor_procurement.cli:main"
-    assert "entry-points" not in data["project"], "no extension: nothing registers itself (ADR 0198)"
+    assert "entry-points" not in data["project"], "no extension: nothing registers itself (ADR 0202)"
 
 
 def test_the_job_image_is_the_runner_plus_the_command() -> None:

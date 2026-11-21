@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The JSON Schemas shipped with the plugin (ADR 0198): the shape the reading agent must produce."""
+"""The JSON Schemas shipped with the plugin (ADR 0202): the shape the reading agent must produce."""
 
 from __future__ import annotations
 

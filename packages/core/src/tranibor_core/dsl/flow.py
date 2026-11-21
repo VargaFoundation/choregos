@@ -53,7 +53,7 @@ def artifact_flow(wf: Workflow) -> list[dict[str, Any]]:
 
     `origin` is `step` (a transition outputs it), `feedback` (`human_feedback`, written by a
     person's rejection), `field` (a property of `metadata.inputs`), `attached` (`attachments`: the
-    files handed to the work item, ADR 0197) or `missing` (read, but nothing produces it).
+    files handed to the work item, ADR 0201) or `missing` (read, but nothing produces it).
     Sorted by the YAML index of the first producer, then of the first reader, then by name:
     two calls give the same list.
     """

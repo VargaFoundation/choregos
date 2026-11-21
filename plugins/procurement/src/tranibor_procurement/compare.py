@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`compare`: every number a comparison memo may quote, in decimal arithmetic (ADR 0198).
+"""`compare`: every number a comparison memo may quote, in decimal arithmetic (ADR 0202).
 
 Reads `.choregos/inputs/offers_structured.json` (the shape of `schemas/offers_structured.schema.json`),
 `offers_text.json` and the field `currency`. A runner mounts an inline JSON input as its artifact name

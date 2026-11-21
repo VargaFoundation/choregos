@@ -937,7 +937,7 @@ export const api = {
     request<PolicyDef>(`/projects/${qualify(id)}/policy`, { method: "PUT", body: JSON.stringify({ yaml }) }),
   createWorkItem: (id: string, body: WorkItemCreate) =>
     request<WorkItemDto>(`/projects/${qualify(id)}/work-items`, { method: "POST", body: JSON.stringify(body) }),
-  /** Hands files to a work item, multipart (ADR 0197): each becomes an input artifact; 201 with the stored artifacts. */
+  /** Hands files to a work item, multipart (ADR 0201): each becomes an input artifact; 201 with the stored artifacts. */
   attachWorkItemFiles: (id: string, files: File[]) => {
     const form = new FormData();
     for (const file of files) form.append("files", file, file.name);

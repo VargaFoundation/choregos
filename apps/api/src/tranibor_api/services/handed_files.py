@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Files a person hands to a work item (ADR 0197): the checks, the names and the two producers.
+"""Files a person hands to a work item (ADR 0201): the checks, the names and the two producers.
 
 A handed file is an input artifact, stored as an A2A file is: the object store first, then the rows,
 so that a store that fails leaves no row. Its producer is `person:<user id>`, beside `a2a:<work item id>`.
@@ -63,7 +63,7 @@ class HandedFile:
 
 
 def slug(filename: str) -> str:
-    """A file's artifact name (ADR 0197 §4): ASCII folding, every character outside `[A-Za-z0-9_.-]`
+    """A file's artifact name (ADR 0201 §4): ASCII folding, every character outside `[A-Za-z0-9_.-]`
     replaced by `-`, runs of `-` collapsed, the extension kept, 128 characters at most. Empty: refused."""
     # The base name only, and not cut at 255 characters like `safe_filename`: the extension must survive.
     base = PurePosixPath(filename.replace("\\", "/")).name.strip()
@@ -77,7 +77,7 @@ def slug(filename: str) -> str:
 
 
 def file_limit(project: Project) -> int:
-    """The project's limit for a handed file, whatever the door (`a2a.max_file_bytes`, ADR 0197 §3)."""
+    """The project's limit for a handed file, whatever the door (`a2a.max_file_bytes`, ADR 0201 §3)."""
     try:
         return A2aConfig.model_validate((project.config or {}).get("a2a") or {}).max_file_bytes
     except ValidationError:
@@ -137,7 +137,7 @@ _MAGIC = {
 
 
 def _check_bytes(shown: str, name: str, type_: str, data: bytes) -> None:
-    """The bytes are what the type says (ADR 0197 §3): a knowledge-base upload's checks for the formats
+    """The bytes are what the type says (ADR 0201 §3): a knowledge-base upload's checks for the formats
     it knows (magic bytes, an Office archive's bombs), a text check for text, the magic bytes of an image.
     A type the platform cannot check is refused rather than stored unchecked."""
     if PurePosixPath(name.lower()).suffix in FORMATS:

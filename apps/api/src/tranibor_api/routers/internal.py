@@ -570,7 +570,7 @@ async def get_inputs(id: str, session: Db, claims: OpenRunAuth) -> list[RunInput
 
     The runner mounts them as files in `.choregos/inputs/`, so a large report no longer has to fit
     in the prompt. An input nothing has produced yet is simply absent. When the transition declares
-    `attachments`, every file handed to the work item is listed too (ADR 0197 §8); a handed name that
+    `attachments`, every file handed to the work item is listed too (ADR 0201 §8); a handed name that
     is also a declared input is listed once, the declared input's revision winning."""
     run, item, _ = await _run_and_item(session, id)
     declared = _declared_inputs(run)
@@ -602,7 +602,7 @@ async def get_inputs(id: str, session: Db, claims: OpenRunAuth) -> list[RunInput
 async def get_input_content(id: str, name: str, session: Db, claims: OpenRunAuth) -> Response:
     """The bytes of a declared input, digest checked; reading it leaves a *read* receipt (S25-04)
     under the digest of what was read. Only the inputs the run's transition declares are served, and
-    a handed file only when it declares `attachments` (ADR 0197 §8)."""
+    a handed file only when it declares `attachments` (ADR 0201 §8)."""
     run, item, project = await _run_and_item(session, id)
     declared = _declared_inputs(run)
     row: ArtifactRecord | None

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`renewals`: the contracts that end soon, as the fan-out of a renewal campaign needs them (ADR 0198).
+"""`renewals`: the contracts that end soon, as the fan-out of a renewal campaign needs them (ADR 0202).
 
 Calls `purchasing.list_contracts` (`ending_before` an ISO date) through the relay. Output `contracts` =
 `{expiring: [id], by_id: {id: summary}, left_out: [id]}`, ordered by end date then id: `--max` caps the
