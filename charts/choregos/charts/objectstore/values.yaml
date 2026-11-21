@@ -1,0 +1,31 @@
+# The embedded object store (ADR 0208). RustFS (Apache-2.0), the S3 server the development stack
+# already uses (`dev/compose.yaml`); the MinIO server image is no longer published.
+# Rendered only when `global.objectStore.embedded` is true. The keys come from the Secret named by
+# `global.objectStore.secretRef` (`access-key`, `secret-key`): the chart draws it when
+# `global.objectStore.generateSecret` is on, otherwise the site provides it.
+image:
+  repository: rustfs/rustfs
+  tag: "1.0.1"
+  # The multi-arch index digest of the tag above. Empty: the tag alone designates the image.
+  digest: sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+# The Job that makes the bucket the object store URL names (`s3://<bucket>/...`), idempotently.
+bucketJob:
+  image:
+    repository: rclone/rclone
+    tag: "1.68.2"
+    digest: sha256:74c51b8817e5431bd6d7ed27cb2a50d8ee78d77f6807b72a41ef6f898845942b
+  # More buckets to make, beside the one of `global.objectStore.url`.
+  extraBuckets: []
+persistence:
+  enabled: true
+  size: 20Gi
+  # Empty: the cluster's default StorageClass.
+  storageClass: ""
+  # Adopt a volume that exists (the chart then creates none).
+  existingClaim: ""
+# The image's own user is named (`rustfs`), not numbered, so `runAsNonRoot` cannot be asserted here:
+# a site whose admission policy requires one sets `runAsUser` / `fsGroup` for the image it runs.
+podSecurityContext: {}
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { cpu: "1", memory: 1Gi }

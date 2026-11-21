@@ -54,3 +54,13 @@ dependencies:
     version: 0.27.15
     repository: file://charts/websearch
     condition: choregos-websearch.enabled
+  # ADR 0208, the all-in-one mode: an S3-compatible object store and an OIDC provider, each off by
+  # default and each with its own switch, so a site brings its own S3 or its own Keycloak instead.
+  - name: choregos-objectstore
+    version: 0.28.0
+    repository: file://charts/objectstore
+    condition: global.objectStore.embedded
+  - name: choregos-keycloak
+    version: 0.28.0
+    repository: file://charts/keycloak
+    condition: global.oidc.embedded

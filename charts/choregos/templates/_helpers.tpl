@@ -227,7 +227,7 @@ proj-{slug}-runners
 - name: CHOREGOS_OBJECT_STORE_URL
   value: {{ .Values.global.objectStore.url | quote }}
 - name: CHOREGOS_OBJECT_STORE_ENDPOINT
-  value: {{ .Values.global.objectStore.endpoint | default "" | quote }}
+  value: {{ include "choregos.objectStoreEndpoint" . | quote }}
 - name: CHOREGOS_OBJECT_STORE_REGION
   value: {{ .Values.global.objectStore.region | default "us-east-1" | quote }}
 {{- with .Values.global.objectStore.secretRef }}
@@ -832,6 +832,13 @@ its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in 
 - { name: temporal, port: 7233, namespace: choregos-temporal, pod: choregos-temporal, embedded: {{ $g.temporal.embedded | default false }} }
 - { name: gateway, port: 4000, namespace: choregos-gateway, pod: choregos-litellm, embedded: {{ $g.gateway.embedded | default false }} }
 - { name: memory, port: 8432, namespace: choregos-memory, pod: choregos-ecphoria, embedded: {{ $g.memory.embedded | default false }} }
+{{- /* ADR 0208: listed only when embedded, so an install that does not embed them renders what it always did. */}}
+{{- if ($g.objectStore).embedded }}
+- { name: objectstore, port: 9000, namespace: choregos-objectstore, pod: choregos-objectstore, embedded: true }
+{{- end }}
+{{- if ($g.oidc).embedded }}
+- { name: oidc, port: 8080, namespace: choregos-oidc, pod: choregos-keycloak, embedded: true }
+{{- end }}
 {{- end -}}
 
 {{/* The NetworkPolicy peer of one of `choregos.networkDependencies`. */}}
@@ -840,5 +847,51 @@ its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in 
 { podSelector: { matchLabels: { app.kubernetes.io/name: {{ .dependency.pod }} } } }
 {{- else -}}
 { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .dependency.namespace }} } } }
+{{- end -}}
+{{- end -}}
+
+{{/*
+All in one (ADR 0208): the pieces the chart can embed beyond the data stores, each one switched by its
+own `embedded` and each one overridable by the setting that names the site's own.
+*/}}
+{{- define "choregos.allInOne" -}}
+{{- if ((.Values.global.allInOne | default dict).enabled) -}}true{{- end -}}
+{{- end -}}
+
+{{/* An image by tag and, when the digest is known, by digest too: `repo:tag@sha256:...`. */}}
+{{- define "choregos.pinnedImage" -}}
+{{ .repository }}:{{ .tag }}{{ with .digest }}@{{ . }}{{ end }}
+{{- end -}}
+
+{{- define "choregos.objectStoreServiceName" -}}
+{{- (.Values.global.objectStore).serviceName | default (printf "%s-objectstore" .Release.Name) -}}
+{{- end -}}
+
+{{/* The bucket the object store URL names: `s3://bucket/prefix` gives `bucket`. */}}
+{{- define "choregos.objectStoreBucket" -}}
+{{- regexReplaceAll "/.*" (trimPrefix "s3://" (.Values.global.objectStore.url | default "")) "" -}}
+{{- end -}}
+
+{{/* The endpoint the API, the backup and the bucket Job use: the site's, else the embedded server's. */}}
+{{- define "choregos.objectStoreEndpoint" -}}
+{{- if .Values.global.objectStore.endpoint -}}
+{{ .Values.global.objectStore.endpoint }}
+{{- else if .Values.global.objectStore.embedded -}}
+http://{{ include "choregos.objectStoreServiceName" . }}.{{ .Release.Namespace }}.svc:9000
+{{- end -}}
+{{- end -}}
+
+{{/* The embedded Keycloak's public host: `choregos-keycloak.ingress.hostname`, else `auth.<global.domain>`. */}}
+{{- define "choregos.oidcHost" -}}
+{{- $kc := index .Values "choregos-keycloak" | default dict -}}
+{{- (($kc.ingress | default dict).hostname) | default (printf "auth.%s" .Values.global.domain) -}}
+{{- end -}}
+
+{{/* The issuer the API and the realm agree on: the site's `global.oidc.issuer`, else the embedded realm's. */}}
+{{- define "choregos.oidcIssuer" -}}
+{{- if .Values.global.oidc.issuer -}}
+{{ .Values.global.oidc.issuer }}
+{{- else if .Values.global.oidc.embedded -}}
+{{ ternary "https" "http" (hasPrefix "https://" (.Values.global.publicUrl | default "")) }}://{{ include "choregos.oidcHost" . }}/realms/{{ ((index .Values "choregos-keycloak" | default dict).realm | default dict).name | default "choregos" }}
 {{- end -}}
 {{- end -}}

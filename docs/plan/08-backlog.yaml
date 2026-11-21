@@ -5768,6 +5768,16 @@ stories:
     size: L
     depends_on: [S80-12]
     notes: "Fourth move of ADR 0195. A websearch subchart, off by default. Done."
+
+    notes: "Fourth move of ADR 0195. A websearch subchart, off by default."
+  - id: S80-18
+    title: "feat(charts): an all-in-one mode that deploys every solution the platform requires, embedded Keycloak and RustFS, generated Secrets (ADR 0208)"
+    stream: S80
+    sprint: 1
+    priority: 2
+    size: L
+    depends_on: [S80-12]
+    notes: "values/all-in-one.yaml, subcharts choregos-objectstore and choregos-keycloak. The agent-sandbox operator is not vendored (k8s_job fallback). Proven by rendering only."
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
     stream: S81
