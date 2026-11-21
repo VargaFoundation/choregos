@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 import yaml
@@ -28,11 +28,16 @@ from tranibor_core.dsl.requirements import requirements
 
 from ..db.models import Agent, AgentVersion, OrgWorkflow
 from ..errors import ApiError
+from ..keyset import matches, position_page
 from ..schemas.definitions import (
     WorkflowCatalogueAgentDto,
     WorkflowCatalogueEntryDto,
     WorkflowCatalogueRequirementDto,
 )
+
+if TYPE_CHECKING:
+    from ..deps import Page
+    from ..schemas.base import PageMeta
 
 logger = structlog.get_logger(__name__)
 
@@ -326,13 +331,44 @@ def entry_dto(
     )
 
 
-async def entries(session: AsyncSession, org_id: str) -> list[WorkflowCatalogueEntryDto]:
-    listed = await offered(session, org_id)
-    slugs = {slug for o in listed for _, slug, _ in named_agents(o.workflow)}
+def _text_of(o: Offered) -> tuple[str, ...]:
+    """What the library's search reads of an entry: its name, title, summary, source and tags."""
+    meta = o.workflow.metadata
+    info = meta.catalogue
+    title = info.title if info and info.title else o.name
+    summary = info.summary if info and info.summary else (meta.description or "")
+    return (o.name, title, summary, o.source, *(info.tags if info else []))
+
+
+def _needs_workspace(o: Offered) -> bool:
+    return any(e.capability == "scm" for e in _requirements(o.yaml))
+
+
+async def entries(
+    session: AsyncSession,
+    org_id: str,
+    page: Page,
+    *,
+    q: str | None = None,
+    needs_workspace: bool | None = None,
+) -> tuple[list[WorkflowCatalogueEntryDto], PageMeta]:
+    """One page of the entries, in the order of the sources (ADR 0206).
+
+    The list is built whole, as it always was (the sources are code, templates, plugins and the
+    organisation's shares: not one SQL table), then filtered on `q` and on whether the workflow needs a
+    workspace, and cut by position. Where each agent resolves is read for the page's agents only.
+    """
+    listed = [
+        o
+        for o in await offered(session, org_id)
+        if matches(q, *_text_of(o)) and (needs_workspace is None or _needs_workspace(o) == needs_workspace)
+    ]
+    window, meta = position_page(listed, page)
+    slugs = {slug for o in window for _, slug, _ in named_agents(o.workflow)}
     # A list never waits for the plugin sources (S55-04): adopting an entry still does, to name the plugin.
     resolved = await resolutions(session, org_id, slugs, wait_for_sources=False)
     # The list carries no YAML (S55-04b): it weighed every entry's whole text and no page reads it.
-    return [entry_dto(o, resolved, with_yaml=False) for o in listed]
+    return [entry_dto(o, resolved, with_yaml=False) for o in window], meta
 
 
 def renamed(text: str, name: str) -> str:

@@ -907,7 +907,7 @@ as they were. A group may name the project (`{project}-maintainers`, S59-01): an
 shares one of these with its own groups serves every project with its own people.
 
 ```bash
-curl $API/orgs/acme/workflow-catalogue                    # any member
+curl "$API/orgs/acme/workflow-catalogue?q=hr&needs_workspace=false"   # any member; one page, `meta.next_cursor` for the next
 curl -X POST $API/projects/acme:hr/workflow-adoptions \
   -d '{"source": "template:joiners-leavers", "name": "onboarding", "as": "joiners", "make_default": true}'
 curl -X POST $API/orgs/acme/workflow-catalogue \
@@ -2096,7 +2096,7 @@ a spend back leaves the line `unmeasured`).
   refuse a model that lost the `embed` / `distill` usage, and say to change it in `/admin/models`.
   `allow_unvalidated` never bypasses the catalogue.
 - **Reading**: every member sees the page read-only and the agent builder offers only the usable
-  models (`GET /orgs/{org}/models/usable`); changes need the `org_admin` role.
+  models (`GET /orgs/{org}/models/usable`, a page at a time: `q`, `limit`, `cursor`); changes need the `org_admin` role.
 - **Voice spend rate**: `max_usd_per_minute` (API only, `PATCH /orgs/{org}/models/{id}`;
   `clear_max_usd_per_minute: true` removes it) caps a voice session of that model at that much per
   minute begun, on top of its reservation. A voice session needs the model's audio prices, from the
@@ -3696,7 +3696,7 @@ The work item starts in `workflow`, or in the workflow the project's routing pic
 body) answers `duplicate`; with `key`, a second call for the same value answers `already_open` and
 starts nothing while that work item runs. Once it has ended, the same value answers `reopened`: the
 work item starts a new pass (see *A ticket that comes back*, below). A payload without the key, or fields the workflow refuses, answers 422 with the
-reason. `POST /projects/{id}/triggers/{name}/fire` runs the same trigger with a payload you type, to
+reason. `GET /projects/{id}/triggers` lists them a page at a time, in the order the configuration declares them (`q` reads the name, title and workflow). `POST /projects/{id}/triggers/{name}/fire` runs the same trigger with a payload you type, to
 try it before handing the URL out. With an external tracker, a trigger answers 409: use the
 tracker's own webhook.
 

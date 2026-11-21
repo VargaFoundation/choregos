@@ -11,7 +11,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      triggers: vi.fn(),
+      triggersPage: vi.fn(),
       rotateTriggerToken: vi.fn(),
       fireTrigger: vi.fn(),
       project: vi.fn(),
@@ -43,6 +43,8 @@ const project = {
   config: { slug: "desk", org: "acme", notify: { emails: ["ops@acme.test"] }, triggers: [{ name: "incident", title: "{/number}" }] },
 };
 
+const onePage = (items: ReturnType<typeof trigger>[]) => ({ items, meta: { has_more: false, next_cursor: null } });
+
 const view = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -57,10 +59,10 @@ describe("a project's HTTP triggers (S56-02)", () => {
   });
 
   it("lists each trigger with its URL, its workflow or the routing, and whether it has a token", async () => {
-    vi.mocked(api.triggers).mockResolvedValue([
+    vi.mocked(api.triggersPage).mockResolvedValue(onePage([
       trigger("incident", { workflow: "incident", has_token: true }),
       trigger("signed", { auth: "signature" }),
-    ]);
+    ]));
     view();
 
     const incident = await screen.findByTestId("trigger-incident");
@@ -75,15 +77,29 @@ describe("a project's HTTP triggers (S56-02)", () => {
     expect(signed).toHaveTextContent("signed");
   });
 
-  it("an answer that is not a list shows no trigger instead of breaking the settings page", async () => {
-    vi.mocked(api.triggers).mockResolvedValue({} as never);
+  it("shows no trigger when the page is empty", async () => {
+    vi.mocked(api.triggersPage).mockResolvedValue(onePage([]));
     view();
 
     expect(await screen.findByTestId("triggers-none")).toHaveTextContent("No trigger declared.");
   });
 
+  it("pages the list: More asks the next page by its cursor (ADR 0206)", async () => {
+    vi.mocked(api.triggersPage)
+      .mockResolvedValueOnce({ items: [trigger("first")], meta: { has_more: true, next_cursor: "c1" } } as never)
+      .mockResolvedValueOnce(onePage([trigger("second")]) as never);
+    view();
+
+    await screen.findByTestId("trigger-first");
+    expect(screen.queryByTestId("trigger-second")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    await screen.findByTestId("trigger-second");
+    expect(api.triggersPage).toHaveBeenLastCalledWith("desk", { cursor: "c1", limit: 50 });
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
+  });
+
   it("shows a minted token once, with the signing secret of a signed trigger", async () => {
-    vi.mocked(api.triggers).mockResolvedValue([trigger("signed", { auth: "signature" })]);
+    vi.mocked(api.triggersPage).mockResolvedValue(onePage([trigger("signed", { auth: "signature" })]));
     vi.mocked(api.rotateTriggerToken).mockResolvedValue({
       name: "signed",
       url: "u",
@@ -101,7 +117,7 @@ describe("a project's HTTP triggers (S56-02)", () => {
   });
 
   it("fires a trigger by hand with a JSON object, and refuses anything else before calling", async () => {
-    vi.mocked(api.triggers).mockResolvedValue([trigger("incident", { workflow: "incident" })]);
+    vi.mocked(api.triggersPage).mockResolvedValue(onePage([trigger("incident", { workflow: "incident" })]));
     vi.mocked(api.fireTrigger).mockResolvedValue({
       accepted: true,
       duplicate: false,
@@ -130,7 +146,7 @@ describe("a project's HTTP triggers (S56-02)", () => {
 describe("editing the triggers and the start rules (S56-02)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.triggers).mockResolvedValue([]);
+    vi.mocked(api.triggersPage).mockResolvedValue(onePage([]));
     vi.mocked(api.project).mockResolvedValue(project as never);
     vi.mocked(api.updateProject).mockResolvedValue(project as never);
   });

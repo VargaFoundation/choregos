@@ -18,8 +18,9 @@ from tranibor_core.models import PLATFORM_PROFILES, TIERS
 
 from ..audit import record
 from ..db.models import ModelCatalogueRow, Organization
-from ..deps import Db, Me, require_platform_admin
+from ..deps import Db, Me, Pagination, require_platform_admin
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
+from ..keyset import matches, position_page
 from ..rbac import Permission
 from ..schemas.definitions import (
     CacheMultipliers,
@@ -37,6 +38,7 @@ from ..schemas.definitions import (
     ModelTiers,
     PriceOverride,
     UsableModel,
+    UsableModelPage,
 )
 from ..services import model_catalogue as service
 from ..services.gateway import org_brings_its_gateway, org_gateway, org_gateway_and_type
@@ -351,16 +353,22 @@ async def curate_preview(org: str, session: Db, principal: Me) -> ModelCuratePre
     return ModelCuratePreview(refused=[ModelCurationRefusal.model_validate(r) for r in refused])
 
 
-@router.get("/orgs/{org}/models/usable", response_model=list[UsableModel], operation_id="listUsableModels")
+@router.get("/orgs/{org}/models/usable", response_model=UsableModelPage, operation_id="listUsableModels")
 async def usable_models(
     org: str,
     session: Db,
     principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
     role: Annotated[str | None, Query()] = None,
     usage: Annotated[str, Query(pattern="^(agent|embed|distill|eval)$")] = "agent",
-) -> list[UsableModel]:
+) -> UsableModelPage:
     """The models an agent may be given: what the catalogue enables for this role and usage, plus,
-    in `open` mode, what the gateway lists that the catalogue does not mention."""
+    in `open` mode, what the gateway lists that the catalogue does not mention.
+
+    By name, one page at a time (ADR 0206). The list merges catalogue rows with the gateway's live list
+    and is cut by the organisation's policy: none of that is one SQL table, so it is built whole, then
+    filtered on `q` (name, display name or provider) and cut by position."""
     _read(principal, org)
     organisation = await organisation_by_slug(session, org)
     settings = service.org_settings(organisation)
@@ -423,4 +431,6 @@ async def usable_models(
                 ],
             )
         )
-    return out
+    kept = [m for m in out if matches(q, m.model_name, m.display_name, m.provider)]
+    items, meta = position_page(kept, page)
+    return UsableModelPage(items=items, meta=meta)

@@ -258,6 +258,13 @@ class TriggerDto(Dto):
     token_created_at: datetime | None = None
 
 
+class TriggerPage(Dto):
+    """One page of a project's declared triggers, in the order its configuration declares them (ADR 0206)."""
+
+    items: list[TriggerDto]
+    meta: PageMeta
+
+
 class TriggerTokenDto(Dto):
     """A trigger's new token, shown once: only its SHA-256 is kept."""
 

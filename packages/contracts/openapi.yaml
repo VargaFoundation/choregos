@@ -1053,10 +1053,18 @@ paths:
       description: >-
         The workflows this organisation can adopt (ADR 0111): the core's, the deployment's templates', its installed
         plugins' and the ones it shared from its projects. For each, the capabilities it requires (computed by the
-        engine, never declared), the human groups it declares and where each agent it names resolves. Any member.
+        engine, never declared), the human groups it declares and where each agent it names resolves. Any member. In the
+        order of the sources, one page at a time (ADR 0206): `q` reads the name, title, summary, source and tags;
+        `needs_workspace` keeps the workflows that need (or do not need) a workspace.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: needs_workspace, in: query, schema: { type: boolean } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueEntry" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowCatalogueEntryPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [workflows]
       operationId: shareWorkflow
@@ -1316,9 +1324,17 @@ paths:
       tags: [models]
       operationId: listPlatformModels
       deprecated: true
-      description: The deployment gateway's models, unfiltered. Use `GET /orgs/{org}/models/usable`.
+      description: >-
+        The deployment gateway's models, in the order it lists them, one page at a time (ADR 0206): the gateway has no
+        paging, so the list is read whole, filtered on `q` (name, upstream model or provider) and cut by position.
+        Use `GET /orgs/{org}/models/usable`.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayModel" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GatewayModelPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/models:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1380,13 +1396,20 @@ paths:
     get:
       tags: [models]
       operationId: listUsableModels
-      description: The models an agent may be given for a stage role and a usage; every member may read it.
+      description: >-
+        The models an agent may be given for a stage role and a usage; every member may read it. By name, one page at a
+        time (ADR 0206): the catalogue's rows are merged with the gateway's live list and cut by the organisation's
+        policy, then filtered on `q` (name, display name or provider) and cut by position.
       parameters:
         - { name: role, in: query, required: false, schema: { type: string } }
         - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route, decide], default: agent } }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UsableModelPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/models/{entry_id}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -1561,11 +1584,17 @@ paths:
       summary: The project's HTTP triggers, their URL, and whether each has a token
       description: >-
         The triggers declared under `triggers:` in the project's configuration (S56-01, ADR 0113). Any member reads
-        them; a token is never listed, only whether one exists and when it was minted.
+        them; a token is never listed, only whether one exists and when it was minted. In the order the configuration
+        declares them, one page at a time (ADR 0206); `q` reads the name, title and workflow.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Trigger" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/triggers/{name}/token:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -4937,10 +4966,16 @@ paths:
     get:
       tags: [agents]
       operationId: listAgentCatalogue
-      description: The agents the platform ships (ADR 0040), and their state in the organisation — installed, in which version, an update available, or an agent of the organisation with the same name.
+      description: The agents the platform ships (ADR 0040), and their state in the organisation — installed, in which version, an update available, or an agent of the organisation with the same name. In the catalogue's order, one page at a time (ADR 0206); `q` reads the slug, name, role, summary and tags, `kind` keeps internal agents or external clients.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: kind, in: query, schema: { type: string, enum: [internal, external, remote] } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCatalogueEntry" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCatalogueEntryPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agent-catalogue/{slug}/install:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -12477,6 +12512,36 @@ components:
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    WorkflowCatalogueEntryPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueEntry" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    TriggerPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Trigger" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentCatalogueEntryPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentCatalogueEntry" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    GatewayModelPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/GatewayModel" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    UsableModelPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/UsableModel" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
     WorkflowDefPage:
       type: object

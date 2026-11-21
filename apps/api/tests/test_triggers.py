@@ -309,7 +309,7 @@ async def test_the_list_shows_the_url_and_whether_a_token_exists_never_the_token
     listed = await client.get(f"/api/v1/projects/{project['id']}/triggers")
 
     assert listed.status_code == 200, listed.text
-    assert [(t["name"], t["has_token"], t["workflow"]) for t in listed.json()] == [
+    assert [(t["name"], t["has_token"], t["workflow"]) for t in listed.json()["items"]] == [
         ("incident", True, "incident"),
         ("routed", False, None),
         ("urgent", False, "change"),

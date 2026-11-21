@@ -2,9 +2,11 @@
 """ADR 0206: a list the API returns is paged by the server, in SQL — two ratchets.
 
 1. Every `GET` of the contract whose `200` is a bare JSON array is named below: either a list bounded by
-   construction (`BOUNDED`, a reason each) or a list still to migrate (`NOT_YET_PAGED`, the ceiling).
+   construction (`BOUNDED`, a reason each) or a list still to migrate (`NOT_YET_PAGED`, the ceiling,
+   empty since every list is paged).
    A new array route fails here; a migrated one must leave the ceiling in the same PR (ADR 0099).
-2. `Page.slice` — read up to a cap, cut in Python — is counted, and the count may only go down.
+2. `Page.slice` — read up to a cap, cut in Python — is gone: it may not come back, and no router cuts a
+   list with `.slice(`.
 """
 
 from __future__ import annotations
@@ -57,19 +59,7 @@ BOUNDED: dict[str, str] = {
 }
 
 #: The ceiling: array routes that read without a page. Lowered when one migrates, never raised.
-NOT_YET_PAGED: frozenset[str] = frozenset(
-    {
-        "listAgentCatalogue",
-        # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
-        # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.
-        "listPlatformModels",
-        "listTriggers",
-        # Catalogue rows merged with the gateway's live list and cut by the role/usage policy in Python;
-        # its clients are whole-list pickers (agent builder, project profiles). Needs a decision.
-        "listUsableModels",
-        "listWorkflowCatalogue",
-    }
-)
+NOT_YET_PAGED: frozenset[str] = frozenset()
 
 
 def _array_routes() -> set[str]:
@@ -107,7 +97,7 @@ def test_the_ceiling_drops_when_a_route_is_paged() -> None:
 
 
 def test_no_page_is_cut_in_memory() -> None:
-    """`Page.slice` read a capped list and cut it in Python; `listOutpostCalls` was its last route."""
+    """`Page.slice` read a capped list and cut it in Python; its last route, `listOutpostCalls`, left it."""
     from tranibor_api.deps import Page
 
     assert not hasattr(Page, "slice"), "Page.slice is back: page in SQL with keyset_page (ADR 0206)"
