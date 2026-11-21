@@ -1977,6 +1977,11 @@ releases, and frees its slug; anything else is refused (`409`) with its reasons:
 which keeps its name in the history. It needs the right to manage the agent and is audited
 (`agent.delete`). In the console, **Delete…** sits on the agent's overview and under *Agent status*;
 the registry hides retired agents behind **Show retired**.
+The registry is paged by the server (ADR 0206), like the agents' runs, clients, release history, the
+approvers' inbox and the feedback candidates: `GET /orgs/{org}/agents` answers `{items, meta}` by name
+(or `sort=stars`), filtered in the query by `q` (a part of the slug or name), `tag`, `scope`, `starred`,
+`retired=false` and `awaiting_approval=true`; **More** reads the next 50 with `meta.next_cursor`. The
+scope and tag chips show no counts, since only the rows read so far are known.
 An agent with no run for 60 days says so (`unused`, `last_run_at`), and
 `POST …/agents/{slug}/owner {"email": …}` hands it to another member, credentials included.
 Agents are under the same

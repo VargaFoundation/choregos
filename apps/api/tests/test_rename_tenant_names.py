@@ -118,7 +118,7 @@ async def test_apply_republishes_in_english_and_a_second_run_finds_nothing(
     await tool.apply(await tool.plan(api, MAPPING))
 
     assert (await client.get(f"{ORG}/skills/access-profiles")).status_code == 200
-    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()}
+    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()["items"]}
     assert agents["onboarding-coordinator"]["lifecycle"] == "active"
     assert agents["coordinateur-onboarding"]["lifecycle"] == "deprecated"  # lang: fr-ok
 

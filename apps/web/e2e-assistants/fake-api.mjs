@@ -134,7 +134,7 @@ createServer(async (req, res) => {
   if (path === "/orgs/acme/assistants/coach/knowledge/updates") return json(res, 200, { items: [] });
   if (path === "/orgs/acme/assistants/coach/reads") return json(res, 200, { items: [], meta: { has_more: false } });
   if (path === "/orgs/acme/connectors") return json(res, 200, []);
-  if (path === "/orgs/acme/agents") return json(res, 200, []);
+  if (path === "/orgs/acme/agents") return json(res, 200, { items: [], meta: { has_more: false } });
   if (path === "/orgs/acme/assistants/coach/tasks/new_ticket/event-key") {
     return json(res, 200, { url: "https://choregos.test/webhooks/assistants/acme/coach/tasks/new_ticket/events", secret: "chev_e2e_secret", generation: 1 });
   }

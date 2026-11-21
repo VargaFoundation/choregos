@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import AgentsPage from "@/app/agents/page";
 import { AgentDetailsCard } from "@/components/agents/details";
 import { MAX_TAGS, normalizeTag, TagEditor, TagFilter, tagProblem, withTags } from "@/components/agents/tags";
+import { fakeAgentsPage } from "./fake-agents-server";
 import { api } from "@/lib/api";
 import type { Agent } from "@/lib/types";
 
@@ -23,8 +24,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      agents: vi.fn(),
-      agentMetricsList: vi.fn().mockResolvedValue([]),
+      agentsPage: vi.fn(),
+      agentMetricsList: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       agentCatalogue: vi.fn().mockResolvedValue([]),
       updateAgent: vi.fn(),
     },
@@ -42,11 +43,13 @@ function wrap(node: ReactNode) {
 beforeEach(() => {
   vi.clearAllMocks();
   query.current = new URLSearchParams();
-  vi.mocked(api.agents).mockResolvedValue([
-    agent("architect", ["madr", "architecture", "design"]),
-    agent("ux-designer", ["ux", "design"]),
-    agent("triager", []),
-  ]);
+  vi.mocked(api.agentsPage).mockImplementation(
+    fakeAgentsPage([
+      agent("architect", ["madr", "architecture", "design"]),
+      agent("ux-designer", ["ux", "design"]),
+      agent("triager", []),
+    ]),
+  );
 });
 
 describe("tag helpers", () => {
@@ -114,13 +117,13 @@ describe("the tag editor", () => {
 });
 
 describe("the tag filter", () => {
-  it("lists every tag with its count and toggles it", () => {
+  it("lists every tag of the loaded agents and toggles it", () => {
     const onChange = vi.fn();
     render(<TagFilter agents={[agent("a", ["x", "y"]), agent("b", ["x"])]} value={["x"]} onChange={onChange} />);
-    expect(screen.getByRole("button", { name: "x (2)" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "y (1)" }));
+    expect(screen.getByRole("button", { name: "x" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "y" }));
     expect(onChange).toHaveBeenCalledWith(["x", "y"]);
-    fireEvent.click(screen.getByRole("button", { name: "x (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: "x" }));
     expect(onChange).toHaveBeenLastCalledWith([]);
   });
 });
@@ -140,13 +143,13 @@ describe("the registry", () => {
     expect(screen.queryByTestId("agent-ux-designer")).toBeNull();
     expect(screen.queryByTestId("agent-triager")).toBeNull();
     const filter = screen.getByTestId("tag-filter");
-    expect(within(filter).getByRole("button", { name: "madr (1)" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(filter).getByRole("button", { name: "madr" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("writes the selection in the address", async () => {
     await act(async () => void wrap(<AgentsPage />));
     await screen.findByTestId("agent-architect");
-    fireEvent.click(within(screen.getByTestId("tag-filter")).getByRole("button", { name: "madr (1)" }));
+    fireEvent.click(within(screen.getByTestId("tag-filter")).getByRole("button", { name: "madr" }));
     expect(replace).toHaveBeenCalledWith("/agents?tag=madr");
   });
 

@@ -197,6 +197,6 @@ async def test_the_core_catalogue_offers_development_and_audit_workflows_with_th
     )
     assert adopted.status_code == 201, adopted.text
     assert adopted.json()["origin"] == "core/security-audit@1"
-    agents = (await client.get("/api/v1/orgs/northwind/agents")).json()
+    agents = (await client.get("/api/v1/orgs/northwind/agents")).json()["items"]
     listed = {a["slug"] for a in (agents["items"] if isinstance(agents, dict) else agents)}
     assert {"secops", "security-reviewer", "compliance"} <= listed, "the adoption installed its agents"

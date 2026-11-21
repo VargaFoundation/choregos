@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { actorSlug } from "@/components/agents/registry";
 import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
+import { nextCursor } from "@/lib/paging";
 import type { Agent, AgentSpec, ApiToken } from "@/lib/types";
 
 /** What a read-only external agent may call at the door: read, search, summarise. */
@@ -25,10 +26,20 @@ export function versionDuClient(lecture: boolean): AgentSpec {
  */
 export function McpClients({ org, clients, agents }: { org: string; clients: ApiToken[]; agents: Agent[] }) {
   // One request for every external agent's clients (S30-04): it was one per agent.
-  const rattachements = useQuery({ queryKey: ["agent-credentials", org], queryFn: () => api.orgAgentCredentials(org) });
+  // A lookup, token -> agent: it reads every page, so a client attached past the first is still recognised.
+  const rattachements = useInfiniteQuery({
+    queryKey: ["agent-credentials", org],
+    queryFn: ({ pageParam }) => api.orgAgentCredentials(org, { cursor: pageParam, limit: 200 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+  });
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = rattachements;
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   const parSlug = new Map(agents.map((agent) => [agent.slug, agent]));
   const agentByToken = new Map<string, Agent>();
-  for (const lien of rattachements.data ?? []) {
+  for (const lien of rattachements.data?.pages.flatMap((page) => page.items) ?? []) {
     const agent = lien.agent ? parSlug.get(lien.agent) : undefined;
     if (agent && lien.token_id && !lien.revoked_at) agentByToken.set(lien.token_id, agent);
   }

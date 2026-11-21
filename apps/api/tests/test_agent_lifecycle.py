@@ -113,7 +113,7 @@ async def test_retiring_runs_its_checklist_and_refuses_new_runs(
     body = retired.json()
     assert body["agent"]["lifecycle"] == "retired" and body["agent"]["retired_at"]
     assert (body["revoked_credentials"], body["unpinned_projects"]) == (1, ["billing-api"])
-    credentials = (await client.get(f"{AGENTS}/onboarding-coordinator/credentials")).json()
+    credentials = (await client.get(f"{AGENTS}/onboarding-coordinator/credentials")).json()["items"]
     assert all(c["revoked_at"] for c in credentials)
     assert (await client.get(f"/api/v1/projects/{project['id']}/agents")).json()["items"] == []
     with pytest.raises(AgentUnavailable, match="retired"):
@@ -190,7 +190,7 @@ async def test_ownership_moves_and_the_credentials_stay(client: AsyncClient, adm
     moved = await client.post(f"{AGENTS}/onboarding-coordinator/owner", json={"email": "Lea@northwind.dev"})
     assert moved.status_code == 200, moved.text
     assert moved.json()["owner"] == "lea@northwind.dev"
-    credentials = (await client.get(f"{AGENTS}/onboarding-coordinator/credentials")).json()
+    credentials = (await client.get(f"{AGENTS}/onboarding-coordinator/credentials")).json()["items"]
     assert len(credentials) == 1 and credentials[0]["revoked_at"] is None
     stranger = await client.post(
         f"{AGENTS}/onboarding-coordinator/owner", json={"email": "stranger@else.dev"}

@@ -492,7 +492,7 @@ async def test_every_move_is_in_the_history_and_in_the_audit_log(client: AsyncCl
     await release(client, "reviewer", channel="candidate", version=2, percent=20, reason="try it")
     await release(client, "reviewer", channel="stable", version=2)
     await release(client, "reviewer", channel="stable", version=1, reason="back")
-    history = (await client.get(f"{ORG}/agents/reviewer/releases")).json()
+    history = (await client.get(f"{ORG}/agents/reviewer/releases")).json()["items"]
     assert [(r["channel"], r["kind"], r["version"]) for r in history][:3] == [
         ("stable", "rollback", 1),
         ("stable", "promote", 2),
@@ -501,7 +501,9 @@ async def test_every_move_is_in_the_history_and_in_the_audit_log(client: AsyncCl
     assert history[-1]["kind"] == "publish" and history[-1]["version"] == 1, "creation is the first move"
     assert history[0]["reason"] == "back" and history[0]["requested_by"] == ADMIN
     assert history[1]["checks"] and history[1]["checks"][0]["name"] == "eval_suite"
-    assert len((await client.get(f"{ORG}/agents/reviewer/releases", params={"limit": 2})).json()) == 2
+    assert (
+        len((await client.get(f"{ORG}/agents/reviewer/releases", params={"limit": 2})).json()["items"]) == 2
+    )
     async with session_scope() as session:
         rows = (await session.execute(select(AuditLog).where(AuditLog.action == "agent.release"))).scalars()
         payloads = [r.payload for r in rows if r.payload.get("kind") != "publish"]
@@ -647,4 +649,6 @@ async def test_a_release_made_meanwhile_is_a_conflict_not_a_lost_update(client: 
     assert refused.status_code == 409 and "another release" in refused.text
     # (the stand-in ran inside the refused request, so it is rolled back with it)
     assert (await agent_of(client))["stable_version"] == 1
-    assert len((await client.get(f"{ORG}/agents/reviewer/releases")).json()) == 1, "no row for a refused move"
+    assert len((await client.get(f"{ORG}/agents/reviewer/releases")).json()["items"]) == 1, (
+        "no row for a refused move"
+    )

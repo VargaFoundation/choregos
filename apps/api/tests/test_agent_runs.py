@@ -39,7 +39,7 @@ async def test_an_agent_s_runs_are_listed_newest_first(client: AsyncClient, proj
             )
     response = await client.get("/api/v1/orgs/northwind/agents/writer/runs")
     assert response.status_code == 200, response.text
-    assert [(r["id"], r["status"], r["project_slug"]) for r in response.json()] == [
+    assert [(r["id"], r["status"], r["project_slug"]) for r in response.json()["items"]] == [
         ("run-a1", "failed", "billing-api"),
         ("run-a0", "succeeded", "billing-api"),
     ]

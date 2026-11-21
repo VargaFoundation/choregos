@@ -3432,15 +3432,21 @@ paths:
     get:
       tags: [agents]
       operationId: listAgents
-      description: The agents the caller may see (ADR 0033, ADR 0061) — a personal agent only to its owner and an org_admin, a project's agent to the members of that project.
+      description: The agents the caller may see (ADR 0033, ADR 0061) — a personal agent only to its owner and an org_admin, a project's agent to the members of that project — by name (or most starred first), one page at a time (ADR 0206).
       parameters:
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 200 }, description: "a substring of the slug or of the name" }
         - { name: scope, in: query, required: false, schema: { type: string, enum: [platform, org, project, personal] } }
         - { name: project, in: query, required: false, schema: { type: string }, description: "a project's slug: only the agents that project owns" }
         - { name: tag, in: query, required: false, style: form, explode: true, schema: { type: array, items: { type: string } }, description: "repeatable: only the agents carrying every tag given (AND, S40-10); applied after visibility, so a tag never reveals an agent the caller cannot see" }
         - { name: starred, in: query, required: false, schema: { type: boolean, default: false }, description: "only the agents the caller starred (ADR 0152)" }
         - { name: sort, in: query, required: false, schema: { type: string, enum: [name, stars], default: name }, description: "`stars`: the most starred first (ADR 0152)" }
+        - { name: retired, in: query, required: false, schema: { type: boolean, default: true }, description: "false leaves the retired agents out" }
+        - { name: awaiting_approval, in: query, required: false, schema: { type: boolean, default: false }, description: "only the agents with a release waiting for approval" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Agent" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [agents]
       operationId: createAgent
@@ -4374,9 +4380,11 @@ paths:
       operationId: listAgentFeedbackCandidates
       description: "The candidate eval cases thumbs down proposed for the agent, newest first, for those who manage it (ADR 0140). Pseudonymised; no author, no raw comment."
       parameters:
-        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The proposed candidates, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } } } } }
+        "200": { description: The proposed candidates, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidatePage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/accept:
@@ -4528,19 +4536,26 @@ paths:
     get:
       tags: [agents]
       operationId: listOrgAgentCredentials
-      description: Every client attached to an external agent of the organisation, with the agent's slug — one request for the AI clients' page, not one per agent (S30-04).
+      description: The clients attached to the agents of the organisation, with the agent's slug, by agent name, one page at a time (ADR 0206) — one request for the AI clients' page, not one per agent (S30-04).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The organisation's agent clients, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } } } } }
+        "200": { description: The organisation's agent clients, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredentialPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agent-metrics:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
       tags: [agents]
       operationId: listAgentMetrics
-      description: For each agent of the registry, its runs over the period, its success rate and its cost — the registry's columns in one request (S30-04).
+      description: For each agent of one page of the registry (by name, ADR 0206), its runs over the period, its success rate and its cost — the registry's columns in one request (S30-04).
       parameters:
         - { name: days, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 365, default: 30 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: One line per agent, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentMetricsSummary" } } } } }
+        "200": { description: One line per agent, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetricsSummaryPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/runs:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -4548,11 +4563,13 @@ paths:
     get:
       tags: [agents]
       operationId: listAgentRuns
-      description: The agent's latest runs across the projects the caller may read, newest first (S30-05).
+      description: The agent's runs across the projects the caller may read, newest first, one page at a time (S30-05, ADR 0206).
       parameters:
-        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The runs, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Run" } } } } }
+        "200": { description: The runs, content: { application/json: { schema: { $ref: "#/components/schemas/AgentRunPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/credentials:
     parameters:
@@ -4561,8 +4578,13 @@ paths:
     get:
       tags: [agents]
       operationId: listAgentCredentials
+      description: The clients attached to the external agent, newest first, one page at a time (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The external agent's clients, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } } } } }
+        "200": { description: The external agent's clients, content: { application/json: { schema: { $ref: "#/components/schemas/AgentCredentialPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [agents]
       operationId: attachAgentCredential
@@ -4723,11 +4745,13 @@ paths:
     get:
       tags: [agents]
       operationId: listAgentReleases
-      description: Every move of the agent's channels, newest first — the release history (ADR 0071).
+      description: The moves of the agent's channels, newest first, one page at a time (ADR 0206) — the release history (ADR 0071).
       parameters:
-        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The history, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } } } } }
+        "200": { description: The history, content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleasePage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [agents]
@@ -4783,12 +4807,14 @@ paths:
     get:
       tags: [agents]
       operationId: listOrgAgentReleases
-      description: Releases of the agents the caller may see, newest first; `status=pending_approval` is the approver's inbox.
+      description: Releases of the agents the caller may see, newest first, one page at a time (ADR 0206); `status=pending_approval` is the approver's inbox.
       parameters:
         - { name: status, in: query, required: false, schema: { type: string, enum: [done, pending_approval, rejected, cancelled, superseded] } }
-        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The releases, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } } } } }
+        "200": { description: The releases, content: { application/json: { schema: { $ref: "#/components/schemas/AgentReleasePage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/versions/{version}/readiness:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -4829,9 +4855,13 @@ paths:
     get:
       tags: [agents]
       operationId: listAgentEvaluations
-      description: The live evaluations of the revision, newest first, each judged from its runs as they stand.
+      description: The live evaluations of the revision, newest first, one page at a time (ADR 0206), each judged from its runs as they stand.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The evaluations, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentEvaluation" } } } } }
+        "200": { description: The evaluations, content: { application/json: { schema: { $ref: "#/components/schemas/AgentEvaluationPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/release-policy:
     parameters:
@@ -13592,6 +13622,48 @@ components:
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/ProjectOperation" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Agent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentMetricsSummaryPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentMetricsSummary" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentRunPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Run" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentCredentialPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentCredential" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentReleasePage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentRelease" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    AgentEvaluationPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AgentEvaluation" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ConversationCandidatePage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
     AuditEntry:
       type: object

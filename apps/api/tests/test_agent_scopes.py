@@ -101,17 +101,19 @@ async def test_a_personal_agent_is_invisible_to_everyone_but_its_owner_and_an_ad
     assert (await create_agent(client, "secret-helper", scope="personal")).status_code == 201
 
     await as_user(client, OTHER)
-    assert "secret-helper" not in [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()]
+    assert "secret-helper" not in [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()["items"]]
     for path in ("", "/versions/1", "/metrics", "/runs"):
         found = await client.get(f"{ORG}/agents/secret-helper{path}")
         assert found.status_code == 404, f"{path or 'agent'}: a 404, not a 403 that would reveal it"
     assert (await client.post(f"{ORG}/agents/secret-helper/versions", json=SPEC)).status_code == 404
-    assert (await client.get(f"{ORG}/agents?scope=personal")).json() == []
+    assert (await client.get(f"{ORG}/agents?scope=personal")).json()["items"] == []
 
     await as_user(client, DEV)
-    assert [a["slug"] for a in (await client.get(f"{ORG}/agents?scope=personal")).json()] == ["secret-helper"]
+    assert [a["slug"] for a in (await client.get(f"{ORG}/agents?scope=personal")).json()["items"]] == [
+        "secret-helper"
+    ]
     await as_user(client, ADMIN)
-    assert "secret-helper" in [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()]
+    assert "secret-helper" in [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()["items"]]
 
 
 async def test_the_list_filters_by_scope_and_by_project(client: AsyncClient, org: str) -> None:
@@ -126,7 +128,7 @@ async def test_the_list_filters_by_scope_and_by_project(client: AsyncClient, org
         assert (await create_agent(client, slug, **extra)).status_code == 201
 
     async def slugs(query: str) -> list[str]:
-        return [a["slug"] for a in (await client.get(f"{ORG}/agents{query}")).json()]
+        return [a["slug"] for a in (await client.get(f"{ORG}/agents{query}")).json()["items"]]
 
     assert await slugs("?scope=platform") == ["developer"]
     assert await slugs("?scope=org") == ["org-helper"]
@@ -155,7 +157,7 @@ async def test_a_project_member_does_not_see_another_projects_agents(client: Asy
                 Membership.user_id.in_(select(Membership.user_id).where(Membership.project_id.is_not(None))),
             )
         )
-    seen = [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()]
+    seen = [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()["items"]]
     assert "dev-helper" in seen and "ops-helper" not in seen
     assert (await client.get(f"{ORG}/agents/ops-helper")).status_code == 404
 

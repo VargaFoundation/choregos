@@ -200,7 +200,7 @@ async def test_an_owner_accepts_a_candidate_into_the_suites_and_the_gate_plays_i
     assert accepted.json()["status"] == "accepted"
     case = accepted.json()["candidate"]["case"]
     assert case["assert"] == ACCEPT["assertions"] and case["turns"] == ["What is ACME worth?"]
-    assert (await client.get(f"{ANALYST}/feedback-candidates")).json() == [], "no longer proposed"
+    assert (await client.get(f"{ANALYST}/feedback-candidates")).json()["items"] == [], "no longer proposed"
     # The accepted case now counts: a version that quotes but ends with "Buy." passes the plugin's cases
     # and fails the owner's. Without the stored addition the gate would let it through.
     model[2] = PUSHY
@@ -246,7 +246,7 @@ async def test_a_case_that_is_not_valid_for_the_agent_is_refused(
     taken = {**ACCEPT, "name": "quote-is-read-first-and-cited"}
     clash = await client.post(_url(candidate, "accept"), json=taken)
     assert clash.status_code == 422 and "already in the agent's suites" in clash.text
-    still = (await client.get(f"{ANALYST}/feedback-candidates")).json()
+    still = (await client.get(f"{ANALYST}/feedback-candidates")).json()["items"]
     assert [c["status"] for c in still] == ["proposed"], "a refused case decides nothing"
 
 
@@ -264,4 +264,4 @@ async def test_only_those_who_manage_the_agent_decide(
         denied = await client.post(_url(candidate, action), json=ACCEPT)
         assert denied.status_code in (403, 404), denied.text
     await as_user(client, ADMIN)
-    assert (await client.get(f"{ANALYST}/feedback-candidates")).json()[0]["status"] == "proposed"
+    assert (await client.get(f"{ANALYST}/feedback-candidates")).json()["items"][0]["status"] == "proposed"

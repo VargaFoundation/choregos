@@ -22,7 +22,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       createAgent: vi.fn(),
       attachAgentToken: vi.fn(),
       agentCredentials: vi.fn(),
-      orgAgentCredentials: vi.fn().mockResolvedValue([]),
+      orgAgentCredentials: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
     },
   };
 });

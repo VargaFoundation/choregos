@@ -161,17 +161,17 @@ async def test_the_list_sorts_by_stars_and_keeps_the_starred_ones(client: AsyncC
     await client.put(f"{ORG}/agents/zzz/star")
     await client.put(f"{ORG}/agents/developer/star")
 
-    by_name = [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()]
+    by_name = [a["slug"] for a in (await client.get(f"{ORG}/agents")).json()["items"]]
     assert by_name == sorted(by_name)
-    by_stars = (await client.get(f"{ORG}/agents", params={"sort": "stars"})).json()
+    by_stars = (await client.get(f"{ORG}/agents", params={"sort": "stars"})).json()["items"]
     assert [a["slug"] for a in by_stars][:2] == ["zzz", "developer"]
     assert by_stars[0]["social"]["stars"] == 2
-    mine = (await client.get(f"{ORG}/agents", params={"starred": True})).json()
+    mine = (await client.get(f"{ORG}/agents", params={"starred": True})).json()["items"]
     assert {a["slug"] for a in mine} == {"zzz", "developer"}
     await as_user(client, DEV)
-    assert [a["slug"] for a in (await client.get(f"{ORG}/agents", params={"starred": True})).json()] == [
-        "zzz"
-    ]
+    assert [
+        a["slug"] for a in (await client.get(f"{ORG}/agents", params={"starred": True})).json()["items"]
+    ] == ["zzz"]
 
 
 async def test_only_a_person_watches_and_stars() -> None:

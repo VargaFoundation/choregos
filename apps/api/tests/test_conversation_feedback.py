@@ -59,7 +59,7 @@ async def test_a_thumb_down_proposes_a_pseudonymised_candidate_to_the_owners(
 
     listed = await client.get(CANDIDATES)
     assert listed.status_code == 200, listed.text
-    (candidate,) = listed.json()
+    (candidate,) = listed.json()["items"]
     case = candidate["candidate"]["case"]
     assert case["turns"] == ["I am <person_1>, <email_1>. Where is order 42?"]
     assert candidate["candidate"]["observed"]["answer"] == "Order 42 shipped. Ask <person_1> or <email_1>."
@@ -82,7 +82,7 @@ async def test_a_candidate_is_never_added_to_a_suite_automatically(
     session_id = await _converse(client, upstream)
     before = (await client.get(f"{ORG}/agents/helper")).json()
     await client.post(_feedback(session_id), json={"rating": "down"})
-    assert len((await client.get(CANDIDATES)).json()) == 1
+    assert len((await client.get(CANDIDATES)).json()["items"]) == 1
     after = (await client.get(f"{ORG}/agents/helper")).json()
     from sqlalchemy import select
     from tranibor_api.db.models import AgentVersion
@@ -102,12 +102,12 @@ async def test_a_thumb_up_proposes_nothing_and_a_change_of_mind_withdraws_the_ca
     session_id = await _converse(client, upstream)
     up = await client.post(_feedback(session_id), json={"rating": "up", "comment": "Thanks"})
     assert up.status_code == 200 and up.json()["candidate_status"] is None
-    assert (await client.get(CANDIDATES)).json() == []
+    assert (await client.get(CANDIDATES)).json()["items"] == []
     await client.post(_feedback(session_id), json={"rating": "down"})
-    assert len((await client.get(CANDIDATES)).json()) == 1
+    assert len((await client.get(CANDIDATES)).json()["items"]) == 1
     again = await client.post(_feedback(session_id), json={"rating": "up"})
     assert again.json()["id"] == up.json()["id"], "one thumb per answer, replaced"
-    assert (await client.get(CANDIDATES)).json() == []
+    assert (await client.get(CANDIDATES)).json()["items"] == []
 
 
 async def test_the_default_answer_is_the_latest_and_a_missing_one_is_refused(
@@ -118,7 +118,7 @@ async def test_the_default_answer_is_the_latest_and_a_missing_one_is_refused(
     session_id = await _converse(client, upstream)
     latest = await client.post(_feedback(session_id), json={"rating": "down"})
     assert latest.json()["response"] == 2
-    (candidate,) = (await client.get(CANDIDATES)).json()
+    (candidate,) = (await client.get(CANDIDATES)).json()["items"]
     assert len(candidate["candidate"]["case"]["turns"]) == 2, "the conversation up to that answer"
     missing = await client.post(_feedback(session_id), json={"rating": "down", "response": 3})
     assert missing.status_code == 422, missing.text

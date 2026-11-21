@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { AgentCatalogue } from "@/components/agents/catalogue";
 import { ChannelBadges } from "@/components/agents/channels";
 import { LifecycleBadges } from "@/components/agents/lifecycle";
 import { ScopeBadge, ScopeFilter } from "@/components/agents/governance";
 import { versionSummary, scopeLabel, type AgentScope } from "@/components/agents/registry";
-import { TagFilter, TagList, withTags } from "@/components/agents/tags";
+import { TagFilter, TagList } from "@/components/agents/tags";
 import { Glossary } from "@/components/glossary";
-import { Badge, Button, Card, Drawer, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR, buttonClasses } from "@/components/ui";
+import { Badge, Button, Card, Drawer, Empty, ErrorNote, Input, Table, TBody, TD, TH, THead, TR, buttonClasses } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
-import { api } from "@/lib/api";
+import { api, type AgentsParams } from "@/lib/api";
+import { nextCursor } from "@/lib/paging";
 import { percent, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -46,36 +47,58 @@ function Agents() {
     const text = query.toString();
     router.replace(text ? `/agents?${text}` : "/agents");
   }
-  const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
-  const metrics = useQuery({ queryKey: ["agent-metrics", org], queryFn: () => api.agentMetricsList(org) });
-  // Releases waiting for approval: the approver's inbox (S40-02b), as a filter chip.
-  const waiting = useQuery({
-    queryKey: ["agent-releases-pending", org],
-    queryFn: () => api.orgAgentReleases(org, "pending_approval"),
-    retry: false,
-  });
-  const awaiting = new Set((waiting.data ?? []).map((r) => r.agent));
-  const [onlyAwaiting, setOnlyAwaiting] = useState(false);
+  // Every filter is a query parameter and the server pages (ADR 0206): "More" asks for the next page.
+  const [awaitingOnly, setOnlyAwaiting] = useState(false);
   const [scope, setScope] = useState<AgentScope | null>(null);
-  // Stars and the caller's own stars (ADR 0152): a sort and a filter on what the server counted.
+  // Stars and the caller's own stars (ADR 0152): a sort and a filter the server applies.
   const [onlyStarred, setOnlyStarred] = useState(false);
   const [byStars, setByStars] = useState(false);
   // A retired agent is gone for good: it stays readable, but out of the way unless asked for.
   const [showRetired, setShowRetired] = useState(false);
-  const retired = (agents.data ?? []).filter((a) => a.lifecycle === "retired").length;
   const [drawer, setDrawer] = useState<"catalogue" | null>(catalogue ? "catalogue" : null);
-  const withStars = withTags(
-    (agents.data ?? []).filter(
-      (a) =>
-        (scope === null || (a.scope ?? "org") === scope) &&
-        (!onlyAwaiting || awaiting.has(a.slug)) &&
-        (!onlyStarred || a.social?.starred_by_me === true) &&
-        (showRetired || a.lifecycle !== "retired"),
-    ),
-    tags,
-  );
-  const shown = byStars ? [...withStars].sort((x, y) => (y.social?.stars ?? 0) - (x.social?.stars ?? 0)) : withStars;
-  const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
+  const [text, setText] = useState("");
+  const [q, setQ] = useState("");
+  const filters: AgentsParams = {
+    q: q || undefined,
+    scope: scope ?? undefined,
+    tag: tags,
+    starred: onlyStarred,
+    sort: byStars ? "stars" : "name",
+    retired: showRetired,
+    awaiting_approval: awaitingOnly,
+  };
+  const agents = useInfiniteQuery({
+    queryKey: ["agents", org, filters],
+    queryFn: ({ pageParam }) => api.agentsPage(org, { ...filters, cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+    // The rows stay while a filter's answer is on its way.
+    placeholderData: keepPreviousData,
+  });
+  const shown = agents.data?.pages.flatMap((page) => page.items);
+  // The metrics are paged by name too: read pages until the last agent shown is covered (the names go up).
+  const metrics = useInfiniteQuery({
+    queryKey: ["agent-metrics", org],
+    queryFn: ({ pageParam }) => api.agentMetricsList(org, 30, { cursor: pageParam, limit: 100 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+  });
+  const metricLines = metrics.data?.pages.flatMap((page) => page.items) ?? [];
+  const covered = metricLines.at(-1)?.agent ?? "";
+  const furthest = (shown ?? []).reduce((max, a) => (a.slug > max ? a.slug : max), "");
+  const { hasNextPage: moreMetrics, isFetchingNextPage: fetchingMetrics, fetchNextPage: nextMetrics } = metrics;
+  useEffect(() => {
+    if (moreMetrics && !fetchingMetrics && covered < furthest) void nextMetrics();
+  }, [moreMetrics, fetchingMetrics, nextMetrics, covered, furthest]);
+  // Releases waiting for approval: the approver's inbox (S40-02b), as a filter chip.
+  const waiting = useQuery({
+    queryKey: ["agent-releases-pending", org],
+    queryFn: () => api.orgAgentReleases(org, "pending_approval", { limit: 200 }),
+    retry: false,
+  });
+  const awaiting = new Set((waiting.data?.items ?? []).map((r) => r.agent));
+  const filtered = q !== "" || scope !== null || onlyStarred || awaitingOnly || tags.length > 0;
+  const parAgent = new Map(metricLines.map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
       <OrgPageHeader title="Agents"
@@ -90,18 +113,26 @@ function Agents() {
         }
       />
       <Glossary ici="agents" />
-      {agents.data && agents.data.length > 0 && (
+      {(shown?.length ?? 0) > 0 || filtered ? (
         <div className="flex flex-wrap items-center gap-3">
-          <ScopeFilter agents={agents.data} value={scope} onChange={setScope} />
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setQ(text.trim());
+            }}
+          >
+            <Input type="search" aria-label="Find an agent" placeholder="Slug or name" value={text} onChange={(e) => setText(e.target.value)} className="max-w-xs" />
+          </form>
+          <ScopeFilter value={scope} onChange={setScope} />
           {awaiting.size > 0 && (
             <button
               type="button"
-              aria-pressed={onlyAwaiting}
-              onClick={() => setOnlyAwaiting(!onlyAwaiting)}
+              aria-pressed={awaitingOnly}
+              onClick={() => setOnlyAwaiting(!awaitingOnly)}
               data-testid="awaiting-chip"
-              className={`rounded-pill border px-3 py-1 text-xs ${onlyAwaiting ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
+              className={`rounded-pill border px-3 py-1 text-xs ${awaitingOnly ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
             >
-              Awaiting approval ({awaiting.size})
+              Awaiting approval
             </button>
           )}
           <button
@@ -122,7 +153,7 @@ function Agents() {
           >
             Most starred first
           </button>
-          {retired > 0 && (
+          {(
             <button
               type="button"
               aria-pressed={showRetired}
@@ -130,20 +161,20 @@ function Agents() {
               data-testid="retired-chip"
               className={`rounded-pill border px-3 py-1 text-xs ${showRetired ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`}
             >
-              Show retired ({retired})
+              Show retired
             </button>
           )}
         </div>
-      )}
-      {agents.data && <TagFilter agents={agents.data} value={tags} onChange={selectTags} />}
+      ) : null}
+      {shown && <TagFilter agents={shown} value={tags} onChange={selectTags} />}
       <Card title="Registry" padding="none" className="overflow-hidden">
         {agents.error ? (
           <div className="p-5">
             <ErrorNote>{String(agents.error)}</ErrorNote>
           </div>
-        ) : !agents.data ? (
+        ) : !shown ? (
           <p className="p-5 text-sm text-ink-muted">Reading the registry…</p>
-        ) : agents.data.length === 0 ? (
+        ) : shown.length === 0 && !filtered ? (
           <div className="p-5">
             <Empty title="No agent yet">Create one, or add one from the catalogue.</Empty>
           </div>
@@ -154,10 +185,10 @@ function Agents() {
                 <button type="button" className="underline" onClick={() => selectTags([])}>
                   Clear the tags
                 </button>
-                {(scope !== null || onlyAwaiting) && " or pick another scope."}
+                {(scope !== null || awaitingOnly) && " or pick another scope."}
               </Empty>
             ) : (
-              <Empty title={onlyAwaiting && scope === null ? "No release is waiting for approval" : `No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
+              <Empty title={awaitingOnly && scope === null ? "No release is waiting for approval" : `No ${scopeLabel(scope ?? undefined).toLowerCase()} agent`}>Pick another scope, or clear the filter.</Empty>
             )}
           </div>
         ) : (
@@ -230,6 +261,13 @@ function Agents() {
               })}
             </TBody>
           </Table>
+        )}
+        {agents.hasNextPage && (
+          <div className="p-3">
+            <Button size="sm" onClick={() => void agents.fetchNextPage()} disabled={agents.isFetchingNextPage}>
+              More
+            </Button>
+          </div>
         )}
       </Card>
       <Drawer open={drawer === "catalogue"} onClose={() => setDrawer(null)} title="Add from catalogue">

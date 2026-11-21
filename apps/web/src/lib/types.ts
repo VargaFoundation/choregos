@@ -323,6 +323,17 @@ export type {
   KnowledgeSourcePatch,
 } from "@choregos/contracts/api";
 
+/** The agents' lists, one page at a time (ADR 0206). */
+export type {
+  AgentCredentialPage,
+  AgentEvaluationPage,
+  AgentMetricsSummaryPage,
+  AgentPage,
+  AgentReleasePage,
+  AgentRunPage,
+  ConversationCandidatePage,
+} from "@choregos/contracts/api";
+
 /** The organisation's memory A/B report and the platform's gateway keys (S47-18). */
 export type {
   ActionPage,

@@ -44,7 +44,7 @@ async def test_an_hr_project_is_born_with_its_workflows_and_the_organisation_rec
     routing = (await client.get(f"/api/v1/projects/{pid}/workflow-routing")).json()
     assert routing["default"] == "onboarding"
     assert routing["rules"][0]["when"]["labels_any"] == ["offboarding", "leaver"]
-    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()}
+    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()["items"]}
     assert {"onboarding-coordinator", "offboarding-coordinator"} <= set(agents)
     detail = (await client.get(f"{ORG}/agents/onboarding-coordinator")).json()
     (version,) = detail["versions"]

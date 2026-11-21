@@ -20,10 +20,11 @@ from tranibor_core import utcnow
 from ..audit import record
 from ..db.models import Agent, AgentRelease, AgentVersion, Organization, Project, ProjectAgent, Run
 from ..decision_session import holds_a_person_session
-from ..deps import _aware
+from ..deps import Page, _aware
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
 from ..freshness import authentication_age, require_fresh_authentication
+from ..keyset import keyset_page
 from ..rbac import Permission, Principal
 from ..schemas import (
     AgentChannelStats,
@@ -38,6 +39,7 @@ from ..schemas import (
     AgentReleaseVote,
     AgentSpec,
 )
+from ..schemas.base import PageMeta
 from .agent_evals import evaluate, suite_for
 from .agent_governance import PERSONAL, is_admin
 from .agent_live_evals import latest_finished
@@ -915,20 +917,21 @@ async def _apply(
 
 
 async def list_releases(
-    session: AsyncSession, visible: Any, status: str | None, limit: int
-) -> list[tuple[AgentRelease, str]]:
-    """Releases of the agents the caller may see (`visible`: the SQL clause of the agents' list), with
-    their agent's slug, newest first — the approver's inbox with `status=pending_approval`."""
-    query = (
-        select(AgentRelease, Agent.slug)
-        .join(Agent, Agent.id == AgentRelease.agent_id)
-        .where(visible)
-        .order_by(AgentRelease.created_at.desc(), AgentRelease.id.desc())
-        .limit(limit)
-    )
+    session: AsyncSession, visible: Any, status: str | None, page: Page
+) -> tuple[list[tuple[AgentRelease, str]], PageMeta]:
+    """One page of the releases of the agents the caller may see (`visible`: the SQL clause of the agents'
+    list), with their agent's slug, newest first — the approver's inbox with `status=pending_approval`."""
+    query = select(AgentRelease, Agent.slug).join(Agent, Agent.id == AgentRelease.agent_id).where(visible)
     if status is not None:
         query = query.where(AgentRelease.status == status)
-    return [(row, slug) for row, slug in (await session.execute(query)).tuples()]
+    rows, meta = await keyset_page(
+        session,
+        query,
+        sort=AgentRelease.created_at,
+        tiebreak=AgentRelease.id,
+        page=page,
+    )
+    return [(row, slug) for row, slug in rows], meta
 
 
 async def after_publish(
@@ -1152,14 +1155,16 @@ async def exposure(
     )
 
 
-async def history(session: AsyncSession, agent: Agent, limit: int) -> list[AgentRelease]:
-    rows = await session.execute(
-        select(AgentRelease)
-        .where(AgentRelease.agent_id == agent.id)
-        .order_by(AgentRelease.created_at.desc(), AgentRelease.id.desc())
-        .limit(limit)
+async def history(session: AsyncSession, agent: Agent, page: Page) -> tuple[list[AgentRelease], PageMeta]:
+    """One page of the agent's release history, newest first."""
+    rows, meta = await keyset_page(
+        session,
+        select(AgentRelease).where(AgentRelease.agent_id == agent.id),
+        sort=AgentRelease.created_at,
+        tiebreak=AgentRelease.id,
+        page=page,
     )
-    return list(rows.scalars())
+    return rows, meta
 
 
 __all__ = [

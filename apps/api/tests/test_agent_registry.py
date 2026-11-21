@@ -41,7 +41,7 @@ async def test_an_agent_is_born_with_its_version_1(client: AsyncClient, admin: s
         admin,
     )
     assert agent["versions"][0]["spec"]["budget"] == {"run_usd": 2.0, "daily_usd": 20.0, "monthly_usd": None}
-    assert [a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()] == [
+    assert [a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()["items"]] == [
         "onboarding-coordinator"
     ]
     assert (await _create(client)).status_code == 409, "one slug per organisation"
