@@ -4,6 +4,6 @@ description: >-
   Embedded S3-compatible object store (RustFS), one replica, one volume, and the Job that makes its
   bucket. Not for production: no replication, no HA (ADR 0208).
 type: application
-version: 0.28.0
-appVersion: "0.28.0"
+version: 0.28.1
+appVersion: "0.28.1"
 # Rendered only when `global.objectStore.embedded` is true (condition of the parent chart).

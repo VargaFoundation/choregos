@@ -4,6 +4,6 @@ description: >-
   Embedded Keycloak (OIDC provider) with a realm and clients for the console and the CLI, a bootstrap
   administrator and generated secrets. One replica. Not for production: no HA (ADR 0208).
 type: application
-version: 0.28.0
-appVersion: "0.28.0"
+version: 0.28.1
+appVersion: "0.28.1"
 # Rendered only when `global.oidc.embedded` is true (condition of the parent chart).

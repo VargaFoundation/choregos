@@ -1,6 +1,6 @@
 [project]
 name = "tranibor-playbooks"
-version = "0.28.0"
+version = "0.28.1"
 description = "Tranibor playbooks: prompts per role, and evals"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }

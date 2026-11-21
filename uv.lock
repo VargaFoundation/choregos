@@ -305,7 +305,7 @@ wheels = [
 
 [[package]]
 name = "choregos-adapters"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-adapters" }
 dependencies = [
     { name = "tranibor-adapters" },
@@ -320,7 +320,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-agent-sdk"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-agent-sdk" }
 dependencies = [
     { name = "tranibor-agent-sdk" },
@@ -335,7 +335,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-api"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-api" }
 dependencies = [
     { name = "tranibor-api" },
@@ -350,7 +350,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-cli"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-cli" }
 dependencies = [
     { name = "tranibor-cli" },
@@ -365,7 +365,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-contracts"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-contracts" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -376,7 +376,7 @@ requires-dist = [{ name = "tranibor-contracts", editable = "packages/contracts" 
 
 [[package]]
 name = "choregos-core"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-core" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -391,7 +391,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-orchestrator"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-orchestrator" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -406,7 +406,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-outpost"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-outpost" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -421,7 +421,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-playbooks"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-playbooks" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -436,7 +436,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-runner"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-runner" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -451,7 +451,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-tools-mcp"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "compat/choregos-tools-mcp" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -466,7 +466,7 @@ requires-dist = [
 
 [[package]]
 name = "choregos-workspace"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "." }
 dependencies = [
     { name = "choregos-adapters" },
@@ -2228,7 +2228,7 @@ wheels = [
 
 [[package]]
 name = "tranibor-adapters"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/adapters" }
 dependencies = [
     { name = "cryptography" },
@@ -2253,7 +2253,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-agent-sdk"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/agent-sdk" }
 dependencies = [
     { name = "agent-client-protocol" },
@@ -2272,7 +2272,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-api"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "aiosqlite" },
@@ -2328,7 +2328,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-cli"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "httpx" },
@@ -2351,7 +2351,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-contracts"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -2366,7 +2366,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-core"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "jinja2" },
@@ -2404,7 +2404,7 @@ provides-extras = ["telemetry", "temporal"]
 
 [[package]]
 name = "tranibor-investment-research"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "plugins/investment-research" }
 dependencies = [
     { name = "httpx" },
@@ -2419,7 +2419,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-orchestrator"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "apps/orchestrator" }
 dependencies = [
     { name = "prometheus-client" },
@@ -2445,7 +2445,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-outpost"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/outpost" }
 dependencies = [
     { name = "cryptography" },
@@ -2478,7 +2478,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-playbooks"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/playbooks" }
 dependencies = [
     { name = "jinja2" },
@@ -2495,7 +2495,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-procurement"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "plugins/procurement" }
 dependencies = [
     { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
@@ -2510,7 +2510,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-runner"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/runner" }
 dependencies = [
     { name = "httpx" },
@@ -2543,7 +2543,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-software-delivery"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "plugins/software-delivery" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -2558,7 +2558,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-tools-mcp"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "packages/tools-mcp" }
 dependencies = [
     { name = "fastapi" },
@@ -2585,7 +2585,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-vault-transit"
-version = "0.28.0"
+version = "0.28.1"
 source = { editable = "plugins/vault-transit" }
 dependencies = [
     { name = "httpx" },
