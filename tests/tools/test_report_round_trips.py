@@ -235,7 +235,7 @@ class FakeApi:
             return self._page(listing[match.group(1)], request)
         if match := re.fullmatch(r"/work-items/([\w-]+)/runs", path):
             runs = self.runs.get(match.group(1))
-            return httpx.Response(200, json=runs) if runs is not None else httpx.Response(404, json={})
+            return self._page(runs, request) if runs is not None else httpx.Response(404, json={})
         if match := re.fullmatch(r"/runs/([\w-]+)/access", path):
             access = self.access.get(match.group(1))
             return httpx.Response(200, json=access) if access is not None else httpx.Response(403, json={})
