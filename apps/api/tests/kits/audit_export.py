@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -23,7 +24,8 @@ async def write_chain(org_id: str | None, count: int, *, start: int = 1, prev: s
         for seq in range(start, start + count):
             payload: dict[str, Any] = {"n": seq, "note": "é", "ratio": 0.1}
             link = Link(
-                id=f"{org_id or 'platform'}-{seq:04d}",
+                # A row id is 36 characters at most (`PkMixin`): a name-based UUID, the same on every run.
+                id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"audit/{org_id or 'platform'}/{seq}")),
                 org_id=org_id,
                 seq=seq,
                 ts=T0 + timedelta(seconds=seq),
