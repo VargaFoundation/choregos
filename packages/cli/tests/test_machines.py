@@ -57,19 +57,46 @@ def test_list_shows_tokens_without_their_value() -> None:
     respx.get(BASE).mock(
         return_value=Response(
             200,
-            json=[
-                {
-                    "slug": "partner-app",
-                    "display_name": "Partner",
-                    "writes_per_day": 500,
-                    "tokens": [{"id": "t1", "name": "main", "expires_at": "2027-02-07T00:00:00Z"}],
-                }
-            ],
+            json={
+                "items": [
+                    {
+                        "slug": "partner-app",
+                        "display_name": "Partner",
+                        "writes_per_day": 500,
+                        "tokens": [{"id": "t1", "name": "main", "expires_at": "2027-02-07T00:00:00Z"}],
+                    }
+                ],
+                "meta": {"has_more": False, "next_cursor": None},
+            },
         )
     )
     shown = CliRunner().invoke(_app(), ["machines", "list", "acme:billing-api"])
     assert shown.exit_code == 0, shown.output
     assert "partner-app" in shown.output and "main" in shown.output
+
+
+@respx.mock
+def test_list_follows_the_cursor_to_the_last_page() -> None:
+    """The server pages the list (ADR 0206): the CLI shows every application, not the first page's."""
+
+    def account(slug: str) -> dict[str, object]:
+        return {"slug": slug, "display_name": slug, "writes_per_day": 500, "tokens": []}
+
+    route = respx.get(BASE).mock(
+        side_effect=[
+            Response(
+                200, json={"items": [account("app-a")], "meta": {"has_more": True, "next_cursor": "c1"}}
+            ),
+            Response(
+                200, json={"items": [account("app-b")], "meta": {"has_more": False, "next_cursor": None}}
+            ),
+        ]
+    )
+    shown = CliRunner().invoke(_app(), ["machines", "list", "acme:billing-api"])
+    assert shown.exit_code == 0, shown.output
+    assert "app-a" in shown.output and "app-b" in shown.output
+    assert route.calls[1].request.url.params["cursor"] == "c1"
+    assert route.calls[0].request.url.params["limit"] == "200"
 
 
 @respx.mock

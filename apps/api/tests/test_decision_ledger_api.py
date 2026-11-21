@@ -94,7 +94,7 @@ async def _record(
 
 
 async def _workflow_name(client: AsyncClient, project: dict[str, Any]) -> str:
-    return str((await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()[0]["name"])
+    return str((await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()["items"][0]["name"])
 
 
 async def test_the_contract_declares_the_calibration_route() -> None:

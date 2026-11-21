@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
@@ -21,11 +21,14 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
  */
 export function MachineAccounts({ slug, onIssued }: { slug: string; onIssued?: OnIssued }) {
   const client = useQueryClient();
-  const listed = useQuery({
+  // The server pages the list (ADR 0206): "More" asks for the next page by its cursor.
+  const listed = useInfiniteQuery({
     queryKey: ["machine-accounts", slug],
-    queryFn: () => api.machineAccounts(slug),
+    queryFn: ({ pageParam }) => api.machineAccounts(slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
   });
-  const accounts = Array.isArray(listed.data) ? listed.data : [];
+  const accounts = listed.data?.pages.flatMap((page) => page.items ?? []) ?? [];
   const [name, setName] = useState("");
   const refresh = () =>
     client.invalidateQueries({ queryKey: ["machine-accounts", slug] });
@@ -71,6 +74,17 @@ export function MachineAccounts({ slug, onIssued }: { slug: string; onIssued?: O
             />
           ))}
         </ul>
+      )}
+      {listed.hasNextPage && (
+        <div className="mt-3" data-testid="machine-accounts-more">
+          <Button
+            size="sm"
+            disabled={listed.isFetchingNextPage}
+            onClick={() => void listed.fetchNextPage()}
+          >
+            {listed.isFetchingNextPage ? "Reading…" : "More"}
+          </Button>
+        </div>
       )}
       <div className="mt-4 flex items-end gap-2">
         <Field

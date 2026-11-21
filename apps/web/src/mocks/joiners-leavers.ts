@@ -23,6 +23,7 @@ import type {
   WorkItemJourney,
 } from "@/lib/types";
 import template from "./joiners-leavers.json";
+import { mockPage } from "./paging";
 
 type Workflow = {
   yaml: string;
@@ -228,7 +229,7 @@ export function peopleOpsApi(method: string, route: string, body: unknown): unkn
     // Copies: the tickets change for the page's lifetime, and React Query keeps a reference it was
     // already given as unchanged.
     if (rest === "/work-items") return { items: structuredClone(items), meta: { has_more: false } };
-    if (rest === "/workflows") return peopleOpsWorkflows;
+    if (rest === "/workflows") return mockPage(peopleOpsWorkflows, route, (w) => w.name);
     if (rest === "/workflow" || rest === "/workflows/onboarding") return onboardingDef();
     if (rest === "/workflow-routing") return { default: "onboarding", rules: [] };
     if (rest === "/connectors") return [{ id: "c-tracker-hr", kind: "tracker", type: "internal", config: {}, secret_refs: {}, status: "ok" }];

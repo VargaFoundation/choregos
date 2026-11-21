@@ -115,7 +115,7 @@ async def test_retiring_runs_its_checklist_and_refuses_new_runs(
     assert (body["revoked_credentials"], body["unpinned_projects"]) == (1, ["billing-api"])
     credentials = (await client.get(f"{AGENTS}/onboarding-coordinator/credentials")).json()
     assert all(c["revoked_at"] for c in credentials)
-    assert (await client.get(f"/api/v1/projects/{project['id']}/agents")).json() == []
+    assert (await client.get(f"/api/v1/projects/{project['id']}/agents")).json()["items"] == []
     with pytest.raises(AgentUnavailable, match="retired"):
         await _resolve(project["id"])
     assert body["agent"]["status"] == "active", "the operational status is another column"

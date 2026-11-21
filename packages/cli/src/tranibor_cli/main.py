@@ -487,7 +487,7 @@ def _machines(project: str) -> str:
 def machines_list(project: str) -> None:
     """A project's applications and their tokens, never a token's value."""
     table = Table("application", "name", "writes a day", "token", "token id", "expires", "last used")
-    for account in client().get(_machines(project)):
+    for account in client().get_pages(_machines(project)):
         tokens = account.get("tokens") or [{}]
         for token in tokens:
             table.add_row(
@@ -933,7 +933,7 @@ def findings_action(
 @workflow_app.command("list")
 def workflow_list(project: str) -> None:
     """A project's workflows: the active version of each, the default, the open work items."""
-    workflows = client().get(f"/projects/{project}/workflows")
+    workflows = client().get_pages(f"/projects/{project}/workflows")
     table = Table("workflow", "version", "default", "open work items", "published by")
     for definition in workflows:
         table.add_row(

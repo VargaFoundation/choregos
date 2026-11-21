@@ -35,7 +35,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       forkAgent: vi.fn(),
       changeAgentScope: vi.fn(),
       projects: vi.fn().mockResolvedValue({ items: [{ slug: "dev" }, { slug: "ops" }], meta: { has_more: false } }),
-      projectAgents: vi.fn().mockResolvedValue([]),
+      projectAgents: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       implicitAgents: vi.fn().mockResolvedValue([]),
     },
   };

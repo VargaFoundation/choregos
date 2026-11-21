@@ -18,7 +18,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      projectAgents: vi.fn().mockResolvedValue([]),
+      projectAgents: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       agents: vi.fn().mockResolvedValue([]),
       implicitAgents: vi.fn(),
       projectAgentChannel: vi.fn().mockResolvedValue({ channel: "stable" }),
@@ -105,5 +105,27 @@ describe("the project's built-in agents", () => {
     expect(body.spec?.instructions).toContain("You carry the implement role");
     expect(body.spec?.model).toBe("profile:by_size");
     expect(await within(list).findByRole("status")).toHaveTextContent("with the implement playbook as its instructions");
+  });
+
+  it("reads the pins a page at a time: More asks for the next page by its cursor (ADR 0206)", async () => {
+    const pin = (agent: string) => ({ agent, channel: "stable", version: 1, overrides: {} }) as never;
+    vi.mocked(api.projectAgents)
+      .mockResolvedValueOnce({ items: [pin("alpha")], meta: { has_more: true, next_cursor: "after-alpha" } })
+      .mockResolvedValueOnce({ items: [pin("beta")], meta: { has_more: false, next_cursor: null } });
+    await act(async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Suspense fallback="…">
+            <ProjectAgentsPage params={Promise.resolve({ slug: "foundation" })} />
+          </Suspense>
+        </QueryClientProvider>,
+      );
+    });
+    const list = await screen.findByTestId("pins");
+    expect(list.children).toHaveLength(1);
+    fireEvent.click(within(await screen.findByTestId("pins-more")).getByRole("button", { name: "More" }));
+    await waitFor(() => expect(screen.getByTestId("pins").children).toHaveLength(2));
+    expect(api.projectAgents).toHaveBeenLastCalledWith("foundation", { cursor: "after-alpha", limit: 50 });
+    expect(screen.queryByTestId("pins-more")).toBeNull();
   });
 });

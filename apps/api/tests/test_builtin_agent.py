@@ -90,8 +90,8 @@ async def test_a_name_cannot_leave_the_playbook_directories(
 async def test_the_workflow_agents_list_named_and_built_in_ones(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    agents = (await client.get(f"/api/v1/projects/{project['id']}/workflow-agents")).json()
-    implicit = (await client.get(f"/api/v1/projects/{project['id']}/implicit-agents")).json()
+    agents = (await client.get(f"/api/v1/projects/{project['id']}/workflow-agents")).json()["items"]
+    implicit = (await client.get(f"/api/v1/projects/{project['id']}/implicit-agents")).json()["items"]
     assert agents, "the project's default workflow runs agents"
     built_in = [(a["workflow"], a["actor"]) for a in agents if not a["registered"]]
     assert built_in == [(a["workflow"], a["actor"]) for a in implicit], (

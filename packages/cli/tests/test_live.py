@@ -201,12 +201,15 @@ class Platform:
         router.get(f"{V1}/projects/acme-web/workflows").mock(
             return_value=Response(
                 200,
-                json=[
-                    contract(
-                        "WorkflowSummary",
-                        {"name": "delivery", "version": 3, "is_default": True, "open_items": 7},
-                    )
-                ],
+                json={
+                    "items": [
+                        contract(
+                            "WorkflowSummary",
+                            {"name": "delivery", "version": 3, "is_default": True, "open_items": 7},
+                        )
+                    ],
+                    "meta": {"has_more": False, "next_cursor": None},
+                },
             )
         )
         router.get(f"{V1}/projects/acme-web/workflows/delivery").mock(

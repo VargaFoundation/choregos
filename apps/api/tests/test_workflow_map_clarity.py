@@ -54,7 +54,7 @@ async def test_the_activity_counts_open_items_by_state_and_runs_by_step(
     from tranibor_api.db.models import Run, WorkflowDef, WorkItem
     from tranibor_api.db.session import session_scope
 
-    workflows = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
+    workflows = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()["items"]
     name = workflows[0]["name"]
     now = datetime.now(UTC)
     async with session_scope() as session:
@@ -120,7 +120,7 @@ async def test_a_state_s_wait_starts_when_the_item_entered_it_not_when_it_was_fi
     from tranibor_api.db.models import Event, WorkflowDef, WorkItem
     from tranibor_api.db.session import session_scope
 
-    name = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()[0]["name"]
+    name = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()["items"][0]["name"]
     now = datetime.now(UTC)
     async with session_scope() as session:
         definition = (

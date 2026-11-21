@@ -250,7 +250,7 @@ async def _plan_workflows(
     marker = mapping["french_marker_state"]
     for project in await _projects(tenant):
         slug = project["slug"]
-        for workflow in await tenant.call("GET", f"/projects/{project['id']}/workflows"):
+        for workflow in await tenant.pages(f"/projects/{project['id']}/workflows"):
             name = workflow["name"]
             current = await tenant.call("GET", f"/projects/{project['id']}/workflows/{name}")
             document = current.get("json") or yaml.safe_load(current["yaml"])

@@ -46,6 +46,10 @@ BOUNDED: dict[str, str] = {
         "(routers/linked_accounts.py:300); deprecated by ADR 0161"
     ),
     "listWorkflowTemplates": "the shipped workflow templates",
+    "resolveProjectAgents": (
+        "one answer per reference asked, and at most 64 are accepted "
+        "(apps/api/src/tranibor_api/routers/agents/pins.py:384, `Query(max_length=64)`)"
+    ),
 }
 
 #: The ceiling: array routes that read without a page. Lowered when one migrates, never raised.
@@ -66,9 +70,7 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listAgentRuns",
         "listAgents",
         "listGlobalPendingMemory",
-        "listImplicitAgents",
         "listKnowledgeBases",
-        "listMachineAccounts",
         "listMemories",
         "listOrgAgentCredentials",
         "listOrgAgentReleases",
@@ -76,7 +78,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
         # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.
         "listPlatformModels",
-        "listProjectAgents",
         "listProjectMemories",
         "listRuns",
         "listSkills",
@@ -85,11 +86,7 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         # its clients are whole-list pickers (agent builder, project profiles). Needs a decision.
         "listUsableModels",
         "listWorkItemArtifacts",
-        "listWorkflowAgents",
         "listWorkflowCatalogue",
-        "listWorkflowVersions",
-        "listWorkflows",
-        "resolveProjectAgents",
         "searchGlobalMemory",
         "searchMemory",
     }
