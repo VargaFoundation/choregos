@@ -33,7 +33,7 @@ dependencies = [
     # extra (MIT-CMU).
     "pillow>=13.0",
     # SAML sign-in (ADR 0170): XML-signature verification (Apache-2.0); lxml and cryptography were already locked.
-    "signxml==5.1.0",
+    "signxml==5.3.0",
 ]
 
 [project.scripts]
