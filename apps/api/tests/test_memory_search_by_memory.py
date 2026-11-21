@@ -85,11 +85,14 @@ async def test_pending_review_of_an_agents_own_and_a_named_memory(client: AsyncC
         "billing-api#memory:decisions", fact, Provenance(source="agent", run_id="r2")
     )
     url = f"/api/v1/projects/{pid}/memory/pending"
-    assert (await client.get(url)).json() == [], "the shared memory has nothing pending"
+    assert (await client.get(url)).json()["items"] == [], "the shared memory has nothing pending"
     assert [
-        m["id"] for m in (await client.get(url, params={"memory": "own", "agent": "architect"})).json()
+        m["id"]
+        for m in (await client.get(url, params={"memory": "own", "agent": "architect"})).json()["items"]
     ] == [own]
-    assert [m["id"] for m in (await client.get(url, params={"memory": "decisions"})).json()] == [named]
+    assert [m["id"] for m in (await client.get(url, params={"memory": "decisions"})).json()["items"]] == [
+        named
+    ]
     # A decision is scoped to the namespace it is made in.
     wrong = await client.post(url, json={"id": own, "action": "accept"}, params={"memory": "decisions"})
     assert wrong.json() == {"status": "not_found"}
@@ -118,7 +121,7 @@ async def test_global_memory_search_pending_and_decision(client: AsyncClient, ad
     found = await client.get(f"{ORG}/memories/lessons/search", params={"q": "TLS"})
     assert [m["subject"] for m in found.json()] == ["tls"]
     pending = await client.get(f"{ORG}/memories/lessons/pending")
-    assert [m["id"] for m in pending.json()] == [proposed]
+    assert [m["id"] for m in pending.json()["items"]] == [proposed]
     decided = await client.post(f"{ORG}/memories/lessons/pending", json={"id": proposed, "action": "accept"})
     assert decided.json() == {"status": "accepted"}
     assert [

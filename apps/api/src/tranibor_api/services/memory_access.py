@@ -15,18 +15,25 @@ What a caller may not see does not exist for it (404 on a route, "unknown memory
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tranibor_adapters.memory import InvalidCursorError
+from tranibor_core.domain import Memory
 from tranibor_core.memory_bindings import RESERVED_SLUGS
 from tranibor_core.memory_scope import memory_key
 
 from ..db.models import Connector, MemoryStore, Organization, OrgConnector
 from ..db.org_aliases import organisation_by_slug_or_alias
 from ..errors import unprocessable
+from ..keyset import position_page
 from ..rbac import Permission, Principal
+from ..schemas import PageMeta
 from ..schemas.agents import AgentSpec
+
+if TYPE_CHECKING:  # `deps` imports the services
+    from ..deps import Page
 
 
 def can_manage(principal: Principal, org: str) -> bool:
@@ -289,3 +296,29 @@ async def search_run_memories(
                 hits.append(queue[position])
         position += 1
     return hits
+
+
+#: What a 422 says of a cursor the backend did not write.
+INVALID_CURSOR = "invalid cursor: pass back the meta.next_cursor of the previous page"
+
+
+async def pending_page(adapter: Any, namespace: str, page: Page) -> tuple[list[Memory], PageMeta]:
+    """One page of a memory's review queue, oldest first (ADR 0206).
+
+    A backend that pages its queue (`pending_page`: the lexical memory in SQL, Ecphoria by its own
+    cursor) is asked for one page, its cursor passed on as it wrote it; one that cannot (a fake, an
+    adapter without a review queue) gives its whole list, cut by position."""
+    reader = getattr(adapter, "pending_page", None)
+    if reader is not None:
+        try:
+            got = await reader(namespace, limit=page.limit, cursor=page.cursor)
+        except InvalidCursorError as error:
+            raise unprocessable(
+                "invalid cursor: pass back the meta.next_cursor of the previous page"
+            ) from error
+        return list(got.items), PageMeta(next_cursor=got.next_cursor, has_more=got.next_cursor is not None)
+    if hasattr(adapter, "list_pending"):
+        rows = list(await adapter.list_pending(namespace))
+    else:
+        rows = list(getattr(adapter, "pending", {}).get(namespace, []))
+    return position_page(rows, page)

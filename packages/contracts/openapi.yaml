@@ -2120,11 +2120,18 @@ paths:
     get:
       tags: [memory]
       operationId: listPendingMemory
+      description: >-
+        Facts proposed by agents, waiting for a person's decision, oldest first, one page at a time (ADR 0206).
+        The memory backend pages its own queue (the lexical memory in SQL, Ecphoria by its cursor); the cursor
+        is passed on as the backend wrote it.
       parameters:
         - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
         - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [memory]
       operationId: decidePendingMemory
@@ -2267,9 +2274,15 @@ paths:
     get:
       tags: [memory]
       operationId: listGlobalPendingMemory
-      description: What agents proposed to this global memory, waiting for an administrator (`agent:manage`). A global memory only ever receives proposals.
+      description: >-
+        What agents proposed to this global memory, waiting for an administrator (`agent:manage`), oldest first,
+        one page at a time (ADR 0206). A global memory only ever receives proposals.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
@@ -9003,6 +9016,13 @@ components:
       properties:
         agent: { type: string }
         version: { type: integer }
+    MemoryPage:
+      type: object
+      description: One page of a memory's review queue, oldest first (ADR 0206).
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Memory" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     MemoryStorePage:
       type: object
       required: [items, meta]

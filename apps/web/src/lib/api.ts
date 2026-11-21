@@ -86,6 +86,7 @@ import type {
   Skill,
   SkillPage,
   KnowledgeBasePage,
+  MemoryPage,
   MemoryStorePage,
   SkillGitImport,
   SkillGitPreview,
@@ -1558,8 +1559,9 @@ export const api = {
   /** `which` picks the project's memory to read (S40-11): `shared` (the default), `own` with an agent, or a named one. */
   memorySearch: (id: string, q: string, which?: MemoryChoice) =>
     request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q, ...memoryParams(which) })}`),
-  memoryPending: (id: string, which?: MemoryChoice) =>
-    request<Memory[]>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`),
+  /** One page of the project memory's review queue, oldest first (ADR 0206): "More" passes `cursor`. */
+  memoryPending: (id: string, which?: MemoryChoice, page: PageParams = {}) =>
+    request<MemoryPage>(`/projects/${qualify(id)}/memory/pending${pageQuery(page, memoryParams(which))}`),
   /** One memory of the project as an OKF bundle (S72-04): its active facts, `verified` where a person accepted one. */
   exportMemory: (id: string, which?: MemoryChoice) =>
     okfBundle(`/projects/${qualify(id)}/memory/export${query(memoryParams(which))}`, `${id}-${which?.memory ?? "shared"}`),
@@ -1603,7 +1605,9 @@ export const api = {
     request<MemoryStore>(`/orgs/${org}/memories/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
   searchGlobalMemory: (org: string, slug: string, q: string) =>
     request<Memory[]>(`/orgs/${org}/memories/${slug}/search${query({ q })}`),
-  globalMemoryPending: (org: string, slug: string) => request<Memory[]>(`/orgs/${org}/memories/${slug}/pending`),
+  /** One page of a global memory's review queue, oldest first (ADR 0206). */
+  globalMemoryPending: (org: string, slug: string, page: PageParams = {}) =>
+    request<MemoryPage>(`/orgs/${org}/memories/${slug}/pending${pageQuery(page)}`),
   decideGlobalMemory: (org: string, slug: string, memoryId: string, action: "accept" | "reject") =>
     request<unknown>(`/orgs/${org}/memories/${slug}/pending`, {
       method: "POST",

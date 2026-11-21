@@ -30,6 +30,7 @@ from ..schemas import (
     AgentSpec,
     MemoryDecision,
     MemoryDto,
+    MemoryPage,
     MemoryStoreCreate,
     MemoryStoreDto,
     MemoryStorePage,
@@ -42,6 +43,7 @@ from ..services.agent_governance import visible_clause
 from ..services.memory_access import (
     can_manage,
     global_adapter,
+    pending_page,
     reaches_project,
     visible_to,
 )
@@ -344,16 +346,20 @@ async def export_global_memory(org: str, slug: Slug, session: Db, principal: Me)
 
 @router.get(
     "/orgs/{org}/memories/{slug}/pending",
-    response_model=list[MemoryDto],
+    response_model=MemoryPage,
     operation_id="listGlobalPendingMemory",
 )
-async def list_global_pending(org: str, slug: Slug, session: Db, principal: Me) -> list[MemoryDto]:
-    """What agents proposed to this memory, waiting for an administrator."""
+async def list_global_pending(
+    org: str, slug: Slug, session: Db, principal: Me, page: Pagination
+) -> MemoryPage:
+    """What agents proposed to this memory, waiting for an administrator, oldest first, one page at a
+    time (ADR 0206)."""
     _manage(principal, org)
     organisation, store = await _global(session, principal, org, slug)
     adapter = await global_adapter(session, organisation)
-    rows = await adapter.list_pending(global_store_namespace(memory_key(organisation), store.slug))
-    return [memory_dto(m) for m in rows]
+    namespace = global_store_namespace(memory_key(organisation), store.slug)
+    rows, meta = await pending_page(adapter, namespace, page)
+    return MemoryPage(items=[memory_dto(m) for m in rows], meta=meta)
 
 
 @router.post("/orgs/{org}/memories/{slug}/pending", operation_id="decideGlobalPendingMemory")

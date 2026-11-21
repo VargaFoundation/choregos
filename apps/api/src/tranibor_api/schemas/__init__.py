@@ -265,6 +265,7 @@ from .measures import (
     MemoryAbReport,
     MemoryDecision,
     MemoryDto,
+    MemoryPage,
     MemoryReimport,
 )
 from .member_profiles import AvatarDto, MemberProfileDto
@@ -603,6 +604,7 @@ __all__ = [
     "MemoryAbReport",
     "MemoryDecision",
     "MemoryDto",
+    "MemoryPage",
     "MemoryReimport",
     "MemoryStoreCreate",
     "MemoryStoreDto",

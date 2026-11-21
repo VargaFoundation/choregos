@@ -4505,7 +4505,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const memoryOf = /^\/orgs\/[^/]+\/memories\/([^/]+)(\/search|\/pending)?$/.exec(route ?? "");
   if (memoryOf) {
     if (memoryOf[2] === "/search") return memories.filter((m) => m.content.toLowerCase().includes((new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").toLowerCase().split(" ")[0] ?? "")) as T;
-    if (memoryOf[2] === "/pending") return structuredClone(proposedToGlobal) as T;
+    if (memoryOf[2] === "/pending") return pageOf(proposedToGlobal, path.split("?")[1] ?? "") as T;
     const global = memoryStores.find((m) => m.scope === "global" && m.slug === memoryOf[1]);
     if (!global) throw new ApiError(404, { detail: "memory not found" });
     return structuredClone(global) as T;
@@ -4769,7 +4769,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/orgs\/[^/]+\/workflow-catalogue$/, workflowCatalogue],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
-    [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
+    [/^\/projects\/[^/]+\/memory\/pending$/, pageOf(pendingMemories, path.split("?")[1] ?? "")],
     [/^\/work-items\/[^/]+\/timeline$/, onePage(timeline)],
     [/^\/work-items\/[^/]+\/hand-offs$/, onePage(handOffs)],
     [/^\/work-items\/[^/]+\/artifacts$/, onePage(artifacts)],

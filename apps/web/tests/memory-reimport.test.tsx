@@ -19,7 +19,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       projectMemories: vi.fn(() => Promise.resolve([])),
       agents: vi.fn(() => Promise.resolve([])),
-      memoryPending: vi.fn(() => Promise.resolve([])),
+      memoryPending: vi.fn(() => Promise.resolve({ items: [], meta: { has_more: false, next_cursor: null } })),
       memorySearch: vi.fn(() => Promise.resolve([])),
       reimportMemory: vi.fn(() => Promise.resolve(undefined)),
     },

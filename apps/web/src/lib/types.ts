@@ -362,6 +362,7 @@ export type {
   AgentMemoryBinding,
   MemoryStore,
   MemoryStoreCreate,
+  MemoryPage,
   MemoryStorePage,
   MemoryStorePatch,
   MemoryStoreUser,

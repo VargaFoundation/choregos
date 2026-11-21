@@ -2072,6 +2072,12 @@ export type MemoryStoreUser = {
   version: number;
 };
 
+/** One page of a memory's review queue, oldest first (ADR 0206). */
+export type MemoryPage = {
+  items: Array<Memory>;
+  meta: PageMeta;
+};
+
 export type MemoryStorePage = {
   items: Array<MemoryStore>;
   meta: PageMeta;
@@ -7102,7 +7108,7 @@ export interface Operations {
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
   listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: GatewayKeyPage };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
-  listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
+  listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: MemoryPage };
   listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: ImplicitAgentPage };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: KnowledgeBasePage };
@@ -7134,7 +7140,7 @@ export interface Operations {
   listOutpostEnrolments: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: never; response: OutpostEnrolmentList };
   listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };
   listOutposts: { method: "GET"; path: "/orgs/{org}/outposts"; body: never; response: OutpostList };
-  listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
+  listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: MemoryPage };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
   listPluginAssistants: { method: "GET"; path: "/orgs/{org}/plugins/{name}/assistants"; body: never; response: PluginAssistantList };
