@@ -17,13 +17,14 @@ compares by identity keeps working; a declared value is returned as a string.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Any
 
 from pydantic import ValidationInfo
 
 from .enums import ConnectorKind, FindingType, InboundEventType, MemoryKind, StageRole
+from .window import DELIVERY_EVENT_TYPES, DELIVERY_FINDING_TYPES, DELIVERY_MEMORY_KINDS, SOFTWARE_DELIVERY
 
 #: The validation context of a document read back from the platform's own storage (`{STORED: True}`).
 STORED = "stored"
@@ -33,17 +34,29 @@ class OpenList:
     """The core's values of one list, and the ones extensions declared, each with its plugin."""
 
     def __init__(
-        self, what: str, pattern: str, core: Iterable[str], enum: type[StrEnum] | None = None
+        self,
+        what: str,
+        pattern: str,
+        core: Iterable[str],
+        enum: type[StrEnum] | None = None,
+        kept: Mapping[str, str] | None = None,
     ) -> None:
         self.what = what
         self.pattern = pattern
         self.core: frozenset[str] = frozenset(core)
+        #: Values of the core's list that are a plugin's (ADR 0181, round C2): its extension declares
+        #: them, and the core keeps them in its list for one window, so that a deployment without the
+        #: extension still reads them. Each is on the window list (`tranibor_contracts.window`), with
+        #: the release that takes it out of the core's list.
+        self.kept: Mapping[str, str] = dict(kept or {})
         self._enum = enum
         self._compiled = re.compile(pattern)
         self._declared: dict[str, str] = {}
         for value in self.core:
             if not self._compiled.fullmatch(value):
                 raise ValueError(f"the core's {what} `{value}` does not match {pattern}")
+        if not set(self.kept) <= self.core:
+            raise ValueError(f"a kept {what} is not in the core's list: {sorted(set(self.kept) - self.core)}")
 
     def declare(self, value: str, *, plugin: str) -> None:
         """Declare a value for `plugin`. A value of the core may be declared too (a plugin that takes
@@ -59,9 +72,18 @@ class OpenList:
     def known(self) -> frozenset[str]:
         return self.core | frozenset(self._declared)
 
+    def declared_by(self, plugin: str) -> frozenset[str]:
+        """The values `plugin`'s extension declared."""
+        return frozenset(value for value, owner in self._declared.items() if owner == plugin)
+
+    def own(self) -> frozenset[str]:
+        """The values the core owns: its list without those it keeps for a plugin."""
+        return self.core - frozenset(self.kept)
+
     def plugin_of(self, value: str) -> str | None:
-        """The plugin that declared `value`; `None` for a value only the core has, or nobody."""
-        return self._declared.get(value)
+        """The plugin that declared `value`, else the one the core keeps it for; `None` for a value the
+        core owns, or nobody's."""
+        return self._declared.get(value) or self.kept.get(value)
 
     def forget(self, plugin: str) -> None:
         """Drop what `plugin` declared: what a test does after installing an extension."""
@@ -103,10 +125,26 @@ CONNECTOR_KIND_PATTERN = r"^[a-z][a-z0-9_]{0,31}$"
 STAGE_ROLE_PATTERN = r"^[a-z][a-z0-9_]{1,31}$"
 
 INBOUND_EVENT_TYPES = OpenList(
-    "inbound event type", INBOUND_EVENT_TYPE_PATTERN, (v.value for v in InboundEventType), InboundEventType
+    "inbound event type",
+    INBOUND_EVENT_TYPE_PATTERN,
+    (v.value for v in InboundEventType),
+    InboundEventType,
+    kept=dict.fromkeys(DELIVERY_EVENT_TYPES, SOFTWARE_DELIVERY),
 )
-FINDING_TYPES = OpenList("finding type", FINDING_TYPE_PATTERN, (v.value for v in FindingType), FindingType)
-MEMORY_KINDS = OpenList("memory kind", MEMORY_KIND_PATTERN, (v.value for v in MemoryKind), MemoryKind)
+FINDING_TYPES = OpenList(
+    "finding type",
+    FINDING_TYPE_PATTERN,
+    (v.value for v in FindingType),
+    FindingType,
+    kept=dict.fromkeys(DELIVERY_FINDING_TYPES, SOFTWARE_DELIVERY),
+)
+MEMORY_KINDS = OpenList(
+    "memory kind",
+    MEMORY_KIND_PATTERN,
+    (v.value for v in MemoryKind),
+    MemoryKind,
+    kept=dict.fromkeys(DELIVERY_MEMORY_KINDS, SOFTWARE_DELIVERY),
+)
 CONNECTOR_KINDS = OpenList(
     "connector kind", CONNECTOR_KIND_PATTERN, (v.value for v in ConnectorKind), ConnectorKind
 )

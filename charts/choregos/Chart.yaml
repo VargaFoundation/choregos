@@ -49,3 +49,8 @@ dependencies:
     version: 0.27.17
     repository: file://charts/laya
     condition: global.decisions.embedded
+  # S80-17: self-hosted web search (SearXNG + search-only Firecrawl [+ relay]). Off by default.
+  - name: choregos-websearch
+    version: 0.27.15
+    repository: file://charts/websearch
+    condition: choregos-websearch.enabled

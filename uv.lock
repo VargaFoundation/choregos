@@ -32,6 +32,7 @@ members = [
     "tranibor-playbooks",
     "tranibor-procurement",
     "tranibor-runner",
+    "tranibor-software-delivery",
     "tranibor-tools-mcp",
 ]
 
@@ -490,6 +491,7 @@ dependencies = [
     { name = "tranibor-playbooks" },
     { name = "tranibor-procurement" },
     { name = "tranibor-runner" },
+    { name = "tranibor-software-delivery" },
     { name = "tranibor-tools-mcp" },
 ]
 
@@ -538,6 +540,7 @@ requires-dist = [
     { name = "tranibor-playbooks", editable = "packages/playbooks" },
     { name = "tranibor-procurement", editable = "plugins/procurement" },
     { name = "tranibor-runner", editable = "packages/runner" },
+    { name = "tranibor-software-delivery", editable = "plugins/software-delivery" },
     { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
 ]
 
@@ -2533,6 +2536,21 @@ requires-dist = [
     { name = "typer", specifier = ">=0.15" },
     { name = "uvicorn", specifier = ">=0.32" },
     { name = "websockets", specifier = ">=13" },
+]
+
+[[package]]
+name = "tranibor-software-delivery"
+version = "0.27.17"
+source = { editable = "plugins/software-delivery" }
+dependencies = [
+    { name = "tranibor-contracts" },
+    { name = "tranibor-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "tranibor-contracts", editable = "packages/contracts" },
+    { name = "tranibor-core", editable = "packages/core" },
 ]
 
 [[package]]

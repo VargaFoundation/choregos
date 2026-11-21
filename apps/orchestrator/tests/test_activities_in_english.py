@@ -175,13 +175,15 @@ def test_the_english_modules_hold_what_the_former_paths_forwarded() -> None:
 
 
 def test_the_english_helpers_are_defined() -> None:
-    from tranibor_orchestrator.activities import execution, gates, interpretation, provisioning, stage
+    from tranibor_orchestrator.activities import execution, interpretation, provisioning, stage
+    from tranibor_software_delivery import facts
 
     assert callable(execution.runner_environment) and callable(execution.runtime_class)
     assert callable(execution.hosts_to_reach_directly)
     assert stage.runner_environment is execution.runner_environment
     assert stage.QUEUE_MAX_MINUTES == execution.QUEUE_MAX_MINUTES
-    assert callable(gates.added_text_of)
+    # The diff's helpers are the `software-delivery` plugin's since ADR 0181 round C2.
+    assert callable(facts.added_text_of)
     assert callable(interpretation.message_of) and callable(interpretation.activity_of)
     assert callable(provisioning.step_labels)
     assert provisioning.templates_dir is not None

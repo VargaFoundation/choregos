@@ -26,12 +26,17 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
-from .enums import Role
+from .enums import FindingType, InboundEventType, MemoryKind, Role
 
 __all__ = [
     "C1",
+    "C2",
+    "DELIVERY_EVENT_TYPES",
+    "DELIVERY_FINDING_TYPES",
+    "DELIVERY_MEMORY_KINDS",
     "ROLE_STORED_AS",
     "ROLE_SUCCESSORS",
+    "SOFTWARE_DELIVERY",
     "WINDOW",
     "FormerName",
     "Window",
@@ -65,6 +70,31 @@ C1 = Window(
     not_before=date(2026, 12, 7),
 )
 
+#: Round C2 of ADR 0181: what is the `software-delivery` plugin's leaves the core under the same strings.
+#: The core keeps the plugin's values of its open lists for one window (`OpenList.kept`): their
+#: enumeration members leave the contracts, and the values the core's list, in `removed_in`; the
+#: plugin's extension declares them from 0.28.0. Two weeks after 0.28.0 at the earliest.
+C2 = Window(
+    round="C2",
+    opened_in="0.28.0",
+    writers_switch_in="0.29.0",
+    removed_in="0.31.0",
+    not_before=date(2026, 12, 14),
+)
+
+#: The first-party plugin whose values the core's open lists keep for the window of round C2.
+SOFTWARE_DELIVERY = "software-delivery"
+#: The inbound event types of a source control, a pipeline and a deployment (`scm.*`, `ci.*`, `cd.*`):
+#: the plugin's since round C2, under the same strings (they are stored in `received_events`).
+DELIVERY_EVENT_TYPES: frozenset[str] = frozenset(
+    member.value for member in InboundEventType if member.value.split(".", 1)[0] in {"scm", "ci", "cd"}
+)
+#: The finding types and memory kinds of software delivery (ADR 0181 inventory, class (b)).
+DELIVERY_FINDING_TYPES: frozenset[str] = frozenset(
+    {FindingType.BUG, FindingType.PERF, FindingType.TECH_DEBT, FindingType.FLAKY_TEST}
+)
+DELIVERY_MEMORY_KINDS: frozenset[str] = frozenset({MemoryKind.FLAKY_TEST, MemoryKind.HOTSPOT})
+
 Surface = Literal["python", "rest", "dsl", "stage-result", "sign-in"]
 
 
@@ -97,6 +127,23 @@ _WORKFLOW_APPROVER = (
 
 def _rest(schema: str, name: str, successor: str) -> FormerName:
     return FormerName(name, successor, "rest", f"openapi:/components/schemas/{schema}/properties/{name}", C1)
+
+
+def _kept(
+    enum: type[InboundEventType | FindingType | MemoryKind], values: frozenset[str]
+) -> tuple[FormerName, ...]:
+    """The members of a contract's enumeration whose value the `software-delivery` plugin declares."""
+    return tuple(
+        FormerName(
+            f"{enum.__name__}.{member.name}",
+            f"`{member.value}`, declared by the software-delivery plugin",
+            "python",
+            f"py:tranibor_contracts.enums:{enum.__name__}.{member.name}",
+            C2,
+        )
+        for member in enum
+        if member.value in values
+    )
 
 
 #: Every former name kept for a window, with its successor and its window.
@@ -175,6 +222,10 @@ WINDOW: tuple[FormerName, ...] = (
         "py:tranibor_contracts.stage:Artifacts.model_fields[pr_url]",
         C1,
     ),
+    # Round C2: the open lists' values of software delivery (ADR 0181 inventory, class (b)).
+    *_kept(InboundEventType, DELIVERY_EVENT_TYPES),
+    *_kept(FindingType, DELIVERY_FINDING_TYPES),
+    *_kept(MemoryKind, DELIVERY_MEMORY_KINDS),
 )
 
 #: A former role and its successor: `Role.neutral` reads through it.

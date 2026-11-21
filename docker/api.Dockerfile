@@ -40,6 +40,7 @@ COPY apps/orchestrator apps/orchestrator
 # The first-party plugins' extensions (ADR 0181): the published API and worker load them from the
 # `choregos.plugins` entry point, so no deployment loses a connector type when it leaves the core.
 COPY plugins/investment-research plugins/investment-research
+COPY plugins/software-delivery plugins/software-delivery
 # The project templates (manifest, scaffold): provisioning reads them at run time.
 # The image lacked them — `provisioning.py` looked for `/app/templates`, which did not exist,
 # and no project with a template could be provisioned from a pod (stocktake of 2026-09-24,

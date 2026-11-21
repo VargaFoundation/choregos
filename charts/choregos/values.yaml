@@ -91,7 +91,7 @@ global:
     # runner's environment (run token, git token, egress report key) nor /app. An executor that cannot
     # start that container (it does not declare `separate_agent`) refuses the run, and `/readiness`
     # says so first (`agent-isolation`); the runner refuses too (exit 100) rather than fall back to
-    # `process`. Needs Kubernetes >= 1.29 (native sidecar). `container` is the default from 0.28
+    # `process`. Needs Kubernetes >= 1.29 (native sidecar). `container` is the default from 0.27.17
     # (S65-04m); `tekton` and `aca` cannot start the agent's container, so a deployment on them sets
     # `process`, which stays a choice, journaled on every run (`agent.isolation`). Roll back the same way.
     agentIsolation: container
@@ -915,3 +915,8 @@ networkPolicies:
   # policy leaves out. Empty on a cluster, whose platform team opens the outside its own way (the
   # egress ceiling above says what it opened); the single-node profile opens it here (ADR 0184).
   platformEgress: []
+
+# S80-17: self-hosted web search for the governed `web_search` tool. Off by default; see
+# charts/websearch/values.yaml and docs/deployment.md.
+choregos-websearch:
+  enabled: false
