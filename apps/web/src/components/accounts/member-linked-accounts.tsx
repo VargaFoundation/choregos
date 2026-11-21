@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, ErrorNote, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -19,7 +19,13 @@ const EMPTY = { provider: "github" as ForgeProvider, baseUrl: "", id: "", login:
 export function MemberLinkedAccounts({ org, userId, readOnly = false }: { org: string; userId: string; readOnly?: boolean }) {
   const client = useQueryClient();
   const key = ["member-linked-accounts", org, userId];
-  const accounts = useQuery({ queryKey: key, queryFn: () => api.memberLinkedAccounts(org, userId) });
+  const accounts = useInfiniteQuery({
+    queryKey: key,
+    queryFn: ({ pageParam }) => api.memberLinkedAccounts(org, userId, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const rows = accounts.data?.pages.flatMap((page) => page.items) ?? [];
   const [draft, setDraft] = useState(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const needsInstance = !DEFAULT_INSTANCES[draft.provider];
@@ -50,11 +56,16 @@ export function MemberLinkedAccounts({ org, userId, readOnly = false }: { org: s
   return (
     <div className="space-y-2 text-sm">
       <LinkedAccountList
-        accounts={accounts.data ?? []}
+        accounts={rows}
         label="Linked accounts of this member"
         onRemove={readOnly ? undefined : (account) => act(() => api.deleteMemberLinkedAccount(org, userId, account.id))}
       />
-      {accounts.isSuccess && (accounts.data ?? []).length === 0 && <p className="text-xs text-ink-muted">No linked account.</p>}
+      {accounts.isSuccess && rows.length === 0 && <p className="text-xs text-ink-muted">No linked account.</p>}
+      {accounts.hasNextPage && (
+        <Button size="sm" onClick={() => void accounts.fetchNextPage()} disabled={accounts.isFetchingNextPage}>
+          More
+        </Button>
+      )}
       {!readOnly && (
         <>
           <div className="flex flex-wrap items-end gap-2">

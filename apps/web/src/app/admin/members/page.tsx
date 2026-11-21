@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { MemberLinkedAccounts } from "@/components/accounts/member-linked-accounts";
 import { peopleOf } from "@/components/members";
 import { MembersTable } from "@/components/members-table";
 import { Card } from "@/components/ui";
-import { api } from "@/lib/api";
+import { useMemberPages } from "@/lib/member-pages";
 import { useSession } from "@/lib/session";
 
 /**
@@ -18,8 +17,8 @@ import { useSession } from "@/lib/session";
 export default function MembersPage() {
   const { me, org } = useSession();
   const orgAdmin = (me?.memberships ?? []).some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
-  const members = useQuery({ queryKey: ["members", org, ""], queryFn: () => api.members(org), enabled: orgAdmin });
-  const people = peopleOf(members.data ?? []).filter((p) => p.userId);
+  const members = useMemberPages(org, { enabled: orgAdmin });
+  const people = peopleOf(members.rows).filter((p) => p.userId);
   return (
     <div className="space-y-4">
       <MembersTable />

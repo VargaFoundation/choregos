@@ -14,7 +14,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       memberProfile: vi.fn(),
-      memberLinkedAccounts: vi.fn().mockResolvedValue([]),
+      memberLinkedAccounts: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

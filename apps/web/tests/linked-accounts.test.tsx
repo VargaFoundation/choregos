@@ -120,7 +120,7 @@ describe("a member's linked accounts, for an administrator", () => {
   });
 
   it("declares an account by numeric id on any forge", async () => {
-    vi.mocked(api.memberLinkedAccounts).mockResolvedValue([VERIFIED]);
+    vi.mocked(api.memberLinkedAccounts).mockResolvedValue({ items: [VERIFIED], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.declareMemberLinkedAccount).mockResolvedValue(DECLARED);
     wrap(<MemberLinkedAccounts org="acme" userId="u2" />);
     expect(await screen.findByText("Verified")).toBeTruthy();
@@ -141,8 +141,20 @@ describe("a member's linked accounts, for an administrator", () => {
     );
   });
 
+  it("reads the next page of a member's accounts on More (ADR 0206)", async () => {
+    vi.mocked(api.memberLinkedAccounts)
+      .mockResolvedValueOnce({ items: [VERIFIED], meta: { has_more: true, next_cursor: "c1" } })
+      .mockResolvedValueOnce({ items: [DECLARED], meta: { has_more: false, next_cursor: null } });
+    wrap(<MemberLinkedAccounts org="acme" userId="u2" />);
+    expect(await screen.findByText("Verified")).toBeTruthy();
+    expect(screen.queryByText("Declared")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByText("Declared")).toBeTruthy();
+    expect(api.memberLinkedAccounts).toHaveBeenLastCalledWith("acme", "u2", expect.objectContaining({ cursor: "c1" }));
+  });
+
   it("shows the conflict when the account belongs to another member", async () => {
-    vi.mocked(api.memberLinkedAccounts).mockResolvedValue([]);
+    vi.mocked(api.memberLinkedAccounts).mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.declareMemberLinkedAccount).mockRejectedValue(
       new ApiError(409, { title: "Conflict", detail: "this github user id is already linked to another member" }),
     );

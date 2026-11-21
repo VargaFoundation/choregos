@@ -7,6 +7,7 @@ import { MachineAccounts } from "@/components/project-settings/machine-accounts"
 import { SettingsSection } from "@/components/project-settings/section";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useMemberPages } from "@/lib/member-pages";
 import { useSession } from "@/lib/session";
 import type { Membership } from "@/lib/types";
 
@@ -20,10 +21,10 @@ export function countByRole(members: Membership[]): string {
 /** Who works on the project. The members and the groups have their own pages: this section counts and points. */
 export function PeopleSection({ slug }: { slug: string }) {
   const { org } = useSession();
-  const members = useQuery({ queryKey: ["members", org, slug], queryFn: () => api.members(org, slug) });
+  const members = useMemberPages(org, { project: slug });
   const readiness = useQuery({ queryKey: ["readiness", slug], queryFn: () => api.projectReadiness(slug) });
   const gaps = (readiness.data?.items ?? []).filter((i) => i.section === "people" && i.state !== "done" && i.state !== "not_needed");
-  const projectMembers = (members.data ?? []).filter((m) => m.project_slug === slug);
+  const projectMembers = members.rows.filter((m) => m.project_slug === slug);
   return (
     <SettingsSection
       id="people"
@@ -32,7 +33,9 @@ export function PeopleSection({ slug }: { slug: string }) {
     >
       <Card title="Members">
         <p className="text-sm" data-testid="people-count">
-          {projectMembers.length === 0 ? "No member is assigned to this project yet." : `${projectMembers.length} on this project: ${countByRole(projectMembers)}.`}
+          {projectMembers.length === 0
+            ? "No member is assigned to this project yet."
+            : `${members.hasMore ? "At least " : ""}${projectMembers.length} on this project: ${countByRole(projectMembers)}${members.hasMore ? " (more in Members)" : ""}.`}
         </p>
         {gaps.length > 0 && (
           <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-warn" data-testid="people-gaps">

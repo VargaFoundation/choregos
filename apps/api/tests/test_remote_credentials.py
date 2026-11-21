@@ -72,7 +72,7 @@ async def test_an_oauth_credential_registers_the_platform_at_the_cards_dcr_endpo
         "http://localhost:8000/api/v1/remote-credentials/oauth/callback"
     ]
     assert "authorization_code" in registered[0]["grant_types"]
-    assert (await client.get(BASE)).json()[0]["name"] == "rovo-oauth"
+    assert (await client.get(BASE)).json()["items"][0]["name"] == "rovo-oauth"
 
 
 async def test_a_card_that_advertises_no_dcr_cannot_be_registered_at(
@@ -105,7 +105,7 @@ async def test_authorising_sends_a_pkce_challenge_and_the_callback_proves_the_ve
     challenge = base64.urlsafe_b64encode(hashlib.sha256(exchange["code_verifier"].encode()).digest())
     assert challenge.decode().rstrip("=") == query["code_challenge"], "the provider can check the PKCE pair"
 
-    listed = (await client.get(BASE)).json()[0]
+    listed = (await client.get(BASE)).json()["items"][0]
     assert listed["status"] == "connected"
     assert listed["last_refresh_at"] is not None
 
@@ -188,7 +188,7 @@ async def test_a_provider_that_gives_no_refresh_token_does_not_connect_the_crede
         "/api/v1/remote-credentials/oauth/callback", params={"code": "c", "state": state}
     )
     assert refused.status_code == 502 and "offline_access" in refused.text
-    assert (await client.get(BASE)).json()[0]["status"] == "pending"
+    assert (await client.get(BASE)).json()["items"][0]["status"] == "pending"
 
 
 async def test_a_bearer_credential_is_sealed_and_never_returned(
@@ -215,7 +215,7 @@ async def test_revoking_deletes_the_sealed_values(
     assert (await client.delete(f"{BASE}/static")).status_code == 204
     async with session_scope() as session:
         assert not (await session.execute(select(OrgSecret))).scalars().all()
-    assert (await client.get(BASE)).json()[0]["status"] == "revoked"
+    assert (await client.get(BASE)).json()["items"][0]["status"] == "revoked"
 
 
 async def test_only_an_org_admin_manages_remote_credentials(

@@ -37,8 +37,9 @@ from tranibor_core.redaction import remember_secret
 from ..audit import record
 from ..db.models import Organization, RemoteCredential
 from ..db.org_aliases import current_slug
-from ..deps import Config, Db, Me
+from ..deps import Config, Db, Me, Pagination
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     A2aRuntime,
@@ -50,6 +51,7 @@ from ..schemas import (
     RemoteCredentialAuthorization,
     RemoteCredentialCreate,
     RemoteCredentialDto,
+    RemoteCredentialPage,
     RemoteSkillInfo,
 )
 from ..secret_store import SecretStoreUnavailable, get_secret_store
@@ -132,20 +134,24 @@ def _https(url: str, what: str) -> str:
 
 @router.get(
     "/orgs/{org}/remote-credentials",
-    response_model=list[RemoteCredentialDto],
+    response_model=RemoteCredentialPage,
     operation_id="listRemoteCredentials",
 )
-async def list_remote_credentials(org: str, session: Db, principal: Me) -> list[RemoteCredentialDto]:
+async def list_remote_credentials(
+    org: str, session: Db, principal: Me, page: Pagination
+) -> RemoteCredentialPage:
+    """The organisation's remote credentials by name, one page at a time (ADR 0206)."""
     _manage(principal, org)
     organisation = await organisation_by_slug(session, org)
-    rows = (
-        await session.execute(
-            select(RemoteCredential)
-            .where(RemoteCredential.org_id == organisation.id)
-            .order_by(RemoteCredential.name)
-        )
-    ).scalars()
-    return [_dto(row) for row in rows]
+    rows, meta = await keyset_page(
+        session,
+        select(RemoteCredential).where(RemoteCredential.org_id == organisation.id),
+        sort=RemoteCredential.name,
+        tiebreak=RemoteCredential.id,
+        page=page,
+        descending=False,
+    )
+    return RemoteCredentialPage(items=[_dto(row) for row in rows], meta=meta)
 
 
 @router.post(

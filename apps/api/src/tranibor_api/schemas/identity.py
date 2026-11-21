@@ -11,7 +11,7 @@ from tranibor_contracts import Role
 from tranibor_core.agent_completeness import OrgCompleteAgents
 from tranibor_core.tool_scripts_switch import OrgToolScripts
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 
 class MembershipDto(Dto):
@@ -20,6 +20,13 @@ class MembershipDto(Dto):
     org: str
     project_slug: str | None = None
     role: Role
+
+
+class MembershipPage(Dto):
+    """One page of memberships, ordered by e-mail then id (ADR 0206)."""
+
+    items: list[MembershipDto]
+    meta: PageMeta
 
 
 class MeDto(Dto):

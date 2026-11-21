@@ -195,8 +195,8 @@ async def test_an_administrator_declares_a_link_that_is_not_verified(
 
     await login(client, "dev@northwind.dev")
     own = await client.get(f"{ORG}/members/{dev}/linked-accounts")
-    assert own.status_code == 200 and {r["provider"] for r in own.json()} == {"gitlab", "forgejo"}
-    assert all(r["verified"] is False for r in own.json())
+    assert own.status_code == 200 and {r["provider"] for r in own.json()["items"]} == {"gitlab", "forgejo"}
+    assert all(r["verified"] is False for r in own.json()["items"])
     assert (await client.get(f"{ORG}/members/{other}/linked-accounts")).status_code == 403
     write = {"provider": "github", "external_id": "9", "login": "x"}
     assert (await client.post(f"{ORG}/members/{dev}/linked-accounts", json=write)).status_code == 403

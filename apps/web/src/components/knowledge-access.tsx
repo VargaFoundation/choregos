@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Lock } from "lucide-react";
 import { Badge, Card, ErrorNote, Input, Select, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useMemberPicker } from "@/lib/member-pages";
 import { GRANT_ROLES, grantKey, grantName, grantsBody, permissionsOf, readersLabel, roleHint } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeGrant } from "@/lib/types";
 
@@ -40,7 +41,9 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
     setSeen(fromServer);
     setDraft(initial(base));
   }
-  const members = useQuery({ queryKey: ["members", org], queryFn: () => api.members(org), enabled: can.share && kind === "user" });
+  // A member is picked by searching the server (`q`), never from the whole organisation in the browser (ADR 0206).
+  const [memberSearch, setMemberSearch] = useState("");
+  const members = useMemberPicker(org, memberSearch.trim(), can.share && kind === "user");
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), enabled: can.share && kind === "project" });
   const dirty = JSON.stringify(grantsBody(draft)) !== JSON.stringify(grantsBody(base.grants ?? []));
 
@@ -75,7 +78,7 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
   }
 
   const readers = readersLabel(base);
-  const memberRows = [...new Map((members.data ?? []).filter((m) => m.user_id).map((m) => [m.user_id, m])).values()];
+  const memberRows = [...new Map(members.rows.filter((m) => m.user_id).map((m) => [m.user_id, m])).values()];
   return (
     <Card title="Access">
       <div className="space-y-4 text-sm" data-testid="knowledge-access">
@@ -177,14 +180,23 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
                 <option value="project">a project</option>
               </Select>
               {kind === "user" ? (
-                <Select aria-label="Member" value={subject} onChange={(event) => setSubject(event.target.value)} className="w-56">
-                  <option value="">Choose a member</option>
-                  {memberRows.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.email ?? m.user_id}
-                    </option>
-                  ))}
-                </Select>
+                <>
+                  <Input
+                    aria-label="Search members"
+                    value={memberSearch}
+                    onChange={(event) => setMemberSearch(event.target.value)}
+                    placeholder="Search by e-mail"
+                    className="w-44"
+                  />
+                  <Select aria-label="Member" value={subject} onChange={(event) => setSubject(event.target.value)} className="w-56">
+                    <option value="">{members.hasMore ? "Choose a member (type to narrow the list)" : "Choose a member"}</option>
+                    {memberRows.map((m) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.email ?? m.user_id}
+                      </option>
+                    ))}
+                  </Select>
+                </>
               ) : kind === "project" ? (
                 <Select aria-label="Project" value={subject} onChange={(event) => setSubject(event.target.value)} className="w-56">
                   <option value="">Choose a project</option>

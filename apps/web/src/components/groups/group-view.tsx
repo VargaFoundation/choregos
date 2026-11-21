@@ -8,6 +8,7 @@ import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { peopleOf } from "@/components/members";
 import { Alert, Button, Card, Empty, ErrorNote, Field, Input, ReadState, Select, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useMemberPicker } from "@/lib/member-pages";
 import type { OrgGroup, OrgGroupMember } from "@/lib/types";
 import { SourceBadge } from "./source-badge";
 
@@ -204,12 +205,15 @@ function Members({
 
 /** Only a member of the organisation joins its groups: the choice is among them. */
 function AddMember({ org, slug, inGroup, onChange }: { org: string; slug: string; inGroup: OrgGroupMember[]; onChange: () => Promise<void> }) {
-  const memberships = useQuery({ queryKey: ["members", org, ""], queryFn: () => api.members(org) });
+  // The person is searched on the server (`q`) and the select shows its first page (ADR 0206). Who is already in the group
+  // is left out of that page here, so a group that holds the first 200 people still finds the others by searching.
+  const [search, setSearch] = useState("");
+  const memberships = useMemberPicker(org, search.trim());
   const [chosen, setChosen] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const already = new Set(inGroup.map((m) => m.user_id));
-  const candidates = peopleOf(memberships.data ?? []).filter((p) => p.userId && !already.has(p.userId));
+  const candidates = peopleOf(memberships.rows).filter((p) => p.userId && !already.has(p.userId));
 
   async function add() {
     setBusy(true);
@@ -235,6 +239,9 @@ function AddMember({ org, slug, inGroup, onChange }: { org: string; slug: string
           if (chosen && !busy) void add();
         }}
       >
+        <Field label="Search people" className="min-w-48">
+          {(props) => <Input {...props} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="e-mail" />}
+        </Field>
         <Field label="Member of the organisation" className="min-w-64">
           {(props) => (
             <Select {...props} value={chosen} onChange={(event) => setChosen(event.target.value)} data-testid="member-choice">

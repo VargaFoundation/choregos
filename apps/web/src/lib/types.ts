@@ -318,11 +318,17 @@ export type {
 /** The organisation's memory A/B report and the platform's gateway keys (S47-18). */
 export type {
   ActionPage,
+  GatewayKeyInfo,
+  GatewayKeyPage,
+  LinkedAccountPage,
+  MembershipPage,
+  MemoryAbGroup,
+  MemoryAbReport,
   OrgConnectorPage,
   ProjectOperationPage,
   ProjectOrgConnectorPage,
-  GatewayKeyInfo,
-  GatewayKeyPage, MemoryAbGroup, MemoryAbReport } from "@choregos/contracts/api";
+  RemoteCredentialPage,
+} from "@choregos/contracts/api";
 
 /** Named memories, global and project, and an agent's bindings to them (S40-11, ADR 0075). */
 export type {

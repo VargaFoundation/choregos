@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import Field
 
 from .agents import SLUG, AgentCreate
-from .base import Dto
+from .base import Dto, PageMeta
 
 RemoteCredentialType = Literal["oauth2_authorization_code", "bearer", "none"]
 
@@ -45,6 +45,13 @@ class RemoteCredentialDto(Dto):
     last_refresh_at: datetime | None = None
     expires_at: datetime | None = None
     last_error: str | None = None
+
+
+class RemoteCredentialPage(Dto):
+    """One page of the organisation's remote credentials, by name (ADR 0206)."""
+
+    items: list[RemoteCredentialDto]
+    meta: PageMeta
 
 
 class RemoteCredentialAuthorization(Dto):

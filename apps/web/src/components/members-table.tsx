@@ -8,6 +8,7 @@ import { Confirmation } from "@/components/confirmed-gesture";
 import { AdditiveRolesNote, PROJECT_ROLES, ROLE_LABELS, ROLES, peopleOf, rank, type Role } from "@/components/members";
 import { Button, Card, Empty, ErrorNote, ReadState, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useMemberPages } from "@/lib/member-pages";
 import { useSession } from "@/lib/session";
 
 /**
@@ -19,7 +20,7 @@ import { useSession } from "@/lib/session";
 export function MembersTable({ project }: { project?: string }) {
   const { org, me } = useSession();
   const client = useQueryClient();
-  const members = useQuery({ queryKey: ["members", org, project ?? ""], queryFn: () => api.members(org, project) });
+  const members = useMemberPages(org, { project });
   // The project picker of an invitation from the organisation's page: a list, not free text.
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), enabled: !project });
   const roles: readonly Role[] = project ? PROJECT_ROLES : ROLES;
@@ -47,7 +48,7 @@ export function MembersTable({ project }: { project?: string }) {
     }
   }
 
-  const people = peopleOf(members.data ?? []).map((person) => ({
+  const people = peopleOf(members.rows).map((person) => ({
     ...person,
     // On a project's page, the role shown is the project's.
     role: project ? (person.projects.find((p) => p.slug === project)?.role ?? null) : person.orgRole,
@@ -240,6 +241,13 @@ export function MembersTable({ project }: { project?: string }) {
               })}
             </TBody>
           </Table>
+        )}
+        {members.hasMore && (
+          <div>
+            <Button size="sm" onClick={() => void members.fetchNextPage()} disabled={members.isFetchingNextPage}>
+              More
+            </Button>
+          </div>
         )}
       </div>
     </Card>

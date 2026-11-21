@@ -2245,10 +2245,24 @@ export const platformAgentImages: AgentImageInfo[] = [
   { name: "scratch-bench", digest_pinned: false },
 ];
 
-/** The memberships the API returns: the organisation's, or one project's with `?project=` (S30-06). */
-function membersOf(path: string): Membership[] {
-  const project = new URLSearchParams(path.split("?")[1] ?? "").get("project");
-  return project ? memberships.filter((m) => m.project_slug === project) : memberships;
+/** One page of `rows` as the server returns it (ADR 0206): `limit` rows from the opaque `cursor` (here an offset). */
+function mockPage<T>(rows: T[], path: string): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+  const search = new URLSearchParams(path.split("?")[1] ?? "");
+  const limit = Math.min(200, Math.max(1, Number(search.get("limit") ?? 50) || 50));
+  const start = Number(search.get("cursor") ?? 0) || 0;
+  const hasMore = rows.length > start + limit;
+  return { items: rows.slice(start, start + limit), meta: { has_more: hasMore, next_cursor: hasMore ? String(start + limit) : null } };
+}
+
+/** The memberships the API returns, by e-mail: the organisation's, or one project's with `?project=` (S30-06), filtered by `?q=`. */
+function membersOf(path: string) {
+  const search = new URLSearchParams(path.split("?")[1] ?? "");
+  const project = search.get("project");
+  const needle = (search.get("q") ?? "").toLowerCase();
+  const rows = memberships
+    .filter((m) => (!project || m.project_slug === project) && (!needle || (m.email ?? "").toLowerCase().includes(needle)))
+    .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
+  return mockPage(rows, path);
 }
 
 /** The registry's columns, one line per agent (S30-04). */
@@ -3532,7 +3546,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       if (at >= 0) mockLinkedAccounts.splice(at, 1);
       return undefined as T;
     }
-    return structuredClone(mockLinkedAccounts.filter((a) => a.org === org && a.user_id === userId)) as T;
+    const mine = mockLinkedAccounts
+      .filter((a) => a.org === org && a.user_id === userId)
+      .sort((a, b) => a.provider.localeCompare(b.provider) || a.base_url.localeCompare(b.base_url));
+    return structuredClone(mockPage(mine, path)) as T;
   }
   if (method === "GET" && bare === "/me/linked-accounts") {
     return structuredClone({ items: mockLinkedAccounts.filter((a) => a.user_id === "u1"), instances: [...mockForgeInstances] }) as T;
@@ -4496,7 +4513,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
   if (/^\/orgs\/[^/]+\/agents\/rovo\/runs$/.test(route ?? "")) return [remoteRunDrifted, remoteRun] as T;
-  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return remoteCredentials as T;
+  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return mockPage([...remoteCredentials].sort((a, b) => a.name.localeCompare(b.name)), path) as T;
   if (/^\/runs\/r-remote\/events$/.test(route ?? "")) return remoteEvents(false) as T;
   if (/^\/runs\/r-remote-drift\/events$/.test(route ?? "")) return remoteEvents(true) as T;
   if (/^\/runs\/r-remote(-drift)?$/.test(route ?? "")) return (route?.endsWith("drift") ? remoteRunDrifted : remoteRun) as T;

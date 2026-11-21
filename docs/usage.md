@@ -2098,6 +2098,10 @@ a spend back leaves the line `unmeasured`).
 
 ### Registering a remote agent (A2A)
 
+The organisation's credentials are listed by `GET /orgs/{org}/remote-credentials`, paged by the server (ADR 0206):
+`{items, meta}` in name order, `?limit=` (1 to 200, 50 by default) and `?cursor=` from `meta.next_cursor`; the console's
+**Remote agent credentials** table reads 50 and shows **More**.
+
 An agent that runs elsewhere — Atlassian's Rovo, or any A2A agent — is registered as kind `remote`
 ([ADR 0062](adr/0062-remote-agents-over-a2a.md), set-up in [integrations](integrations.md)). Read its
 card first: `POST /orgs/acme/agents/discover {"card_url": "https://…/.well-known/agent.json"}` lists its
@@ -3582,6 +3586,11 @@ self-managed instance, `forgejo-oauth`): its address, the OAuth application's cl
 and its hosts in the egress allowlist; the setup procedures say what to register at each forge, with the
 callback address `<api_url>/api/v1/auth/linked-accounts/callback`.
 
+The lists are paged by the server (ADR 0206): `GET /orgs/{org}/members/{user_id}/linked-accounts` answers `{items,
+meta}`, ordered by forge then instance, and the member's page shows **More** when there are further accounts.
+`GET /orgs/{org}/members/{user_id}/tracker-identities` stays an array, one row at most (a member has one GitHub
+link).
+
 An administrator still declares a member's account by its numeric id on **Administration**, **Members**
 (`POST /orgs/{org}/members/{user_id}/linked-accounts`): it is shown as **Declared**, not verified, until the
 member links it themself. One forge account belongs to one member of an organisation, whichever way it was
@@ -3589,6 +3598,14 @@ linked. Today a declared github.com link is honoured for the signed comments abo
 always was); requiring `verified` is a later switch. The routes of S47-14
 (`/orgs/{org}/members/{user_id}/tracker-identities/github`) still answer, deprecated: they read and write the
 member's github.com link.
+
+### The members list
+
+`GET /orgs/{org}/members` answers `{items, meta}` (ADR 0206): one row per membership, ordered by e-mail so one
+person's rows are neighbours, `?project=<slug>` for that project's, `?q=` for a part of the e-mail, `?limit=` (1 to 200, 50
+by default) and `?cursor=`. What a project reader may see is filtered in the query, so a page is full. **Members** reads 50
+at a time and shows **More**; the person pickers (group, knowledge access, reassigning a request) search on the server and
+show its first 200 matches.
 
 ### A member's profile
 
