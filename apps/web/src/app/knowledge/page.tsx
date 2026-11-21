@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Card, Empty, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -34,10 +34,22 @@ function filterFromUrl(): Filter {
 export default function KnowledgePage() {
   const { org } = useSession();
   const client = useQueryClient();
-  const bases = useQuery({
-    queryKey: ["knowledge", org],
-    queryFn: () => api.knowledgeBases(org),
+  const [filter, setFilter] = useState<Filter>(filterFromUrl);
+  // The scope goes to the server, which pages by slug (ADR 0206): "More" asks for the next page.
+  const bases = useInfiniteQuery({
+    queryKey: ["knowledge", org, "pages", filter],
+    queryFn: ({ pageParam }) =>
+      api.knowledgeBasesPage(org, {
+        scope: filter === "all" ? undefined : filter,
+        cursor: pageParam,
+        limit: 50,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) =>
+      last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined,
+    placeholderData: keepPreviousData,
   });
+  const shown = bases.data?.pages.flatMap((page) => page.items) ?? [];
   const projects = useQuery({
     queryKey: ["projects", org],
     queryFn: () => api.projects(org),
@@ -45,7 +57,6 @@ export default function KnowledgePage() {
   const projectNames = Object.fromEntries(
     (projects.data?.items ?? []).map((p) => [p.slug, p.name]),
   );
-  const [filter, setFilter] = useState<Filter>(filterFromUrl);
   function pick(next: Filter) {
     setFilter(next);
     const url = new URL(window.location.href);
@@ -53,9 +64,6 @@ export default function KnowledgePage() {
     else url.searchParams.set("scope", next);
     window.history.replaceState(null, "", url);
   }
-  const shown = (bases.data ?? []).filter(
-    (b) => filter === "all" || b.scope === filter,
-  );
   const [form, setForm] = useState<{
     slug: string;
     name: string;
@@ -119,7 +127,7 @@ export default function KnowledgePage() {
           <ErrorNote>{String(bases.error)}</ErrorNote>
         ) : !bases.data ? (
           <p className="text-sm text-ink-muted">reading the knowledge bases…</p>
-        ) : bases.data.length === 0 ? (
+        ) : shown.length === 0 && filter === "all" ? (
           <Empty title="No knowledge base yet">
             Create one below, then upload its documents.
           </Empty>
@@ -201,6 +209,15 @@ export default function KnowledgePage() {
                 </tbody>
               </table>
             </div>
+            {bases.hasNextPage && (
+              <Button
+                size="sm"
+                onClick={() => void bases.fetchNextPage()}
+                disabled={bases.isFetchingNextPage}
+              >
+                More
+              </Button>
+            )}
           </div>
         )}
       </Card>

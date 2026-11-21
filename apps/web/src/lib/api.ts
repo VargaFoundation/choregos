@@ -85,6 +85,9 @@ import type {
   ProjectAgent,
   ProjectAgentPut,
   Skill,
+  SkillPage,
+  KnowledgeBasePage,
+  MemoryStorePage,
   SkillGitImport,
   SkillGitPreview,
   SkillGitPreviewRequest,
@@ -491,6 +494,29 @@ async function cliManifest(): Promise<CliManifest | null> {
   return (await response.json()) as CliManifest;
 }
 
+/** What a paged list takes (ADR 0206): the server filters on `q`, `cursor` is the one the last page gave. */
+export type PageParams = { q?: string; cursor?: string; limit?: number };
+
+const pageQuery = (params: PageParams): string =>
+  query(compact({ q: params.q, cursor: params.cursor, limit: params.limit?.toString() }));
+
+/**
+ * Every row of a paged list, by following `next_cursor` to the end. For the screens that need the whole
+ * list (an agent's composition resolves its skills by name): tables ask for one page and offer More.
+ */
+async function everyRow<T>(
+  page: (cursor: string | undefined) => Promise<{ items: T[]; meta: { has_more: boolean; next_cursor?: string | null } }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const got = await page(cursor);
+    rows.push(...got.items);
+    if (!got.meta.has_more || !got.meta.next_cursor) return rows;
+    cursor = got.meta.next_cursor;
+  }
+}
+
 export const api = {
   me: () => request<MeDto>("/me"),
   cliManifest,
@@ -744,12 +770,12 @@ export const api = {
     request<ImplicitAgentPage>(`/projects/${qualify(id)}/implicit-agents${pageQuery(params)}`),
   /** All of them, page after page (the page needs the count and the whole list to register from). */
   implicitAgents: (id: string): Promise<ImplicitAgent[]> =>
-    followPages((params) => api.implicitAgentsPage(id, params)),
+    everyRow((cursor) => api.implicitAgentsPage(id, { cursor, limit: 200 })),
   /** Every agent the project's active workflows run, named or built in (S47-39). */
   workflowAgentsPage: (id: string, params: PageParams = {}) =>
     request<WorkflowAgentPage>(`/projects/${qualify(id)}/workflow-agents${pageQuery(params)}`),
   workflowAgents: (id: string): Promise<WorkflowAgent[]> =>
-    followPages((params) => api.workflowAgentsPage(id, params)),
+    everyRow((cursor) => api.workflowAgentsPage(id, { cursor, limit: 200 })),
   /** Who a person step addressed to a group waits for, and who of them may answer in the project. */
   groupMembers: (id: string, group: string) =>
     request<GroupMembers>(`/projects/${qualify(id)}/groups/${encodeURIComponent(group)}/members`),
@@ -804,7 +830,12 @@ export const api = {
   unpinProjectAgent: (id: string, slug: string) =>
     request<void>(`/projects/${qualify(id)}/agents/${slug}`, { method: "DELETE" }),
   /** The skill library: a folder, imported as a zip, versioned, never rewritten. */
-  skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
+  /** One page of the skill library by slug (ADR 0206); `q` matches the slug or the description. */
+  skillsPage: (org: string, params: PageParams = {}) =>
+    request<SkillPage>(`/orgs/${org}/skills${pageQuery(params)}`),
+  /** The whole library, every page: for the screens that resolve skills by name. */
+  skills: (org: string) =>
+    everyRow((cursor) => request<SkillPage>(`/orgs/${org}/skills${pageQuery({ cursor, limit: 200 })}`)),
   /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
   skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
   installSkillCatalogueEntry: (org: string, id: string, allowEgress = false) =>
@@ -829,7 +860,14 @@ export const api = {
       headers: { "Content-Type": "application/zip" },
     }),
   /** Knowledge bases (ADR 0051): a curated corpus, converted to markdown outside the request. */
-  knowledgeBases: (org: string) => request<KnowledgeBase[]>(`/orgs/${org}/knowledge`),
+  /** One page of the bases the caller may read, by slug (ADR 0206); `q` matches the slug or the name. */
+  knowledgeBasesPage: (org: string, params: PageParams & { scope?: "org" | "projects" | "groups" } = {}) =>
+    request<KnowledgeBasePage>(
+      `/orgs/${org}/knowledge${query(compact({ q: params.q, scope: params.scope, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
+  /** Every readable base, every page: for the pickers and the bindings. */
+  knowledgeBases: (org: string) =>
+    everyRow((cursor) => request<KnowledgeBasePage>(`/orgs/${org}/knowledge${pageQuery({ cursor, limit: 200 })}`)),
   knowledgeBase: (org: string, slug: string) => request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`),
   createKnowledgeBase: (org: string, body: KnowledgeBaseCreate) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
@@ -1269,7 +1307,7 @@ export const api = {
   workflowsPage: (id: string, params: PageParams = {}) =>
     request<WorkflowSummaryPage>(`/projects/${qualify(id)}/workflows${pageQuery(params)}`),
   /** Every active workflow, page after page: the pickers, the board and the flow need the whole set. */
-  workflows: (id: string): Promise<WorkflowSummary[]> => followPages((params) => api.workflowsPage(id, params)),
+  workflows: (id: string): Promise<WorkflowSummary[]> => everyRow((cursor) => api.workflowsPage(id, { cursor, limit: 200 })),
   workflowNamed: (id: string, name: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`),
   /** Publishes the next version; `baseVersion` is the one that was read, and if stale the API answers 409. */
@@ -1290,7 +1328,7 @@ export const api = {
     ),
   /** Every version, newest first, page after page: the history diffs any two of them. */
   workflowVersions: (id: string, name: string): Promise<WorkflowDef[]> =>
-    followPages((params) => api.workflowVersionsPage(id, name, params)),
+    everyRow((cursor) => api.workflowVersionsPage(id, name, { cursor, limit: 200 })),
   /** Republishes a past version as the next one: nothing is rewritten, the history grows. */
   restoreWorkflowVersion: (id: string, name: string, version: number) =>
     request<WorkflowDef>(
@@ -1510,8 +1548,13 @@ export const api = {
       body: JSON.stringify(sources ? { sources } : {}),
     }),
   /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
+  memoriesPage: (org: string, filter: { scope?: "global" | "project"; project?: string } & PageParams = {}) =>
+    request<MemoryStorePage>(
+      `/orgs/${org}/memories${query(compact({ scope: filter.scope, project: filter.project, q: filter.q, cursor: filter.cursor, limit: filter.limit?.toString() }))}`,
+    ),
+  /** Every memory of the filter, every page: for the pickers and the bindings. */
   memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
-    request<MemoryStore[]>(`/orgs/${org}/memories${query(compact(filter))}`),
+    everyRow((cursor) => api.memoriesPage(org, { ...filter, cursor, limit: 200 })),
   /** Tickets with and without a memory over the last `weeks` (1-52): the report's verdict says whether memory helps. */
   memoryAbReport: (org: string = DEFAULT_ORG, weeks = 4) =>
     request<MemoryAbReport>(`/orgs/${org}/memory/ab-report${query({ weeks: String(weeks) })}`),
@@ -1534,7 +1577,11 @@ export const api = {
       body: JSON.stringify({ id: memoryId, action }),
     }),
   /** What a run of the project may bind: `shared`, `own`, its named memories, the global ones that reach it. */
-  projectMemories: (id: string) => request<MemoryStore[]>(`/projects/${qualify(id)}/memories`),
+  projectMemoriesPage: (id: string, params: PageParams = {}) =>
+    request<MemoryStorePage>(`/projects/${qualify(id)}/memories${pageQuery(params)}`),
+  /** Every memory a run of the project may bind, every page. */
+  projectMemories: (id: string) =>
+    everyRow((cursor) => api.projectMemoriesPage(id, { cursor, limit: 200 })),
   createProjectMemory: (id: string, body: ProjectMemoryCreate) =>
     request<MemoryStore>(`/projects/${qualify(id)}/memories`, { method: "POST", body: JSON.stringify(body) }),
   updateProjectMemory: (id: string, slug: string, body: MemoryStorePatch) =>
@@ -1656,34 +1703,6 @@ async function allWorkItems(
     hasMore = page.meta.has_more;
   } while (hasMore && cursor && items.length < cap);
   return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
-}
-
-/** The paging parameters of a list route (ADR 0206). */
-export type PageParams = { cursor?: string; limit?: number };
-
-function pageQuery(params: PageParams): string {
-  return query(compact({ cursor: params.cursor, limit: params.limit?.toString() }));
-}
-
-/** How many rows `followPages` reads at most: ten pages of 200. */
-export const FOLLOW_PAGES_CAP = 2000;
-
-/**
- * Every row of a paged list, page after page, up to `cap`. For the screens that need the whole set
- * (a picker, a graph, a count); a table asks for a page and offers "More" instead.
- */
-async function followPages<T>(
-  read: (params: PageParams) => Promise<{ items: T[]; meta: { has_more: boolean; next_cursor?: string | null } }>,
-  cap: number = FOLLOW_PAGES_CAP,
-): Promise<T[]> {
-  const items: T[] = [];
-  let cursor: string | undefined;
-  for (;;) {
-    const page = await read({ cursor, limit: 200 });
-    items.push(...page.items);
-    if (!page.meta.has_more || !page.meta.next_cursor || items.length >= cap) return items;
-    cursor = page.meta.next_cursor;
-  }
 }
 
 function query(params?: Record<string, string>): string {

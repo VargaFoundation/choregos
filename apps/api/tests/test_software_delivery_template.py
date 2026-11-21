@@ -53,7 +53,7 @@ async def test_a_project_born_from_the_template_receives_its_three_workflows_its
 
     agents = {a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()}
     assert agents >= AGENTS, sorted(AGENTS - agents)
-    skills = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()}
+    skills = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()["items"]}
     assert "madr-4" in skills
 
     # The PR's checks are read from the repository: nothing asks a GitHub Actions project for a Tekton.

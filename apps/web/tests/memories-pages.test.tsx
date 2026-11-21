@@ -21,6 +21,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       memories: vi.fn(),
+      memoriesPage: vi.fn(),
       memory: vi.fn(),
       createGlobalMemory: vi.fn(),
       updateMemory: vi.fn(),
@@ -73,6 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   session.me = { memberships: [{ org: "acme", role: "org_admin" }] };
   vi.mocked(api.memories).mockResolvedValue([SECURITY, ARCH]);
+  vi.mocked(api.memoriesPage).mockResolvedValue({ items: [SECURITY, ARCH], meta: { has_more: false, next_cursor: null } });
   vi.mocked(api.projects).mockResolvedValue({ items: [{ slug: "billing-api", name: "Billing API" }, { slug: "checkout-web", name: "Checkout Web" }], meta: { has_more: false } } as never);
   vi.mocked(api.agents).mockResolvedValue([{ slug: "architect", display_name: "Architect" }] as never);
 });
@@ -85,7 +87,22 @@ describe("the organisation's registry", () => {
     expect(within(table).getByText("every project")).toBeInTheDocument();
     expect(within(table).getByText("projects billing-api")).toBeInTheDocument();
     expect(within(table).getByRole("link", { name: "architect v3" })).toHaveAttribute("href", "/agents/architect");
-    expect(api.memories).toHaveBeenCalledWith("acme", { scope: "global" });
+    expect(api.memoriesPage).toHaveBeenCalledWith("acme", { scope: "global", cursor: undefined, limit: 50 });
+  });
+
+  it("reads one page at a time: More asks for the next by its cursor", async () => {
+    vi.mocked(api.memoriesPage).mockImplementation(async (_org, params) =>
+      params?.cursor === "security-lessons"
+        ? { items: [ARCH], meta: { has_more: false, next_cursor: null } }
+        : { items: [SECURITY], meta: { has_more: true, next_cursor: "security-lessons" } },
+    );
+    await show(<MemoriesPage />);
+    const table = await screen.findByTestId("memories");
+    expect(within(table).queryByRole("link", { name: ARCH.display_name })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    await waitFor(() => expect(within(table).getByRole("link", { name: ARCH.display_name })).toBeInTheDocument());
+    expect(within(table).getByRole("link", { name: SECURITY.display_name })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 
   it("an administrator creates one, with a reach", async () => {

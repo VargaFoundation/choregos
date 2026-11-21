@@ -330,7 +330,7 @@ async def test_restricted_base_hides_from_project_viewers_and_serves_runs_only_f
     await login(client, "admin@northwind.dev")
     async with _as(client, "reader@northwind.dev", org_role="viewer") as reader:
         assert (await reader.get(f"{ORG}/architecture")).status_code == 404
-        assert [b["slug"] for b in (await reader.get(ORG)).json()] == []
+        assert [b["slug"] for b in (await reader.get(ORG)).json()["items"]] == []
     with pytest.raises(KnowledgeRefusedError, match=r"`reader@northwind\.dev` may not read it"):
         await _pinned(two_projects, "person:reader@northwind.dev")
     granted = await client.put(
@@ -340,7 +340,7 @@ async def test_restricted_base_hides_from_project_viewers_and_serves_runs_only_f
     assert granted.status_code == 200, granted.text
     async with _as(client, "reader@northwind.dev", org_role="viewer") as reader:
         assert (await reader.get(f"{ORG}/architecture")).status_code == 200
-        assert [b["slug"] for b in (await reader.get(ORG)).json()] == ["architecture"]
+        assert [b["slug"] for b in (await reader.get(ORG)).json()["items"]] == ["architecture"]
     # a run started by the reader is served it now (ADR 0097)
     pinned = await _pinned(two_projects, "person:reader@northwind.dev")
     assert pinned and pinned[0]["slug"] == "architecture"
@@ -527,7 +527,7 @@ async def test_list_does_not_query_grants_per_base(client: AsyncClient, two_proj
         listed = await client.get(ORG)
     finally:
         event.remove(engine, "before_cursor_execute", count)
-    assert len(listed.json()) == 5
+    assert len(listed.json()["items"]) == 5
     assert len(seen) == 1, f"one query for the grants of every base, saw {len(seen)}"
 
 

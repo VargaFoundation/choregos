@@ -2072,6 +2072,11 @@ export type MemoryStoreUser = {
   version: number;
 };
 
+export type MemoryStorePage = {
+  items: Array<MemoryStore>;
+  meta: PageMeta;
+};
+
 export type MemoryStore = {
   slug: string;
   display_name: string;
@@ -3172,6 +3177,11 @@ export type SkillUpdate = {
   problem?: string | null;
 };
 
+export type SkillPage = {
+  items: Array<Skill>;
+  meta: PageMeta;
+};
+
 export type Skill = {
   slug: string;
   description?: string | null;
@@ -3356,6 +3366,11 @@ export type KnowledgeBaseUser = {
   display_name: string;
   /** the revision that names the base: production, else the latest */
   version: number;
+};
+
+export type KnowledgeBasePage = {
+  items: Array<KnowledgeBase>;
+  meta: PageMeta;
 };
 
 export type KnowledgeBase = {
@@ -7007,13 +7022,13 @@ export interface Operations {
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: ImplicitAgentPage };
-  listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
+  listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: KnowledgeBasePage };
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
   listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: MachineAccountPage };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMemberLinkedAccounts: { method: "GET"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: never; response: LinkedAccountPage };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: MembershipPage };
-  listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
+  listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: MemoryStorePage };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
   listMyConnectedAccounts: { method: "GET"; path: "/me/connected-accounts"; body: never; response: ConnectedAccountList };
   listMyConversationActions: { method: "GET"; path: "/me/conversations/{conversation_id}/actions"; body: never; response: ConversationActionList };
@@ -7044,7 +7059,7 @@ export interface Operations {
   listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: ProjectAgentPage };
-  listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
+  listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: MemoryStorePage };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: ProjectOperationPage };
   listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: ProjectOrgConnectorPage };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
@@ -7055,7 +7070,7 @@ export interface Operations {
   listRunAgents: { method: "GET"; path: "/runs/{id}/agents"; body: never; response: RunAgentList };
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
-  listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
+  listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: SkillPage };
   listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };

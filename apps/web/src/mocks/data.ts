@@ -1103,6 +1103,25 @@ export const memoryStores: MemoryStore[] = [
 /** `acme:billing-api` (how the client qualifies a project) or `billing-api`: the slug. */
 const bareSlug = (id: string): string => decodeURIComponent(id).split(/[:/]/).pop() ?? id;
 
+/**
+ * One page of a paged list, as the server cuts it (ADR 0206): by slug, the cursor is the last slug read,
+ * `limit` rows, `has_more` when others follow. `text` is what `q` is matched against.
+ */
+export function pageBySlug<T extends { slug: string }>(
+  rows: T[],
+  search: URLSearchParams,
+  text: (row: T) => string = (row) => row.slug,
+): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+  const needle = (search.get("q") ?? "").trim().toLowerCase();
+  const limit = Number(search.get("limit") ?? "50");
+  const after = search.get("cursor");
+  const sorted = rows.filter((row) => !needle || text(row).toLowerCase().includes(needle)).sort((a, b) => a.slug.localeCompare(b.slug));
+  const rest = after === null ? sorted : sorted.filter((row) => row.slug > after);
+  const items = rest.slice(0, limit);
+  const more = rest.length > limit;
+  return { items: structuredClone(items), meta: { has_more: more, next_cursor: more ? (items.at(-1)?.slug ?? null) : null } };
+}
+
 /** What `GET /projects/{id}/memories` returns for a project: the implicit memories, its own, the global ones that reach it. */
 export function projectMemoryList(project: string): MemoryStore[] {
   const implicit: MemoryStore[] = (["shared", "own"] as const).map((slug) => ({
@@ -4463,9 +4482,24 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (installedVersion && catalogueSkills.has(installedVersion[1]!)) return catalogueSkills.get(installedVersion[1]!)!.version as T;
   const installedSkill = /^\/orgs\/[^/]+\/skills\/([^/]+)$/.exec(route ?? "");
   if (installedSkill && catalogueSkills.has(installedSkill[1]!)) return catalogueSkills.get(installedSkill[1]!)!.skill as T;
+  // The skill library and the knowledge bases, paged by slug like the server (ADR 0206).
+  if (method === "GET" && /^\/orgs\/[^/]+\/skills$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return pageBySlug([...skills, ...[...catalogueSkills.values()].map((c) => c.skill)], search, (k) => `${k.slug} ${k.description ?? ""}`) as T;
+  }
+  if (method === "GET" && /^\/orgs\/[^/]+\/knowledge$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const reach = search.get("scope");
+    return pageBySlug(knowledgeBases.filter((b) => !reach || b.scope === reach).map((b) => ({ ...b, documents: null })), search, (b) => `${b.slug} ${b.name}`) as T;
+  }
   if (/^\/orgs\/[^/]+\/memories$/.test(route ?? "")) {
     const wanted = new URLSearchParams(path.split("?")[1] ?? "").get("scope");
-    return structuredClone(memoryStores.filter((m) => !wanted || m.scope === wanted)) as T;
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return pageBySlug(
+      memoryStores.filter((m) => !wanted || m.scope === wanted),
+      search,
+      (m) => `${m.slug} ${m.display_name} ${m.description ?? ""}`,
+    ) as T;
   }
   const memoryOf = /^\/orgs\/[^/]+\/memories\/([^/]+)(\/search|\/pending)?$/.exec(route ?? "");
   if (memoryOf) {
@@ -4476,7 +4510,19 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return structuredClone(global) as T;
   }
   const projectMemories = /^\/projects\/([^/]+)\/memories$/.exec(route ?? "");
-  if (projectMemories) return structuredClone(projectMemoryList(bareSlug(projectMemories[1]!))) as T;
+  if (projectMemories) {
+    // The two implicit memories open the first page, outside its limit, as the server does.
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const all = projectMemoryList(bareSlug(projectMemories[1]!));
+    const page = pageBySlug(
+      all.filter((m) => !m.implicit),
+      search,
+      (m) => `${m.slug} ${m.display_name} ${m.description ?? ""}`,
+    );
+    const needle = (search.get("q") ?? "").trim().toLowerCase();
+    const implicit = search.get("cursor") ? [] : all.filter((m) => m.implicit && (!needle || `${m.slug} ${m.display_name}`.toLowerCase().includes(needle)));
+    return { items: [...structuredClone(implicit), ...page.items], meta: page.meta } as T;
+  }
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
@@ -4610,9 +4656,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, mockPage(projectAgents, path, (pin) => pin.agent)],
-    [/^\/orgs\/[^/]+\/skills$/, [...skills, ...[...catalogueSkills.values()].map((c) => c.skill)]],
     [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
-    [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
     [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, withWrittenGrants(projectKnowledgeBase)],
     [/^\/orgs\/[^/]+\/knowledge\/security-policy$/, readOnlyKnowledgeBase],

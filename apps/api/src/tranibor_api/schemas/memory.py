@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
 Reach = Literal["org", "projects"]
@@ -37,6 +37,13 @@ class MemoryStoreDto(Dto):
     created_by: str | None = None
     created_at: datetime | None = None
     used_by: list[MemoryStoreUser] = Field(default_factory=list)
+
+
+class MemoryStorePage(Dto):
+    """One page of named memories, by slug (ADR 0206)."""
+
+    items: list[MemoryStoreDto]
+    meta: PageMeta
 
 
 class MemoryStoreCreate(Dto):

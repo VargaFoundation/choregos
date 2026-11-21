@@ -296,7 +296,8 @@ async def test_only_an_org_admin_curates(client: AsyncClient, admin: str) -> Non
     assert (await _upload(client, "notes.md", b"# Notes\n")).status_code == 403
     assert (await client.patch(f"{BASE}/architecture", json={"name": "x"})).status_code == 403
     listed = await client.get(BASE)
-    assert [b["slug"] for b in listed.json()] == ["architecture"], "an org-wide base is read by members"
+    slugs = [b["slug"] for b in listed.json()["items"]]
+    assert slugs == ["architecture"], "an org-wide base is read by members"
 
 
 async def test_a_base_outside_the_callers_scope_does_not_exist_for_it(
@@ -306,10 +307,11 @@ async def test_a_base_outside_the_callers_scope_does_not_exist_for_it(
     await _base(client, "auditors", scope="groups", groups=["auditors"])
     await _base(client, "everyone")
     await login(client, "dev@northwind.dev")
-    assert [b["slug"] for b in (await client.get(BASE)).json()] == ["billing-only", "everyone"]
+    assert [b["slug"] for b in (await client.get(BASE)).json()["items"]] == ["billing-only", "everyone"]
     assert (await client.get(f"{BASE}/auditors")).status_code == 404, "a session carries no IdP group yet"
     await login(client, "admin@northwind.dev")
-    assert {b["slug"] for b in (await client.get(BASE)).json()} == {"auditors", "billing-only", "everyone"}
+    seen = {b["slug"] for b in (await client.get(BASE)).json()["items"]}
+    assert seen == {"auditors", "billing-only", "everyone"}
 
 
 def test_scope_decides_who_reads_and_which_runs_are_served() -> None:
