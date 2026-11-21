@@ -79,6 +79,7 @@ jobs:
               - 'docker/**'
               # A first-party extension the images install, and the job image it builds (ADR 0181).
               - 'plugins/investment-research/**'
+              - 'plugins/software-delivery/**'
               # The scan lives in this workflow: changing it must run it (S40-16e).
               - '.github/workflows/ci.yml'
               # The lockfiles the Dockerfiles copy: a dependency bump changes the image (#857).

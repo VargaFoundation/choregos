@@ -46,7 +46,7 @@ the platform's own processes.
 | A connector type (a tracker, a directory, a market data feed) | an MCP server that implements the tracker profile | a connector type, through `tranibor_adapters.register` |
 | Effects of a governed action | | `effects.declare_effect` |
 | Its own tables, its own routes | | the `choregos.migrations` entry point, `extensions.declare_router` |
-| Gates and the facts they read | | `gates.gate` and `gates.context_provider` ([ADR 0181](../../adr/0181-the-contracts-speak-no-trade.md), round C0) |
+| Gates and the facts they read | | `gates.gate` and `gates.context_provider`, with its `judged` hook ([ADR 0181](../../adr/0181-the-contracts-speak-no-trade.md), rounds C0 and C2) |
 | Step effects for `does:` | | `step_effects.step_effect` (ADR 0181, round C0) |
 | Inbound event types, finding types, memory kinds, stage roles | | `INBOUND_EVENT_TYPES`, `FINDING_TYPES`, `MEMORY_KINDS` of `tranibor_contracts`, `stage_roles.declare_stage_roles` (ADR 0181, round C0) |
 | Durable code of its own (a release train) | | a worker seam (ADR 0181, round D) |
@@ -58,10 +58,10 @@ names it.
 
 - **Software delivery**: `software-delivery`, a first-party plugin with both
   halves. Its content is published today: the delivery agents (triage to the production go/no-go) and
-  the `madr-4` skill. By 1.0 it also holds the repository templates, and its extension,
-  `tranibor-software-delivery`, holds what the core carries today: the twelve gates that read a diff or
-  a CI (`ci_green`, `diff_size_max`, `scope_respected` …) and the context provider that reads the diff
-  and the checks for them, the step effects `open_pr` and `merge_pr`, the `scm.*`, `ci.*` and `cd.*`
+  the `madr-4` skill. Its extension, `tranibor-software-delivery` in `plugins/software-delivery/` of the
+  core's repository, which the published images install, holds the twelve gates that read a diff or a
+  CI (`ci_green`, `diff_size_max`, `scope_respected` …) and the context provider that reads the diff and
+  the checks for them. By 1.0 it also holds the repository templates, the step effects `open_pr` and `merge_pr`, the `scm.*`, `ci.*` and `cd.*`
   event types, the finding types `bug`, `perf`, `tech-debt` and `flaky-test`, the roles `fix_ci`,
   `address_review`, `release_notes` and `verify_prod`, and the release train.
 - **IT service management**: `servicenow`. Content only: an ITSM triage agent, its skill, and an MCP
@@ -90,7 +90,7 @@ first-party plugin like any other, in its own distribution, before 1.0.
 | :-- | :-- |
 | The roles `developer` and `release_captain` | `contributor` and `approver`, in the core |
 | `pr_url` on a work item and a step's result, `repository` fields | `links`, with `rel: change_request`; `workspace` |
-| The twelve gates that read a diff or a CI | `software-delivery`'s extension, under the same names |
+| The twelve gates that read a diff or a CI | `software-delivery`'s extension, under the same names: done (S83-04a, `plugins/software-delivery/`) |
 | `does: open_pr` and `merge_pr`, the `scm.*`, `ci.*`, `cd.*` events | `software-delivery`, under the same names |
 | The release train, its routes and the DORA figures | `software-delivery` |
 | The repository templates | `software-delivery`'s content |

@@ -24,33 +24,20 @@ from tranibor_contracts.workflow import (
     transition_effect,
 )
 
-from tranibor_core.gates import DIFF_GATES, OVER_WORK_ITEM, is_async_gate
+from tranibor_core.gates import gate_detail_of, gate_summary_of, is_async_gate, workspace_gates
 
 #: What each guarantee checks, in one sentence. A test requires a summary for every known
 #: guarantee: a new guarantee without a summary would make the process view speak into the void.
 RESUMES: dict[str, str] = {
     "action_succeeded": "its governed action succeeded",
-    "adr_number_free": "the decision record's number is not already taken on the default branch",
-    "already_fixed_proven": "the step changed nothing, pushed no branch, and the tests pass on the default "
-    "branch, as measured",
-    "ci_green": "the CI pipeline is green",
-    "coverage_delta_min": "test coverage does not drop below the threshold",
-    "diff_size_max": "the change stays under the size limit",
-    "docs_updated": "the change updates its documentation when it changes anything else",
     "evidence_facts": "the facts the step counted meet the declared minimums",
     "evidence_present": "the platform measured the evidence the stage owes",
     "external": "an external check reports success",
     "flag_present": "the change sits behind a feature flag",
-    "no_secrets": "no secret leaks into the change",
     "numbers_measured": "every number the step writes was measured by an earlier step",
     "outputs_present": "the declared outputs are present",
     "output_schema": "the outputs match their declared JSON Schema",
     "outputs_in": "the outputs take an allowed value (a review's verdict, a size)",
-    "markdown_sections": "the documents the change adds carry their required sections",
-    "provenance_signed": "the build provenance is signed",
-    "review_approved": "the review is approved",
-    "scans_ok": "security scans find nothing blocking",
-    "scope_respected": "the agent stayed within its allowed paths",
     "tool_called": "the required tool was actually called",
 }
 
@@ -60,47 +47,20 @@ def _listed(values: Any) -> str:
 
 
 def gate_summary(name: str, params: dict[str, Any]) -> str:
-    """What a guarantee checks, in one sentence, as this declaration reads it: `scope_respected` over
-    the work item's whole diff is not about an agent (ADR 0171)."""
-    if name == "scope_respected" and params.get("over") == OVER_WORK_ITEM:
-        return "the whole change stays out of the paths the policy forbids" + (
-            " and within the declared ones" if params.get("paths") else ""
-        )
-    return RESUMES.get(name, name)
+    """What a guarantee checks, in one sentence, as this declaration reads it: what the gate says of
+    itself when it was registered with a `summary` (an extension's: `scope_respected` over the work
+    item's whole diff is not about an agent, ADR 0171), else the core's sentence, else its name."""
+    return gate_summary_of(name, params) or RESUMES.get(name, name)
 
 
 def gate_detail(name: str, params: dict[str, Any], timeout_hours: int | None = None) -> str | None:
-    """What a guarantee holds the step to, with the thresholds it actually applies — the defaults of
-    `tranibor_core.gates` when the workflow sets none — and how long an asynchronous one waits."""
+    """What a guarantee holds the step to, with the thresholds it actually applies — the gate's own
+    defaults when the workflow sets none, as it says them when it is registered with a `detail` — and
+    how long an asynchronous one waits."""
     parts: list[str] = []
-    if name == "diff_size_max":
-        files = params.get("files", params.get("n"))
-        lines = params.get("lines")
-        parts.append(
-            f"at most {files if files is not None else 60} files and "
-            f"{lines if lines is not None else 100_000} lines changed"
-            + (" (the platform's defaults)" if files is None and lines is None else "")
-        )
-    elif name == "coverage_delta_min":
-        threshold = float(params.get("x", params.get("min", 0.0)))
-        parts.append(f"coverage may not move by less than {threshold:+.2f} points")
-    elif name == "scope_respected" and params.get("over") == OVER_WORK_ITEM:
-        paths = params.get("paths")
-        parts.append(
-            "read on the work item's whole diff, whichever step ran last; "
-            + (
-                f"only files under {_listed(paths)}"
-                if paths
-                else "no allowed paths are held, only the forbidden ones"
-            )
-        )
-    elif name == "scope_respected":
-        paths = params.get("paths")
-        parts.append(
-            f"only files under {_listed(paths)}"
-            if paths
-            else "only the work item's allowed paths; with none declared, anything passes"
-        )
+    registered = gate_detail_of(name, params)
+    if registered is not None:
+        parts.append(registered)
     elif name == "tool_called" and params.get("tools"):
         parts.append(f"calls {_listed(params['tools'])}")
     elif name == "evidence_facts":
@@ -253,7 +213,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
             if isinstance(actor, DecisionActor)
             else list(t.outputs)
         )
-        writes = isinstance(actor, AgentActor | JobActor) and bool(set(t.gate_names()) & DIFF_GATES)
+        writes = isinstance(actor, AgentActor | JobActor) and bool(set(t.gate_names()) & workspace_gates())
         steps.append(
             {
                 "id": t.key,

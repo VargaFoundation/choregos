@@ -44,11 +44,13 @@ from ..domain import REPOSITORY_FIELD, TRACKER_FIELD
 from ..errors import Issue
 from ..gates import (
     ALREADY_FIXED_GATE,
-    DIFF_GATES,
     OVER_WORK_ITEM,
-    RUN_SCOPED_GATES,
+    gate_plugin,
+    gate_requires,
+    is_run_scoped,
     judged_on_a_run,
     known_gates,
+    reads_the_workspace,
     unavailable,
 )
 from .dates import field_of
@@ -81,6 +83,40 @@ class ValidationReport:
             "errors": [i.to_dict() for i in self.errors],
             "warnings": [i.to_dict() for i in self.warnings],
         }
+
+
+#: The codes of a refusal only the deployment can settle: a gate whose plugin's extension is not installed
+#: in this process (ADR 0181). A process that only reads workflows (the CLI, a template shipped with the
+#: core read before any extension loads) cannot know what the deployment installed.
+DEPLOYMENT_CODES = frozenset({"gate.unknown", "gate.provider_missing"})
+
+
+def _gate_at(wf: Workflow, path: str | None) -> str | None:
+    """The gate an issue's path designates (`transitions[i].gates[j]`), else `None`."""
+    import re
+
+    found = re.fullmatch(r"transitions\[(\d+)\]\.gates\[(\d+)\]", path or "")
+    if found is None:
+        return None
+    try:
+        return wf.transitions[int(found.group(1))].gates[int(found.group(2))].name
+    except IndexError:
+        return None
+
+
+def deployment_issues(wf: Workflow, report: ValidationReport) -> tuple[list[Issue], list[Issue]]:
+    """`(left to the deployment, the others)`: the errors about a gate a known plugin serves, whose
+    extension this process lacks, apart from every other error. A deployment refuses the first ones at
+    publication when it lacks the extension; a reader that is not the deployment reports them."""
+    elsewhere: list[Issue] = []
+    others: list[Issue] = []
+    for issue in report.errors:
+        name = _gate_at(wf, issue.path)
+        if issue.code in DEPLOYMENT_CODES and name is not None and gate_plugin(name) is not None:
+            elsewhere.append(issue)
+        else:
+            others.append(issue)
+    return elsewhere, others
 
 
 def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
@@ -894,7 +930,7 @@ def _check_merge_holds_a_diff_guarantee(wf: Workflow, report: ValidationReport, 
     for index, t in enumerate(wf.transitions):
         if not isinstance(wf.actors.get(t.by or ""), SystemActor) or transition_effect(t) != "merge_pr":
             continue
-        if any(g.name in DIFF_GATES and not judged_on_a_run(g.name, g.params) for g in t.gates):
+        if any(reads_the_workspace(g.name) and not judged_on_a_run(g.name, g.params) for g in t.gates):
             continue
         report.warn(
             "workflow.no_diff_gate_at_merge",
@@ -915,7 +951,7 @@ def _check_scope_readings(wf: Workflow, report: ValidationReport, source: Any) -
     for index, t in enumerate(wf.transitions):
         by_the_platform = isinstance(wf.actors.get(t.by or ""), SystemActor)
         for g_index, g in enumerate(t.gates):
-            if g.name not in RUN_SCOPED_GATES:
+            if not is_run_scoped(g.name):
                 continue
             over = g.params.get("over")
             if over is not None and over != OVER_WORK_ITEM:
@@ -976,7 +1012,6 @@ GATES_NEEDING_PARAMS: dict[str, tuple[str, str]] = {
     "evidence_facts": ("keys", "`keys:` as a parameter of the guarantee"),
     "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
     "outputs_in": ("values", "`values:` as a parameter of the guarantee"),
-    "markdown_sections": ("paths", "`paths:` as a parameter of the guarantee"),
     "output_schema": ("schemas", "`schemas:` as a parameter of the guarantee"),
     "numbers_measured": ("sources", "`sources:` as a parameter of the guarantee"),
 }
@@ -991,7 +1026,7 @@ def _check_gates_have_something_to_check(wf: Workflow, report: ValidationReport,
     """
     for index, t in enumerate(wf.transitions):
         for g_index, g in enumerate(t.gates):
-            need = GATES_NEEDING_PARAMS.get(g.name)
+            need = GATES_NEEDING_PARAMS.get(g.name) or gate_requires(g.name)
             if need is None:
                 continue
             param, hint = need
