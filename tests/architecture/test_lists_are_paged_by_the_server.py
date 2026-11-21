@@ -72,7 +72,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
 )
 
 
-
 def _array_routes() -> set[str]:
     found = set()
     for operations in contracts.load_openapi()["paths"].values():
@@ -108,7 +107,7 @@ def test_the_ceiling_drops_when_a_route_is_paged() -> None:
 
 
 def test_no_page_is_cut_in_memory() -> None:
-    """`Page.slice` read a capped list and cut it in Python; the last route left it with `listOutpostCalls`."""
+    """`Page.slice` read a capped list and cut it in Python; `listOutpostCalls` was its last route."""
     from tranibor_api.deps import Page
 
     assert not hasattr(Page, "slice"), "Page.slice is back: page in SQL with keyset_page (ADR 0206)"

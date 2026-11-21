@@ -1717,7 +1717,8 @@ def test_an_instance_says_which_token_it_enrolled_with_and_who_issued_it() -> No
 
 
 def test_the_recent_calls_window_is_said() -> None:
-    """#1630 row 7: a cursor that ends is not read as "no older call"."""
+    """#1630 row 7, after ADR 0206: there is no window any more, the cursor reaches the oldest call."""
     calls = _management()[("/orgs/{org}/outposts/{slug}/calls", "get")]
     said = " ".join(calls["description"].split())
-    assert "the newest 1000 calls" in said and "not that none exists" in said
+    assert "1000" not in said
+    assert "Paged in SQL (ADR 0206)" in said and "the last page is the oldest call" in said
