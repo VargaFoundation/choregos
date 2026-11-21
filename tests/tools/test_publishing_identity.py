@@ -207,11 +207,7 @@ def test_moving_the_publication_is_one_edit_and_one_command(tmp_path: pathlib.Pa
         in values
     )
     policy = (root / "infra/policies/plugin-servers.yaml").read_text(encoding="utf-8")
-    # The frozen namespace of the images published before the move stays admitted beside the current one.
-    assert (
-        r"^(?:registry\\.example\\.org/exampleorg/tranibor-agents|ghcr\\.io/vargafoundation/choregos-agents)/"
-        in policy
-    )
+    assert r"^registry\\.example\\.org/exampleorg/tranibor-agents/" in policy
     assert "@ExampleOrg/integrators" in (root / "CODEOWNERS").read_text(encoding="utf-8")
     # The images and charts follow their prefixes and their registry, both names of the window.
     release = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -219,14 +215,11 @@ def test_moving_the_publication_is_one_edit_and_one_command(tmp_path: pathlib.Pa
     assert "ALIAS: registry.example.org/exampleorg/examplelegacy-${{ matrix.image }}" in release
     images = (root / "infra/policies/images.yaml").read_text(encoding="utf-8")
     assert '- "registry.example.org/exampleorg/exampleware-api*"' in images
-    # The frozen images keep the signers that signed them: a move never rewrites history (#1861).
-    for frozen in ("VargaFoundation/choregos", "VargaFoundation/ecphoria"):
-        assert f'subject: "https://github.com/{frozen}/.github/workflows/*"' in images, frozen
     assert 'imageReferences: ["registry.example.org/exampleorg/examplelegacy-*"]' in images
     install = (root / "docs/site/host/install.md").read_text(encoding="utf-8")
     assert "oci://registry.example.org/exampleorg/charts/examplelegacy" in install
     # The plugins' images keep their own name under the registry: it is not an image prefix.
-    assert "registry\\\\.example\\\\.org/exampleorg/tranibor-agents|" in policy
+    assert "exampleorg/tranibor-agents/" in policy
 
 
 def test_the_prefixes_count_only_in_an_image_or_chart_name() -> None:

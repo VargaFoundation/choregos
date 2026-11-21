@@ -49,29 +49,6 @@ spec:
                     rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
           required: true
-        # The images published before the publication moved (0.27.10 and older) stay in the frozen
-        # namespace and keep their signatures, issued by the repositories as they were then named:
-        # `VargaFoundation/choregos` and `VargaFoundation/ecphoria` (cosign, #1861). These two subjects
-        # are history, not the publishing identity: a move of the publication never rewrites them
-        # (`tests/charts/test_frozen_image_signers.py`).
-        - imageReferences: ["ghcr.io/vargafoundation/choregos-*"]
-          attestors:
-            - entries:
-                - keyless:
-                    subject: "https://github.com/VargaFoundation/choregos/.github/workflows/*"
-                    issuer: "https://token.actions.githubusercontent.com"
-                    rekor: { url: "https://rekor.sigstore.dev" }
-          mutateDigest: true
-          required: true
-        - imageReferences: ["ghcr.io/vargafoundation/ecphoria*"]
-          attestors:
-            - entries:
-                - keyless:
-                    subject: "https://github.com/VargaFoundation/ecphoria/.github/workflows/*"
-                    issuer: "https://token.actions.githubusercontent.com"
-                    rekor: { url: "https://rekor.sigstore.dev" }
-          mutateDigest: true
-          required: true
         # Ecphoria belongs to the publisher but not to this repository: its images are signed by
         # the workflows of `graalsystems/ecphoria`. With the pattern above alone, the glob
         # `ghcr.io/graalsystems/*` caught `ghcr.io/graalsystems/ecphoria` and demanded a

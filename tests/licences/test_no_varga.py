@@ -23,22 +23,20 @@ HISTORY = (
     "plugins/offline/",  # the archives and the lock record the index and identity that signed them
 )
 
-#: Files: the frozen namespace `ghcr.io/vargafoundation` and the old source name, until republished.
+#: Files: the old source name, and the references to the frozen namespace `ghcr.io/vargafoundation`
+#: (its packages were deleted on 2026-11-21) that have no graalsystems equivalent yet.
 ALLOWED = {
     "tests/licences/test_no_varga.py": "this guard",
     "packages/core/src/tranibor_core/plugins/sources.py": "resolves the old default source name",
     "packages/core/tests/test_plugin_sources.py": "tests that the old default source name resolves",
     "apps/api/tests/test_default_plugin_source_migration.py": "tests the rename of the old source name",
-    "infra/policies/images.yaml": "admits the images published before the move",
-    "infra/policies/plugin-servers.yaml": "admits the plugin servers published before the move",
-    "infra/bootstrap/gvisor.yaml": "the gVisor installer image exists only in the frozen namespace",
-    ".github/workflows/code-agent-examples.yml": "the runner image exists only in the frozen namespace",
-    "examples/agents/langgraph/Dockerfile": "the runner image exists only in the frozen namespace",
-    "examples/agents/openai-agents/Dockerfile": "the runner image exists only in the frozen namespace",
-    "examples/agents/plain/Dockerfile": "the runner image exists only in the frozen namespace",
-    "examples/agents/pydantic-ai/Dockerfile": "the runner image exists only in the frozen namespace",
-    "tests/tools/test_publishing_identity.py": "the policy keeps the frozen plugin namespace",
-    "tests/charts/test_frozen_image_signers.py": "pins the signers of the images published before the move",
+    "infra/bootstrap/gvisor.yaml": "the gVisor installer image has no graalsystems equivalent: the frozen package is deleted, nothing builds it",
+    ".github/workflows/code-agent-examples.yml": "pins a runner image of the deleted frozen namespace, to repoint on a graalsystems runner tag",
+    "examples/agents/langgraph/Dockerfile": "pins a runner image of the deleted frozen namespace, to repoint on a graalsystems runner tag",
+    "examples/agents/openai-agents/Dockerfile": "pins a runner image of the deleted frozen namespace, to repoint on a graalsystems runner tag",
+    "examples/agents/plain/Dockerfile": "pins a runner image of the deleted frozen namespace, to repoint on a graalsystems runner tag",
+    "examples/agents/pydantic-ai/Dockerfile": "pins a runner image of the deleted frozen namespace, to repoint on a graalsystems runner tag",
+    "tests/charts/test_no_frozen_namespace_in_policies.py": "guards that no policy names the deleted frozen namespace",
     "apps/api/tests/test_catalogue_provenance_migration.py": "an old migration records the old source name",
 }
 

@@ -24,19 +24,19 @@ spec:
       validate:
         message: >-
           a plugin server's image is pinned by digest (`@sha256:`) and comes from an allowed registry
-          (ghcr.io/graalsystems/tranibor-agents/, or the frozen ghcr.io/vargafoundation/choregos-agents/)
+          (ghcr.io/graalsystems/tranibor-agents/)
         foreach:
           - list: "request.object.spec.containers"
             deny:
               conditions:
                 all:
-                  - key: "{{ regex_match('^(?:ghcr\\.io/graalsystems/tranibor-agents|ghcr\\.io/vargafoundation/choregos-agents)/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$', '{{ element.image }}') }}"
+                  - key: "{{ regex_match('^ghcr\\.io/graalsystems/tranibor-agents/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$', '{{ element.image }}') }}"
                     operator: Equals
                     value: false
           - list: "request.object.spec.initContainers || `[]`"
             deny:
               conditions:
                 all:
-                  - key: "{{ regex_match('^(?:ghcr\\.io/graalsystems/tranibor-agents|ghcr\\.io/vargafoundation/choregos-agents)/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$', '{{ element.image }}') }}"
+                  - key: "{{ regex_match('^ghcr\\.io/graalsystems/tranibor-agents/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$', '{{ element.image }}') }}"
                     operator: Equals
                     value: false
