@@ -86,13 +86,13 @@ choregos self update
 
 This works on every version, and is the way on 0.25.3 and earlier. It needs Python 3.12 and
 [uv](https://docs.astral.sh/uv/). Download three wheels of your instance's version from its
-[GitHub release](https://github.com/graalsystems/tranibor/releases) (here 0.27.17):
-`tranibor_cli-0.27.17-py3-none-any.whl`, `tranibor_core-0.27.17-py3-none-any.whl` and
-`tranibor_contracts-0.27.17-py3-none-any.whl`. Then:
+[GitHub release](https://github.com/graalsystems/tranibor/releases) (here 0.28.0):
+`tranibor_cli-0.28.0-py3-none-any.whl`, `tranibor_core-0.28.0-py3-none-any.whl` and
+`tranibor_contracts-0.28.0-py3-none-any.whl`. Then:
 
 ```shell
-uv tool install --python 3.12 ./tranibor_cli-0.27.17-py3-none-any.whl \
-  --with ./tranibor_core-0.27.17-py3-none-any.whl --with ./tranibor_contracts-0.27.17-py3-none-any.whl
+uv tool install --python 3.12 ./tranibor_cli-0.28.0-py3-none-any.whl \
+  --with ./tranibor_core-0.28.0-py3-none-any.whl --with ./tranibor_contracts-0.28.0-py3-none-any.whl
 ```
 
 To upgrade, install the next version's

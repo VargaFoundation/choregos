@@ -205,7 +205,7 @@ result is checked like any agent's.
 ### 1. Write it
 
 ```shell
-pip install ./tranibor_agent_sdk-0.27.17-py3-none-any.whl ./tranibor_contracts-0.27.17-py3-none-any.whl
+pip install ./tranibor_agent_sdk-0.28.0-py3-none-any.whl ./tranibor_contracts-0.28.0-py3-none-any.whl
 ```
 
 The SDK's wheel and the contracts it validates against are attached to each

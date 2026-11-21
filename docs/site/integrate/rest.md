@@ -74,6 +74,22 @@ choregos items create acme:billing-api --workflow ship-a-change --title "Add cre
   --field ticket=FIN-42 --field priority=high --label billing
 ```
 
+## 2 bis. Hand files to a work item
+
+A workflow that declares `metadata.attachments` takes files from a person (ADR 0201). File the work
+item with `"start": false`, send the files, then start it with the `mark_agent_ready` action; a start
+is refused while fewer than `min` files were handed.
+
+```shell
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/BIL-12/files" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -F files=@quote-a.pdf -F files=@quote-b.pdf
+```
+
+The answer is `201` and the stored artifacts, each with `handed_by`. A type the workflow does not
+accept, bytes that are not their type, or too many names answer `422`; a file over the project's limit
+(`a2a.max_file_bytes`) `413`; a finished work item `409`. The files are listed by
+`GET /work-items/{id}/artifacts`.
+
 ## 3. Follow it
 
 ```bash

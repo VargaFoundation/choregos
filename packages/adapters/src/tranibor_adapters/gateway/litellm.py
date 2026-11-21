@@ -134,6 +134,7 @@ class LiteLlmGateway:
         tokens_out = sum(int(entry.get("completion_tokens", 0)) for entry in logs)
         cached = sum(_cache_read_tokens(entry) for entry in logs)
         cache_write = sum(_cache_write_tokens(entry) for entry in logs)
+        cache_write_1h = sum(_cache_write_1h_tokens(entry) for entry in logs)
         models = sorted({str(entry.get("model", "")) for entry in logs if entry.get("model")})
         if not total and logs:
             total = sum(float(entry.get("spend", 0.0)) for entry in logs)
@@ -142,6 +143,7 @@ class LiteLlmGateway:
             tokens_out=tokens_out,
             tokens_cached=cached,
             tokens_cache_write=cache_write,
+            tokens_cache_write_1h=cache_write_1h,
             cost_usd=round(total, 6),
             requests=len(logs),
             models_used=models,
@@ -272,3 +274,26 @@ def _cache_write_tokens(entry: dict[str, Any]) -> int:
         return int(entry["cache_creation_input_tokens"])
     usage = (entry.get("metadata") or {}).get("usage_object") or {}
     return int(usage.get("cache_creation_input_tokens") or 0)
+
+
+def _cache_write_1h_tokens(entry: dict[str, Any]) -> int:
+    """The part of a spend log entry's cache writes made with the 1-hour TTL (S4-12, ADR 0200).
+
+    LiteLLM v1.105.5 keeps Anthropic's split under `prompt_tokens_details.cache_creation_token_details`
+    (`ephemeral_5m_input_tokens` / `ephemeral_1h_input_tokens`) in the request's usage
+    (`metadata.usage_object`, also copied to `metadata.additional_usage_values`); a pass-through call
+    keeps Anthropic's own `cache_creation` object. An entry that carries none is read as all 5-minute
+    writes (the provider's default), and a count above the entry's writes is clamped to them."""
+    writes = _cache_write_tokens(entry)
+    if not writes:
+        return 0
+    metadata = entry.get("metadata") or {}
+    for usage in (metadata.get("usage_object"), metadata.get("additional_usage_values"), entry):
+        if not isinstance(usage, dict):
+            continue
+        details = usage.get("prompt_tokens_details")
+        split = details.get("cache_creation_token_details") if isinstance(details, dict) else None
+        for candidate in (split, usage.get("cache_creation")):
+            if isinstance(candidate, dict) and candidate.get("ephemeral_1h_input_tokens"):
+                return min(int(candidate["ephemeral_1h_input_tokens"]), writes)
+    return 0

@@ -68,6 +68,11 @@ class ModelCatalogueRow(Base, PkMixin, TimestampMixin):
     usages: Mapped[list[str]] = mapped_column(Json, default=lambda: ["agent"])
     input_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
     output_per_1k_override: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: What a cached input token costs as a multiple of the input price (S4-12, ADR 0200); null: the
+    #: gateway's cached-input price (read only), else the provider family's default.
+    cache_read_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cache_write_5m_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cache_write_1h_multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
     #: The most a voice session of the model may spend per minute it lasts (S41-15); null: no rate.
     max_usd_per_minute: Mapped[float | None] = mapped_column(Float, nullable=True)
     gateway_facts: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)

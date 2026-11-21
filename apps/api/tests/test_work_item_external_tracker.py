@@ -177,3 +177,29 @@ async def test_the_webhook_ignores_the_issue_until_labelled(
         rows = (await session.execute(select(WorkItem))).scalars().all()
     assert [row.tracker_key for row in rows] == [key]
     assert get_temporal().started == started  # type: ignore[attr-defined]
+
+
+async def test_a_fan_out_child_is_born_in_the_platform_and_nothing_is_filed_in_the_tracker(
+    client: AsyncClient, project: dict[str, Any], tracker: FakeTracker
+) -> None:
+    """ADR 0199: a child keeps the key its fan-out gives (`<parent>.<rank>`), whatever the tracker — so
+    a replayed fan-out finds it — and the external tracker receives nothing."""
+    from tranibor_api.db.models import Project
+    from tranibor_api.db.session import session_scope
+    from tranibor_api.errors import ApiError
+    from tranibor_api.rbac import SYSTEM
+    from tranibor_api.schemas.tickets import WorkItemCreate
+    from tranibor_api.services.tickets import create_work_item
+
+    pid = await _github(client, project)
+    request = WorkItemCreate(title="Review AAA", workflow="onboarding", fields={"role": "data"}, start=False)
+    async with session_scope() as session:
+        row = await session.get(Project, pid)
+        assert row is not None
+        child = await create_work_item(
+            session, SYSTEM, row, request, key="northwind/billing-api#7.1", in_platform=True
+        )
+        assert child.tracker_key == "northwind/billing-api#7.1"
+        with pytest.raises(ApiError):
+            await create_work_item(session, SYSTEM, row, request, in_platform=True)
+    assert not [call for call in tracker.calls if call[0] == "create_item"]

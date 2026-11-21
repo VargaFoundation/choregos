@@ -26,7 +26,8 @@ from tranibor_contracts.workflow import Transition, Workflow, transition_effect
 from tranibor_core import parse_workflow
 from tranibor_core.dsl import TEMPLATE_NAMES, template_yaml
 from tranibor_core.dsl.process import gate_detail, gate_summary, to_process
-from tranibor_core.gates import DIFF_GATES, OVER_WORK_ITEM, GateContext, evaluate, judged_on_a_run
+from tranibor_core.gates import OVER_WORK_ITEM, evaluate, judged_on_a_run
+from tranibor_software_delivery.gates import DIFF_GATES, DeliveryFacts, delivery_context
 
 ROOT = Path(__file__).resolve().parents[3]
 MERGE_WARNING = "workflow.no_diff_gate_at_merge"
@@ -188,7 +189,8 @@ DENY = [".github/workflows/**"]
 
 
 def _scope(files: list[str], params: dict[str, Any], **context: Any) -> Any:
-    return evaluate("scope_respected", GateContext(changed_files=files, denied_paths=DENY, **context), params)
+    facts = DeliveryFacts(changed_files=files, denied_paths=DENY, **context)
+    return evaluate("scope_respected", delivery_context(facts), params)
 
 
 def test_without_over_the_scope_is_the_runs_paths() -> None:

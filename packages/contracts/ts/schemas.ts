@@ -66,6 +66,8 @@ export type Artifact = {
   created_at?: string | null;
   /** How the console shows this revision (ADR 0129); null when nothing is said beyond its type. Outside the digest. */
   display?: null | ArtifactDisplay;
+  /** Who handed this file to the work item (ADR 0201 §2): a person or an application's A2A task; null for a step's output. */
+  handed_by?: "person" | "a2a" | null;
   /** A `level` or a `metric`, once its digest checked (ADR 0129); anything else is read from its content. */
   value?: string | number | null;
 };
@@ -689,6 +691,8 @@ export type PluginServer = {
   implements?: Array<"tracker">;
   webhook?: {
     path: string;
+    /** forward the delivery's `Authorization` header to this server's `tracker_parse_event`, for a sender that signs its deliveries with a bearer token the server verifies (ADR 0198); never logged nor stored by the platform, and never forwarded to a server that does not declare it */
+    forward_authorization?: boolean;
   };
   /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
   fake?: {
@@ -885,6 +889,8 @@ export type Plugin = {
       name: PluginName;
       version: PluginRange;
     }>;
+    /** the extensions the plugin needs inside the platform's processes, by the name of their `choregos.plugins` entry point (ADR 0181): a deployment that has not installed one refuses the plugin, naming it. `software-delivery` for the plugin of the same name. */
+    extensions?: Array<PluginName>;
     /** project connectors, kind → expected type, as in a template */
     connectors?: {
       [key: string]: string;
@@ -1218,6 +1224,8 @@ export type Project = {
   } | {
     states: unknown;
   }>;
+  /** The projects of the organisation whose workflows may file work items here, by slug (the `work_item.file` effect, ADR 0197). Empty: none may. */
+  accepts_items_from?: Array<string>;
   /** What the A2A door takes for this project's skills (ADR 0078 §6). */
   a2a?: {
     /** The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most. */
@@ -1259,6 +1267,8 @@ export type StageInput = {
       spec_comment?: string | null;
       plan_comment?: string | null;
       pr?: string | null;
+      /** The change request the work item is on: the successor of `pr`, which a reader takes as a fallback until the window list of ADR 0181 removes it. */
+      change_request?: string | null;
     };
   };
   transition: {
@@ -1836,12 +1846,14 @@ export type WorkflowActionApproval = {
   approvers?: Array<{
     /** the least rank an approver holds: `contributor`, `approver`, `project_owner` or `org_admin`. `developer` and `release_captain` are their former names, read until the release the window list names (ADR 0181 C1) */
     role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
-    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052) */
+    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052); in a workflow's action, `{{ fields.<name> }}` names the group a field of the work item holds, rendered when the action is proposed (ADR 0196) */
     group?: string;
     min?: number;
   }>;
   step_up_minutes?: number;
   separation_of_duties?: boolean;
+  /** who may not decide the action, whatever their rank: e-mail addresses, or in a workflow's action `{{ fields.<name> }}`, rendered when it is proposed; an empty value excludes nobody (ADR 0196) */
+  excluded?: Array<string>;
 };
 
 /** title, reason and parameters rendered with the work item's fields; a human approval when an operation requires one or when `approval` is declared */
@@ -1960,6 +1972,15 @@ export type Workflow = {
     /** JSON Schema of the fields of a work item of this workflow (ADR 0031). */
     inputs?: {
       [key: string]: unknown;
+    };
+    /** The files a person may hand to a work item of this workflow (ADR 0201 §1). Absent: the workflow takes no file from a person. A step reads them through the reserved input `attachments`. */
+    attachments?: {
+      /** The artifact types a handed file may have (ADR 0201 §1, §3). */
+      accept: Array<"markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file" | "diff" | "level" | "metric" | "keyvalue">;
+      /** Handed files required before the work item starts (ADR 0201 §7). */
+      min?: number;
+      /** Distinct handed names at most (ADR 0201 §3). */
+      max?: number;
     };
     /** How the workflow catalogue presents it (ADR 0111); the engine ignores it. */
     catalogue?: {

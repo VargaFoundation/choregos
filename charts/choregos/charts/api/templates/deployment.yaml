@@ -337,7 +337,7 @@ spec:
             {{- include "choregos.outpostsDoorEnv" . | nindent 12 }}
             {{- end }}
             {{- if (.Values.global.auditExport | default dict).enabled }}
-            # The SIEM export of the audit log (ADR 0196): every replica runs the loop; the token is read
+            # The SIEM export of the audit log (ADR 0207): every replica runs the loop; the token is read
             # from a Secret by reference.
             {{- include "choregos.auditExportEnv" . | nindent 12 }}
             {{- end }}

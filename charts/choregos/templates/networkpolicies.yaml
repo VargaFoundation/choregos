@@ -104,7 +104,7 @@ spec:
 {{- $auditEgress := $audit.egress | default dict }}
 {{- if and $audit.enabled (or $auditEgress.cidrs $auditEgress.namespace) }}
 ---
-# The SIEM export of the audit log (ADR 0196): the API, and no other pod, may reach the sink.
+# The SIEM export of the audit log (ADR 0207): the API, and no other pod, may reach the sink.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

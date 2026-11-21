@@ -50,6 +50,11 @@ async def test_happy_path_commits_and_posts_result(stage_input: StageInput, runn
     # The runner ran the tests; git computed the diff: measured (ADR 0045).
     measured = set(outcome.result.evidence.measured or [])
     assert {"tests_passed", "tests_run", "diff_files", "diff_lines"} <= measured
+    # Both forms for one window (ADR 0181 C2): each proof also as the named fact, measured as such.
+    facts = outcome.result.evidence.facts or {}
+    assert facts["tests_run"] == 3 and facts["tests_passed"] is True and "diff_files" in facts
+    assert {"facts.tests_passed", "facts.tests_run", "facts.diff_files", "facts.diff_lines"} <= measured
+    assert client.results[0].evidence.facts == facts, "what is posted carries both"
     assert outcome.result.artifacts.commits, "a commit was created"
     assert outcome.result.artifacts.commits[0].startswith("feat(1):")
     assert client.results and client.results[0].summary == "fix applied"

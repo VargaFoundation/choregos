@@ -390,7 +390,7 @@ its Secret by reference, and is not optional: a door that could sign nothing wou
 {{- end -}}
 
 {{/*
-The SIEM export of the audit log (ADR 0196): what the API is told when `global.auditExport.enabled`. The
+The SIEM export of the audit log (ADR 0207): what the API is told when `global.auditExport.enabled`. The
 token comes from a Secret by reference (`secretKeyRef`), never a value; the API refuses to start on a sink
 it cannot build, so the mistakes the chart can see are refused here, at render time.
 */}}
@@ -737,7 +737,7 @@ template: `choregos.alertRules` stays plain YAML, which a test reads as such.
 {{- end }}
 
 {{/*
-The alert of the SIEM export (ADR 0196), rendered only while `global.auditExport.enabled`: entries are waiting
+The alert of the SIEM export (ADR 0207), rendered only while `global.auditExport.enabled`: entries are waiting
 and no cursor has moved for half an hour, which a sink that is down or refusing looks like. Plain YAML, like
 the other rule lists.
 */}}
