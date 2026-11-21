@@ -2252,7 +2252,7 @@ CPU and 2Gi; the warm pool's template too) and the agent's takes `runner.limits`
 the single container did: a namespace quota sees 1.25 CPU and 2.5Gi requested per run instead of 1 and 2Gi,
 and a LimitRange judges each container. `tekton` and `aca` refuse `container`.
 
-## Upgrading to 0.28
+## Upgrading past 0.27.16: the ontology, the neutral names, the agent's own container
 
 **The ontology is removed** ([ADR 0181](adr/0181-the-contracts-speak-no-trade.md), O4-1). The trial plugin
 `tranibor-ontology` (formerly `choregos-ontology`), its compatibility shim, its console card, its MCP tools and
@@ -2261,7 +2261,7 @@ the `ontology:` extension of the `joiners-leavers` template are gone. It was off
 
 | What | What happens | What to do |
 | :-- | :-- | :-- |
-| `TRANIBOR_ONTOLOGY_TRIAL` | No longer read. | Remove it from `global.extraEnv` (or `.env`) **with or after** the upgrade, never before: on 0.27, removing it where the branch was applied leaves `onto0003` in `alembic_version` with no revision to read it, and the migration Job fails. |
+| `TRANIBOR_ONTOLOGY_TRIAL` | No longer read. | Remove it from `global.extraEnv` (or `.env`) **with or after** the upgrade, never before: on 0.27.16 or earlier, removing it where the branch was applied leaves `onto0003` in `alembic_version` with no revision to read it, and the migration Job fails. |
 | Its tables `ontology_versions`, `managed_objects` (and `action_proposals`, left by `onto0002`) | The core migration `b4d6f8a0c2e5` drops them when they exist; their RLS policies and indexes go with them. Their content is not kept. | Export them first if you need what they hold. |
 | Its rows in `alembic_version` (`onto0001` to `onto0003`) | The migration Job forgets them before anything else (Alembic could not read the table otherwise) and logs `retired_revisions_forgotten`. `python -m tranibor_api.migrate heads` shows the core's head only. | Nothing. |
 | Actions it persisted (`origin: ontology`, effects `ontology.effet` / `ontology.preuve`, `params.ontologie`) <!-- lang: fr-ok --> | Read as before: the API, the console's action page and the audit log still show them, and the contract keeps `ontology` as an `origin` it reads and never writes. | One still pending can be rejected; approved, it fails on its effect, which nothing declares any more. |
