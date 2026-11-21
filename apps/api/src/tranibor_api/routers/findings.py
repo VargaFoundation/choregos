@@ -6,16 +6,17 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from tranibor_contracts import EventType
 
 from ..audit import record
 from ..db.models import Finding, Project, WorkItem
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import forbidden, not_found
+from ..keyset import keyset_page
 from ..knowledge.marked import readable
 from ..rbac import Permission
-from ..schemas import FindingAction, FindingDto, FindingPage, PageMeta
+from ..schemas import FindingAction, FindingDto, FindingPage
 from ..services import persist_event
 from ..temporal import get_temporal, interpreter_id
 
@@ -50,6 +51,23 @@ async def _readable(session: Db, principal: Any, row: Finding, org_id: str) -> b
     return origin is None or await readable(session, principal, origin, org_id)
 
 
+async def _hidden_origins(session: Db, ctx: Any) -> list[str]:
+    """The ids of the marked work items, origins of this project's findings, the caller does not read."""
+    origins = select(Finding.origin_work_item_id).where(
+        Finding.project_id == ctx.id, Finding.origin_work_item_id.is_not(None)
+    )
+    rows = (
+        await session.execute(
+            select(WorkItem.id, WorkItem.restricted_knowledge).where(WorkItem.id.in_(origins))
+        )
+    ).all()
+    marked = [str(row[0]) for row in rows if row[1]]
+    if not marked:
+        return []
+    items = (await session.execute(select(WorkItem).where(WorkItem.id.in_(marked)))).scalars().all()
+    return [item.id for item in items if not await readable(session, ctx.principal, item, ctx.project.org_id)]
+
+
 @router.get("/projects/{id}/findings", response_model=FindingPage, operation_id="listFindings")
 async def list_findings(
     ctx: ProjectCtx,
@@ -63,14 +81,16 @@ async def list_findings(
         query = query.where(Finding.status == status_filter)
     if severity:
         query = query.where(Finding.severity == severity)
-    rows = (await session.execute(query.order_by(Finding.created_at.desc()))).scalars().all()
     # A finding of a marked work item is the run's content: only that work item's readers see it (ADR 0114).
-    rows = [row for row in rows if await _readable(session, ctx.principal, row, ctx.project.org_id)]
-    window, cursor, has_more = page.slice(list(rows))
-    return FindingPage(
-        items=[await _dto(session, row, ctx.slug) for row in window],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    # The reading rule needs the person's grants, so it is decided on the marked origins only — never on
+    # every finding — and the ones this caller may not read are left out in SQL, before the page is cut.
+    hidden = await _hidden_origins(session, ctx)
+    if hidden:
+        query = query.where(
+            or_(Finding.origin_work_item_id.is_(None), Finding.origin_work_item_id.not_in(hidden))
+        )
+    window, meta = await keyset_page(session, query, sort=Finding.created_at, tiebreak=Finding.id, page=page)
+    return FindingPage(items=[await _dto(session, row, ctx.slug) for row in window], meta=meta)
 
 
 @router.post("/findings/{id}/actions", response_model=FindingDto, operation_id="postFindingAction")

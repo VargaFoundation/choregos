@@ -25,12 +25,12 @@ from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
 from ..edition import is_enterprise
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     OrgCreate,
     OrgDto,
     OrgUpdate,
-    PageMeta,
     ProjectCreate,
     ProjectDto,
     ProjectPage,
@@ -273,21 +273,21 @@ async def release_org_alias(org: str, alias: str, session: Db, principal: Me) ->
 @router.get("/orgs/{org}/projects", response_model=ProjectPage, operation_id="listProjects")
 async def list_projects(org: str, session: Db, principal: Me, page: Pagination) -> ProjectPage:
     organization = await organisation_by_slug(session, org)
-    rows = (
-        (
-            await session.execute(
-                select(Project).where(Project.org_id == organization.id, listed()).order_by(Project.slug)
-            )
-        )
-        .scalars()
-        .all()
+    query = select(Project).where(Project.org_id == organization.id, listed())
+    if not principal.can(Permission.PROJECT_READ, org):
+        # No right at the organisation: only the projects where a role of their own grants the read.
+        # `project_roles` is keyed `org/slug`, so the candidates are known without reading the table.
+        granted = [
+            key.partition("/")[2]
+            for key in principal.project_roles
+            if key.startswith(f"{org}/")
+            and principal.can(Permission.PROJECT_READ, org, key.partition("/")[2])
+        ]
+        query = query.where(Project.slug.in_(granted))
+    window, meta = await keyset_page(
+        session, query, sort=Project.slug, tiebreak=Project.id, page=page, descending=False
     )
-    visible = [p for p in rows if principal.can(Permission.PROJECT_READ, org, p.slug)]
-    window, cursor, has_more = page.slice(list(visible))
-    return ProjectPage(
-        items=[await project_dto(session, p, org) for p in window],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    return ProjectPage(items=[await project_dto(session, p, org) for p in window], meta=meta)
 
 
 def _with_deployment_defaults(config: ProjectConfig) -> dict[str, Any]:

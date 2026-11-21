@@ -42,7 +42,6 @@ from ..schemas import (
     GatewayKeyPage,
     MembershipDto,
     MembershipUpsert,
-    PageMeta,
     SecretsRewrap,
 )
 from ..schemas.network import NetworkActivity, NetworkActivityRow
@@ -453,7 +452,7 @@ async def list_audit(
     total = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
     whole_instance = len(readable) >= int(total)
 
-    query = select(AuditLog).order_by(AuditLog.ts.desc())
+    query = select(AuditLog)
     ids = select(Organization.id).where(Organization.slug.in_(readable))
     scope = AuditLog.org_id.in_(ids)
     query = query.where(or_(scope, AuditLog.org_id.is_(None)) if whole_instance else scope)
@@ -461,12 +460,8 @@ async def list_audit(
         query = query.where(AuditLog.actor_id == actor)
     if target_type:
         query = query.where(AuditLog.target_type == target_type)
-    rows = (await session.execute(query.limit(1000))).scalars().all()
-    window, cursor, has_more = page.slice(list(rows))
-    return AuditPage(
-        items=[AuditEntry.model_validate(row) for row in window],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    window, meta = await keyset_page(session, query, sort=AuditLog.ts, tiebreak=AuditLog.id, page=page)
+    return AuditPage(items=[AuditEntry.model_validate(row) for row in window], meta=meta)
 
 
 @router.get("/orgs/{org}/network-activity", response_model=NetworkActivity, operation_id="getNetworkActivity")
