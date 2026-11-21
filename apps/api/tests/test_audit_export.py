@@ -30,7 +30,14 @@ from tranibor_api.config import Settings
 from tranibor_api.db.models import AuditExportCursor, Organization
 from tranibor_api.db.session import session_scope
 
+from .conftest import SUITE_ON_POSTGRES
 from .kits.audit_export import check_stream, write_chain
+
+#: The chain is written by hand here, as the trigger would write it. On PostgreSQL the trigger writes it
+#: (and the chain head) itself, so this file is SQLite's; `test_audit_export_postgres.py` is PostgreSQL's.
+pytestmark = pytest.mark.skipif(
+    SUITE_ON_POSTGRES, reason="the chain is the trigger's on PostgreSQL: test_audit_export_postgres.py"
+)
 
 
 @pytest.fixture
