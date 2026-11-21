@@ -23,7 +23,7 @@ tags:
   - { name: models }
   - { name: work-items }
   - { name: runs }
-  - { name: trains }
+  - { name: trains, x-plugin: software-delivery }
   - { name: findings }
   - { name: memory }
   - { name: costs }
@@ -1856,6 +1856,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunLogs" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /runs/{id}/diff:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [runs]
@@ -1863,6 +1864,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DiffSummary" } } } }
   /projects/{id}/releases:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [trains]
@@ -1874,6 +1876,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReleasePage" } } } }
   /releases/{id}:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [trains]
@@ -1882,6 +1885,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Release" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/trains/{env}:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     get:
       tags: [trains]
@@ -1889,12 +1893,14 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TrainStatus" } } } }
   /projects/{id}/trains/{env}/depart:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
       operationId: departTrain
       responses: { "202": { description: Departure requested }, "409": { $ref: "#/components/responses/Conflict" } }
   /projects/{id}/trains/{env}/freeze:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
@@ -1904,12 +1910,14 @@ paths:
         content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3 } } } } }
       responses: { "202": { description: Freeze requested } }
   /projects/{id}/trains/{env}/unfreeze:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
       operationId: unfreezeTrain
       responses: { "202": { description: Unfreeze requested } }
   /releases/{id}/approve:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [trains]
@@ -1918,6 +1926,7 @@ paths:
         content: { application/json: { schema: { type: object, properties: { note: { type: string } } } } }
       responses: { "202": { description: Approval passed on }, "403": { $ref: "#/components/responses/Forbidden" } }
   /releases/{id}/abort:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [trains]
@@ -2204,6 +2213,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CrossBackendReport" } } } }
   /projects/{id}/metrics/dora:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [costs]
@@ -7149,7 +7159,7 @@ components:
         config_revision: { type: string, description: "An opaque digest of the name and configuration, to send back as `base_revision`" }
         workflow_name: { type: [string, "null"] }
         policy_name: { type: [string, "null"] }
-        has_release_train: { type: boolean, default: false, description: "An active workflow of the project has a `via: release_train` transition: only then does the project have trains." }
+        has_release_train: { type: boolean, default: false, x-plugin: software-delivery, description: "An active workflow of the project has a `via: release_train` transition: only then does the project have trains." }
         stats: { $ref: "#/components/schemas/ProjectStats" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -7159,7 +7169,7 @@ components:
         active_work_items: { type: integer }
         cost_month_eur: { type: number }
         budget_month_eur: { type: [number, "null"] }
-        trains_pending: { type: integer }
+        trains_pending: { type: integer, x-plugin: software-delivery }
         first_pass_merge_rate: { type: [number, "null"], description: "The former name of `first_pass_acceptance_rate`, until the release the window list names (ADR 0181 C1)." }
         first_pass_acceptance_rate: { type: [number, "null"], description: "The share of the work items accepted without a rework loop (ADR 0181 C1)." }
         cycle_time_p50_hours: { type: [number, "null"] }
@@ -12474,6 +12484,7 @@ components:
         error: { type: [string, "null"], description: Why the logs could not be read }
         captured_at: { type: [string, "null"], format: date-time }
     DiffSummary:
+      x-plugin: software-delivery
       type: object
       required: [files, additions, deletions]
       properties:
@@ -12494,6 +12505,7 @@ components:
         additions: { type: integer }
         deletions: { type: integer }
     Release:
+      x-plugin: software-delivery
       type: object
       required: [id, project_slug, env, batch_no, status, items]
       properties:
@@ -12523,12 +12535,14 @@ components:
         notes: { type: [string, "null"] }
         promotion_url: { type: [string, "null"] }
     ReleasePage:
+      x-plugin: software-delivery
       type: object
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Release" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
     TrainStatus:
+      x-plugin: software-delivery
       type: object
       required: [env, status, batch_size, frozen]
       properties:
@@ -13037,6 +13051,7 @@ components:
         verdict: { type: string }
         detail: { type: string, default: "" }
     DoraMetric:
+      x-plugin: software-delivery
       type: object
       required: [unit]
       properties:
@@ -13045,6 +13060,7 @@ components:
         level: { type: string, enum: [elite, high, medium, low, unknown], default: unknown }
         sample: { type: integer, default: 0 }
     DoraReport:
+      x-plugin: software-delivery
       type: object
       required: [since, until, deployment_frequency, lead_time, change_failure_rate, time_to_restore]
       properties:
