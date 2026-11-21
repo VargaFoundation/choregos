@@ -21,6 +21,8 @@ def test_policies_are_found() -> None:
 
 def test_no_policy_references_the_frozen_namespace() -> None:
     offenders = [
-        str(path.relative_to(ROOT)) for path in POLICIES if "vargafoundation" in path.read_text(encoding="utf-8").lower()
+        str(path.relative_to(ROOT))
+        for path in POLICIES
+        if "vargafoundation" in path.read_text(encoding="utf-8").lower()
     ]
     assert offenders == [], "the frozen namespace was deleted on 2026-11-21: " + ", ".join(offenders)
