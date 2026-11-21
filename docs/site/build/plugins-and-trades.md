@@ -61,9 +61,9 @@ names it.
   the `madr-4` skill. Its extension, `tranibor-software-delivery` in `plugins/software-delivery/` of the
   core's repository, which the published images install, holds the twelve gates that read a diff or a
   CI (`ci_green`, `diff_size_max`, `scope_respected` …) and the context provider that reads the diff and
-  the checks for them, and the step effects `open_pr` and `merge_pr`. By 1.0 it also holds the
-  repository templates, the `scm.*`, `ci.*` and `cd.*` event types, the finding types `bug`, `perf`,
-  `tech-debt` and `flaky-test`, the roles `fix_ci`, `address_review`, `release_notes` and
+  the checks for them, the step effects `open_pr` and `merge_pr`, the `scm.*`, `ci.*` and `cd.*` event
+  types and the finding types `bug`, `perf`, `tech-debt` and `flaky-test`. By 1.0 it also holds the
+  repository templates, the roles `fix_ci`, `address_review`, `release_notes` and
   `verify_prod`, and the release train.
 - **IT service management**: `servicenow`. Content only: an ITSM triage agent, its skill, and an MCP
   server that implements the tracker profile, so a project's tickets live in ServiceNow and every write
@@ -93,8 +93,8 @@ first-party plugin like any other, in its own distribution, before 1.0.
 | `pr_url` on a work item and a step's result, `repository` fields | `links`, with `rel: change_request`; `workspace` |
 | The twelve gates that read a diff or a CI | `software-delivery`'s extension, under the same names: done (S83-04a, `plugins/software-delivery/`) |
 | `does: open_pr` and `merge_pr` | `software-delivery`, under the same names: done (S83-04b) |
-| The `scm.*`, `ci.*`, `cd.*` events | `software-delivery`, under the same names |
-| The release train, its routes and the DORA figures | `software-delivery` |
+| The `scm.*`, `ci.*`, `cd.*` events, the finding types `bug`, `perf`, `tech-debt`, `flaky-test` | `software-delivery`, under the same names: declared by it (S83-04c), kept in the core's lists until 0.31.0 |
+| The release train, its routes and the DORA figures | `software-delivery`: its routes are outside the frozen REST set (S83-04d); its code moves in round D |
 | The repository templates | `software-delivery`'s content |
 | `packages/ontology` | removed |
 | The `quant` command and the investment template | `investment-research`: done (S83-07) |
