@@ -29,7 +29,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       agent: vi.fn(),
       agents: vi.fn(),
       agentMetrics: vi.fn().mockResolvedValue({ agent: "x", days: 30, runs: 0, succeeded: 0, failed: 0, cost_usd: 0 }),
-      agentReleases: vi.fn().mockResolvedValue([]),
+      agentReleases: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       agentExposure: vi.fn().mockResolvedValue({ projects: [] }),
       agentReleaseReadiness: vi.fn().mockResolvedValue({ version: 3, channel: "candidate", kind: "promote", ready: true, checks: [] }),
       forkAgent: vi.fn(),

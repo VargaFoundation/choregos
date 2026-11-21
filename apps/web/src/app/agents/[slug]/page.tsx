@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -55,6 +55,7 @@ import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-ve
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
+import { nextCursor } from "@/lib/paging";
 import { useSession } from "@/lib/session";
 import type { Agent, AgentStopResult } from "@/lib/types";
 import { StopWithReason } from "@/components/activity/stop";
@@ -373,8 +374,11 @@ function AgentMetrics({ org, slug }: { org: string; slug: string }) {
 
 /** A remote agent whose latest run stopped on a card that moved says so, with the way out (ADR 0062). */
 function RemoteDrift({ org, slug }: { org: string; slug: string }) {
-  const runs = useQuery({ queryKey: ["agent-runs", org, slug], queryFn: () => api.agentRuns(org, slug) });
-  const latest = runs.data?.[0];
+  const runs = useQuery({
+    queryKey: ["agent-runs-latest", org, slug],
+    queryFn: () => api.agentRuns(org, slug, { limit: 1 }),
+  });
+  const latest = runs.data?.items[0];
   return latest?.result?.reason === "remote_card_changed" ? <CardChangedWarning slug={slug} /> : null;
 }
 
@@ -456,9 +460,15 @@ function AcpDefinition({ org, agent }: { org: string; agent: Agent }) {
 
 /** Its latest runs, across the projects one may read (S30-05): one request. */
 function Runs({ org, slug }: { org: string; slug: string }) {
-  const runs = useQuery({ queryKey: ["agent-runs", org, slug], queryFn: () => api.agentRuns(org, slug) });
-  if (!runs.data) return <ReadState lecture={runs} quoi="the agent's runs" />;
-  if (runs.data.length === 0) return <Empty title="No run yet">A workflow that names this agent runs it.</Empty>;
+  const runs = useInfiniteQuery({
+    queryKey: ["agent-runs", org, slug],
+    queryFn: ({ pageParam }) => api.agentRuns(org, slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+  });
+  const rows = runs.data?.pages.flatMap((page) => page.items);
+  if (!rows) return <ReadState lecture={runs} quoi="the agent's runs" />;
+  if (rows.length === 0) return <Empty title="No run yet">A workflow that names this agent runs it.</Empty>;
   return (
     <Card title="Latest runs" padding="none" className="overflow-hidden">
       <Table aria-label="Runs" data-testid="agent-runs">
@@ -472,7 +482,7 @@ function Runs({ org, slug }: { org: string; slug: string }) {
           </TR>
         </THead>
         <TBody>
-          {runs.data.map((run) => (
+          {rows.map((run) => (
             <TR key={run.id} interactive>
               <TD className="font-mono text-xs">{run.started_at ? shortDate(run.started_at) : "—"}</TD>
               <TD>
@@ -493,6 +503,13 @@ function Runs({ org, slug }: { org: string; slug: string }) {
           ))}
         </TBody>
       </Table>
+      {runs.hasNextPage && (
+        <div className="p-3">
+          <Button size="sm" onClick={() => void runs.fetchNextPage()} disabled={runs.isFetchingNextPage}>
+            More
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -500,17 +517,20 @@ function Runs({ org, slug }: { org: string; slug: string }) {
 /** The MCP clients that embody this agent: when each one called, with what; attach, detach. */
 function Clients({ org, slug }: { org: string; slug: string }) {
   const client = useQueryClient();
-  const links = useQuery({
+  const links = useInfiniteQuery({
     queryKey: ["agent-credentials", org, slug],
-    queryFn: () => api.agentCredentials(org, slug),
+    queryFn: ({ pageParam }) => api.agentCredentials(org, slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
   });
+  const attached = links.data?.pages.flatMap((page) => page.items) ?? [];
   // The picker asks the server for MCP tokens by name (ADR 0206): the first page, a search, "More".
   const [recherche, setRecherche] = useState("");
   const [filtre, setFiltre] = useState("");
   const tokens = useTokens({ kind: "mcp", q: filtre });
   const [choisi, setChoisi] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
-  const rattaches = new Set((links.data ?? []).map((l) => l.token_id));
+  const rattaches = new Set(attached.map((l) => l.token_id));
   const libres = tokens.rows.filter((j) => !rattaches.has(j.id));
   async function agir(gesture: () => Promise<unknown>) {
     setErreur(null);
@@ -525,11 +545,11 @@ function Clients({ org, slug }: { org: string; slug: string }) {
   return (
     <Card title="MCP clients acting as this agent">
       <div className="space-y-3">
-        {(links.data ?? []).length === 0 ? (
+        {attached.length === 0 ? (
           <p className="text-sm text-ink-muted">No client yet: attach one of your MCP tokens below.</p>
         ) : (
           <ul className="space-y-2" data-testid="agent-clients">
-            {(links.data ?? []).map((lien) => {
+            {attached.map((lien) => {
               const state = clientState(lien);
               return (
                 <li key={lien.id} className="flex flex-wrap items-center gap-3 text-sm">
@@ -551,6 +571,11 @@ function Clients({ org, slug }: { org: string; slug: string }) {
               );
             })}
           </ul>
+        )}
+        {links.hasNextPage && (
+          <Button size="sm" onClick={() => void links.fetchNextPage()} disabled={links.isFetchingNextPage}>
+            More
+          </Button>
         )}
         {(libres.length > 0 || filtre !== "" || tokens.hasNextPage) && (
           <form

@@ -308,7 +308,7 @@ describe("a release waiting for approval", () => {
 
 describe("the lifecycle tab", () => {
   it("holds the pipeline, the history, the policy and what the page passes in", async () => {
-    vi.mocked(api.agentReleases).mockResolvedValue(history([{ kind: "promote", version: 2, previous_version: 1, reason: "first week" }, { kind: "baseline", version: 1, requested_by: "migration" }]));
+    vi.mocked(api.agentReleases).mockResolvedValue({ items: history([{ kind: "promote", version: 2, previous_version: 1, reason: "first week" }, { kind: "baseline", version: 1, requested_by: "migration" }]), meta: { has_more: false } });
     wrap(
       <LifecycleTab org="acme" agent={agent()}>
         <p>Agent status here</p>
@@ -323,7 +323,7 @@ describe("the lifecycle tab", () => {
   });
 
   it("saves the release policy it shows, with the gates the author set", async () => {
-    vi.mocked(api.agentReleases).mockResolvedValue([]);
+    vi.mocked(api.agentReleases).mockResolvedValue({ items: [], meta: { has_more: false } } as never);
     vi.mocked(api.setAgentReleasePolicy).mockResolvedValue(agent());
     wrap(<LifecycleTab org="acme" agent={agent()} />);
     const form = await screen.findByRole("form", { name: "Release policy" });
@@ -350,7 +350,7 @@ describe("the lifecycle tab", () => {
   });
 
   it("a policy that saves straight to production sends no testing gate (the API would refuse it)", async () => {
-    vi.mocked(api.agentReleases).mockResolvedValue([]);
+    vi.mocked(api.agentReleases).mockResolvedValue({ items: [], meta: { has_more: false } } as never);
     vi.mocked(api.setAgentReleasePolicy).mockResolvedValue(agent());
     wrap(<LifecycleTab org="acme" agent={agent()} />);
     const form = await screen.findByRole("form", { name: "Release policy" });

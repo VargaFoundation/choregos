@@ -6565,6 +6565,41 @@ export type ProjectOperationPage = {
   meta: PageMeta;
 };
 
+export type AgentPage = {
+  items: Array<Agent>;
+  meta: PageMeta;
+};
+
+export type AgentMetricsSummaryPage = {
+  items: Array<AgentMetricsSummary>;
+  meta: PageMeta;
+};
+
+export type AgentRunPage = {
+  items: Array<Run>;
+  meta: PageMeta;
+};
+
+export type AgentCredentialPage = {
+  items: Array<AgentCredential>;
+  meta: PageMeta;
+};
+
+export type AgentReleasePage = {
+  items: Array<AgentRelease>;
+  meta: PageMeta;
+};
+
+export type AgentEvaluationPage = {
+  items: Array<AgentEvaluation>;
+  meta: PageMeta;
+};
+
+export type ConversationCandidatePage = {
+  items: Array<ConversationCandidate>;
+  meta: PageMeta;
+};
+
 export type AuditEntry = {
   id: string;
   actor_id?: string | null;
@@ -6995,17 +7030,17 @@ export interface Operations {
   listActions: { method: "GET"; path: "/projects/{id}/actions"; body: never; response: ActionPage };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
-  listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
-  listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
-  listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: Array<ConversationCandidate> };
+  listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: AgentCredentialPage };
+  listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: AgentEvaluationPage };
+  listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: ConversationCandidatePage };
   listAgentForks: { method: "GET"; path: "/orgs/{org}/agents/{slug}/forks"; body: never; response: AgentForkList };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
-  listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
+  listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: AgentMetricsSummaryPage };
   listAgentNotifications: { method: "GET"; path: "/orgs/{org}/agent-notifications"; body: never; response: AgentNotificationList };
-  listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
-  listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
+  listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: AgentReleasePage };
+  listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: AgentRunPage };
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
-  listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
+  listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: AgentPage };
   listAssistantKnowledgeUpdates: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates"; body: never; response: KnowledgeUpdateList };
   listAssistantReads: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/reads"; body: never; response: AssistantReadPage };
   listAssistants: { method: "GET"; path: "/orgs/{org}/assistants"; body: never; response: AssistantList };
@@ -7041,8 +7076,8 @@ export interface Operations {
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: ApiTokenPage };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: ActionPage };
   listOrgActivity: { method: "GET"; path: "/orgs/{org}/activity"; body: never; response: ActivityList };
-  listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
-  listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
+  listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: AgentCredentialPage };
+  listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: AgentReleasePage };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: OrgConnectorPage };
   listOrgGroupMembers: { method: "GET"; path: "/orgs/{org}/groups/{slug}/members"; body: never; response: OrgGroupMemberList };
   listOrgGroups: { method: "GET"; path: "/orgs/{org}/groups"; body: never; response: OrgGroupList };

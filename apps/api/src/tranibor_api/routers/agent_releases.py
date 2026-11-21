@@ -13,18 +13,21 @@ from ..audit import record
 from ..db.models import Agent, AgentVersion, Organization, Project
 from ..db.models import AgentEvaluation as AgentEvaluationRow
 from ..decision_session import require_person_session
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Db, Me, Pagination, ProjectCtx
 from ..errors import forbidden, not_found
 from ..freshness import require_fresh_authentication
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     AgentDto,
     AgentEvaluation,
     AgentEvaluationCreate,
+    AgentEvaluationPage,
     AgentExposure,
     AgentReleaseCreate,
     AgentReleaseDecision,
     AgentReleaseDto,
+    AgentReleasePage,
     AgentReleasePolicy,
     AgentReleaseReadiness,
     AgentSpec,
@@ -42,7 +45,7 @@ router = APIRouter(tags=["agents"])
 
 @router.get(
     "/orgs/{org}/agents/{slug}/releases",
-    response_model=list[AgentReleaseDto],
+    response_model=AgentReleasePage,
     operation_id="listAgentReleases",
 )
 async def list_agent_releases(
@@ -50,12 +53,12 @@ async def list_agent_releases(
     slug: Slug,
     session: Db,
     principal: Me,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
-) -> list[AgentReleaseDto]:
-    """Every move of the agent's channels, newest first: the release history."""
+    page: Pagination,
+) -> AgentReleasePage:
+    """The moves of the agent's channels, newest first, one page at a time (ADR 0206): the release history."""
     _, agent, _ = await load_visible_agent(session, principal, org, slug)
-    rows = await agent_releases.history(session, agent, limit)
-    return [agent_releases.release_dto(row, agent.slug) for row in rows]
+    rows, meta = await agent_releases.history(session, agent, page)
+    return AgentReleasePage(items=[agent_releases.release_dto(row, agent.slug) for row in rows], meta=meta)
 
 
 @router.post(
@@ -97,27 +100,27 @@ async def decide_agent_release(
 
 @router.get(
     "/orgs/{org}/agent-releases",
-    response_model=list[AgentReleaseDto],
+    response_model=AgentReleasePage,
     operation_id="listOrgAgentReleases",
 )
 async def list_org_agent_releases(
     org: str,
     session: Db,
     principal: Me,
+    page: Pagination,
     status_: Annotated[
         Literal["done", "pending_approval", "rejected", "cancelled", "superseded"] | None,
         Query(alias="status"),
     ] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
-) -> list[AgentReleaseDto]:
-    """Releases of the agents the caller may see, newest first; `status=pending_approval` is the
-    approver's inbox."""
+) -> AgentReleasePage:
+    """Releases of the agents the caller may see, newest first, one page at a time (ADR 0206);
+    `status=pending_approval` is the approver's inbox."""
     require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     visible = Agent.org_id == organisation.id
     visible = visible & await visible_clause(session, principal, organisation)
-    rows = await agent_releases.list_releases(session, visible, status_, limit)
-    return [agent_releases.release_dto(row, slug) for row, slug in rows]
+    rows, meta = await agent_releases.list_releases(session, visible, status_, page)
+    return AgentReleasePage(items=[agent_releases.release_dto(row, slug) for row, slug in rows], meta=meta)
 
 
 @router.get(
@@ -278,13 +281,14 @@ async def start_agent_evaluation(
 
 @router.get(
     "/orgs/{org}/agents/{slug}/versions/{version}/evaluations",
-    response_model=list[AgentEvaluation],
+    response_model=AgentEvaluationPage,
     operation_id="listAgentEvaluations",
 )
 async def list_agent_evaluations(
-    org: str, slug: Slug, version: int, session: Db, principal: Me
-) -> list[AgentEvaluation]:
-    """The live evaluations of the revision, newest first, each judged from its runs as they stand."""
+    org: str, slug: Slug, version: int, session: Db, principal: Me, page: Pagination
+) -> AgentEvaluationPage:
+    """The live evaluations of the revision, newest first, one page at a time (ADR 0206), each judged from
+    its runs as they stand (only the page's rows are judged)."""
     _, agent, _ = await load_visible_agent(session, principal, org, slug)
     spec = await _spec_of(session, agent, version)
     policy = agent_releases.policy_of(agent)
@@ -293,12 +297,16 @@ async def list_agent_evaluations(
         if policy.stable.min_live_score is not None
         else policy.candidate.min_live_score
     )
-    rows = (
-        await session.execute(
-            select(AgentEvaluationRow, Project.slug)
-            .join(Project, Project.id == AgentEvaluationRow.project_id)
-            .where(AgentEvaluationRow.agent_id == agent.id, AgentEvaluationRow.version == version)
-            .order_by(AgentEvaluationRow.created_at.desc(), AgentEvaluationRow.id.desc())
-        )
-    ).tuples()
-    return [await agent_live_evals.read(session, row, slug_, spec, floor) for row, slug_ in rows]
+    rows, meta = await keyset_page(
+        session,
+        select(AgentEvaluationRow, Project.slug)
+        .join(Project, Project.id == AgentEvaluationRow.project_id)
+        .where(AgentEvaluationRow.agent_id == agent.id, AgentEvaluationRow.version == version),
+        sort=AgentEvaluationRow.created_at,
+        tiebreak=AgentEvaluationRow.id,
+        page=page,
+    )
+    return AgentEvaluationPage(
+        items=[await agent_live_evals.read(session, row, slug_, spec, floor) for row, slug_ in rows],
+        meta=meta,
+    )

@@ -51,7 +51,7 @@ async def test_a_project_born_from_the_template_receives_its_three_workflows_its
     assert active == {"dev-simple", "study", "dev-complex"}
     assert (await client.get(f"/api/v1/projects/{pid}/policy")).json()["name"] == "software-delivery"
 
-    agents = {a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()}
+    agents = {a["slug"] for a in (await client.get("/api/v1/orgs/northwind/agents")).json()["items"]}
     assert agents >= AGENTS, sorted(AGENTS - agents)
     skills = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()["items"]}
     assert "madr-4" in skills

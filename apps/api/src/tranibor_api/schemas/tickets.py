@@ -448,6 +448,13 @@ class RunDto(RunSummary):
     tool_connectors: list[ToolConnector] = Field(default_factory=list)
 
 
+class AgentRunPage(Dto):
+    """One page of an agent's runs, newest first (ADR 0206)."""
+
+    items: list[RunDto]
+    meta: PageMeta
+
+
 class RunEventDto(Dto):
     seq: int
     type: str

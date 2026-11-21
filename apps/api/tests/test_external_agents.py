@@ -194,7 +194,7 @@ async def test_an_attached_client_says_when_it_called_and_with_what(client: Asyn
     await _external_agent(client, None)
     token_id, token = await _token(client)
     assert (await _attach(client, token_id)).status_code == 201
-    (before,) = (await client.get("/api/v1/orgs/northwind/agents/claude-of-lea/credentials")).json()
+    (before,) = (await client.get("/api/v1/orgs/northwind/agents/claude-of-lea/credentials")).json()["items"]
     assert before["token_name"] == "claude-code"
     assert before["last_used_at"] is None and before["last_client"] is None
 
@@ -207,7 +207,7 @@ async def test_an_attached_client_says_when_it_called_and_with_what(client: Asyn
     )
     assert call.status_code == 200, call.text
     client.cookies.update(cookies)
-    (after,) = (await client.get("/api/v1/orgs/northwind/agents/claude-of-lea/credentials")).json()
+    (after,) = (await client.get("/api/v1/orgs/northwind/agents/claude-of-lea/credentials")).json()["items"]
     assert after["last_used_at"] is not None
     assert after["last_client"] == "claude-code/2.1.0"
 

@@ -6,6 +6,7 @@
  */
 import { ApiError } from "@/lib/api";
 import { socialOf } from "./agent-social";
+import { pageOf } from "./paging";
 import type {
   Agent,
   AgentChannelStats,
@@ -271,10 +272,11 @@ export function agentReleasesApi(method: string, path: string, query: string, bo
   const org = /^\/orgs\/[^/]+\/agent-releases$/.test(path);
   if (org && method === "GET") {
     const status = new URLSearchParams(query).get("status");
-    return agents
+    const listed = agents
       .flatMap((a) => stateOf(a).releases)
       .filter((r) => !status || r.status === status)
-      .map((r) => structuredClone(r));
+      .sort((x, y) => (y.requested_at ?? "").localeCompare(x.requested_at ?? ""));
+    return pageOf(listed, query);
   }
   const m = /^\/orgs\/[^/]+\/agents\/([^/]+)\/(releases|exposure|release-policy|versions\/(\d+)\/readiness)(?:\/([^/]+)\/decision)?$/.exec(path);
   if (m) {
@@ -282,7 +284,7 @@ export function agentReleasesApi(method: string, path: string, query: string, bo
     if (!agent) return undefined;
     const state = stateOf(agent);
     if (m[4] && method === "POST") return structuredClone(decide(agent, state, m[4], body as AgentReleaseDecision, by));
-    if (m[2] === "releases" && method === "GET") return structuredClone(state.releases);
+    if (m[2] === "releases" && method === "GET") return pageOf(state.releases, query);
     if (m[2] === "releases" && method === "POST") return structuredClone(release(agent, state, body as AgentReleaseCreate, by));
     if (m[2] === "exposure" && method === "GET") {
       const exposure: AgentExposure = {
@@ -323,7 +325,7 @@ export function agentReleasesApi(method: string, path: string, query: string, bo
     if (!agent) return undefined;
     const version = Number(ev[2]);
     const list = (evaluations.get(`${agent.slug}@${version}`) ?? []) as AgentEvaluation[];
-    if (method === "GET") return structuredClone(list);
+    if (method === "GET") return pageOf(list, query);
     if (method === "POST") {
       const live = (agent.versions?.find((v) => v.version === version)?.spec.evals ?? []).filter((c) => c.live === true);
       if (live.length === 0) refuse(409, `v${version} has no live case in its eval suite: mark a case \`live\` first`);

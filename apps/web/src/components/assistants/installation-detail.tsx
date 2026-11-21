@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -41,6 +41,7 @@ import {
   type SubjectErasure,
 } from "@/lib/assistants-api";
 import { shortDate } from "@/lib/format";
+import { nextCursor } from "@/lib/paging";
 import { useSession } from "@/lib/session";
 
 const STATUS_TONE = { ready: "succeeded", incomplete: "waiting", suspended: "neutral" } as const;
@@ -587,16 +588,22 @@ function CandidateCard({
 
 /** The candidate cases that thumbs down proposed to an agent's owners. */
 function FeedbackCandidates({ org }: { org: string }) {
-  const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
+  // The picker asks the server for the agents matching what is typed: the first page, never a filter in the browser.
+  const [find, setFind] = useState("");
+  const agents = useQuery({ queryKey: ["agents", org, find], queryFn: () => api.agents(org, find.trim() || undefined) });
   const [agent, setAgent] = useState("");
-  const candidates = useQuery({
+  const candidates = useInfiniteQuery({
     queryKey: ["feedback-candidates", org, agent],
-    queryFn: () => assistantsApi.feedbackCandidates(org, agent),
+    queryFn: ({ pageParam }) => assistantsApi.feedbackCandidates(org, agent, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
     enabled: agent !== "",
   });
+  const proposed = candidates.data?.pages.flatMap((page) => page.items);
   return (
     <Card title="Feedback candidates" eyebrow="Thumbs down">
       <div className="space-y-3">
+        <Input type="search" aria-label="Find an agent" placeholder="Find an agent" value={find} onChange={(e) => setFind(e.target.value)} />
         <Select aria-label="Agent" value={agent} onChange={(e) => setAgent(e.target.value)}>
           <option value="">Choose the assistant&apos;s agent</option>
           {(agents.data ?? []).map((a) => (
@@ -605,10 +612,15 @@ function FeedbackCandidates({ org }: { org: string }) {
             </option>
           ))}
         </Select>
-        {candidates.data && candidates.data.length === 0 && <Empty>No candidate case.</Empty>}
-        {(candidates.data ?? []).map((c) => (
+        {proposed && proposed.length === 0 && <Empty>No candidate case.</Empty>}
+        {(proposed ?? []).map((c) => (
           <CandidateCard key={c.id} org={org} agent={agent} candidate={c} onDecided={() => void candidates.refetch()} />
         ))}
+        {candidates.hasNextPage && (
+          <Button size="sm" onClick={() => void candidates.fetchNextPage()} disabled={candidates.isFetchingNextPage}>
+            More
+          </Button>
+        )}
       </div>
     </Card>
   );

@@ -29,21 +29,18 @@ export function ScopeBadge({ agent }: { agent: Pick<Agent, "scope" | "project"> 
 
 /** The chips of the registry: one per scope, with how many agents each holds. */
 export function ScopeFilter({
-  agents,
   value,
   onChange,
 }: {
-  agents: Agent[];
   value: AgentScope | null;
   onChange: (scope: AgentScope | null) => void;
 }) {
-  const count = (scope: AgentScope) => agents.filter((a) => (a.scope ?? "org") === scope).length;
   const chip = (active: boolean) =>
     `rounded-pill border px-3 py-1 text-xs ${active ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`;
   return (
     <div role="group" aria-label="Filter by scope" className="flex flex-wrap gap-2" data-testid="scope-filter">
       <button type="button" className={chip(value === null)} aria-pressed={value === null} onClick={() => onChange(null)}>
-        All ({agents.length})
+        All
       </button>
       {SCOPES.map((scope) => (
         <button
@@ -53,7 +50,7 @@ export function ScopeFilter({
           aria-pressed={value === scope}
           onClick={() => onChange(value === scope ? null : scope)}
         >
-          {scopeLabel(scope)} ({count(scope)})
+          {scopeLabel(scope)}
         </button>
       ))}
     </div>

@@ -20,13 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from ..db.models import AgentSessionRecord, Organization, Project
-from ..deps import Db, Me
+from ..deps import Db, Me, Pagination
 from ..errors import not_found, unprocessable
 from ..schemas.agent_sessions import (
     AgentResponse,
     AgentResponseCreate,
     AgentSession,
-    ConversationCandidate,
+    ConversationCandidatePage,
     ConversationFeedbackCreate,
     ConversationFeedbackDto,
 )
@@ -128,13 +128,15 @@ async def give_agent_session_feedback(
 
 @router.get(
     "/orgs/{org}/agents/{slug}/feedback-candidates",
-    response_model=list[ConversationCandidate],
+    response_model=ConversationCandidatePage,
     operation_id="listAgentFeedbackCandidates",
 )
 async def list_agent_feedback_candidates(
-    org: str, slug: str, session: Db, principal: Me, limit: int = 50
-) -> list[ConversationCandidate]:
-    """The candidate eval cases thumbs down proposed for the agent, for those who manage it (ADR 0140)."""
+    org: str, slug: str, session: Db, principal: Me, page: Pagination
+) -> ConversationCandidatePage:
+    """The candidate eval cases thumbs down proposed for the agent, for those who manage it (ADR 0140),
+    newest first, one page at a time (ADR 0206)."""
     organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
     enforce_decision(decide(principal, org, subject, Action.MANAGE))
-    return await proposed_candidates(session, organisation.id, agent.slug, max(1, min(limit, 200)))
+    items, meta = await proposed_candidates(session, organisation.id, agent.slug, page)
+    return ConversationCandidatePage(items=items, meta=meta)

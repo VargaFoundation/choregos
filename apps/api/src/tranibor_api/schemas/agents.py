@@ -719,6 +719,13 @@ class AgentEvaluation(Dto):
     cases: list[AgentEvaluationCase] = Field(default_factory=list)
 
 
+class AgentEvaluationPage(Dto):
+    """One page of live evaluations of one revision, newest first (ADR 0206)."""
+
+    items: list[AgentEvaluation]
+    meta: PageMeta
+
+
 class AgentReleaseCreate(Dto):
     """Point a channel at a revision."""
 
@@ -778,6 +785,13 @@ class AgentReleaseDto(Dto):
     done_at: datetime | None = None
     reason: str | None = None
     checks: list[AgentReleaseCheck] = Field(default_factory=list)
+
+
+class AgentReleasePage(Dto):
+    """One page of moves of the release channels, newest first (ADR 0206)."""
+
+    items: list[AgentReleaseDto]
+    meta: PageMeta
 
 
 class AgentChannelStats(Dto):
@@ -1134,6 +1148,13 @@ class AgentDto(Dto):
     social: AgentSocial = Field(default_factory=AgentSocial)
 
 
+class AgentPage(Dto):
+    """One page of agents the caller may see, by name (ADR 0206)."""
+
+    items: list[AgentDto]
+    meta: PageMeta
+
+
 class AgentOverrides(Dto):
     """What a project may change on a version: only tighten."""
 
@@ -1437,6 +1458,13 @@ class AgentMetricsSummary(Dto):
     cost_usd: float = 0.0
 
 
+class AgentMetricsSummaryPage(Dto):
+    """One page of agents' registry lines, by agent name (ADR 0206)."""
+
+    items: list[AgentMetricsSummary]
+    meta: PageMeta
+
+
 class AgentResolution(Dto):
     """Which agent version a run would load for a reference (S39-13), through the runtime's resolver."""
 
@@ -1584,6 +1612,13 @@ class AgentCredentialDto(Dto):
     last_client: str | None = None
     #: The slug of the agent the client is attached to (the organisation's list carries it).
     agent: str | None = None
+
+
+class AgentCredentialPage(Dto):
+    """One page of clients attached to agents (ADR 0206)."""
+
+    items: list[AgentCredentialDto]
+    meta: PageMeta
 
 
 class AgentLifecycleChange(Dto):

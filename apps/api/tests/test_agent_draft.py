@@ -50,7 +50,7 @@ def _script(monkeypatch: pytest.MonkeyPatch, answer: dict[str, Any]) -> Scripted
 
 async def test_a_draft_is_proposed_not_saved(client: AsyncClient, admin: str) -> None:
     await client.post(f"{ORG}/skills", json={"files": {"SKILL.md": SKILL_MD}})
-    before = (await client.get(f"{ORG}/agents")).json()
+    before = (await client.get(f"{ORG}/agents")).json()["items"]
     response = await client.post(f"{ORG}/agent-drafts", json=REQUEST)
     assert response.status_code == 200, response.text
     draft = response.json()
@@ -58,7 +58,7 @@ async def test_a_draft_is_proposed_not_saved(client: AsyncClient, admin: str) ->
     assert draft["slug"] == "release-notes-writer" and draft["sample"]["title"]
     assert draft["spec"]["skills"] == [{"slug": "release-style", "version": None}]
     assert 1 <= len(draft["spec"]["evals"]) <= 2 and draft["model"] == "fake/agent-drafter"
-    assert (await client.get(f"{ORG}/agents")).json() == before, "nothing is created"
+    assert (await client.get(f"{ORG}/agents")).json()["items"] == before, "nothing is created"
     audit = (await client.get("/api/v1/audit")).json()["items"]
     (entry,) = [e for e in audit if e["action"] == "agent.draft"]
     assert entry["payload"]["description_chars"] == len(REQUEST["description"])

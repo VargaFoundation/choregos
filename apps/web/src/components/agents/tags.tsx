@@ -144,7 +144,10 @@ export function TagEditor({
   );
 }
 
-/** Every tag of the visible agents with its count; several can be selected, an agent must carry all of them. */
+/**
+ * The tags of the agents loaded so far, plus the selected ones; several can be selected, an agent must carry
+ * all of them (the server applies it, ADR 0206). No count: only a page of the registry is in the browser.
+ */
 export function TagFilter({
   agents,
   value,
@@ -154,11 +157,11 @@ export function TagFilter({
   value: string[];
   onChange: (tags: string[]) => void;
 }) {
-  const counts = new Map<string, number>();
-  for (const agent of agents) for (const tag of agent.tags ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  const seen = new Set<string>();
+  for (const agent of agents) for (const tag of agent.tags ?? []) seen.add(tag);
   const chip = (active: boolean) =>
     `rounded-pill border px-3 py-1 text-xs ${active ? "border-accent-line bg-accent-soft text-accent-strong" : "border-line text-ink-muted hover:bg-surface-muted"}`;
-  const all = [...new Set([...counts.keys(), ...value])].sort();
+  const all = [...new Set([...seen, ...value])].sort();
   if (all.length === 0) return null;
   return (
     <div role="group" aria-label="Filter by tag" className="flex flex-wrap gap-2" data-testid="tag-filter">
@@ -173,7 +176,7 @@ export function TagFilter({
             data-verbatim
             onClick={() => onChange(active ? value.filter((t) => t !== tag) : [...value, tag])}
           >
-            {tag} ({counts.get(tag) ?? 0})
+            {tag}
           </button>
         );
       })}

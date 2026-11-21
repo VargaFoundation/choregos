@@ -143,7 +143,7 @@ async def test_production_moved_meanwhile_supersedes_the_request(client: AsyncCl
     stale = await decide(client, waiting["id"], "approve")
     assert stale.status_code == 409 and "superseded" in stale.text
     assert (await agent_of(client))["stable_version"] == 1, "the rollback stands"
-    inbox = (await client.get(f"{ORG}/agent-releases", params={"status": "superseded"})).json()
+    inbox = (await client.get(f"{ORG}/agent-releases", params={"status": "superseded"})).json()["items"]
     assert [r["id"] for r in inbox] == [waiting["id"]], "the status survives the 409"
     again = await decide(client, waiting["id"], "approve")
     assert again.status_code == 409 and "already superseded" in again.text
@@ -204,7 +204,9 @@ async def test_a_rollback_never_waits_and_saving_with_on_publish_stable_waits(cl
     await save(client, "reviewer", 4)
     waiting = (await agent_of(client))["pending_release"]
     assert waiting["version"] == 4, "a newer revision replaces the request of an older one"
-    listed = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()
+    listed = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()[
+        "items"
+    ]
     assert [r["version"] for r in listed] == [4]
 
 
@@ -229,15 +231,17 @@ async def test_the_inbox_lists_only_the_agents_the_caller_may_see(client: AsyncC
     for slug in ("reviewer", "dev-helper"):
         await save(client, slug, 2)
         assert (await release(client, slug, channel="stable", version=2)).status_code == 201
-    inbox = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()
+    inbox = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()["items"]
     assert {r["agent"] for r in inbox} == {"reviewer", "dev-helper"}
     await as_user(client, CAROL)
     await only_project_roles()
-    visible = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()
+    visible = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()[
+        "items"
+    ]
     assert [r["agent"] for r in visible] == ["reviewer"], "a member of ops does not see dev's agent"
     await as_user(client, "owner@northwind.dev")
     await only_project_roles()
-    owner = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()
+    owner = (await client.get(f"{ORG}/agent-releases", params={"status": "pending_approval"})).json()["items"]
     assert "dev-helper" in {r["agent"] for r in owner}
     hidden = await client.post(f"{ORG}/agents/dev-helper/releases/x/decision", json={"decision": "cancel"})
     assert hidden.status_code == 404
@@ -263,7 +267,7 @@ async def test_retiring_an_agent_cancels_its_waiting_request(client: AsyncClient
     waiting = await request_v2(client)
     retired = await client.post(f"{ORG}/agents/reviewer/lifecycle", json={"to": "retired"})
     assert retired.status_code == 200, retired.text
-    listed = (await client.get(f"{ORG}/agent-releases", params={"status": "cancelled"})).json()
+    listed = (await client.get(f"{ORG}/agent-releases", params={"status": "cancelled"})).json()["items"]
     assert [r["id"] for r in listed] == [waiting["id"]]
 
 

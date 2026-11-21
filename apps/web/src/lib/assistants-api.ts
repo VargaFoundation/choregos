@@ -22,6 +22,7 @@ import type {
   ConversationActionList,
   ConversationActionRefusal,
   ConversationCandidate,
+  ConversationCandidatePage,
   ConversationCandidateAccept,
   ConversationFeedback,
   ConversationFeedbackCreate,
@@ -310,8 +311,15 @@ export const assistantsApi = {
     }),
   deleteTeamsDelivery: (org: string, slug: string) =>
     request<void>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`, { method: "DELETE" }),
-  feedbackCandidates: (org: string, agent: string) =>
-    request<ConversationCandidate[]>(`/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates`),
+  feedbackCandidates: (org: string, agent: string, page: { cursor?: string; limit?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (page.cursor) search.set("cursor", page.cursor);
+    if (page.limit) search.set("limit", String(page.limit));
+    const text = search.toString();
+    return request<ConversationCandidatePage>(
+      `/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates${text ? `?${text}` : ""}`,
+    );
+  },
   acceptCandidate: (org: string, agent: string, id: string, body: ConversationCandidateAccept) =>
     request<ConversationCandidate>(
       `/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates/${enc(id)}/accept`,

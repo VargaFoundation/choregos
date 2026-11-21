@@ -6,17 +6,20 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from fastapi import Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from tranibor_adapters.storage import ObjectStoreError
 
 from ...audit import record
+from ...db.json_lists import has_tag
 from ...db.models import (
     Agent,
+    AgentRelease,
     AgentStar,
     AgentVersion,
 )
-from ...deps import Db, Me
+from ...deps import Db, Me, Pagination
 from ...errors import ApiError, conflict, forbidden, not_found, unprocessable, upstream
+from ...keyset import keyset_page
 from ...object_store import object_store
 from ...rbac import Permission
 from ...schemas import (
@@ -24,6 +27,7 @@ from ...schemas import (
     AgentDraft,
     AgentDraftRequest,
     AgentDto,
+    AgentPage,
     HostedSourceDto,
 )
 from ...services.agent_access import (
@@ -68,19 +72,26 @@ from ._common import _grants_bound, _model_allowed, _skills_usable
 from ._router import Slug, router
 
 
-@router.get("/orgs/{org}/agents", response_model=list[AgentDto], operation_id="listAgents")
-async def list_agents(
+@router.get("/orgs/{org}/agents", response_model=AgentPage, operation_id="listAgents")
+async def list_agents(  # noqa: PLR0913 - one parameter per console filter
     org: str,
     session: Db,
     principal: Me,
+    page: Pagination,
     scope: Annotated[Literal["platform", "org", "project", "personal"] | None, Query()] = None,
     project: Annotated[str | None, Query()] = None,
     tag: Annotated[list[str] | None, Query(description="every tag given (AND)")] = None,
     starred: Annotated[bool, Query(description="only the agents the caller has starred")] = False,
     sort: Annotated[Literal["name", "stars"], Query()] = "name",
-) -> list[AgentDto]:
-    """The agents the caller may see (ADR 0061), optionally of one scope or one project, and carrying
-    every tag given (S40-10; applied after visibility, so a tag never reveals an invisible agent)."""
+    retired: Annotated[bool, Query(description="include the retired agents")] = True,
+    awaiting_approval: Annotated[
+        bool, Query(description="only agents with a release awaiting approval")
+    ] = False,
+    q: Annotated[str | None, Query(max_length=200, description="a substring of the slug or the name")] = None,
+) -> AgentPage:
+    """The agents the caller may see (ADR 0061), one page at a time (ADR 0206): by name, or most starred
+    first with ties by name. Optionally of one scope or one project, matching `q`, and carrying every tag
+    given (S40-10; applied after visibility, so a tag never reveals an invisible agent)."""
     require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     agent_query = select(Agent).where(
@@ -97,14 +108,44 @@ async def list_agents(
         agent_query = agent_query.where(
             Agent.id.in_(select(AgentStar.agent_id).where(AgentStar.user_id == principal.user_id))
         )
-    agents = (await session.execute(agent_query.order_by(Agent.slug))).scalars()
-    wanted = set(tag or [])
-    dtos = [
-        await agent_dto(session, agent, principal, org) for agent in agents if wanted <= set(agent.tags or [])
-    ]
-    if sort == "stars":  # most starred first, ties by slug (the order the rows came in)
-        dtos.sort(key=lambda dto: -dto.social.stars)
-    return dtos
+    if not retired:
+        agent_query = agent_query.where(Agent.lifecycle != "retired")
+    if awaiting_approval:
+        agent_query = agent_query.where(
+            Agent.id.in_(select(AgentRelease.agent_id).where(AgentRelease.status == "pending_approval"))
+        )
+    if q and q.strip():
+        needle = q.strip()
+        agent_query = agent_query.where(
+            or_(
+                Agent.slug.icontains(needle, autoescape=True),
+                Agent.display_name.icontains(needle, autoescape=True),
+            )
+        )
+    for wanted_tag in tag or []:
+        agent_query = agent_query.where(has_tag(Agent.tags, wanted_tag))
+    if sort == "stars":
+        star_count = select(func.count(AgentStar.id)).where(AgentStar.agent_id == Agent.id).scalar_subquery()
+        starred_rows, meta = await keyset_page(
+            session,
+            agent_query.add_columns(star_count.label("star_count")),
+            sort=star_count,
+            tiebreak=Agent.slug,
+            page=page,
+            tiebreak_descending=False,
+        )
+        agents = [row.Agent for row in starred_rows]
+    else:
+        agents, meta = await keyset_page(
+            session,
+            agent_query,
+            sort=Agent.slug,
+            tiebreak=Agent.id,
+            page=page,
+            descending=False,
+            tiebreak_descending=False,
+        )
+    return AgentPage(items=[await agent_dto(session, agent, principal, org) for agent in agents], meta=meta)
 
 
 @router.post(

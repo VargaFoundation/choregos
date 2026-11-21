@@ -119,7 +119,7 @@ async def test_the_agent_catalogue_installing_a_skill_under_that_slug_is_refused
     assert refused.status_code == 422, refused.text
     _refused(refused.json(), "the catalogue entry `architect`", "library")
     assert await _skills() == before
-    assert "architect" not in {a["slug"] for a in (await client.get(f"{ORG}/agents")).json()}
+    assert "architect" not in {a["slug"] for a in (await client.get(f"{ORG}/agents")).json()["items"]}
 
 
 async def test_the_shared_install_path_refuses_before_writing_and_spares_an_existing_skill(

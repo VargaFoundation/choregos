@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ChannelBadges, RevisionChannels } from "@/components/agents/channels";
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate } from "@/lib/format";
+import { nextCursor } from "@/lib/paging";
 import { useSession } from "@/lib/session";
 import type {
   Agent,
@@ -137,18 +138,19 @@ export function LiveEvaluation({ org, agent, version }: { org: string; agent: Ag
   const spec = (agent.versions ?? []).find((v) => v.version === version)?.spec;
   const cases = (spec?.evals ?? []).filter((c) => c.live === true);
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org), enabled: cases.length > 0 });
+  // Newest first: the first page holds the latest evaluation and the running ones, which is all this card reads.
   const evaluations = useQuery({
     queryKey: ["agent-evaluations", org, agent.slug, version],
-    queryFn: () => api.agentEvaluations(org, agent.slug, version),
+    queryFn: () => api.agentEvaluations(org, agent.slug, version, { limit: 50 }),
     enabled: cases.length > 0,
-    refetchInterval: (query) => ((query.state.data ?? []).some((e) => e.status === "running") ? 5000 : false),
+    refetchInterval: (query) => ((query.state.data?.items ?? []).some((e) => e.status === "running") ? 5000 : false),
   });
   const [project, setProject] = useState("");
   const [error, setError] = useState<string | null>(null);
   if (cases.length === 0) return null;
   const chosen = project || (projects.data?.items ?? [])[0]?.slug || "";
   const estimate = cases.reduce((total, c) => total + Math.min(0.5, c.max_cost_usd ?? 0.25), 0);
-  const latest = (evaluations.data ?? [])[0];
+  const latest = (evaluations.data?.items ?? [])[0];
   const locked = agent.can?.release === false;
   async function start() {
     setError(null);
@@ -820,7 +822,13 @@ export function ReleaseHistory({ history }: { history: AgentRelease[] }) {
 
 /** The Lifecycle tab: the pipeline, a waiting approval, the history, the policy, and `children` (the agent's own status). */
 export function LifecycleTab({ org, agent, children }: { org: string; agent: Agent; children?: ReactNode }) {
-  const history = useQuery({ queryKey: ["agent-releases", org, agent.slug], queryFn: () => api.agentReleases(org, agent.slug) });
+  const releases = useInfiniteQuery({
+    queryKey: ["agent-releases", org, agent.slug],
+    queryFn: ({ pageParam }) => api.agentReleases(org, agent.slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: nextCursor,
+  });
+  const loaded = releases.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -834,13 +842,18 @@ export function LifecycleTab({ org, agent, children }: { org: string; agent: Age
           {agent.cannot_reason ?? "You may not release this agent."}
         </Alert>
       )}
-      {history.error ? (
-        <ErrorNote>{String(history.error)}</ErrorNote>
+      {releases.error ? (
+        <ErrorNote>{String(releases.error)}</ErrorNote>
       ) : (
-        <ReleasePipeline org={org} agent={agent} history={history.data ?? []} />
+        <ReleasePipeline org={org} agent={agent} history={loaded} />
       )}
       <PendingRelease org={org} agent={agent} />
-      <ReleaseHistory history={history.data ?? []} />
+      <ReleaseHistory history={loaded} />
+      {releases.hasNextPage && (
+        <Button size="sm" onClick={() => void releases.fetchNextPage()} disabled={releases.isFetchingNextPage}>
+          More
+        </Button>
+      )}
       <ReleasePolicyForm key={JSON.stringify(agent.release_policy)} org={org} agent={agent} />
       {children}
     </div>

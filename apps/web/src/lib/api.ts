@@ -67,7 +67,6 @@ import type {
   ProjectAgentChannel,
   AgentTrial,
   AgentTrialCreate,
-  AgentMetricsSummary,
   AgentResolution,
   BuiltinAgent,
   GroupMembers,
@@ -272,6 +271,12 @@ import type {
   ConversationAction,
   ConversationActionList,
   RunContext,
+  AgentPage,
+  AgentMetricsSummaryPage,
+  AgentRunPage,
+  AgentCredentialPage,
+  AgentReleasePage,
+  AgentEvaluationPage,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -497,8 +502,10 @@ async function cliManifest(): Promise<CliManifest | null> {
 /** What a paged list takes (ADR 0206): the server filters on `q`, `cursor` is the one the last page gave. */
 export type PageParams = { q?: string; cursor?: string; limit?: number };
 
-const pageQuery = (params: PageParams): string =>
-  query(compact({ q: params.q, cursor: params.cursor, limit: params.limit?.toString() }));
+/** The query string of a paged list: its paging, its `q`, and the route's own filters in `extra`. */
+function pageQuery(page: PageParams, extra: Record<string, string | undefined> = {}): string {
+  return query(compact({ ...extra, q: page.q, cursor: page.cursor, limit: page.limit?.toString() }));
+}
 
 /**
  * Every row of a paged list, by following `next_cursor` to the end. For the screens that need the whole
@@ -644,7 +651,12 @@ export const api = {
   addMember: (org: string, body: MembershipUpsert) =>
     request<Membership>(`/orgs/${org}/members`, { method: "POST", body: JSON.stringify(body) }),
   /** The organisation's agent registry (ADR 0033): a version is never modified. */
-  agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
+  agentsPage: (org: string, params: AgentsParams = {}) =>
+    request<AgentPage>(
+      `/orgs/${org}/agents${agentsQuery(params)}`,
+    ),
+  /** The first page of the registry, by name: for a picker or a lookup, narrowed by `q` on the server (ADR 0206). */
+  agents: async (org: string, q?: string) => (await api.agentsPage(org, { q, limit: 200 })).items,
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
   createAgent: (org: string, body: AgentCreate, allowEgress = false) =>
     request<Agent>(`/orgs/${org}/agents${allowEgress ? "?allow_egress=true" : ""}`, {
@@ -707,8 +719,8 @@ export const api = {
   /** Channels (S40-02, ADR 0071): point production or testing at a revision; the history, the checklist. */
   releaseAgentVersion: (org: string, slug: string, body: AgentReleaseCreate) =>
     request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases`, { method: "POST", body: JSON.stringify(body) }),
-  agentReleases: (org: string, slug: string, limit = 50) =>
-    request<AgentRelease[]>(`/orgs/${org}/agents/${slug}/releases?limit=${limit}`),
+  agentReleases: (org: string, slug: string, page: PageParams = {}) =>
+    request<AgentReleasePage>(`/orgs/${org}/agents/${slug}/releases${pageQuery(page)}`),
   agentReleaseReadiness: (org: string, slug: string, version: number, channel: "stable" | "candidate") =>
     request<AgentReleaseReadiness>(`/orgs/${org}/agents/${slug}/versions/${version}/readiness?channel=${channel}`),
   setAgentReleasePolicy: (org: string, slug: string, body: AgentReleasePolicy) =>
@@ -719,14 +731,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ project }),
     }),
-  agentEvaluations: (org: string, slug: string, version: number) =>
-    request<AgentEvaluation[]>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`),
+  agentEvaluations: (org: string, slug: string, version: number, page: PageParams = {}) =>
+    request<AgentEvaluationPage>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations${pageQuery(page)}`),
   agentExposure: (org: string, slug: string) => request<AgentExposure>(`/orgs/${org}/agents/${slug}/exposure`),
   decideAgentRelease: (org: string, slug: string, id: string, body: AgentReleaseDecision) =>
     request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
   /** The approvers' inbox: releases of the agents one may see, by status. */
-  orgAgentReleases: (org: string, status?: AgentRelease["status"]) =>
-    request<AgentRelease[]>(`/orgs/${org}/agent-releases${status ? `?status=${status}` : ""}`),
+  orgAgentReleases: (org: string, status?: AgentRelease["status"], page: PageParams = {}) =>
+    request<AgentReleasePage>(`/orgs/${org}/agent-releases${pageQuery(page, { status })}`),
   projectAgentChannel: (id: string) => request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`),
   setProjectAgentChannel: (id: string, channel: ProjectAgentChannel["channel"]) =>
     request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`, { method: "PUT", body: JSON.stringify({ channel }) }),
@@ -762,9 +774,11 @@ export const api = {
       body: JSON.stringify({ read_only: readOnly }),
     }),
   /** Every client attached to an agent of the organisation, with its agent: one request (S30-04). */
-  orgAgentCredentials: (org: string) => request<AgentCredential[]>(`/orgs/${org}/agent-credentials`),
+  orgAgentCredentials: (org: string, page: PageParams = {}) =>
+    request<AgentCredentialPage>(`/orgs/${org}/agent-credentials${pageQuery(page)}`),
   /** The registry's columns — runs, success rate, cost — for every agent at once (S30-04). */
-  agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
+  agentMetricsList: (org: string, days = 30, page: PageParams = {}) =>
+    request<AgentMetricsSummaryPage>(`/orgs/${org}/agent-metrics${pageQuery(page, { days: String(days) })}`),
   /** A project's implicit agents, computed by the API (S30-04). */
   implicitAgentsPage: (id: string, params: PageParams = {}) =>
     request<ImplicitAgentPage>(`/projects/${qualify(id)}/implicit-agents${pageQuery(params)}`),
@@ -806,15 +820,16 @@ export const api = {
   startAgentTrial: (org: string, body: AgentTrialCreate) =>
     request<AgentTrial>(`/orgs/${org}/agent-trials`, { method: "POST", body: JSON.stringify(body) }),
   /** An agent's latest runs (S30-05). */
-  agentRuns: (org: string, slug: string, limit = 50) => request<Run[]>(`/orgs/${org}/agents/${slug}/runs?limit=${limit}`),
+  agentRuns: (org: string, slug: string, page: PageParams = {}) =>
+    request<AgentRunPage>(`/orgs/${org}/agents/${slug}/runs${pageQuery(page)}`),
   /** What a version of the agent reaches in one project, the five components of its definition (ADR 0127). */
   agentAccess: (org: string, slug: string, project: string, version?: number) => {
     const query = new URLSearchParams({ project });
     if (version != null) query.set("version", String(version));
     return request<AgentAccess>(`/orgs/${org}/agents/${slug}/access?${query}`);
   },
-  agentCredentials: (org: string, slug: string) =>
-    request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
+  agentCredentials: (org: string, slug: string, page: PageParams = {}) =>
+    request<AgentCredentialPage>(`/orgs/${org}/agents/${slug}/credentials${pageQuery(page)}`),
   attachAgentToken: (org: string, slug: string, tokenId: string) =>
     request<AgentCredential>(`/orgs/${org}/agents/${slug}/credentials`, {
       method: "POST",
@@ -1703,6 +1718,28 @@ async function allWorkItems(
     hasMore = page.meta.has_more;
   } while (hasMore && cursor && items.length < cap);
   return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
+}
+
+
+export type AgentsParams = PageParams & {
+  q?: string;
+  scope?: "platform" | "org" | "project" | "personal";
+  project?: string;
+  tag?: readonly string[];
+  starred?: boolean;
+  sort?: "name" | "stars";
+  retired?: boolean;
+  awaiting_approval?: boolean;
+};
+
+function agentsQuery(params: AgentsParams): string {
+  const search = new URLSearchParams(compact({ q: params.q, scope: params.scope, project: params.project, sort: params.sort, cursor: params.cursor, limit: params.limit?.toString() }));
+  for (const tag of params.tag ?? []) search.append("tag", tag);
+  if (params.starred) search.set("starred", "true");
+  if (params.retired === false) search.set("retired", "false");
+  if (params.awaiting_approval) search.set("awaiting_approval", "true");
+  const text = search.toString();
+  return text ? `?${text}` : "";
 }
 
 function query(params?: Record<string, string>): string {

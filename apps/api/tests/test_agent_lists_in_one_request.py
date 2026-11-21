@@ -34,7 +34,7 @@ async def test_the_organisation_s_agent_clients_come_in_one_list_with_their_agen
         assert attached.status_code == 201, attached.text
     listing = await client.get("/api/v1/orgs/northwind/agent-credentials")
     assert listing.status_code == 200, listing.text
-    assert [(c["agent"], c["token_name"]) for c in listing.json()] == [
+    assert [(c["agent"], c["token_name"]) for c in listing.json()["items"]] == [
         ("claude-of-lea", "claude-of-lea"),
         ("cursor-of-marc", "cursor-of-marc"),
     ]
@@ -67,7 +67,7 @@ async def test_the_registry_s_metrics_come_in_one_list(client: AsyncClient, proj
         session.add(
             CostLedger(project_id=project["id"], run_id="run-m0", kind="model", cost_usd=0.5, ts=utcnow())
         )
-    rows = {m["agent"]: m for m in (await client.get("/api/v1/orgs/northwind/agent-metrics")).json()}
+    rows = {m["agent"]: m for m in (await client.get("/api/v1/orgs/northwind/agent-metrics")).json()["items"]}
     assert rows["writer"]["runs"] == 3
     assert rows["writer"]["success_rate"] == pytest.approx(0.5), "a running run is not finished"
     assert rows["writer"]["cost_usd"] == pytest.approx(0.5)

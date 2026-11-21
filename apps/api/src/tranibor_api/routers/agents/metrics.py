@@ -12,15 +12,17 @@ from tranibor_core import utcnow
 from ...db.models import (
     Agent,
 )
-from ...deps import Db, Me
+from ...deps import Db, Me, Pagination
+from ...keyset import keyset_page
 from ...rbac import Permission
 from ...schemas import (
     AgentMetrics,
     AgentMetricsSummary,
+    AgentMetricsSummaryPage,
     AgentProjectMetrics,
+    AgentRunPage,
     AgentSpec,
     AgentVersionMetrics,
-    RunDto,
 )
 from ...services.agent_access import (
     load_visible_agent,
@@ -128,13 +130,17 @@ async def agent_metrics(
 
 
 @router.get(
-    "/orgs/{org}/agent-metrics", response_model=list[AgentMetricsSummary], operation_id="listAgentMetrics"
+    "/orgs/{org}/agent-metrics", response_model=AgentMetricsSummaryPage, operation_id="listAgentMetrics"
 )
 async def list_agent_metrics(
-    org: str, session: Db, principal: Me, days: Annotated[int, Query(ge=1, le=365)] = 30
-) -> list[AgentMetricsSummary]:
-    """The registry's columns for every agent at once (S30-04): runs, success rate, cost — two
-    grouped queries instead of one call per agent."""
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+) -> AgentMetricsSummaryPage:
+    """The registry's columns for the agents of one page (S30-04, ADR 0206), by name: runs, success rate,
+    cost — two grouped queries over the page's agents instead of one call per agent."""
     from datetime import timedelta
 
     from ...db.models import CostLedger, Project, Run
@@ -142,17 +148,18 @@ async def list_agent_metrics(
     require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     window_start = utcnow() - timedelta(days=days)
-    slugs = list(
-        (
-            await session.execute(
-                select(Agent.slug)
-                .where(
-                    Agent.org_id == organisation.id, await visible_clause(session, principal, organisation)
-                )
-                .order_by(Agent.slug)
-            )
-        ).scalars()
+    agents, meta = await keyset_page(
+        session,
+        select(Agent).where(
+            Agent.org_id == organisation.id, await visible_clause(session, principal, organisation)
+        ),
+        sort=Agent.slug,
+        tiebreak=Agent.id,
+        page=page,
+        descending=False,
+        tiebreak_descending=False,
     )
+    slugs = [agent.slug for agent in agents]
     runs = (
         await session.execute(
             select(Run.agent_slug, Run.status, func.count())
@@ -185,41 +192,49 @@ async def list_agent_metrics(
         if run_status == "succeeded":
             succeeded_count[agent_key] = succeeded_count.get(agent_key, 0) + int(run_count)
     cost_by_agent = {str(slug_read): float(amount_usd or 0.0) for slug_read, amount_usd in cost_rows}
-    return [
-        AgentMetricsSummary(
-            agent=slug,
-            days=days,
-            runs=total.get(slug, 0),
-            success_rate=round(succeeded_count.get(slug, 0) / finished_count[slug], 4)
-            if finished_count.get(slug)
-            else None,
-            cost_usd=round(cost_by_agent.get(slug, 0.0), 6),
-        )
-        for slug in slugs
-    ]
+    return AgentMetricsSummaryPage(
+        items=[
+            AgentMetricsSummary(
+                agent=slug,
+                days=days,
+                runs=total.get(slug, 0),
+                success_rate=round(succeeded_count.get(slug, 0) / finished_count[slug], 4)
+                if finished_count.get(slug)
+                else None,
+                cost_usd=round(cost_by_agent.get(slug, 0.0), 6),
+            )
+            for slug in slugs
+        ],
+        meta=meta,
+    )
 
 
-@router.get("/orgs/{org}/agents/{slug}/runs", response_model=list[RunDto], operation_id="listAgentRuns")
-async def list_agent_runs(
-    org: str, slug: Slug, session: Db, principal: Me, limit: Annotated[int, Query(ge=1, le=200)] = 50
-) -> list[RunDto]:
-    """The agent's latest runs (S30-05): its page lists them in a tab, newest first, from the
-    projects the caller may read only."""
+@router.get("/orgs/{org}/agents/{slug}/runs", response_model=AgentRunPage, operation_id="listAgentRuns")
+async def list_agent_runs(org: str, slug: Slug, session: Db, principal: Me, page: Pagination) -> AgentRunPage:
+    """The agent's runs (S30-05), newest first, one page at a time (ADR 0206): its page lists them in a
+    tab, from the projects the caller may read only — decided in the query, so a page is never thinned
+    afterwards."""
     from ...db.models import Project, Run
     from ...services.tickets import run_dto
 
     organisation, _, _ = await load_visible_agent(session, principal, org, slug)
-    db_rows = (
-        await session.execute(
-            select(Run, Project.slug)
-            .join(Project, Project.id == Run.project_id)
-            .where(Run.agent_slug == slug, Project.org_id == organisation.id)
-            .order_by(Run.created_at.desc())
-            .limit(limit)
-        )
-    ).all()
-    return [
-        run_dto(run, project_key)
-        for run, project_key in db_rows
-        if principal.can(Permission.PROJECT_READ, org, project_key)
-    ]
+    query = (
+        select(Run, Project.slug)
+        .join(Project, Project.id == Run.project_id)
+        .where(Run.agent_slug == slug, Project.org_id == organisation.id)
+    )
+    if not principal.can(Permission.PROJECT_READ, org):  # an organisation role reads every project
+        readable = [
+            key.split("/", 1)[1]
+            for key in principal.project_roles
+            if key.startswith(f"{org}/") and principal.can(Permission.PROJECT_READ, org, key.split("/", 1)[1])
+        ]
+        query = query.where(Project.slug.in_(readable))
+    db_rows, meta = await keyset_page(
+        session,
+        query,
+        sort=Run.created_at,
+        tiebreak=Run.id,
+        page=page,
+    )
+    return AgentRunPage(items=[run_dto(run, project_key) for run, project_key in db_rows], meta=meta)
