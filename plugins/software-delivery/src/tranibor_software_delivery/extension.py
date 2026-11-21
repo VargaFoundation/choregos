@@ -8,7 +8,9 @@ platform's processes, registered through the core's seams when the API and the w
   `ci_green`, `review_approved`, `scans_ok`, `provenance_signed`, `already_fixed_proven`), under the
   names stored workflows carry (`gates.py`);
 - the context provider `delivery` their facts come from, and its `judged` hook (`facts.py`);
-- the step effects `open_pr` and `merge_pr` of `does:` (`effects.py`).
+- the step effects `open_pr` and `merge_pr` of `does:` (`effects.py`);
+- the `scm.*`, `ci.*` and `cd.*` inbound event types, four finding types and two memory kinds, in the
+  contracts' open lists (`lists.py`).
 
 `register` is idempotent: the API loads the extensions twice (through the worker it imports, then in
 `create_app`).
@@ -21,6 +23,7 @@ from tranibor_core.gates import context_provider
 from .effects import register_effects
 from .facts import judged, read_delivery_facts
 from .gates import PROVIDER, register_gates
+from .lists import declare_values
 from .names import NAME
 
 
@@ -29,3 +32,4 @@ def register() -> None:
     context_provider(PROVIDER, plugin=NAME, judged=judged)(read_delivery_facts)
     register_gates()
     register_effects()
+    declare_values()
