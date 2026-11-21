@@ -113,6 +113,13 @@ class WorkflowSummaryPage(Dto):
     meta: PageMeta
 
 
+class WorkflowCatalogueEntryPage(Dto):
+    """One page of the workflows an organisation can adopt, in the order of the sources (ADR 0206)."""
+
+    items: list[WorkflowCatalogueEntryDto]
+    meta: PageMeta
+
+
 class WorkflowDefPage(Dto):
     """One page of a workflow's versions, newest first (ADR 0206)."""
 
@@ -453,6 +460,20 @@ class UsableModel(Dto):
     output_cost_per_1k: float | None = None
     priced_by: Literal["gateway", "override", "none"] = "none"
     tiers: list[str] = Field(default_factory=list)
+
+
+class GatewayModelPage(Dto):
+    """One page of the gateway's models, in the order it lists them (ADR 0206)."""
+
+    items: list[GatewayModelDto]
+    meta: PageMeta
+
+
+class UsableModelPage(Dto):
+    """One page of the models an agent may be given, by name (ADR 0206)."""
+
+    items: list[UsableModel]
+    meta: PageMeta
 
 
 class StateActivity(Dto):

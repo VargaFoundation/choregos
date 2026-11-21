@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useState } from "react";
@@ -9,7 +9,6 @@ import { Badge, Button, Card, Empty, ErrorNote, ReadState, Field, Heading, Input
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 import {
-  filterEntries,
   readinessPreview,
   RESOLUTION_TEXT,
   sourceLabel,
@@ -31,18 +30,29 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
   const { slug } = use(params);
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const org = project.data?.org;
-  const catalogue = useQuery({
-    queryKey: ["workflow-catalogue", org],
-    queryFn: () => api.workflowCatalogue(org!),
-    enabled: !!org,
-  });
   const connectors = useQuery({ queryKey: ["connectors", slug], queryFn: () => api.connectors(slug) });
   const hasRepository = !!project.data?.config?.repo?.url;
   const [query, setQuery] = useState("");
   const [repository, setRepository] = useState<RepositoryFilter | null>(null);
   // Without a repository, the catalogue opens on what such a project can run (ADR 0110).
   const filter: RepositoryFilter = repository ?? (project.data && !hasRepository ? "without" : "any");
-  const shown = filterEntries(catalogue.data ?? [], query, filter);
+  // The server searches and filters (ADR 0206): the text and the repository filter go to the query, "More" asks
+  // for the next page. Nothing is filtered in the browser over a partial list.
+  const search = query.trim();
+  const catalogue = useInfiniteQuery({
+    queryKey: ["workflow-catalogue", org, search, filter],
+    queryFn: ({ pageParam }) =>
+      api.workflowCataloguePage(org!, {
+        q: search || undefined,
+        needsWorkspace: filter === "any" ? undefined : filter === "with",
+        cursor: pageParam,
+        limit: 50,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+    enabled: !!org && (!!repository || !!project.data),
+  });
+  const shown = catalogue.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
     <div className="space-y-6">
@@ -86,6 +96,13 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
           </li>
         ))}
       </ul>
+      {catalogue.hasNextPage && (
+        <div className="mt-3">
+          <Button size="sm" disabled={catalogue.isFetchingNextPage} onClick={() => void catalogue.fetchNextPage()}>
+            {catalogue.isFetchingNextPage ? "Reading…" : "More"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

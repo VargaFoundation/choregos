@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Query
 from sqlalchemy import select
 from tranibor_contracts import ProjectConfig
 from tranibor_core import ModelResolver
@@ -11,11 +13,13 @@ from tranibor_core.models import PLATFORM_PROFILES
 
 from ..audit import record
 from ..db.models import ModelProfileRow, Project
-from ..deps import Db, ProjectCtx
+from ..deps import Db, Pagination, ProjectCtx
 from ..errors import unprocessable
+from ..keyset import matches, position_page
 from ..rbac import Permission
 from ..schemas import (
     GatewayModelDto,
+    GatewayModelPage,
     ModelMatrix,
     ModelMatrixEntry,
     ProjectModelProfile,
@@ -35,9 +39,18 @@ async def _gateway_models() -> list[GatewayModelDto]:
     return [GatewayModelDto.model_validate(m.model_dump()) for m in models]
 
 
-@router.get("/platform/models", response_model=list[GatewayModelDto], operation_id="listPlatformModels")
-async def platform_models() -> list[GatewayModelDto]:
-    return await _gateway_models()
+@router.get("/platform/models", response_model=GatewayModelPage, operation_id="listPlatformModels")
+async def platform_models(
+    page: Pagination, q: Annotated[str | None, Query(max_length=200)] = None
+) -> GatewayModelPage:
+    """The gateway's models, in the order it lists them, one page at a time (ADR 0206).
+
+    The gateway has no paging of its own: its list is read whole, filtered on `q` (name, upstream model or
+    provider) and cut by position.
+    """
+    listed = [m for m in await _gateway_models() if matches(q, m.model_name, m.litellm_model, m.provider)]
+    items, meta = position_page(listed, page)
+    return GatewayModelPage(items=items, meta=meta)
 
 
 @router.get("/projects/{id}/models", response_model=ProjectModels, operation_id="getProjectModels")

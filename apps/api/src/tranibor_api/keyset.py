@@ -12,6 +12,10 @@ whether another page follows, with no `COUNT(*)`.
 `position_page` is the same contract over a list that is not a table: a snapshot a row already holds (the
 skills, inputs or knowledge bases a run's `StageInput` names), cut by position.
 
+A list that is not a SQL table (the project's configuration, the gateway, a catalogue merged from several
+sources and cut by policy) is built whole, in the order it has always had, then filtered with `matches`
+and cut with `position_page`: the cost is the build, the payload is one page.
+
 `Page.slice` (`deps.py`) is what this replaces: it loaded up to a fixed cap in memory and cut it in Python,
 so whatever lay beyond the cap was unreachable and every page paid for the whole read.
 """
@@ -213,3 +217,10 @@ def position_page[T](items: Sequence[T], page: Page) -> tuple[list[T], PageMeta]
     return window, PageMeta(
         next_cursor=encode_cursor(start + page.limit) if has_more else None, has_more=has_more
     )
+
+
+def matches(q: str | None, *texts: str | None) -> bool:
+    """The `q` filter of a list built in Python: no `q` keeps everything, else a row stays when any of its
+    texts holds `q` as a substring, whatever the case (the same rule `ILIKE '%q%'` gives in SQL)."""
+    needle = (q or "").strip().lower()
+    return not needle or any(needle in text.lower() for text in texts if text)

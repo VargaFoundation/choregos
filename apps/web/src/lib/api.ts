@@ -194,6 +194,11 @@ import type {
   ApiTokenPage,
   BrowserSessionPage,
   ImplicitAgentPage,
+  AgentCatalogueEntryPage,
+  GatewayModelPage,
+  TriggerPage,
+  UsableModelPage,
+  WorkflowCatalogueEntryPage,
   MachineAccountPage,
   ProjectAgentPage,
   WorkflowAgentPage,
@@ -766,7 +771,12 @@ export const api = {
       body: JSON.stringify({ card_url: cardUrl }),
     }),
   /** The platform's catalogue (ADR 0040): what it offers, what is installed from it. */
-  agentCatalogue: (org: string) => request<AgentCatalogueEntry[]>(`/orgs/${org}/agent-catalogue`),
+  /** One page of the platform's agent catalogue (ADR 0206): `kind` and `q` are the server's filters. */
+  agentCataloguePage: (org: string, params: PageParams & { kind?: AgentCatalogueEntry["kind"] } = {}) =>
+    request<AgentCatalogueEntryPage>(`/orgs/${org}/agent-catalogue${pageQuery(params, { kind: params.kind })}`),
+  /** All of one kind, page after page (the picker and the connect list need the whole set). */
+  agentCatalogue: (org: string, kind?: AgentCatalogueEntry["kind"]): Promise<AgentCatalogueEntry[]> =>
+    everyRow((cursor) => api.agentCataloguePage(org, { kind, cursor, limit: 200 })),
   installCatalogueAgent: (org: string, slug: string, upgrade = false) =>
     request<Agent>(`/orgs/${org}/agent-catalogue/${slug}/install`, {
       method: "POST",
@@ -1005,16 +1015,16 @@ export const api = {
   endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),
   connectorTypes: () => request<ConnectorType[]>("/connectors/types"),
-  platformModels: () => request<GatewayModel[]>("/platform/models"),
+  platformModelsPage: (params: PageParams = {}) => request<GatewayModelPage>(`/platform/models${pageQuery(params)}`),
+  platformModels: (): Promise<GatewayModel[]> =>
+    everyRow((cursor) => api.platformModelsPage({ cursor, limit: 200 })),
   /** The organisation's model catalogue and what an agent may use of it (ADR 0060). */
   modelCatalogue: (org: string) => request<ModelCatalogue>(`/orgs/${org}/models`),
-  usableModels: (org: string, query: { role?: string; usage?: string } = {}) => {
-    const params = new URLSearchParams();
-    if (query.role) params.set("role", query.role);
-    if (query.usage) params.set("usage", query.usage);
-    const suffix = params.toString();
-    return request<UsableModel[]>(`/orgs/${org}/models/usable${suffix ? `?${suffix}` : ""}`);
-  },
+  usableModelsPage: (org: string, params: PageParams & { role?: string; usage?: string } = {}) =>
+    request<UsableModelPage>(`/orgs/${org}/models/usable${pageQuery(params, { role: params.role, usage: params.usage })}`),
+  /** Every model the agent may be given for a role and usage: a picker needs the whole set. */
+  usableModels: (org: string, query: { role?: string; usage?: string } = {}): Promise<UsableModel[]> =>
+    everyRow((cursor) => api.usableModelsPage(org, { ...query, cursor, limit: 200 })),
   putModelCatalogueSettings: (org: string, body: ModelCatalogueSettings) =>
     request<ModelCatalogueSettings>(`/orgs/${org}/models/settings`, { method: "PUT", body: JSON.stringify(body) }),
   syncModelCatalogue: (org: string) => request<ModelSyncResult>(`/orgs/${org}/models/sync`, { method: "POST" }),
@@ -1373,7 +1383,13 @@ export const api = {
     request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
   /** What the organisation can adopt, with what each needs and where its agents resolve (ADR 0111). */
-  workflowCatalogue: (org: string) => request<WorkflowCatalogueEntry[]>(`/orgs/${org}/workflow-catalogue`),
+  /** One page of the workflow library (ADR 0206): the server searches (`q`) and keeps the ones that need a workspace. */
+  workflowCataloguePage: (org: string, params: PageParams & { needsWorkspace?: boolean } = {}) =>
+    request<WorkflowCatalogueEntryPage>(
+      `/orgs/${org}/workflow-catalogue${pageQuery(params, { needs_workspace: params.needsWorkspace?.toString() })}`,
+    ),
+  workflowCatalogue: (org: string): Promise<WorkflowCatalogueEntry[]> =>
+    everyRow((cursor) => api.workflowCataloguePage(org, { cursor, limit: 200 })),
   /** Copies a catalogue entry into the project; an unresolved agent is a 422, a taken name a 409. */
   adoptWorkflow: (id: string, body: WorkflowAdopt) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflow-adoptions`, { method: "POST", body: JSON.stringify(body) }),
@@ -1455,7 +1471,9 @@ export const api = {
       method: "DELETE",
     }),
   /** The project's HTTP triggers (S56-01, ADR 0113): URL, workflow, whether a token exists. */
-  triggers: (id: string) => request<Trigger[]>(`/projects/${qualify(id)}/triggers`),
+  triggersPage: (id: string, params: PageParams = {}) =>
+    request<TriggerPage>(`/projects/${qualify(id)}/triggers${pageQuery(params)}`),
+  triggers: (id: string): Promise<Trigger[]> => everyRow((cursor) => api.triggersPage(id, { cursor, limit: 200 })),
   /** Mints a trigger's token and signing secret, shown once; the previous ones stop working. */
   rotateTriggerToken: (id: string, name: string) =>
     request<TriggerToken>(`/projects/${qualify(id)}/triggers/${encodeURIComponent(name)}/token`, { method: "POST" }),

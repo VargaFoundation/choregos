@@ -8,16 +8,24 @@ and never a plugin: an agent that resolves nowhere refuses the adoption and says
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Organization, OrgWorkflow, Project, WorkflowDef
-from ..deps import Db, Me, ProjectCtx, resolve_project
+from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
-from ..schemas.definitions import WorkflowAdopt, WorkflowCatalogueEntryDto, WorkflowDefDto, WorkflowShare
+from ..schemas.definitions import (
+    WorkflowAdopt,
+    WorkflowCatalogueEntryDto,
+    WorkflowCatalogueEntryPage,
+    WorkflowDefDto,
+    WorkflowShare,
+)
 from ..services.agent_governance import is_admin, is_member
 from ..services.definitions import active_workflow_named, publish_workflow
 from ..services.organisations import organisation_by_slug
@@ -39,15 +47,26 @@ router = APIRouter(tags=["workflows"])
 
 @router.get(
     "/orgs/{org}/workflow-catalogue",
-    response_model=list[WorkflowCatalogueEntryDto],
+    response_model=WorkflowCatalogueEntryPage,
     operation_id="listWorkflowCatalogue",
 )
-async def list_workflow_catalogue(org: str, session: Db, principal: Me) -> list[WorkflowCatalogueEntryDto]:
+async def list_workflow_catalogue(
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    needs_workspace: Annotated[bool | None, Query()] = None,
+) -> WorkflowCatalogueEntryPage:
+    """One page of what the organisation can adopt, in the order of the sources (ADR 0206): `q` reads the
+    name, title, summary, source and tags; `needs_workspace` keeps the workflows that do (or do not)
+    need a workspace."""
     # The right first: under RLS a non-member does not see the organisation, and would get a 404.
     if not is_member(principal, org):
         raise forbidden(f"reading the workflow catalogue of {org} requires being a member of it")
     organisation = await organisation_by_slug(session, org)
-    return await entries(session, organisation.id)
+    items, meta = await entries(session, organisation.id, page, q=q, needs_workspace=needs_workspace)
+    return WorkflowCatalogueEntryPage(items=items, meta=meta)
 
 
 async def _adopted_from_same_entry(

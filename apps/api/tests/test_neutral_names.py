@@ -140,8 +140,7 @@ def test_the_dtos_fill_each_name_from_the_other() -> None:
 async def test_the_catalogue_and_the_process_view_carry_both_names(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    entries = (await client.get("/api/v1/orgs/northwind/workflow-catalogue")).json()
-    entries = entries["items"] if isinstance(entries, dict) else entries
+    entries = (await client.get("/api/v1/orgs/northwind/workflow-catalogue?limit=200")).json()["items"]
     assert entries, "the catalogue lists the shipped workflows"
     assert all(e["needs_workspace"] == e["needs_repository"] for e in entries)
     assert any(e["needs_workspace"] for e in entries) and not all(e["needs_workspace"] for e in entries)

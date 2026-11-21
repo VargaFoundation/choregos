@@ -134,7 +134,11 @@ async def test_a_fork_copies_the_tags(client: AsyncClient, org: str) -> None:
 
 async def test_the_catalogue_installs_the_architect_with_its_tags(client: AsyncClient, org: str) -> None:
     await as_user(client, ADMIN)
-    entry = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "architect")
+    entry = next(
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "architect"
+    )
     assert entry["tags"] == ["madr", "architecture", "design"]
     installed = await client.post(f"{ORG}/agent-catalogue/architect/install")
     assert installed.status_code == 201, installed.text

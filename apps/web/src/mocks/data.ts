@@ -2204,8 +2204,22 @@ export const modelCatalogue: ModelCatalogue = {
   })),
 };
 
-/** What an agent may be given: the enabled entries, for the role and usage asked. */
-export function usableModelsOf(path: string): UsableModel[] {
+/** The rows whose text holds the query's `q`, as the server's `matches` reads it (ADR 0206). */
+function searched<T>(rows: readonly T[], path: string, texts: (row: T) => (string | null | undefined)[]): T[] {
+  const needle = (new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").trim().toLowerCase();
+  if (!needle) return [...rows];
+  return rows.filter((row) => texts(row).some((text) => !!text && text.toLowerCase().includes(needle)));
+}
+
+/** What an agent may be given: the enabled entries, for the role and usage asked, searched and paged. */
+export function usableModelsOf(path: string) {
+  return pageOf(
+    searched(usableModelsAll(path), path, (m) => [m.model_name, m.display_name, m.provider]),
+    path.split("?")[1] ?? "",
+  );
+}
+
+function usableModelsAll(path: string): UsableModel[] {
   const query = new URLSearchParams(path.split("?")[1] ?? "");
   const role = query.get("role");
   const usage = query.get("usage") ?? "agent";
@@ -4674,7 +4688,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
     [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
-    [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
+    [
+      /^\/orgs\/[^/]+\/agent-catalogue$/,
+      pageOf(
+        searched(
+          agentCatalogue.filter((e) => {
+            const kind = new URLSearchParams(path.split("?")[1] ?? "").get("kind");
+            return !kind || e.kind === kind;
+          }),
+          path,
+          (e) => [e.slug, e.display_name, e.role, e.summary, ...(e.tags ?? [])],
+        ),
+        path.split("?")[1] ?? "",
+      ),
+    ],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
     [/^\/projects\/[^/]+\/agents$/, mockPage(projectAgents, path, (pin) => pin.agent)],
     [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
@@ -4694,7 +4721,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
     [/^\/orgs\/[^/]+\/connector-catalogue$/, connectorCatalogue()],
-    [/^\/platform\/models$/, platformModels],
+    [
+      /^\/platform\/models$/,
+      pageOf(searched(platformModels, path, (m) => [m.model_name, m.litellm_model, m.provider]), path.split("?")[1] ?? ""),
+    ],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
     [
@@ -4765,9 +4795,25 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/machine-accounts$/, mockPage(mockMachineAccounts, path, (a) => a.slug)],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
-    [/^\/projects\/[^/]+\/triggers$/, mockTriggers],
+    [
+      /^\/projects\/[^/]+\/triggers$/,
+      pageOf(searched(mockTriggers, path, (t) => [t.name, t.title, t.workflow]), path.split("?")[1] ?? ""),
+    ],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
-    [/^\/orgs\/[^/]+\/workflow-catalogue$/, workflowCatalogue],
+    [
+      /^\/orgs\/[^/]+\/workflow-catalogue$/,
+      pageOf(
+        searched(
+          workflowCatalogue.filter((e) => {
+            const wanted = new URLSearchParams(path.split("?")[1] ?? "").get("needs_workspace");
+            return wanted === null || (e.needs_workspace ?? e.needs_repository ?? false) === (wanted === "true");
+          }),
+          path,
+          (e) => [e.name, e.title, e.summary, e.source, ...e.tags],
+        ),
+        path.split("?")[1] ?? "",
+      ),
+    ],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
     [/^\/projects\/[^/]+\/memory\/pending$/, pageOf(pendingMemories, path.split("?")[1] ?? "")],
     [/^\/work-items\/[^/]+\/timeline$/, onePage(timeline)],

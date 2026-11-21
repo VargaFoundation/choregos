@@ -11,6 +11,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...reel,
     api: {
       ...reel.api,
+      agentCataloguePage: vi.fn(),
       agentCatalogue: vi.fn(),
       installCatalogueAgent: vi.fn(),
       connectCatalogueClient: vi.fn(),
@@ -35,14 +36,25 @@ function mount() {
 
 describe("the agent catalogue in the console (S21-18)", () => {
   beforeEach(() => {
-    vi.mocked(api.agentCatalogue).mockResolvedValue([
-      entry("developer"),
-      entry("tester", { installed: true, installed_version: 1 }),
-      entry("reviewer", { installed: true, installed_version: 2, update_available: true }),
-      entry("architect", { installed: true, installed_version: 1, own_agent: true }),
+    const external = [
       entry("claude-code", { kind: "external", role: "external", client: "claude-code", reach: "always" }),
       entry("chatgpt", { kind: "external", role: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "no OAuth here" }),
-    ]);
+    ];
+    // The server filters on `kind` and cuts the list (ADR 0206): the table reads pages, the connect list reads every row.
+    vi.mocked(api.agentCataloguePage)
+      .mockReset()
+      .mockResolvedValueOnce({
+        items: [entry("developer"), entry("tester", { installed: true, installed_version: 1 })],
+        meta: { has_more: true, next_cursor: "c1" },
+      } as never)
+      .mockResolvedValue({
+        items: [
+          entry("reviewer", { installed: true, installed_version: 2, update_available: true }),
+          entry("architect", { installed: true, installed_version: 1, own_agent: true }),
+        ],
+        meta: { has_more: false, next_cursor: null },
+      } as never);
+    vi.mocked(api.agentCatalogue).mockResolvedValue(external);
     vi.mocked(api.installCatalogueAgent).mockReset().mockResolvedValue({} as never);
     vi.mocked(api.connectCatalogueClient).mockReset();
   });
@@ -60,6 +72,10 @@ describe("the agent catalogue in the console (S21-18)", () => {
   it("installs one agent, updates another, and leaves the organisation's", async () => {
     mount();
     const developer = await screen.findByTestId("catalogue-developer");
+    expect(screen.queryByTestId("catalogue-reviewer")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    await screen.findByTestId("catalogue-reviewer");
+    expect(api.agentCataloguePage).toHaveBeenLastCalledWith("acme", { kind: "internal", cursor: "c1", limit: 50 });
     fireEvent.click(within(developer).getByRole("button", { name: "Install" }));
     await waitFor(() => expect(api.installCatalogueAgent).toHaveBeenLastCalledWith("acme", "developer", false));
     fireEvent.click(within(screen.getByTestId("catalogue-reviewer")).getByRole("button", { name: "Update" }));

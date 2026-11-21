@@ -5499,6 +5499,31 @@ export type WorkflowSummaryPage = {
   meta: PageMeta;
 };
 
+export type WorkflowCatalogueEntryPage = {
+  items: Array<WorkflowCatalogueEntry>;
+  meta: PageMeta;
+};
+
+export type TriggerPage = {
+  items: Array<Trigger>;
+  meta: PageMeta;
+};
+
+export type AgentCatalogueEntryPage = {
+  items: Array<AgentCatalogueEntry>;
+  meta: PageMeta;
+};
+
+export type GatewayModelPage = {
+  items: Array<GatewayModel>;
+  meta: PageMeta;
+};
+
+export type UsableModelPage = {
+  items: Array<UsableModel>;
+  meta: PageMeta;
+};
+
 export type WorkflowDefPage = {
   items: Array<WorkflowDef>;
   meta: PageMeta;
@@ -7083,7 +7108,7 @@ export interface Operations {
 }; response: WebhookAck };
   listActions: { method: "GET"; path: "/projects/{id}/actions"; body: never; response: ActionPage };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
-  listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
+  listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: AgentCatalogueEntryPage };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: AgentCredentialPage };
   listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: AgentEvaluationPage };
   listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: ConversationCandidatePage };
@@ -7141,7 +7166,7 @@ export interface Operations {
   listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };
   listOutposts: { method: "GET"; path: "/orgs/{org}/outposts"; body: never; response: OutpostList };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: MemoryPage };
-  listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
+  listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: GatewayModelPage };
   listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
   listPluginAssistants: { method: "GET"; path: "/orgs/{org}/plugins/{name}/assistants"; body: never; response: PluginAssistantList };
   listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
@@ -7163,12 +7188,12 @@ export interface Operations {
   listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
-  listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
-  listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
+  listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: TriggerPage };
+  listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: UsableModelPage };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: ArtifactPage };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
   listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: WorkflowAgentPage };
-  listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: Array<WorkflowCatalogueEntry> };
+  listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: WorkflowCatalogueEntryPage };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: WorkflowDefPage };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: WorkflowSummaryPage };

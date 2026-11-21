@@ -42,14 +42,16 @@ def test_every_catalogue_entry_is_an_installable_agent() -> None:
 async def test_the_catalogue_lists_the_agents_and_says_whether_they_are_installed(
     client: AsyncClient, admin: str
 ) -> None:
-    listed = (await client.get(f"{ORG}/agent-catalogue")).json()
+    listed = (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
     by_slug = {e["slug"]: e for e in listed}
     assert {"developer", "tester", "architect", "claude-code"} <= set(by_slug)
     assert by_slug["developer"]["role"] == "implement" and by_slug["developer"]["installed"] is False
     assert by_slug["chatgpt"]["reach"] == "cloud" and by_slug["claude-code"]["kind"] == "external"
     assert (await client.post(f"{ORG}/agent-catalogue/developer/install")).status_code == 201
     developer = next(
-        e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "developer"
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "developer"
     )
     assert (developer["installed"], developer["installed_version"], developer["update_available"]) == (
         True,
@@ -89,7 +91,9 @@ async def test_an_upgrade_publishes_the_next_version_only_if_it_changes(
     new = dataclasses.replace(old, version=2, document=document)
     _replace_entry(monkeypatch, new)
     listed_entry = next(
-        e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "triager"
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "triager"
     )
     assert listed_entry["update_available"] is True
     published = await client.post(f"{ORG}/agent-catalogue/triager/install", json={"upgrade": True})
@@ -108,7 +112,9 @@ async def test_an_organisations_own_agent_of_the_same_name_is_never_touched(
         await client.post(f"{ORG}/agent-catalogue/developer/install", json={"upgrade": True})
     ).status_code == 409
     listed_entry = next(
-        e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "developer"
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "developer"
     )
     assert (listed_entry["own_agent"], listed_entry["update_available"]) == (True, False)
     agent = (await client.get(f"{ORG}/agents/developer")).json()
@@ -238,7 +244,11 @@ async def test_a_client_that_calls_from_the_cloud_is_not_offered_without_oauth_o
 
     from tranibor_api.config import reset_settings_cache
 
-    chatgpt = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "chatgpt")
+    chatgpt = next(
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "chatgpt"
+    )
     assert chatgpt["offered"] is False and "OAuth" in chatgpt["unavailable_reason"]
     refused = await client.post(f"{ORG}/agent-catalogue/chatgpt/connect")
     assert refused.status_code == 409 and "not offered" in refused.text
@@ -249,13 +259,19 @@ async def test_a_client_that_calls_from_the_cloud_is_not_offered_without_oauth_o
         "TRANIBOR_MCP_OAUTH_CLIENTS", json.dumps({"chatgpt": {"client_id": "choregos-chatgpt"}})
     )
     reset_settings_cache()
-    still = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "chatgpt")
+    still = next(
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "chatgpt"
+    )
     assert still["offered"] is False and "https" in still["unavailable_reason"], "OAuth, but over http"
 
     monkeypatch.setenv("TRANIBOR_PUBLIC_URL", "https://choregos.example")
     reset_settings_cache()
     claude_ai = next(
-        e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "claude-ai"
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "claude-ai"
     )
     assert claude_ai["offered"] is False and "claude-ai" in claude_ai["unavailable_reason"], (
         "no client for it"
@@ -299,7 +315,9 @@ async def test_a_catalogue_agent_installed_by_a_template_carries_the_same_proven
     assert agent["versions"][0]["created_by"] == "plugin:software-delivery/reviewer@2"
     assert agent["scope"] == "platform"
     listed_entry = next(
-        e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "reviewer"
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "reviewer"
     )
     assert listed_entry["own_agent"] is False
 
@@ -403,7 +421,11 @@ async def test_an_upgrade_keeps_the_knowledge_the_organisation_added(
     assert (await client.post(f"{ORG}/agent-catalogue/reviewer/install")).status_code == 201
     await _hand_version("reviewer", knowledge=[{"slug": "our-engineering"}])
     _catalogue_moves(monkeypatch, "reviewer")
-    listed = next(e for e in (await client.get(f"{ORG}/agent-catalogue")).json() if e["slug"] == "reviewer")
+    listed = next(
+        e
+        for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]
+        if e["slug"] == "reviewer"
+    )
     assert listed["update_available"] is True
     published = await client.post(f"{ORG}/agent-catalogue/reviewer/install", json={"upgrade": True})
     assert published.status_code == 200, published.text

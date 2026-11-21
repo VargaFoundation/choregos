@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge, Button, Card, ErrorNote, Field, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -22,9 +22,14 @@ const OUTCOME: Record<string, string> = {
  * declared in the project's configuration (`triggers:`); this card never shows a token twice.
  */
 export function Triggers({ slug }: { slug: string }) {
-  const listed = useQuery({ queryKey: ["triggers", slug], queryFn: () => api.triggers(slug) });
-  // An answer that is not a list (an older API, a stand-in) shows nothing rather than breaking the page.
-  const triggers = Array.isArray(listed.data) ? listed.data : [];
+  // The server pages the list (ADR 0206): "More" asks for the next page by its cursor.
+  const listed = useInfiniteQuery({
+    queryKey: ["triggers", slug],
+    queryFn: ({ pageParam }) => api.triggersPage(slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const triggers = listed.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <Card title="Triggers" data-testid="triggers">
       <p className="mb-3 text-sm text-ink-muted">
@@ -46,6 +51,13 @@ export function Triggers({ slug }: { slug: string }) {
             <TriggerLine key={trigger.name} slug={slug} trigger={trigger} />
           ))}
         </ul>
+      )}
+      {listed.hasNextPage && (
+        <div className="mt-3">
+          <Button size="sm" disabled={listed.isFetchingNextPage} onClick={() => void listed.fetchNextPage()}>
+            {listed.isFetchingNextPage ? "Reading…" : "More"}
+          </Button>
+        </div>
       )}
       <ConfigEditor slug={slug} />
     </Card>
