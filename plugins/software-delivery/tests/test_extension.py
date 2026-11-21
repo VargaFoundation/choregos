@@ -221,3 +221,13 @@ def test_without_the_extension_does_naming_one_is_refused_naming_the_plugin(
     load_template.cache_clear()
     assert load_template("default-simple").transitions
     load_template.cache_clear()
+
+
+def test_the_plugin_declares_its_values_in_the_contracts_open_lists() -> None:
+    """The `scm.*`, `ci.*`, `cd.*` event types, four finding types and two memory kinds (S83-04c)."""
+    from tranibor_contracts import FINDING_TYPES, INBOUND_EVENT_TYPES, MEMORY_KINDS
+
+    for open_list in (INBOUND_EVENT_TYPES, FINDING_TYPES, MEMORY_KINDS):
+        assert open_list.declared_by(NAME) == frozenset(open_list.kept), open_list.what
+    assert "scm.pr.merged" in INBOUND_EVENT_TYPES.declared_by(NAME)
+    assert "flaky-test" in FINDING_TYPES.declared_by(NAME)
