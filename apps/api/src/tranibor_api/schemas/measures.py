@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 
 class MemoryDto(Dto):
@@ -159,3 +159,10 @@ class DoraReport(Dto):
     lead_time: DoraMetric
     change_failure_rate: DoraMetric
     time_to_restore: DoraMetric
+
+
+class BudgetAlertPage(Dto):
+    """One page of budget alerts, newest first (ADR 0206)."""
+
+    items: list[BudgetAlertDto]
+    meta: PageMeta

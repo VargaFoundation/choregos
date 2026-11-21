@@ -203,7 +203,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
 
       {!project && <WatchedAgentsCard org={org} />}
 
-      <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{inbox.budgets.length} open</span>}>
+      <Card title="Budgets crossed" action={<span className="text-xs text-ink-muted">{inbox.budgets.length}{inbox.budgetsHaveMore ? "+" : ""} open</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           A project&apos;s or an agent&apos;s daily budget that reached the policy&apos;s alert share (80 % by default)
           or the whole budget. One item per budget, threshold and day. Acknowledging one takes it out of everyone&apos;s
@@ -249,6 +249,13 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
               </li>
             ))}
           </ul>
+        )}
+        {inbox.budgetsHaveMore && (
+          <div className="mt-3">
+            <Button size="sm" disabled={inbox.loadingMoreBudgets} onClick={inbox.loadMoreBudgets}>
+              {inbox.loadingMoreBudgets ? "Reading…" : "More"}
+            </Button>
+          </div>
         )}
       </Card>
     </div>

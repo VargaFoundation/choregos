@@ -2431,12 +2431,20 @@ paths:
     get:
       tags: [costs]
       operationId: listBudgetAlerts
-      description: The budgets that crossed a threshold — a project's or an agent's daily budget at 80 % (the policy's `alert_at_ratio`) or 100 % — newest first. One alert per budget, day and threshold; the open ones are the inbox's.
+      description: >-
+        The budgets that crossed a threshold — a project's or an agent's daily budget at 80 % (the policy's
+        `alert_at_ratio`) or 100 % — newest first, one page at a time (ADR 0206). One alert per budget, day and
+        threshold; the open ones are the inbox's. `project` keeps the alerts of that one project (an agent's alert is
+        not one of them). The caller reads the alerts they may see, so a page is never short of what they can read.
       parameters:
         - { name: status, in: query, schema: { type: string, enum: [open, acknowledged, all], default: open } }
+        - { name: project, in: query, schema: { type: string, maxLength: 64 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BudgetAlert" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BudgetAlertPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/budget-alerts/{alert_id}/acknowledge:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2577,8 +2585,11 @@ paths:
       tags: [admin]
       operationId: listAgentImages
       summary: The images an operator named for agents written in code (names only, ADR 0063)
+      description: >-
+        Bare array by design (ADR 0206 section 5): the deployment's `TRANIBOR_AGENT_IMAGES` holds at most 200 names, a
+        cap the API enforces at start-up.
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AgentImageInfo" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { type: array, maxItems: 200, items: { $ref: "#/components/schemas/AgentImageInfo" } } } } }
   /platform/executors:
     get:
       tags: [admin]
@@ -12868,6 +12879,12 @@ components:
           type: boolean
           default: false
           description: "whether the person reading may acknowledge it: a project owner or above, on the alert's project for a project alert, on the organisation for an agent alert"
+    BudgetAlertPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/BudgetAlert" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     StopRequest:
       type: object
       required: [reason]

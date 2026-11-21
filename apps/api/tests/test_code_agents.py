@@ -110,3 +110,18 @@ def test_a_tag_only_reference_stops_the_api_when_digests_are_required(
     monkeypatch.setenv("TRANIBOR_AGENT_IMAGES", json.dumps({"loose": "registry.example/agent:latest"}))
     with pytest.raises(ValidationError, match="not pinned by digest"):
         Settings()
+
+
+def test_more_image_names_than_the_cap_stop_the_api() -> None:
+    """`GET /platform/agent-images` is a bare array only because the deployment cannot make it long."""
+    from pydantic import ValidationError
+    from tranibor_api.config import MAX_AGENT_IMAGES, Settings
+
+    names = {
+        f"agent-{index}": f"registry.example/agent@sha256:{'0' * 64}" for index in range(MAX_AGENT_IMAGES)
+    }
+    assert len(Settings(_env_file=None, agent_images=names).agent_images) == MAX_AGENT_IMAGES  # type: ignore[call-arg]
+    with pytest.raises(ValidationError, match=f"at most {MAX_AGENT_IMAGES}"):
+        Settings(
+            _env_file=None, agent_images={**names, "one-too-many": "registry.example/x@sha256:" + "0" * 64}
+        )  # type: ignore[call-arg]

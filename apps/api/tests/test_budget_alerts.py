@@ -76,7 +76,7 @@ async def _spend(project_id: str, usd: float, *, agent: str | None = None, run_i
 async def _alerts(client: AsyncClient, status: str = "open") -> list[dict[str, Any]]:
     response = await client.get("/api/v1/orgs/northwind/budget-alerts", params={"status": status})
     assert response.status_code == 200, response.text
-    return list(response.json())
+    return list(response.json()["items"])
 
 
 async def test_crossing_80_then_100_percent_raises_one_item_each_and_never_twice(

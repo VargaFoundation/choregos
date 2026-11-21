@@ -7,15 +7,16 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, and_, false, select
 from tranibor_core import utcnow
 
 from ..audit import record
 from ..db.models import BudgetAlert
-from ..deps import Db, Me
+from ..deps import Db, Me, Pagination
 from ..errors import conflict, forbidden, not_found
+from ..keyset import keyset_page
 from ..rbac import Permission, Principal
-from ..schemas import BudgetAlertDto
+from ..schemas import BudgetAlertDto, BudgetAlertPage, PageMeta
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["costs"])
@@ -38,32 +39,58 @@ def _dto(alert: BudgetAlert, principal: Principal, org: str) -> BudgetAlertDto:
     return dto
 
 
-@router.get("/orgs/{org}/budget-alerts", response_model=list[BudgetAlertDto], operation_id="listBudgetAlerts")
+def _readable(principal: Principal, org: str) -> ColumnElement[bool] | None:
+    """The SQL predicate of the alerts the caller may read; `None` when they may read all of them.
+
+    A role on the organisation reads every alert (an agent's included). Without one, the caller reads
+    the alerts of the projects they hold a role on, and no agent's: the same rule `can(PROJECT_READ,
+    org, subject)` applied per row, applied before the page is cut so that a page is never short.
+    """
+    if principal.can(Permission.PROJECT_READ, org):
+        return None
+    prefix = f"{org}/"
+    slugs = [
+        key[len(prefix) :]
+        for key in principal.project_roles
+        if key.startswith(prefix) and principal.can(Permission.PROJECT_READ, org, key[len(prefix) :])
+    ]
+    if not slugs:
+        return false()
+    return and_(BudgetAlert.scope == "project", BudgetAlert.subject.in_(slugs))
+
+
+@router.get("/orgs/{org}/budget-alerts", response_model=BudgetAlertPage, operation_id="listBudgetAlerts")
 async def list_budget_alerts(
     org: str,
     session: Db,
     principal: Me,
+    page: Pagination,
     status: Annotated[str, Query(pattern="^(open|acknowledged|all)$")] = "open",
-) -> list[BudgetAlertDto]:
-    """The budgets that crossed a threshold, newest first; `open` (the default) are the inbox's.
+    project: Annotated[str | None, Query(max_length=64)] = None,
+) -> BudgetAlertPage:
+    """The budgets that crossed a threshold, newest first, one page at a time (ADR 0206); `open` (the
+    default) are the inbox's. `project` keeps the alerts of that one project (an agent's alert, which
+    spans the organisation, is not one of them).
 
     Like the actions of the inbox, the caller reads what they can see, not a refusal: a member of one
     project only, with no organisation role, reads that project's alerts. An agent's alert spans the
     organisation (an agent serves several projects), so it needs a role on the organisation.
     """
     if not _is_member(principal, org):
-        return []
+        return BudgetAlertPage(items=[], meta=PageMeta(next_cursor=None, has_more=False))
     organisation = await organisation_by_slug(session, org)
     query = select(BudgetAlert).where(BudgetAlert.org_id == organisation.id)
     if status != "all":
         query = query.where(BudgetAlert.status == status)
-    rows = (await session.execute(query.order_by(BudgetAlert.created_at.desc(), BudgetAlert.id))).scalars()
-    return [_dto(row, principal, org) for row in rows if _may_read(principal, org, row)]
-
-
-def _may_read(principal: Principal, org: str, alert: BudgetAlert) -> bool:
-    project = alert.subject if alert.scope == "project" else None
-    return principal.can(Permission.PROJECT_READ, org, project)
+    if project:
+        query = query.where(BudgetAlert.scope == "project", BudgetAlert.subject == project)
+    visible = _readable(principal, org)
+    if visible is not None:
+        query = query.where(visible)
+    rows, meta = await keyset_page(
+        session, query, sort=BudgetAlert.created_at, tiebreak=BudgetAlert.id, page=page
+    )
+    return BudgetAlertPage(items=[_dto(row, principal, org) for row in rows], meta=meta)
 
 
 @router.post(
