@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The Azure DevOps Boards TrackerAdapter: work items, states, comments, fields, tags, links (ADR 0198).
+"""The Azure DevOps Boards TrackerAdapter: work items, states, comments, fields, tags, links (ADR 0209).
 
 Azure DevOps Services (`https://dev.azure.com/<organisation>`) and Azure DevOps Server 2022 (the
 collection URL, `https://<server>/<virtual directory>/<collection>`) speak the same REST API 7.1; the

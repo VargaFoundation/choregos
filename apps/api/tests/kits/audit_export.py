@@ -1,4 +1,4 @@
-"""What the SIEM export's tests share (S80-05b, ADR 0196): a chained log written without PostgreSQL's
+"""What the SIEM export's tests share (S80-05b, ADR 0207): a chained log written without PostgreSQL's
 trigger, and a receiver that verifies a stream of exported events with nothing of the platform's code."""
 
 from __future__ import annotations

@@ -351,3 +351,60 @@ async def test_the_local_mode_stops_at_a_fan_out_instead_of_passing_it(setup: Fi
     assert trace.final_state == "screened", "no child opened: the parent did not move"
     assert "does not run a fan-out" in (trace.stopped_reason or "")
     assert list(await _items(setup)) == [setup.tracker_key]
+
+
+def test_a_childs_tracker_writes_go_nowhere_when_its_tracker_keeps_items_elsewhere() -> None:
+    """ADR 0199: a fan-out's child is held in the platform; an external tracker (Jira, a plugin's server)
+    never heard of it, so its state, status and comments are not written there — the internal tracker
+    still receives them."""
+    from types import SimpleNamespace
+
+    from tranibor_adapters.fakes.tracker import FakeTracker
+    from tranibor_adapters.tracker.internal import InternalTracker
+    from tranibor_orchestrator.activities.base import NOWHERE, tracker_for
+
+    external, internal = FakeTracker("x"), InternalTracker()
+    child = SimpleNamespace(documents={"parent": {"key": "PROJ-1"}})
+    parent = SimpleNamespace(documents={})
+    assert tracker_for(SimpleNamespace(adapters=SimpleNamespace(tracker=external)), child) is NOWHERE
+    assert tracker_for(SimpleNamespace(adapters=SimpleNamespace(tracker=external)), parent) is external
+    assert tracker_for(SimpleNamespace(adapters=SimpleNamespace(tracker=internal)), child) is internal
+
+
+async def test_an_external_trackers_project_opens_its_children_in_the_platform(
+    setup: Fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR 0199: on a project whose tracker keeps its items elsewhere (Jira, GitHub, a plugin's server),
+    the children are born in the platform under `<parent>.<rank>` — nothing is filed in the tracker, and a
+    replayed fan-out finds them instead of filing them again."""
+    from temporalio.testing import ActivityEnvironment
+    from tranibor_adapters.fakes.tracker import FakeTracker
+    from tranibor_api.services import tickets
+    from tranibor_orchestrator.activities.children import spawn_children
+
+    await _install(setup, _research(), {"symbols": SYMBOLS})
+    external = FakeTracker("billing-api")
+
+    async def an_external_tracker(session: Any, project: Any) -> Any:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(type="github-issues"), external
+
+    monkeypatch.setattr(tickets, "project_tracker", an_external_tracker)
+
+    class Client:
+        async def start_workflow(self, _name: str, _input: Any, *, id: str, task_queue: str) -> None:
+            return None
+
+    env = ActivityEnvironment(client=Client())  # type: ignore[arg-type]
+    payload = {
+        "project_id": setup.project_id,
+        "work_item_id": setup.work_item_id,
+        "workflow_id": PARENT_ID,
+        "spawn": _research()["transitions"][0]["spawn"],
+    }
+    first = await env.run(spawn_children, payload)
+    again = await env.run(spawn_children, payload)
+    assert first == again == {"children": ["northwind/billing-api#123.1", "northwind/billing-api#123.2"]}
+    assert not [call for call in external.calls if call[0] == "create_item"], "nothing filed in the tracker"
+    assert len(await _items(setup)) == 3

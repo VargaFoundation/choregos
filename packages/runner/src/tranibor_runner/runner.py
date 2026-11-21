@@ -1554,6 +1554,8 @@ class Runner:
         result.evidence.diff_files = len(await workspace.changed_files(base))
         # The diff is what git says, not the agent: measured (ADR 0045).
         result.evidence.measured = sorted({*(result.evidence.measured or []), "diff_files", "diff_lines"})
+        # Each proof of software delivery also as the named fact (ADR 0181 C2): both forms for one window.
+        result.evidence = result.evidence.with_facts()
 
         # We push as soon as there is SOMETHING to push, not only when we are the ones
         # who committed. The agent has git at hand: when it commits itself, the tree

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AnyUrl, Field, field_validator, model_validator
 
@@ -322,6 +322,11 @@ class ProjectConfig(Strict):
     #: Tracker items that start without `agent-ready` (S56-03, ADR 0113): a ServiceNow incident in
     #: the desk's queue, a Jira bug of a given type. Empty: only `agent-ready` starts, as before.
     start_rules: list[StartRule] = Field(default_factory=list)
+    #: The projects of the organisation whose workflows may file work items here, by their slug
+    #: (`work_item.file`, ADR 0197). Empty: none may.
+    accepts_items_from: list[Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]] = Field(
+        default_factory=list, max_length=50
+    )
     #: What the A2A door takes for this project's skills (ADR 0078 §6).
     a2a: A2aConfig = Field(default_factory=A2aConfig)
     labels: dict[str, str] = Field(default_factory=dict)

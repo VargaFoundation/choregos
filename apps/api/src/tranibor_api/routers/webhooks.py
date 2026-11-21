@@ -1085,7 +1085,8 @@ async def gitlab_webhook(
 
 PluginName = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
 OrgSlug = Annotated[str, Path(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")]
-#: Headers a delivery never forwards to the server: the caller's own credentials and transport.
+#: Headers a delivery never forwards to the server: the caller's own credentials and transport. The
+#: one exception is `Authorization`, to a server whose `webhook.forward_authorization` asks for it (ADR 0198).
 _NOT_FORWARDED = frozenset({"authorization", "cookie", "host", "content-length", "connection"})
 
 
@@ -1177,13 +1178,19 @@ async def plugin_webhook(
         raise not_found("Plugin tracker server", f"{org}/{plugin}/{server}")
     body = await request.body()
     headers = {k: v for k, v in request.headers.items() if k.lower() not in _NOT_FORWARDED}
+    sender = request.headers.get("authorization")
     for connector in candidates:
+        # A sender that signs with a bearer token (ADR 0198): only the server that declares it sees it.
+        hook = (connector.plugin_server or {}).get("webhook") or {}
+        seen = (
+            {**headers, "authorization": sender} if sender and hook.get("forward_authorization") else headers
+        )
         config = await pin_plugin_tracker(
             session, connector.org_id, "tracker", "plugin", {"plugin": plugin, "server": server}
         )
         try:
             adapter = build("tracker", "plugin", config)
-            verified, events = await adapter.parse_event(headers, body)
+            verified, events = await adapter.parse_event(seen, body)
         except AdapterError as failed:
             logger.warning("plugin.webhook.server_failed", plugin=plugin, server=server, error=str(failed))
             continue

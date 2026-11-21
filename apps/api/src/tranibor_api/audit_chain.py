@@ -437,7 +437,7 @@ async def _links(session: AsyncSession, chain: str) -> AsyncIterator[Link]:
 
 async def links_after(session: AsyncSession, chain: str, after: int, limit: int) -> list[Link]:
     """The chain's next `limit` entries after place `after`, in the order of `seq`: what an exporter reads
-    (ADR 0196). Entries outside the chain (`seq IS NULL`) are not returned. The payload is
+    (ADR 0207). Entries outside the chain (`seq IS NULL`) are not returned. The payload is
     `CAST(payload AS TEXT)`, which PostgreSQL renders as `payload::text` does, so `canonical` of the result
     is the text the hash covers. The session must see the chain: the platform's scope (`*`)."""
     owner = AuditLog.org_id.is_(None) if chain == PLATFORM else AuditLog.org_id == chain

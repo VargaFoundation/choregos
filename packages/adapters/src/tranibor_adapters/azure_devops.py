@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""What the Azure DevOps connectors of source control and CI share (ADR 0198, S13-08).
+"""What the Azure DevOps connectors of source control and CI share (ADR 0209, S13-08).
 
 Azure DevOps Services (`https://dev.azure.com/<organisation>`) and Azure DevOps Server 2022 (the
 collection, `https://<server>/<virtual directory>/<collection>`) speak the same REST API 7.1: the
@@ -10,7 +10,7 @@ resource and refreshed a minute before it expires.
 
 This is the one Azure DevOps client of the three connector types (Boards, Repos, Pipelines): the REST
 client, the Entra client credentials, the PAT handling, the configuration checks, the egress hosts and the
-service hook's shared secret live here and nowhere else (ADR 0198; `tests/test_azure_one_client.py`). The
+service hook's shared secret live here and nowhere else (ADR 0209; `tests/test_azure_one_client.py`). The
 Boards tracker imports this module; nothing here imports the tracker.
 """
 

@@ -1060,12 +1060,14 @@ export type ActionApproval = {
   approvers?: Array<{
     /** The least rank an approver holds; `developer` and `release_captain` are the former names of `contributor` and `approver` (ADR 0181 C1). */
     role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
-    /** an identity-provider group the approver must also belong to (ADR 0052) */
+    /** an identity-provider group the approver must also belong to (ADR 0052); a workflow's action may name it from a field of its work item, rendered when proposed (ADR 0196) */
     group?: string | null;
     min?: number;
   }>;
   step_up_minutes?: number;
   separation_of_duties?: boolean;
+  /** who may not decide the action, whatever their rank: e-mail addresses, compared without case (ADR 0196) */
+  excluded?: Array<string>;
 };
 
 export type ActionCreate = {
@@ -4325,7 +4327,7 @@ export type PriceOverride = {
   output_per_1k: number;
 };
 
-/** What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0196). A null or absent field keeps the default for the model's provider family. */
+/** What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0200). A null or absent field keeps the default for the model's provider family. */
 export type CacheMultipliers = {
   /** a token read from the cache (0.1 on Anthropic, 0.05 on Opus 5.5 / Sonnet 5.5) */
   read?: number | null;
@@ -4493,6 +4495,8 @@ export type ModelMatrix = {
     median_tokens_in?: number | null;
     /** Cache-read input tokens from the ledger. */
     median_tokens_cached?: number | null;
+    /** Cache-write input tokens from the ledger, part of the input tokens (S4-13); null when no case was metered. */
+    median_tokens_cache_write?: number | null;
     median_tokens_out?: number | null;
     median_turns?: number | null;
   }>;
@@ -5373,7 +5377,10 @@ export type WorkItem = {
 export type Totals = {
   tokens_in?: number;
   tokens_out?: number;
+  /** the input tokens read from the provider's cache, part of tokens_in */
   tokens_cached?: number;
+  /** the input tokens written to the provider's cache, part of tokens_in (S4-13) */
+  tokens_cache_write?: number;
   cost_usd?: number;
   cost_eur?: number;
   duration_s?: number;
@@ -6155,7 +6162,10 @@ export type ActivityFailure = {
 export type SpendSoFar = {
   tokens_in: number;
   tokens_out: number;
+  /** the input tokens read from the provider's cache, part of tokens_in */
   tokens_cached: number;
+  /** the input tokens the provider wrote to its cache, part of tokens_in (S4-13); 0 when the provider reports none or the entry predates S4-07 */
+  tokens_cache_write?: number;
   cost_usd: number;
   /** when the gateway was asked; at most every 30 s per run */
   read_at: string;
@@ -6218,7 +6228,7 @@ export type CostReport = {
     tokens_cached?: number;
     /** the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07 */
     tokens_cache_write?: number;
-    /** the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0196) */
+    /** the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0200) */
     tokens_cache_write_1h?: number;
     runs?: number;
   }>;
@@ -6233,7 +6243,7 @@ export type CostReport = {
     tokens_cached?: number;
     /** the input tokens the provider wrote to its cache, part of tokens_in (S4-07) */
     tokens_cache_write?: number;
-    /** the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0196) */
+    /** the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0200) */
     tokens_cache_write_1h?: number;
   };
 };
@@ -6448,6 +6458,11 @@ export type GatewayKeyInfo = {
   created_at: string;
 };
 
+export type GatewayKeyPage = {
+  items: Array<GatewayKeyInfo>;
+  meta: PageMeta;
+};
+
 export type AuditEntry = {
   id: string;
   actor_id?: string | null;
@@ -6543,6 +6558,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   attachAgentCredential: { method: "POST"; path: "/orgs/{org}/agents/{slug}/credentials"; body: AgentCredentialCreate; response: AgentCredential };
+  attachWorkItemFiles: { method: "POST"; path: "/work-items/{id}/files"; body: void; response: Array<Artifact> };
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
@@ -6899,7 +6915,7 @@ export interface Operations {
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
   listExecutors: { method: "GET"; path: "/platform/executors"; body: never; response: Array<ExecutorInfo> };
   listFindings: { method: "GET"; path: "/projects/{id}/findings"; body: never; response: FindingPage };
-  listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: Array<GatewayKeyInfo> };
+  listGatewayKeys: { method: "GET"; path: "/platform/gateway/keys"; body: never; response: GatewayKeyPage };
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };

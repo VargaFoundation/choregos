@@ -169,6 +169,7 @@ at most.
 | `description` | one sentence |
 | `extends` | `template:<name>@<version>`: start from a shipped template |
 | `inputs` | the JSON Schema of a work item's fields; every door (console, CLI, REST, MCP, A2A, triggers) checks fields against it |
+| `attachments` | the files a person may hand to a work item (ADR 0201): `accept` (artifact types, 1 to 20, required), `min` (0 to 50, default 0), `max` (1 to 50, default 20); a step reads them through the reserved input `attachments` |
 | `catalogue` | how the workflow catalogue presents it: `title` (80 characters), `summary` (400), `tags` (12 at most); the engine ignores it |
 
 ## `actors`
@@ -177,7 +178,7 @@ Each actor has a `type`.
 
 | `type` | Keys | What it is |
 | --- | --- | --- |
-| `agent` | `role` (required), `agent`, `model`, `backend`, `playbook`, `max_turns`, `max_minutes`, `fresh_context`, `needs` | an agent run in a sandbox. `agent` names a registry agent (`slug` or `slug@version`) whose version sets the instructions, model, limits and budget ([Build an agent](../build/agents.md)). `model` is `profile:<name>`, `profile:by_size` (the default, by the work item's size) or a model id. `backend` is the coding agent, the project's default otherwise. `playbook` names the instructions when there is no registry agent (the role's own otherwise). `fresh_context: true` starts without the previous runs' context. `needs` lists the connector kinds the agent works through (`[scm]` for a repository), which the project must connect; a workflow whose agents declare no `needs` (one written before 0.28) has them guessed from the role (`implement`, `review`… need an `scm`) |
+| `agent` | `role` (required), `agent`, `model`, `backend`, `playbook`, `max_turns`, `max_minutes`, `fresh_context`, `needs` | an agent run in a sandbox. `agent` names a registry agent (`slug` or `slug@version`) whose version sets the instructions, model, limits and budget ([Build an agent](../build/agents.md)). `model` is `profile:<name>`, `profile:by_size` (the default, by the work item's size) or a model id. `backend` is the coding agent, the project's default otherwise. `playbook` names the instructions when there is no registry agent (the role's own otherwise). `fresh_context: true` starts without the previous runs' context. `needs` lists the connector kinds the agent works through (`[scm]` for a repository), which the project must connect; a workflow whose agents declare no `needs` (one written before 0.27.17) has them guessed from the role (`implement`, `review`… need an `scm`) |
 | `human` | `group`, `user` (at least one), `sla_hours`, `escalate_to` | a person decides in the console: a member of the identity provider's `group`, or the person `user` names by e-mail. With both, that person is asked first and the group may answer once `sla_hours` (24 by default) has passed. An actor that approves a `train` names a `group` |
 | `system` | none | the platform itself: opens or merges a pull request (`does`), proposes an action |
 | `job` | `role` and `command` (required), `image`, `max_minutes` | a command run in the step's sandbox, without a model: `command` is an argument list, never a shell line; `image` is a job image the operator named. The facts it writes in `.choregos/facts.json` are measured |
@@ -222,7 +223,7 @@ A transition has `from` and `to`, and either `by` (an actor) or `via: release_tr
 | `on_fail` | what happens when the step or a gate fails: `to`, `max_attempts`, `escalate_to` (all three required) |
 | `on_reject` | for a human step: the state a rejection sends the work item to |
 | `on_changes_requested` | for a review: like `on_fail`, when changes are requested |
-| `repairs` | the outcome this transition repairs (`ci_failed`, `changes_requested`): it is taken when the work item meets that outcome, never on the normal path. A workflow that declares no `repairs:` (one written before 0.28) has its repairs guessed: an agent of role `fix_ci` repairs `ci_failed`, one of role `address_review` `changes_requested` |
+| `repairs` | the outcome this transition repairs (`ci_failed`, `changes_requested`): it is taken when the work item meets that outcome, never on the normal path. A workflow that declares no `repairs:` (one written before 0.27.17) has its repairs guessed: an agent of role `fix_ci` repairs `ci_failed`, one of role `address_review` `changes_requested` |
 | `review` | who reviews: `agents` (actor names), `humans` (`group`, and `required`: `always`, `by_policy` or `never`) |
 | `timeout_hours` | how long the step may wait |
 | `does` | what the platform does on a system transition: `open_pr` or `merge_pr` |
@@ -245,7 +246,9 @@ connector), `with` (its arguments) and `compensate` (how to undo it). `justifica
 rendered with the work item's fields; `not_before` delays it to a date taken from a field
 (`fields.start_date - 10d`). `approval` asks people first: `approvers` (each a `role`, a `group`, and
 `min` people), `step_up_minutes` (they must have signed in within that time), `separation_of_duties`
-(the requester cannot approve).
+(the requester cannot approve) and `excluded` (people who may not decide, whatever their rank). A
+`group` may read one field of the work item (`owners-{{ fields.tool }}`) and each `excluded` entry may
+be one (`{{ fields.upn }}`): both are rendered when the action is proposed.
 
 ### `spawn`
 
@@ -300,6 +303,7 @@ result and the diff; the others wait for an event.
 | `tool_called` | the tools the step required were really called, read from the ledger |
 | `coverage_delta_min` | test coverage does not drop below the threshold |
 | `docs_updated` | the branch updates the documentation when it changes anything else |
+| `output_sections` | named Markdown outputs carry their required sections, no repository needed: `params.outputs`, `params.ordered` |
 | `markdown_sections` | the documents the branch adds carry their required sections |
 | `adr_number_free` | the number of an ADR the branch adds is not already taken |
 | `already_fixed_proven` | the fix is already on the default branch, on measured evidence |

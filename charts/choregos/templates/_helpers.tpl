@@ -390,7 +390,7 @@ its Secret by reference, and is not optional: a door that could sign nothing wou
 {{- end -}}
 
 {{/*
-The SIEM export of the audit log (ADR 0196): what the API is told when `global.auditExport.enabled`. The
+The SIEM export of the audit log (ADR 0207): what the API is told when `global.auditExport.enabled`. The
 token comes from a Secret by reference (`secretKeyRef`), never a value; the API refuses to start on a sink
 it cannot build, so the mistakes the chart can see are refused here, at render time.
 */}}
@@ -737,7 +737,7 @@ template: `choregos.alertRules` stays plain YAML, which a test reads as such.
 {{- end }}
 
 {{/*
-The alert of the SIEM export (ADR 0196), rendered only while `global.auditExport.enabled`: entries are waiting
+The alert of the SIEM export (ADR 0207), rendered only while `global.auditExport.enabled`: entries are waiting
 and no cursor has moved for half an hour, which a sink that is down or refusing looks like. Plain YAML, like
 the other rule lists.
 */}}
@@ -832,7 +832,7 @@ its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in 
 - { name: temporal, port: 7233, namespace: choregos-temporal, pod: choregos-temporal, embedded: {{ $g.temporal.embedded | default false }} }
 - { name: gateway, port: 4000, namespace: choregos-gateway, pod: choregos-litellm, embedded: {{ $g.gateway.embedded | default false }} }
 - { name: memory, port: 8432, namespace: choregos-memory, pod: choregos-ecphoria, embedded: {{ $g.memory.embedded | default false }} }
-{{- /* ADR 0197: listed only when embedded, so an install that does not embed them renders what it always did. */}}
+{{- /* ADR 0208: listed only when embedded, so an install that does not embed them renders what it always did. */}}
 {{- if ($g.objectStore).embedded }}
 - { name: objectstore, port: 9000, namespace: choregos-objectstore, pod: choregos-objectstore, embedded: true }
 {{- end }}
@@ -851,7 +851,7 @@ its own namespace on a cluster, or, embedded (ADR 0184), as the chart's pods in 
 {{- end -}}
 
 {{/*
-All in one (ADR 0197): the pieces the chart can embed beyond the data stores, each one switched by its
+All in one (ADR 0208): the pieces the chart can embed beyond the data stores, each one switched by its
 own `embedded` and each one overridable by the setting that names the site's own.
 */}}
 {{- define "choregos.allInOne" -}}
