@@ -2,7 +2,7 @@
 #   docker build -f examples/agents/pydantic-ai/Dockerfile \
 #     --build-arg RUNNER_IMAGE=ghcr.io/graalsystems/choregos-runner:<tag> -t my-registry/pydantic-ai-triager .
 ARG RUNNER_IMAGE=ghcr.io/vargafoundation/choregos-runner:0.17.15
-FROM ghcr.io/astral-sh/uv:0.5.11@sha256:0ac957607303916420297a4c9c213bb33fbd3c888f9cd7f4f7273596ebf42b85 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.9@sha256:d3b601f0c7b118bc1753febf7c41cc80981df678445e0254284eecf84db79a7d AS uv
 
 FROM ${RUNNER_IMAGE}
 USER root
