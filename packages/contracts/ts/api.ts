@@ -4495,6 +4495,8 @@ export type ModelMatrix = {
     median_tokens_in?: number | null;
     /** Cache-read input tokens from the ledger. */
     median_tokens_cached?: number | null;
+    /** Cache-write input tokens from the ledger, part of the input tokens (S4-13); null when no case was metered. */
+    median_tokens_cache_write?: number | null;
     median_tokens_out?: number | null;
     median_turns?: number | null;
   }>;
@@ -5375,7 +5377,10 @@ export type WorkItem = {
 export type Totals = {
   tokens_in?: number;
   tokens_out?: number;
+  /** the input tokens read from the provider's cache, part of tokens_in */
   tokens_cached?: number;
+  /** the input tokens written to the provider's cache, part of tokens_in (S4-13) */
+  tokens_cache_write?: number;
   cost_usd?: number;
   cost_eur?: number;
   duration_s?: number;
@@ -6157,7 +6162,10 @@ export type ActivityFailure = {
 export type SpendSoFar = {
   tokens_in: number;
   tokens_out: number;
+  /** the input tokens read from the provider's cache, part of tokens_in */
   tokens_cached: number;
+  /** the input tokens the provider wrote to its cache, part of tokens_in (S4-13); 0 when the provider reports none or the entry predates S4-07 */
+  tokens_cache_write?: number;
   cost_usd: number;
   /** when the gateway was asked; at most every 30 s per run */
   read_at: string;
