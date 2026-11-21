@@ -145,7 +145,8 @@ def test_actions_call_only_what_the_template_announces(path: Path) -> None:
     """Every `connector.call` names a connector the manifest announces (`org_connectors`), an
     operation its capability declares, with the arguments its schema requires — and nothing else. An
     `mcp` server discovers its tools: only the connector name is judged. A template only calls
-    core effects: a plugin's are not everywhere."""
+    core effects: a plugin's are not everywhere. `work_item.file` (ADR 0197) names a project, not a
+    connector: the project's own `accepts_items_from` judges it."""
     from tranibor_adapters import connector_types
 
     annonces = dict(manifest(path)["requires"].get("org_connectors") or {})
@@ -164,7 +165,7 @@ def test_actions_call_only_what_the_template_announces(path: Path) -> None:
                 ]
                 for spec in specs:
                     name = str(spec["effect"])
-                    assert name in {"connector.call", "check", "verifier"}, (
+                    assert name in {"connector.call", "check", "verifier", "work_item.file"}, (
                         f"{transition.key}: effect `{name}` outside the core"
                     )
                     if name != "connector.call":

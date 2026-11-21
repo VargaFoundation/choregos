@@ -245,7 +245,9 @@ connector), `with` (its arguments) and `compensate` (how to undo it). `justifica
 rendered with the work item's fields; `not_before` delays it to a date taken from a field
 (`fields.start_date - 10d`). `approval` asks people first: `approvers` (each a `role`, a `group`, and
 `min` people), `step_up_minutes` (they must have signed in within that time), `separation_of_duties`
-(the requester cannot approve).
+(the requester cannot approve) and `excluded` (people who may not decide, whatever their rank). A
+`group` may read one field of the work item (`owners-{{ fields.tool }}`) and each `excluded` entry may
+be one (`{{ fields.upn }}`): both are rendered when the action is proposed.
 
 ### `spawn`
 

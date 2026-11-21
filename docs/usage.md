@@ -3340,6 +3340,16 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   A human group (a workflow actor's `group`, an approver rule's `group`, a knowledge base's group
   scope or grant) may arrive from the identity provider bare (`architects`) or as
   `choregos:<org>:<group>`; the second counts only in `<org>` (S40-27).
+- **Approvers from the work item** ([ADR 0196](adr/0196-an-actions-approvers-come-from-its-work-item.md)):
+  in a workflow's action, an approver rule's `group` may read ONE declared field,
+  `{"role": "approver", "group": "owners-{{ fields.tool }}"}`, and `excluded` lists who may not
+  decide, whatever their rank — an address, or one field each:
+  `"excluded": ["{{ fields.upn }}", "{{ fields.requester }}"]`. Both are rendered when the action is
+  proposed and stored rendered. A group whose field is absent or empty refuses the proposal (the
+  transition's `on_fail`); an exclusion that renders empty excludes nobody; an excluded person —
+  an organisation administrator included — gets `403`. The validator refuses any other template, and
+  a field `metadata.inputs` does not declare. Keep a literal prefix (`owners-`): the field then only
+  chooses among the groups the organisation named that way, and the rank is still asked.
 - **Running**: the approval starts `ActionWorkflow` (`action-<id>`) once it is committed, and
   answers at once. If Temporal was unreachable at that moment, the action stays `approved` and every
   API replica starts it again within about a minute; a workflow started for an action that is not
@@ -3406,7 +3416,7 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   **Acknowledge** button appears only to those who may (`can_acknowledge` on each alert), the
   others read who can.
 
-The core ships two effects. `connector.call` is an operation of a connector of the organisation,
+The core ships three effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP
 tool returns **structured** (`structuredContent`) is its result, so a later effect cites
 `effects[0].serial` as it would for a typed connector. An `approval` operation runs here — the
@@ -3417,6 +3427,15 @@ outside: a condition, rendered with the earlier effects' results, that must be t
 action fails, named by its `reason` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
 `verifier` (with `motif`) is the name it had before S39-11: it stays registered as an alias, so a
 workflow or an action written with it keeps running; write `check` and `reason` from now on.
+`work_item.file` ([ADR 0197](adr/0197-a-workflow-files-a-work-item-in-another-project.md)) files
+a work item in **another project** of the organisation, through that project's tracker — internal,
+Jira, GitHub, GitLab or a plugin's — as a person's request is filed there: `{project: <slug>, title,
+body, labels}`; it answers `{project, key, url, work_item_id}`, so a later effect cites
+`effects[0].key`. The target project must list the source in its config's `accepts_items_from`; the
+work item is filed, not started (the target's people or start rules start it), its body saying which
+work item filed it; its labels, with `from:<source>`, choose its workflow in the target's routing and
+reach an external tracker (an internal one keeps none). Played again under the same key, it files
+nothing twice. It is `approval`: a person decides.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its
 title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the
@@ -3724,7 +3743,11 @@ finds them and opens none twice. Each child signals its parent as it closes, and
 re-reads its children every 30 minutes in case a signal is lost; its status says how many are still
 open. The join writes `documents.children` on the parent: the count per state, and each child's key,
 title, final state and fields. A list that cannot be read, too long, or a child its workflow refuses,
-follows `on_fail`. Children need the internal tracker; the local mode stops at a fan-out.
+follows `on_fail`. Children are held in the platform whatever the project's tracker
+([ADR 0199](adr/0199-a-fan-outs-children-are-the-platforms.md)): on a project whose tracker keeps its
+items elsewhere (Jira, GitHub, GitLab, a plugin's server), nothing is filed there for a child, and its
+state, status and comments are not written there; the parent's item is. The local mode stops at a
+fan-out.
 
 ## 6. Read what came out
 

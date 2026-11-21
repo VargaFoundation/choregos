@@ -7697,10 +7697,15 @@ components:
                 type: string
                 enum: [contributor, approver, project_owner, org_admin, developer, release_captain]
                 description: "The least rank an approver holds; `developer` and `release_captain` are the former names of `contributor` and `approver` (ADR 0181 C1)."
-              group: { type: [string, "null"], description: "an identity-provider group the approver must also belong to (ADR 0052)" }
+              group: { type: [string, "null"], description: "an identity-provider group the approver must also belong to (ADR 0052); a workflow's action may name it from a field of its work item, rendered when proposed (ADR 0196)" }
               min: { type: integer, minimum: 1, maximum: 5 }
         step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10 }
         separation_of_duties: { type: boolean, default: true }
+        excluded:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 300 }
+          description: "who may not decide the action, whatever their rank: e-mail addresses, compared without case (ADR 0196)"
     ActionCreate:
       type: object
       required: [kind, title, effects]

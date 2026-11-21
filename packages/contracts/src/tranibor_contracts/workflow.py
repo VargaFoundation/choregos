@@ -327,6 +327,8 @@ class ActionApprover(Strict):
     )
     #: An identity-provider group the approver must ALSO belong to (ADR 0052): a rank says how
     #: much someone may decide, a group says who is competent to — `netops-approvers` for a firewall.
+    #: In a workflow's action it may be ONE field of the work item, `{{ fields.approver_group }}`,
+    #: rendered when the action is proposed (ADR 0196): a field absent or empty refuses the proposal.
     group: str | None = Field(default=None, min_length=1, max_length=200)
     min: int = Field(default=1, ge=1, le=5)
 
@@ -335,6 +337,13 @@ class ActionApprovalSpec(Strict):
     approvers: list[ActionApprover] = Field(default_factory=lambda: [ActionApprover()], min_length=1)
     step_up_minutes: int = Field(default=10, ge=1, le=120)
     separation_of_duties: bool = True
+    #: Who may NOT decide this action, whatever their rank (ADR 0196): e-mail addresses, or in a
+    #: workflow's action ONE field of the work item each, `{{ fields.upn }}`, rendered when it is
+    #: proposed — the person an access grants, the person who asked for it. An empty value excludes
+    #: nobody.
+    excluded: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(
+        default_factory=list, max_length=10
+    )
 
 
 #: `fields.<field>`, shifted or not: `fields.arrival_date - 10d`, `fields.departure_date + 2h`.

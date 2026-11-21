@@ -723,7 +723,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200,
-                "description": "an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052)"
+                "description": "an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052); in a workflow's action, `{{ fields.<name> }}` names the group a field of the work item holds, rendered when the action is proposed (ADR 0196)"
               },
               "min": {
                 "type": "integer",
@@ -740,6 +740,16 @@
         },
         "separation_of_duties": {
           "type": "boolean"
+        },
+        "excluded": {
+          "type": "array",
+          "maxItems": 10,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "description": "who may not decide the action, whatever their rank: e-mail addresses, or in a workflow's action `{{ fields.<name> }}`, rendered when it is proposed; an empty value excludes nobody (ADR 0196)"
         }
       }
     },

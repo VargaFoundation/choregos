@@ -6057,3 +6057,50 @@ stories:
       - "Which eval calls are stateless model calls is established from the code, and written in ADR 0190"
       - "No eval call is batched when none is stateless and non-blocking; the finding names where to reopen"
     notes: "ADR 0190, follow-up"
+  # ───────────── S84 — desk seams: approvers from the work item, filing into another project, a webhook's sender identity ─────────────
+  - id: S84-01
+    title: "contract(schemas): an action's approver group reads a field of its work item, and approval.excluded names who may not decide (ADR 0196)"
+    stream: S84
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S20-05, S40-27]
+    acceptance:
+      - "a workflow action's approvers[].group may hold one {{ fields.<declared> }}, rendered at proposal; a field absent or empty refuses the proposal"
+      - "approval.excluded (addresses or one {{ fields.<declared> }} each) is rendered at proposal; an excluded person, organisation administrator included, gets 403"
+      - "the validator refuses any other template in an approval and an undeclared field"
+    notes: "Contract change: workflow.schema.json, ActionApprovalSpec, openapi ApprovalSpec, generated types."
+  - id: S84-02
+    title: "feat(api): the work_item.file effect files a work item in another project of the organisation, whose tracker receives it (ADR 0197)"
+    stream: S84
+    sprint: 1
+    priority: 2
+    size: M
+    depends_on: [S20-05]
+    acceptance:
+      - "work_item.file {project, title, body, labels} creates the work item through the target project's tracker (internal, Jira, GitHub, GitLab or a plugin's) and returns {project, key, url}"
+      - "the target project must list the source in config.accepts_items_from; otherwise the effect is refused"
+      - "a replayed effect files nothing twice"
+    notes: "Generic: names no trade and no tracker."
+  - id: S84-03
+    title: "contract(schemas): a plugin server's webhook may receive its sender's Authorization header (ADR 0198)"
+    stream: S84
+    sprint: 1
+    priority: 3
+    size: S
+    depends_on: [S43-07]
+    acceptance:
+      - "webhook.forward_authorization: true on a server declaration forwards the Authorization header to that server's tracker_parse_event, and to no other"
+      - "the header is never logged nor stored"
+    notes: "For senders that sign with a bearer token in Authorization."
+  - id: S84-04
+    title: "fix(orchestrator): a fan-out's children are the platform's, whatever the project's tracker (ADR 0199)"
+    stream: S84
+    sprint: 1
+    priority: 4
+    size: S
+    depends_on: [S38-12]
+    acceptance:
+      - "spawn_children opens each child under <parent>.<rank> in the platform; an external tracker receives nothing, and a replay finds the children"
+      - "a child's tracker writes (state, status, fields, comments, close) go nowhere when the project's tracker keeps its items elsewhere; the internal tracker still receives them"
+    notes: "Before: children of an external tracker's project were filed there under the tracker's key, so a replay could not find them; a tracker that cannot create items (a plugin's) refused every child."

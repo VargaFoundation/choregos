@@ -12,8 +12,9 @@ whose server the platform does not see. It is delivered at most once, under its 
 when the instance that claimed it never answers it ends IN DOUBT (`EffectInDoubt`): neither a
 refusal nor a failure to retry, never compensated automatically.
 
-The core ships `connector.call`, an operation of an organisation connector (ADR 0034), and `check`
-(alias `verifier`), a control with no effect outside; an extension declares its own. An effect's
+The core ships `connector.call`, an operation of an organisation connector (ADR 0034), `check`
+(alias `verifier`), a control with no effect outside, and `work_item.file`, a work item filed in another
+project of the organisation through its tracker (ADR 0197); an extension declares its own. An effect's
 parameters are rendered in isolated Jinja, with those of the action (`params`) and the results of
 the effects already done (`effects`): an onboarding's second effect adds to the groups the account
 the first one created.
@@ -24,6 +25,7 @@ The French names this module had before 0.21 (`effets.py`, `declarer_un_effet`..
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -412,11 +414,88 @@ async def _check(_ctx: EffectContext, params: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "reason": reason, "motif": reason}  # lang: fr-ok - `motif` kept one release
 
 
+#: The namespace of the work item `work_item.file` files under one effect's key: replayed, the same id.
+_FILED_NAMESPACE = uuid.UUID("5b1c8f8e-4a0e-4f37-9a43-0d6f0c1a9e21")
+
+
+async def _file_work_item(ctx: EffectContext, params: dict[str, Any]) -> dict[str, Any]:
+    """`work_item.file` (ADR 0197): a work item filed in ANOTHER project of the organisation, through
+    that project's tracker — internal, Jira, GitHub, GitLab or a plugin's — as a person's request is
+    filed there. The target project must list the source among `accepts_items_from`: a workflow does
+    not write into a project that did not open its door to it.
+
+    Idempotent under the effect's key: the work item's id is derived from it, so an effect played again
+    finds the one it filed. An external tracker's issue is created before that row: an activity that
+    dies between the two files the issue again when it is played again (the window a person's request
+    has too). The work item is not started: the target project's people or its start rules start it. Its
+    labels, with `from:<source>`, route it at birth and reach an external tracker; its body says which work
+    item filed it."""
+    from tranibor_contracts import ActionStatus
+
+    from .db.models import WorkItem
+    from .errors import ApiError
+    from .rbac import SYSTEM
+    from .schemas.tickets import WorkItemCreate
+    from .services.definitions import project_config
+    from .services.initiator import initiator
+    from .services.tickets import create_work_item
+
+    approved = {ActionStatus.APPROVED.value, ActionStatus.RUNNING.value, ActionStatus.AWAITING_EVIDENCE.value}
+    if ctx.action.status not in approved:
+        raise EffectRefused(
+            f"work_item.file: the action is {ctx.action.status}, not approved — nothing is filed"
+        )
+    slug = str(params.get("project") or "").strip()
+    title = str(params.get("title") or "").strip()
+    if not slug or not title:
+        raise EffectRefused("work_item.file needs a `project` and a `title`")
+    target = (
+        await ctx.session.execute(
+            select(Project).where(Project.org_id == ctx.project.org_id, Project.slug == slug)
+        )
+    ).scalar_one_or_none()
+    if target is None or target.id == ctx.project.id:
+        raise EffectRefused(f"work_item.file: no other project `{slug}` in the organisation")
+    if ctx.project.slug not in project_config(target).accepts_items_from:
+        raise EffectRefused(
+            f"work_item.file: the project `{slug}` does not accept work items from `{ctx.project.slug}` "
+            "(its `accepts_items_from`)"
+        )
+    item_id = str(uuid.uuid5(_FILED_NAMESPACE, ctx.key or f"{ctx.action.id}:{slug}:{title}"))
+    filed = await ctx.session.get(WorkItem, item_id)
+    if filed is None:
+        source = await ctx.session.get(WorkItem, ctx.action.work_item_id) if ctx.action.work_item_id else None
+        origin = source.tracker_key if source is not None else ctx.action.id
+        body = str(params.get("body") or "")
+        trace = f"Filed by the action `{ctx.action.title}` of {ctx.project.slug} ({origin}), approved."
+        labels = [str(label) for label in params.get("labels") or []][:20]
+        try:
+            filed = await create_work_item(
+                ctx.session,
+                SYSTEM,
+                target,
+                WorkItemCreate(
+                    title=title[:500],
+                    body=f"{body}\n\n{trace}".strip(),
+                    labels=[*dict.fromkeys([*labels, f"from:{ctx.project.slug}"])],
+                    start=False,
+                ),
+                canal="action",
+                initiated_by=initiator("work_item", origin),
+                item_id=item_id,
+            )
+        except ApiError as refused:
+            raise EffectRefused(f"work_item.file into `{slug}`: {refused.detail}") from refused
+    return {"project": slug, "key": filed.tracker_key, "url": filed.url, "work_item_id": filed.id}
+
+
 def reset() -> None:
     """For tests: only the core's effects remain."""
     _EFFECTS.clear()
     _POLICIES.clear()
     _EFFECTS["connector.call"] = _connector_call
+    _EFFECTS["work_item.file"] = _file_work_item
+    _POLICIES["work_item.file"] = "approval"
     _EFFECTS["check"] = _check
     _POLICIES["check"] = "allowed"
     _EFFECTS["verifier"] = _check  # lang: fr-ok - alias for actions written before S39-11
