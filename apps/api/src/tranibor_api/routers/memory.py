@@ -55,7 +55,7 @@ async def search(
     ctx: ProjectCtx,
     session: Db,
     q: Annotated[str, Query()],
-    k: Annotated[int, Query(le=100)] = 10,
+    k: Annotated[int, Query(ge=1, le=100)] = 10,
     kinds: Annotated[str | None, Query()] = None,
     memory: Annotated[str | None, Query()] = None,
     agent: Annotated[str | None, Query()] = None,
@@ -66,7 +66,8 @@ async def search(
     adapter = await _adapter(ctx, session)
     results = await adapter.search(await project_namespace(session, ctx.project, memory, agent), q, k)
     wanted = {kind.strip() for kind in (kinds or "").split(",") if kind.strip()}
-    return [to_dto(m) for m in results if not wanted or str(m.kind) in wanted]
+    # At most `k` (1-100) hits, whatever the backend returned: this slice and the `le` bound the list.
+    return [to_dto(m) for m in results if not wanted or str(m.kind) in wanted][:k]
 
 
 @router.get("/projects/{id}/memory/pending", response_model=list[MemoryDto], operation_id="listPendingMemory")

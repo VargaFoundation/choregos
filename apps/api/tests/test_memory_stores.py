@@ -119,7 +119,7 @@ async def test_list_project_memories_has_implicit_named_and_only_the_global_ones
         f"/api/v1/projects/{billing['id']}/memories", json={"slug": "decisions", "display_name": "D"}
     )
     listed = (await client.get(f"/api/v1/projects/{billing['id']}/memories")).json()
-    by_slug = {(m["scope"], m["slug"]): m for m in listed}
+    by_slug = {(m["scope"], m["slug"]): m for m in listed["items"]}
     assert set(by_slug) == {
         ("project", "shared"),
         ("project", "own"),
@@ -131,8 +131,10 @@ async def test_list_project_memories_has_implicit_named_and_only_the_global_ones
     assert not by_slug[("project", "decisions")]["implicit"]
     # The org-wide listing carries the project memory too, filterable.
     org_wide = (await client.get(MEM, params={"scope": "project"})).json()
-    assert [(m["slug"], m["project"]) for m in org_wide] == [("decisions", "billing-api")]
-    reaching = {m["slug"] for m in (await client.get(MEM, params={"project": "checkout-web"})).json()}
+    assert [(m["slug"], m["project"]) for m in org_wide["items"]] == [("decisions", "billing-api")]
+    reaching = {
+        m["slug"] for m in (await client.get(MEM, params={"project": "checkout-web"})).json()["items"]
+    }
     assert reaching == {"checkout-only"}
 
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, Drawer, Empty, ErrorNote, Input, Select } from "@/components/ui";
@@ -21,7 +21,14 @@ import type { MemoryStoreCreate } from "@/lib/types";
 export default function MemoriesPage() {
   const { org, me } = useSession();
   const client = useQueryClient();
-  const memories = useQuery({ queryKey: ["memories", org, "global"], queryFn: () => api.memories(org, { scope: "global" }) });
+  // One page at a time (ADR 0206): "More" asks for the next by its cursor, nothing is cut in the browser.
+  const memories = useInfiniteQuery({
+    queryKey: ["memories", org, "global", "pages"],
+    queryFn: ({ pageParam }) => api.memoriesPage(org, { scope: "global", cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const rows = memories.data?.pages.flatMap((page) => page.items) ?? [];
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   const admin = (me?.memberships ?? []).some((m) => m.org === org && !m.project_slug && m.role === "org_admin");
   const [open, setOpen] = useState(false);
@@ -76,7 +83,7 @@ export default function MemoriesPage() {
           <ErrorNote>{String(memories.error)}</ErrorNote>
         ) : !memories.data ? (
           <p className="text-sm text-ink-muted">Reading the memories…</p>
-        ) : memories.data.length === 0 ? (
+        ) : rows.length === 0 ? (
           <Empty title="No organisation memory yet">
             {admin ? "Create one: agents then bind it, and projects within its reach read it." : "An organisation administrator creates them."}
           </Empty>
@@ -92,7 +99,7 @@ export default function MemoriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {memories.data.map((memory) => (
+                {rows.map((memory) => (
                   <tr key={memory.slug} className={`border-t border-line ${memory.status === "archived" ? "opacity-60" : ""}`}>
                     <td className="py-2">
                       <Link href={`/memories/${memory.slug}`} className="font-medium hover:underline">
@@ -119,6 +126,13 @@ export default function MemoriesPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {memories.hasNextPage && (
+          <div className="mt-3">
+            <Button size="sm" onClick={() => void memories.fetchNextPage()} disabled={memories.isFetchingNextPage}>
+              More
+            </Button>
           </div>
         )}
       </Card>

@@ -50,6 +50,10 @@ BOUNDED: dict[str, str] = {
         "one answer per reference asked, and at most 64 are accepted "
         "(apps/api/src/tranibor_api/routers/agents/pins.py:384, `Query(max_length=64)`)"
     ),
+    "searchGlobalMemory": "the top-k of a search: `k` is at most 100 (`routers/memories.py:303`) "
+    "and the hits are cut to `k` (`routers/memories.py:310`)",
+    "searchMemory": "the top-k of a search: `k` is at most 100 (`routers/memory.py:58`) "
+    "and the hits are cut to `k` (`routers/memory.py:70`)",
 }
 
 #: The ceiling: array routes that read without a page. Lowered when one migrates, never raised.
@@ -70,25 +74,19 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listAgentRuns",
         "listAgents",
         "listGlobalPendingMemory",
-        "listKnowledgeBases",
-        "listMemories",
         "listOrgAgentCredentials",
         "listOrgAgentReleases",
         "listPendingMemory",
         # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
         # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.
         "listPlatformModels",
-        "listProjectMemories",
         "listRuns",
-        "listSkills",
         "listTriggers",
         # Catalogue rows merged with the gateway's live list and cut by the role/usage policy in Python;
         # its clients are whole-list pickers (agent builder, project profiles). Needs a decision.
         "listUsableModels",
         "listWorkItemArtifacts",
         "listWorkflowCatalogue",
-        "searchGlobalMemory",
-        "searchMemory",
     }
 )
 

@@ -2081,7 +2081,7 @@ paths:
       operationId: searchMemory
       parameters:
         - { name: q, in: query, required: true, schema: { type: string } }
-        - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+        - { name: k, in: query, schema: { type: integer, default: 10, minimum: 1, maximum: 100 } }
         - { name: kinds, in: query, schema: { type: array, items: { type: string } }, style: form, explode: false }
         - { name: memory, in: query, schema: { type: string }, description: "which memory of the project (S40-11): `shared` (the default), `own` with `agent`, or a named memory of the project" }
         - { name: agent, in: query, schema: { type: string }, description: "with `memory=own`: whose own memory" }
@@ -2154,13 +2154,17 @@ paths:
     get:
       tags: [memory]
       operationId: listMemories
-      description: "The named memories the caller sees (S40-11, ADR 0075): global ones with their reach, project ones of their projects. `used_by` lists the agents whose latest version binds each."
+      description: "The named memories the caller sees (S40-11, ADR 0075): global ones with their reach, project ones of their projects, by slug, one page at a time (ADR 0206). `used_by` lists the agents whose latest version binds each."
       parameters:
         - { name: scope, in: query, schema: { type: string, enum: [global, project] } }
         - { name: project, in: query, schema: { type: string }, description: only the memories of this project (a project memory) or reaching it }
+        - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: "a substring of the slug, the name or the description" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStorePage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [memory]
       operationId: createGlobalMemory
@@ -2205,7 +2209,7 @@ paths:
       operationId: searchGlobalMemory
       parameters:
         - { name: q, in: query, required: true, schema: { type: string } }
-        - { name: k, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+        - { name: k, in: query, schema: { type: integer, default: 10, minimum: 1, maximum: 100 } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Memory" } } } } }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -2255,10 +2259,15 @@ paths:
     get:
       tags: [memory]
       operationId: listProjectMemories
-      description: "What a run of this project may bind (S40-11): the implicit `shared` and `own` (`implicit: true`), the project's named memories, and the global ones that reach it."
+      description: "What a run of this project may bind (S40-11): the implicit `shared` and `own` (`implicit: true`), the project's named memories, and the global ones that reach it. The named ones are paged by slug (ADR 0206); the two implicit ones are not rows and open the first page, outside its `limit`."
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: "a substring of the slug, the name or the description" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryStorePage" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [memory]
       operationId: createProjectMemory
@@ -4899,9 +4908,14 @@ paths:
     get:
       tags: [agents]
       operationId: listSkills
-      description: The organisation's skill library (ADR 0033).
+      description: The organisation's skill library (ADR 0033), by slug, one page at a time (ADR 0206).
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: "a substring of the slug or the description" }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skill" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [agents]
       operationId: createSkill
@@ -5517,10 +5531,16 @@ paths:
     get:
       tags: [knowledge]
       operationId: listKnowledgeBases
-      description: The organisation's knowledge bases the caller may read (ADR 0051), without their documents.
+      description: The organisation's knowledge bases the caller may read (ADR 0051), without their documents, by slug, one page at a time (ADR 0206).
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 }, description: "a substring of the slug or the name" }
+        - { name: scope, in: query, schema: { type: string, enum: [org, projects, groups] }, description: only the bases of this reach }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/KnowledgeBase" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeBasePage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [knowledge]
       operationId: createKnowledgeBase
@@ -8946,6 +8966,12 @@ components:
       properties:
         agent: { type: string }
         version: { type: integer }
+    MemoryStorePage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MemoryStore" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     MemoryStore:
       type: object
       required: [slug, display_name, scope]
@@ -9972,6 +9998,12 @@ components:
         removed: { type: array, items: { type: string } }
         modified: { type: array, items: { type: string } }
         problem: { type: [string, "null"] }
+    SkillPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Skill" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     Skill:
       type: object
       required: [slug, status, latest_version]
@@ -10149,6 +10181,12 @@ components:
         agent: { type: string }
         display_name: { type: string }
         version: { type: integer, description: "the revision that names the base: production, else the latest" }
+    KnowledgeBasePage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/KnowledgeBase" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     KnowledgeBase:
       type: object
       required: [slug, name, scope, serving_mode, status]

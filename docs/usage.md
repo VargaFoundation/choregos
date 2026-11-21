@@ -2156,8 +2156,9 @@ An agent version binds them in its spec; earlier bindings win, at most one bindi
 `GET /orgs/{org}/agents/{slug}/versions/{n}` answers `effective_memories`, the list a run binds, derived
 from the legacy `memory` field when `memories` is absent. Publishing refuses (422) a global memory the
 publisher does not see, or is archived; a **project** reference is relative, so it is checked when a run
-resolves it. `GET /orgs/{org}/memories` lists what you see (`?scope=global|project`, `?project=`) with
-`used_by`, the agents whose latest version binds each; `PATCH` renames, changes the reach or archives
+resolves it. `GET /orgs/{org}/memories` lists what you see (`?scope=global|project`, `?project=`, `?q=` on the slug, the name or the description) with
+`used_by`, the agents whose latest version binds each, by slug and one page at a time (ADR 0206: `?limit=` and `?cursor=`, and
+`GET /projects/{id}/memories` pages the same way, its two implicit memories opening the first page); the search routes return at most `k` hits (1 to 100); `PATCH` renames, changes the reach or archives
 (`status: archived`). To review: `GET /orgs/{org}/memories/{slug}/search?q=…` and
 `GET|POST /orgs/{org}/memories/{slug}/pending` for a global memory (proposals wait for an administrator);
 for a project, `GET /projects/{id}/memory/search?q=…&memory=decisions` and `…/memory/pending?memory=own&agent=architect`
@@ -2378,6 +2379,10 @@ curl -X POST $API/orgs/acme/knowledge -H 'Content-Type: application/json' \
   -d '{"slug": "architecture", "name": "Architecture framework", "scope": "org", "serving_mode": "files"}'
 curl -X POST $API/orgs/acme/knowledge/architecture/documents -F file=@zoning-principles.pptx
 ```
+
+`GET /orgs/{org}/knowledge` lists the bases you may read by slug, one page at a time (ADR 0206): `?limit=` (1 to 200,
+50 by default), `?cursor=` (the `meta.next_cursor` of the page before), `?q=` (a part of the slug or the name) and
+`?scope=org|projects|groups`. `GET /orgs/{org}/skills` pages the same way (`?q=` on the slug or the description).
 
 An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text, and structured text: YAML (`.yaml`,
 `.yml`), JSON, TOML; 20 MiB by default,

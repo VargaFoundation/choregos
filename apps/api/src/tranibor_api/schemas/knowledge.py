@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, model_validator
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
 Scope = Literal["org", "projects", "groups"]
@@ -182,6 +182,13 @@ class KnowledgeBaseDto(Dto):
     #: a reading of ONE base carries them: the agents the caller sees whose current revision names
     #: the base in `spec.knowledge` — a run is served a base only through one of them
     used_by: list[KnowledgeBaseUser] | None = None
+
+
+class KnowledgeBasePage(Dto):
+    """One page of knowledge bases, by slug (ADR 0206)."""
+
+    items: list[KnowledgeBaseDto]
+    meta: PageMeta
 
 
 class KnowledgeEvalCase(Dto):

@@ -49,10 +49,13 @@ vi.mock("@/lib/api", async (importOriginal) => {
       createWorkflow: vi.fn(async () => ({})),
       putWorkflowRouting: vi.fn(async (_: string, routing: unknown) => routing),
       deactivateWorkflow: vi.fn(async () => undefined),
-      skills: vi.fn(async () => [
-        { slug: "library", description: "Published before S55-17", latest_version: 1, used_by: [] },
-        { slug: "pdf", description: "PDF files", latest_version: 2, used_by: [] },
-      ]),
+      skillsPage: vi.fn(async () => ({
+        items: [
+          { slug: "library", description: "Published before S55-17", latest_version: 1, used_by: [] },
+          { slug: "pdf", description: "PDF files", latest_version: 2, used_by: [] },
+        ],
+        meta: { has_more: false, next_cursor: null },
+      })),
       skill: vi.fn(async (_: string, slug: string) => ({
         slug,
         description: "Published before S55-17",

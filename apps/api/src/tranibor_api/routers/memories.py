@@ -13,7 +13,7 @@ import asyncio
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Path, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_core import utcnow
 from tranibor_core.memory_bindings import OWN, RESERVED_SLUGS, SHARED
@@ -21,8 +21,9 @@ from tranibor_core.memory_scope import global_store_namespace, memory_key
 
 from ..audit import record
 from ..db.models import Agent, AgentVersion, MemoryStore, Organization, Project
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Db, Me, Pagination, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
+from ..keyset import keyset_page
 from ..knowledge import okf
 from ..rbac import Permission
 from ..schemas import (
@@ -31,6 +32,7 @@ from ..schemas import (
     MemoryDto,
     MemoryStoreCreate,
     MemoryStoreDto,
+    MemoryStorePage,
     MemoryStorePatch,
     MemoryStoreUser,
     ProjectMemoryCreate,
@@ -41,7 +43,6 @@ from ..services.memory_access import (
     can_manage,
     global_adapter,
     reaches_project,
-    stores_of,
     visible_to,
 )
 from ..services.organisations import organisation_by_slug
@@ -150,25 +151,53 @@ async def _global(
     return organisation, store
 
 
-@router.get("/orgs/{org}/memories", response_model=list[MemoryStoreDto], operation_id="listMemories")
+def _matching(query: Select[Any], q: str | None) -> Select[Any]:
+    """Keep the memories whose slug, name or description contains `q` (`%` and `_` are characters)."""
+    if not (q and q.strip()):
+        return query
+    needle = q.strip()
+    return query.where(
+        or_(
+            MemoryStore.slug.icontains(needle, autoescape=True),
+            MemoryStore.display_name.icontains(needle, autoescape=True),
+            MemoryStore.description.icontains(needle, autoescape=True),
+        )
+    )
+
+
+@router.get("/orgs/{org}/memories", response_model=MemoryStorePage, operation_id="listMemories")
 async def list_memories(
     org: str,
     session: Db,
     principal: Me,
+    page: Pagination,
     scope: Annotated[str | None, Query(pattern="^(global|project)$")] = None,
     project: Annotated[str | None, Query()] = None,
-) -> list[MemoryStoreDto]:
-    """The memories the caller sees: global ones with their reach, project ones of their projects."""
+    q: Annotated[str | None, Query(max_length=200)] = None,
+) -> MemoryStorePage:
+    """The memories the caller sees: global ones with their reach, project ones of their projects.
+
+    By slug, one page at a time (ADR 0206). `scope` and `q` run in SQL; who sees a memory (`visible_to`) and
+    `project` read its JSON list of projects, so the page is filled from successive batches of rows.
+    """
     _member(principal, org)
     organisation = await organisation_by_slug(session, org)
+    query = _matching(select(MemoryStore).where(MemoryStore.org_id == organisation.id), q)
+    if scope is not None:
+        query = query.where(MemoryStore.scope == scope)
+
+    async def seen(batch: list[MemoryStore]) -> list[MemoryStore]:
+        return [
+            store
+            for store in batch
+            if visible_to(principal, org, store) and (project is None or project in (store.projects or []))
+        ]
+
+    stores, meta = await keyset_page(
+        session, query, sort=MemoryStore.slug, tiebreak=MemoryStore.id, page=page, descending=False, keep=seen
+    )
     used = await _used_by(session, principal, organisation)
-    return [
-        _dto(store, used)
-        for store in await stores_of(session, organisation)
-        if visible_to(principal, org, store)
-        and (scope is None or store.scope == scope)
-        and (project is None or project in (store.projects or []))
-    ]
+    return MemoryStorePage(items=[_dto(store, used) for store in stores], meta=meta)
 
 
 @router.post(
@@ -271,15 +300,14 @@ async def search_global_memory(
     session: Db,
     principal: Me,
     q: Annotated[str, Query()],
-    k: Annotated[int, Query(le=100)] = 10,
+    k: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> list[MemoryDto]:
     _member(principal, org)
     organisation, store = await _global(session, principal, org, slug)
     adapter = await global_adapter(session, organisation)
-    return [
-        memory_dto(m)
-        for m in await adapter.search(global_store_namespace(memory_key(organisation), store.slug), q, k)
-    ]
+    hits = await adapter.search(global_store_namespace(memory_key(organisation), store.slug), q, k)
+    # At most `k` (1-100) hits, whatever the backend returned: this slice and the `le` bound the list.
+    return [memory_dto(m) for m in hits][:k]
 
 
 @router.get(
@@ -362,33 +390,63 @@ _IMPLICIT: dict[str, tuple[str, str]] = {
 }
 
 
-@router.get(
-    "/projects/{id}/memories", response_model=list[MemoryStoreDto], operation_id="listProjectMemories"
-)
-async def list_project_memories(ctx: ProjectCtx, session: Db) -> list[MemoryStoreDto]:
+@router.get("/projects/{id}/memories", response_model=MemoryStorePage, operation_id="listProjectMemories")
+async def list_project_memories(
+    ctx: ProjectCtx,
+    session: Db,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+) -> MemoryStorePage:
     """What a run of this project may bind: the implicit `shared` and `own`, the project's named
-    memories, and the global ones that reach it."""
+    memories, and the global ones that reach it.
+
+    The named memories are paged by slug (ADR 0206). The two implicit ones are not rows: they open the
+    first page, outside its `limit`, and a `q` that does not match their name or description drops them.
+    """
     organisation = await organisation_by_slug(session, ctx.org_slug)
     used = await _used_by(session, ctx.principal, organisation)
-    implicit = [
-        MemoryStoreDto(
-            slug=slug,
-            display_name=name,
-            description=description,
-            scope="project",
-            project=ctx.slug,
-            implicit=True,
-            used_by=used.get(("project", slug), []),
-        )
-        for slug, (name, description) in _IMPLICIT.items()
-    ]
-    named = [
-        _dto(store, used)
-        for store in await stores_of(session, organisation)
-        if (store.scope == "project" and store.owner_key == ctx.id)
-        or (store.scope == "global" and reaches_project(store, ctx.slug))
-    ]
-    return [*implicit, *named]
+    needle = (q or "").strip().lower()
+    implicit = (
+        [
+            MemoryStoreDto(
+                slug=slug,
+                display_name=name,
+                description=description,
+                scope="project",
+                project=ctx.slug,
+                implicit=True,
+                used_by=used.get(("project", slug), []),
+            )
+            for slug, (name, description) in _IMPLICIT.items()
+            if not needle or needle in f"{slug} {name} {description}".lower()
+        ]
+        if not page.cursor
+        else []
+    )
+    query = _matching(
+        select(MemoryStore).where(
+            MemoryStore.org_id == organisation.id,
+            or_(
+                and_(MemoryStore.scope == "project", MemoryStore.owner_key == ctx.id),
+                MemoryStore.scope == "global",
+            ),
+        ),
+        q,
+    )
+
+    async def reachable(batch: list[MemoryStore]) -> list[MemoryStore]:
+        return [store for store in batch if store.scope == "project" or reaches_project(store, ctx.slug)]
+
+    stores, meta = await keyset_page(
+        session,
+        query,
+        sort=MemoryStore.slug,
+        tiebreak=MemoryStore.id,
+        page=page,
+        descending=False,
+        keep=reachable,
+    )
+    return MemoryStorePage(items=[*implicit, *(_dto(store, used) for store in stores)], meta=meta)
 
 
 @router.post(

@@ -15,7 +15,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      knowledgeBases: vi.fn(),
+      knowledgeBasesPage: vi.fn(),
       projects: vi.fn(),
       knowledgeBase: vi.fn(),
       createKnowledgeBase: vi.fn(),
@@ -24,6 +24,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
       convertKnowledgeDocument: vi.fn(),
     },
   };
+});
+
+const pageOf = (items: KnowledgeBase[], next: string | null = null) => ({
+  items,
+  meta: { has_more: next !== null, next_cursor: next },
 });
 
 const base: KnowledgeBase = {
@@ -72,7 +77,7 @@ describe("the knowledge page (S33-01)", () => {
   });
 
   it("lists the bases with their scope and documents, and creates one", async () => {
-    vi.mocked(api.knowledgeBases).mockResolvedValue([{ ...base, documents: null }]);
+    vi.mocked(api.knowledgeBasesPage).mockResolvedValue(pageOf([{ ...base, documents: null }]));
     vi.mocked(api.createKnowledgeBase).mockResolvedValue(base);
     wrap(<KnowledgePage />);
     const table = await screen.findByTestId("knowledge-bases");
@@ -140,7 +145,10 @@ describe("the registry's scope (S39-14)", () => {
         { slug: "checkout-web", name: "Checkout web" },
       ],
     } as never);
-    vi.mocked(api.knowledgeBases).mockResolvedValue([org, base, people].map((b) => ({ ...b, documents: null })));
+    // The server filters by scope (ADR 0206): the mock does too, as the route does.
+    vi.mocked(api.knowledgeBasesPage).mockImplementation(async (_org, params) =>
+      pageOf([org, base, people].filter((b) => !params?.scope || b.scope === params.scope).map((b) => ({ ...b, documents: null }))),
+    );
     vi.mocked(api.createKnowledgeBase).mockResolvedValue(base);
     window.history.replaceState(null, "", "/knowledge");
   });
@@ -151,11 +159,12 @@ describe("the registry's scope (S39-14)", () => {
     expect(table).toHaveTextContent("Every project");
     expect(table).toHaveTextContent("People in groups auditors (never agents)");
     fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    await waitFor(() => expect(table).not.toHaveTextContent("Security policy"));
     expect(table).toHaveTextContent("Audit notes");
-    expect(table).not.toHaveTextContent("Security policy");
+    expect(api.knowledgeBasesPage).toHaveBeenLastCalledWith("northwind", { scope: "groups", cursor: undefined, limit: 50 });
     expect(window.location.search).toBe("?scope=groups");
     fireEvent.click(screen.getByRole("button", { name: "All" }));
-    expect(table).toHaveTextContent("Security policy");
+    await waitFor(() => expect(table).toHaveTextContent("Security policy"));
   });
 
   it("picks the projects from a list, not from typed slugs", async () => {
@@ -169,5 +178,25 @@ describe("the registry's scope (S39-14)", () => {
     await waitFor(() => expect(api.createKnowledgeBase).toHaveBeenCalled());
     expect(vi.mocked(api.createKnowledgeBase).mock.calls[0]![1]).toMatchObject({ scope: "projects", projects: ["checkout-web"] });
     expect(screen.getByText(/create it from the project's Knowledge page/)).toBeInTheDocument();
+  });
+});
+
+describe("the knowledge page is paged by the server (ADR 0206)", () => {
+  it("reads one page, and More asks for the next by its cursor", async () => {
+    vi.mocked(api.projects).mockResolvedValue({ items: [] } as never);
+    const first = { ...base, slug: "a-base", name: "First base", documents: null };
+    const second = { ...base, slug: "b-base", name: "Second base", documents: null };
+    vi.mocked(api.knowledgeBasesPage).mockImplementation(async (_org, params) =>
+      params?.cursor === "a-base" ? pageOf([second]) : pageOf([first], "a-base"),
+    );
+    wrap(<KnowledgePage />);
+    const table = await screen.findByTestId("knowledge-bases");
+    expect(table).toHaveTextContent("First base");
+    expect(table).not.toHaveTextContent("Second base");
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    await waitFor(() => expect(table).toHaveTextContent("Second base"));
+    expect(table).toHaveTextContent("First base");
+    expect(api.knowledgeBasesPage).toHaveBeenLastCalledWith("northwind", { scope: undefined, cursor: "a-base", limit: 50 });
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 });

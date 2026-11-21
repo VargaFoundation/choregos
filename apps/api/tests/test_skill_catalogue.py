@@ -60,7 +60,8 @@ async def test_a_member_lists_the_catalogue_and_nothing_is_installed(client: Asy
     assert body["meta"]["catalogue_version"] == shipped.meta.catalogue_version
     assert len(body["entries"]) == len(shipped.entries) >= 70
     assert {e["state"] for e in body["entries"]} == {"available"}
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "listing installs nothing"
+    listed = (await client.get("/api/v1/orgs/northwind/skills")).json()["items"]
+    assert listed == [], "listing installs nothing"
     entry = _by_id(body)["write-spec"]
     assert (entry["delivery"], entry["risk"], entry["licence"]) == ("bundled", "low", "Apache-2.0")
     assert _by_id(body)["systematic-debugging"]["delivery"] == "git"
@@ -279,7 +280,7 @@ async def test_a_tampered_bundled_file_is_refused_and_nothing_is_published(
     monkeypatch.setattr(skill_catalogue, "BUNDLED_DIR", tmp_path)
     refused = await client.post(f"{BASE}/write-spec/install")
     assert refused.status_code == 502 and "provenance" in refused.text
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == []
 
 
 async def test_a_pin_the_repository_cannot_serve_is_a_bad_gateway_not_a_half_install(
@@ -288,7 +289,7 @@ async def test_a_pin_the_repository_cannot_serve_is_a_bad_gateway_not_a_half_ins
     fetcher.tarballs.clear()
     refused = await client.post(f"{BASE}/systematic-debugging/install")
     assert refused.status_code == 502, refused.text
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == []
 
 
 async def test_what_the_repository_serves_must_be_what_the_catalogue_pinned(
@@ -302,7 +303,7 @@ async def test_what_the_repository_serves_must_be_what_the_catalogue_pinned(
     monkeypatch.setattr(skill_catalogue, "load", lambda: changed)
     refused = await client.post(f"{BASE}/systematic-debugging/install")
     assert refused.status_code == 422 and "digest mismatch" in refused.text
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == []
 
 
 async def test_git_entries_say_whether_the_deployment_declares_their_host(
@@ -347,4 +348,4 @@ async def test_the_platform_never_approves_a_high_risk_bundle_on_its_own_word(
     )
     refused = await client.post(f"{BASE}/write-spec/install")
     assert refused.status_code == 422 and "high risk" in refused.text, refused.text
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == []

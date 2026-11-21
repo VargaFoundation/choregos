@@ -1324,6 +1324,13 @@ class SkillDto(Dto):
     review_status: Literal["approved", "pending_review"] = "approved"
 
 
+class SkillPage(Dto):
+    """One page of the skill library, by slug (ADR 0206)."""
+
+    items: list[SkillDto]
+    meta: PageMeta
+
+
 class AgentProjectMetrics(Dto):
     project: str
     runs: int

@@ -77,7 +77,7 @@ async def test_what_a_binary_must_hold_or_the_skill_is_refused(
     refused = await _upload(client, _zip({"SKILL.md": SKILL_MD, **files}))
     assert refused.status_code == 422, refused.text
     assert reason in refused.text
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == []
 
 
 async def test_a_file_stored_directly_must_be_valid_base64_of_the_right_type(
