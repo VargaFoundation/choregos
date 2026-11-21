@@ -34,6 +34,7 @@ members = [
     "tranibor-runner",
     "tranibor-software-delivery",
     "tranibor-tools-mcp",
+    "tranibor-vault-transit",
 ]
 
 [[package]]
@@ -493,6 +494,7 @@ dependencies = [
     { name = "tranibor-runner" },
     { name = "tranibor-software-delivery" },
     { name = "tranibor-tools-mcp" },
+    { name = "tranibor-vault-transit" },
 ]
 
 [package.dev-dependencies]
@@ -542,6 +544,7 @@ requires-dist = [
     { name = "tranibor-runner", editable = "packages/runner" },
     { name = "tranibor-software-delivery", editable = "plugins/software-delivery" },
     { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
+    { name = "tranibor-vault-transit", editable = "plugins/vault-transit" },
 ]
 
 [package.metadata.requires-dev]
@@ -2578,6 +2581,21 @@ requires-dist = [
     { name = "tranibor-core", editable = "packages/core" },
     { name = "typer", specifier = ">=0.15" },
     { name = "uvicorn", specifier = ">=0.32" },
+]
+
+[[package]]
+name = "tranibor-vault-transit"
+version = "0.27.17"
+source = { editable = "plugins/vault-transit" }
+dependencies = [
+    { name = "httpx" },
+    { name = "tranibor-api" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "tranibor-api", editable = "apps/api" },
 ]
 
 [[package]]

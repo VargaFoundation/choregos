@@ -15,6 +15,7 @@ COPY compat compat
 COPY plugins/investment-research/pyproject.toml plugins/investment-research/
 COPY plugins/software-delivery/pyproject.toml plugins/software-delivery/
 COPY plugins/procurement/pyproject.toml plugins/procurement/
+COPY plugins/vault-transit/pyproject.toml plugins/vault-transit/
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
 # `--no-editable`: the daemon and the three workspace packages it uses (the contract, the core's
