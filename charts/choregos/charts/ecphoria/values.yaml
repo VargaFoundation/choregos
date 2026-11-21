@@ -7,6 +7,8 @@ persistence:
   enabled: true
   size: 5Gi
   storageClass: ""
+  # Adopt a volume that already holds the data: the chart renders no claim of its own and never touches it.
+  existingClaim: ""
 # Embedding model, requested from Choregos' gateway (measured cost, no direct egress).
 embedding:
   # `none` when the deployment has no gateway: memory keeps the facts, but

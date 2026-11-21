@@ -3,11 +3,18 @@
 `tranibor_contracts.window.WINDOW` is the only place a former name may stay beside its successor
 (ADR 0098 left no alias policy). This test holds it both ways: an entry names a place where its former
 name is today (an entry whose name already left is stale and is refused), and once the repository's
-version reaches the entry's `removed_in` the name must be gone from that place. So the release that
-should remove a name cannot ship with it, and the list is empty on 1.0.
+release that removes the entry's window is cut, the name must be gone from that place. So the release
+that should remove a name cannot ship with it, and the list is empty on 1.0.
 
-To see it fail, set `removed_in` of `C1` to the current version: every entry is reported, naming its
-place. Or delete `pr_url` from the `WorkItem` of `openapi.yaml` without taking its entry off the list.
+A window is keyed on the releases actually cut (S83-04w): the release ledger `tools/releases.json`, which
+`tools/bump_version.py` writes in a release's own pull request. A window closes in the first release cut
+on or after its `removed_on`, two weeks at least after the release that opened it, whether that release
+is a patch (0.27.18) or a minor. The verdict moves only when the version and the ledger move, never on a
+calendar day.
+
+To see it fail, set `removed_on` of `C1` to a day before the last release of the ledger and that
+release two weeks after 0.27.17: every entry is reported, naming its place. Or delete `pr_url` from
+the `WorkItem` of `openapi.yaml` without taking its entry off the list.
 """
 
 from __future__ import annotations
@@ -24,22 +31,39 @@ from typing import Any
 import pytest
 import yaml
 from tranibor_contracts import Role
-from tranibor_contracts.window import C1, ROLE_STORED_AS, ROLE_SUCCESSORS, WINDOW, FormerName, Window
+from tranibor_contracts.window import (
+    C1,
+    GRACE,
+    ROLE_STORED_AS,
+    ROLE_SUCCESSORS,
+    WINDOW,
+    FormerName,
+    Window,
+    opening_release,
+    release,
+    removal_due,
+    writers_due,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "packages/contracts"
 
 
-def version() -> tuple[int, ...]:
+LEDGER = ROOT / "tools/releases.json"
+
+
+def current() -> str:
     text = (CONTRACTS / "pyproject.toml").read_text(encoding="utf-8")
-    return release(tomllib.loads(text)["project"]["version"])
+    return str(tomllib.loads(text)["project"]["version"])
 
 
-def release(name: str) -> tuple[int, ...]:
-    """`0.30.0` -> (0, 30, 0); a pre-release suffix (`0.30.0rc1`) counts as its release."""
-    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", name)
-    assert match, f"`{name}` is not a release number"
-    return tuple(int(part) for part in match.groups())
+def version() -> tuple[int, ...]:
+    return release(current())
+
+
+def releases() -> dict[str, date]:
+    document = json.loads(LEDGER.read_text(encoding="utf-8"))
+    return {name: date.fromisoformat(day) for name, day in document["releases"].items()}
 
 
 def _pointer(document: Any, pointer: str) -> Any:
@@ -99,10 +123,10 @@ def _label(entry: FormerName) -> str:
 
 @pytest.mark.parametrize("entry", WINDOW, ids=_label)
 def test_a_former_name_is_where_the_list_says_until_its_release_removes_it(entry: FormerName) -> None:
-    if version() >= release(entry.window.removed_in):
+    if removal_due(entry.window, releases(), current()):
         assert not present(entry), (
-            f"{_label(entry)} is still there in {'.'.join(map(str, version()))}, the release that removes "
-            f"it ({entry.window.round} of ADR 0181): remove it, rewrite the rows that hold it, and take its "
+            f"{_label(entry)} is still there in {current()}, the release that removes it "
+            f"({entry.window.round} of ADR 0181): remove it, rewrite the rows that hold it, and take its "
             "entry off `tranibor_contracts.window.WINDOW`"
         )
     else:
@@ -113,11 +137,9 @@ def test_a_former_name_is_where_the_list_says_until_its_release_removes_it(entry
 
 
 def test_the_writers_switch_one_release_after_the_readers() -> None:
-    windows = {entry.window for entry in WINDOW} | {C1}
-    switched = [w for w in windows if version() >= release(w.writers_switch_in)]
-    if any(w is C1 for w in switched):
+    if writers_due(C1, releases(), current()):
         assert not ROLE_STORED_AS, (
-            f"{C1.writers_switch_in} writes the neutral role names (ADR 0098 §4): empty `ROLE_STORED_AS`"
+            f"{current()} writes the neutral role names (ADR 0098 §4): empty `ROLE_STORED_AS`"
         )
     else:
         assert {old.stored for old in ROLE_SUCCESSORS} == set(ROLE_SUCCESSORS)
@@ -126,12 +148,58 @@ def test_the_writers_switch_one_release_after_the_readers() -> None:
 
 @pytest.mark.parametrize("window", sorted({entry.window for entry in WINDOW} | {C1}, key=lambda w: w.round))
 def test_a_window_is_ordered_and_its_removal_waits_two_weeks(window: Window) -> None:
-    assert release(window.opened_in) < release(window.writers_switch_in) < release(window.removed_in)
-    if version() >= release(window.removed_in):
-        assert date.today() >= window.not_before, (
-            f"{window.removed_in} removes the former names of {window.round} before {window.not_before}, "
-            "two weeks after the round's release (ADR 0181): move `removed_in` to a later release"
-        )
+    assert window.opened_on < window.writers_switch_on < window.removed_on
+    assert window.removed_on >= window.opened_on + GRACE
+
+
+def test_the_ledger_holds_the_current_release_in_order() -> None:
+    """The release a commit carries is in the ledger (`tools/bump_version.py` writes both), and the days
+    never go back as the versions go up."""
+    ledger = releases()
+    assert current() in ledger or "-" in current(), "run tools/bump_version.py: it writes the ledger"
+    days = [day for _, day in sorted(ledger.items(), key=lambda item: release(item[0]))]
+    assert days == sorted(days)
+    # C1 merged on 2026-11-19 and was first served by 0.27.17, as STATUS says.
+    assert opening_release(C1, ledger, "0.27.17") == ("0.27.17", date(2026, 11, 20))
+
+
+def test_a_window_closes_in_the_first_release_cut_on_its_day_patch_or_minor() -> None:
+    """What the ledger decides, on a window of 2026-11-21 → 2026-12-14."""
+    window = Window("T", date(2026, 11, 21), date(2026, 12, 7), date(2026, 12, 14))
+    ledger = {"0.27.17": date(2026, 11, 20), "0.27.18": date(2026, 11, 24), "0.27.19": date(2026, 12, 8)}
+    assert opening_release(window, ledger, "0.27.17") is None, "the round is in no release yet"
+    same_day = {"0.27.17": date(2026, 11, 21), "0.27.18": date(2026, 11, 22)}
+    assert opening_release(window, same_day, "0.27.18") == ("0.27.18", date(2026, 11, 22)), "maybe cut before"
+    assert opening_release(window, ledger, "0.27.19") == ("0.27.18", date(2026, 11, 24))
+    assert writers_due(window, ledger, "0.27.19") and not removal_due(window, ledger, "0.27.19")
+    # A patch on the removal day closes it; a minor would as well. Nothing is due before it is cut.
+    ledger["0.27.20"] = date(2026, 12, 14)
+    assert removal_due(window, ledger, "0.27.20") and not removal_due(window, ledger, "0.27.19")
+    assert removal_due(window, {**ledger, "0.28.0": date(2026, 12, 15)}, "0.28.0")
+    # Two weeks after the opening release at least: a late opening pushes the removal back.
+    late = {"0.27.17": date(2026, 11, 20), "0.27.18": date(2026, 12, 10), "0.27.19": date(2026, 12, 15)}
+    assert not removal_due(window, late, "0.27.19")
+    assert removal_due(window, {**late, "0.27.20": date(2026, 12, 24)}, "0.27.20")
+    # The release that opens a window never closes it, even cut after its day.
+    assert not removal_due(window, {"0.27.17": date(2026, 11, 20), "0.27.18": date(2027, 1, 4)}, "0.27.18")
+
+
+def test_the_release_writes_the_ledger_and_checks_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("bump_version", ROOT / "tools/bump_version.py")
+    assert spec is not None and spec.loader is not None
+    bump = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bump)
+    ledger = tmp_path / "releases.json"
+    ledger.write_text(json.dumps({"releases": {"0.27.17": "2026-11-20"}}), encoding="utf-8")
+    monkeypatch.setattr(bump, "LEDGER", ledger)
+    monkeypatch.setattr(bump, "ROOT", tmp_path)
+    assert bump.record_release("0.27.18", check=True) == 1, "a release missing from the ledger is refused"
+    assert bump.record_release("0.27.18", check=False, today=date(2026, 11, 24)) == 0
+    assert json.loads(ledger.read_text(encoding="utf-8"))["releases"]["0.27.18"] == "2026-11-24"
+    assert bump.record_release("0.27.18", check=True) == 0
+    assert bump.record_release("0.28.0-rc1", check=True) == 0, "a pre-release is not a release"
 
 
 def test_the_list_is_empty_on_1_0() -> None:

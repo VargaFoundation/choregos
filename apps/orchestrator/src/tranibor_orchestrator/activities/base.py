@@ -263,6 +263,42 @@ async def _sealed_values(session: AsyncSession, org_id: str, connector: Connecto
         return {}
 
 
+class _Nowhere:
+    """The tracker of a work item the platform holds while its project's tracker keeps items elsewhere:
+    every write is a success that writes nothing (ADR 0199)."""
+
+    async def set_state(self, key: str, mapping: Any) -> None:
+        return None
+
+    async def upsert_status_comment(self, key: str, markdown: str, marker: str) -> None:
+        return None
+
+    async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
+        return None
+
+    async def comment(self, key: str, markdown: str) -> None:
+        return None
+
+    async def close_item(self, key: str) -> None:
+        return None
+
+
+NOWHERE = _Nowhere()
+
+
+def held_in_platform(item: Any) -> bool:
+    """A fan-out's child (it keeps its parent, `documents.parent`): born in the platform whatever the
+    project's tracker (ADR 0199)."""
+    return bool((getattr(item, "documents", None) or {}).get("parent"))
+
+
+def tracker_for(bundle: Any, item: Any) -> Any:
+    """Where a work item's tracker writes go: the project's tracker, except for a fan-out's child when that
+    tracker keeps its items elsewhere — the child is not there, its writes go nowhere (ADR 0199)."""
+    adapter = bundle.adapters.tracker
+    return NOWHERE if held_in_platform(item) and tracker_owns_items(adapter) else adapter
+
+
 def tracker_owns_items(adapter: object) -> bool:
     """Does the connector keep the work items elsewhere? A mute connector is assumed to.
 

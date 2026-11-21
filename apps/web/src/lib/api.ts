@@ -257,6 +257,10 @@ import type {
 } from "./types";
 
 export const API_BASE = "/api/v1";
+/** Where the bytes of one revision (`name@version`) are downloaded: the content route, digest checked by the API. */
+export function artifactDownloadUrl(id: string, ref: string): string {
+  return `${API_BASE}/work-items/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(ref)}/content?download=true`;
+}
 export const IS_MOCK = process.env.NEXT_PUBLIC_API_MODE === "mock";
 /**
  * The starting organisation, before the session says more (demo mode, first render). It is
@@ -933,6 +937,12 @@ export const api = {
     request<PolicyDef>(`/projects/${qualify(id)}/policy`, { method: "PUT", body: JSON.stringify({ yaml }) }),
   createWorkItem: (id: string, body: WorkItemCreate) =>
     request<WorkItemDto>(`/projects/${qualify(id)}/work-items`, { method: "POST", body: JSON.stringify(body) }),
+  /** Hands files to a work item, multipart (ADR 0201): each becomes an input artifact; 201 with the stored artifacts. */
+  attachWorkItemFiles: (id: string, files: File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file, file.name);
+    return request<Artifact[]>(`/work-items/${encodeURIComponent(id)}/files`, { method: "POST", body: form });
+  },
   suspendProject: (id: string) => request<ProjectDto>(`/projects/${qualify(id)}/suspend`, { method: "POST" }),
   deleteProject: (id: string) => request<void>(`/projects/${qualify(id)}`, { method: "DELETE" }),
   abortRelease: (releaseId: string, reason: string) =>

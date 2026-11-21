@@ -3598,6 +3598,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (/^\/orgs\/[^/]+\/outposts(\/|$)/.test(bare)) {
     return structuredClone(outpostsApi(method, bare, path.split("?")[1] ?? "", body, orgConnectors, me.email)) as T;
   }
+  // A person hands files to a work item (ADR 0201): the stored artifacts, as the API answers 201.
+  const handing = /^\/work-items\/([^/]+)\/files$/.exec(bare);
+  if (method === "POST" && handing && init.body instanceof FormData) {
+    const files = init.body.getAll("files").filter((part): part is File => typeof part !== "string");
+    return files.map((file, index) => ({
+      ...artifactOf(file.name.replace(/[^A-Za-z0-9_.-]+/g, "-"), 1, "file", "file", file.type || "application/octet-stream", file.size, "", "", 0 - index),
+      produced_by: { run_id: "", stage: null, attempt: null, agent: null, agent_version: null },
+      handed_by: "person" as const,
+    })) as T;
+  }
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).

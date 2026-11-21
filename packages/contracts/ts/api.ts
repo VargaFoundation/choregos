@@ -1060,12 +1060,14 @@ export type ActionApproval = {
   approvers?: Array<{
     /** The least rank an approver holds; `developer` and `release_captain` are the former names of `contributor` and `approver` (ADR 0181 C1). */
     role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
-    /** an identity-provider group the approver must also belong to (ADR 0052) */
+    /** an identity-provider group the approver must also belong to (ADR 0052); a workflow's action may name it from a field of its work item, rendered when proposed (ADR 0196) */
     group?: string | null;
     min?: number;
   }>;
   step_up_minutes?: number;
   separation_of_duties?: boolean;
+  /** who may not decide the action, whatever their rank: e-mail addresses, compared without case (ADR 0196) */
+  excluded?: Array<string>;
 };
 
 export type ActionCreate = {
@@ -4325,6 +4327,25 @@ export type PriceOverride = {
   output_per_1k: number;
 };
 
+/** What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0200). A null or absent field keeps the default for the model's provider family. */
+export type CacheMultipliers = {
+  /** a token read from the cache (0.1 on Anthropic, 0.05 on Opus 5.5 / Sonnet 5.5) */
+  read?: number | null;
+  /** a token written with the 5-minute TTL (1.25 on Anthropic) */
+  write_5m?: number | null;
+  /** a token written with the 1-hour TTL (2 on Anthropic) */
+  write_1h?: number | null;
+};
+
+/** The multipliers a cache-heavy line is priced with when the organisation's price override applies: the entry's own, else the gateway's cached-input price, else the provider family's default. */
+export type EffectiveCacheMultipliers = {
+  read: number;
+  write_5m: number;
+  write_1h: number;
+  /** where the read multiplier comes from; the writes come from the override or the family default */
+  source: "override" | "gateway" | "family_default";
+};
+
 export type ModelGatewayFacts = {
   provider?: string;
   upstream_model?: string;
@@ -4350,6 +4371,8 @@ export type ModelCatalogueEntry = {
   allowed_roles: Array<string>;
   usages: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide">;
   price_override?: PriceOverride | null;
+  cache_multipliers?: CacheMultipliers | null;
+  effective_cache_multipliers?: EffectiveCacheMultipliers;
   max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
   last_seen_at?: string | null;
@@ -4366,6 +4389,7 @@ export type ModelCatalogueEntryCreate = {
   allowed_roles?: Array<string>;
   usages?: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide">;
   price_override?: PriceOverride | null;
+  cache_multipliers?: CacheMultipliers | null;
   max_usd_per_minute?: number | null;
   notes?: string;
 };
@@ -4376,7 +4400,9 @@ export type ModelCataloguePatch = {
   allowed_roles?: Array<string> | null;
   usages?: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide"> | null;
   price_override?: PriceOverride | null;
+  cache_multipliers?: CacheMultipliers | null;
   clear_price_override?: boolean;
+  clear_cache_multipliers?: boolean;
   max_usd_per_minute?: number | null;
   clear_max_usd_per_minute?: boolean;
   notes?: string | null;
@@ -6202,6 +6228,8 @@ export type CostReport = {
     tokens_cached?: number;
     /** the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07 */
     tokens_cache_write?: number;
+    /** the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0200) */
+    tokens_cache_write_1h?: number;
     runs?: number;
   }>;
   total: {
@@ -6215,6 +6243,8 @@ export type CostReport = {
     tokens_cached?: number;
     /** the input tokens the provider wrote to its cache, part of tokens_in (S4-07) */
     tokens_cache_write?: number;
+    /** the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0200) */
+    tokens_cache_write_1h?: number;
   };
 };
 
@@ -6523,6 +6553,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   attachAgentCredential: { method: "POST"; path: "/orgs/{org}/agents/{slug}/credentials"; body: AgentCredentialCreate; response: AgentCredential };
+  attachWorkItemFiles: { method: "POST"; path: "/work-items/{id}/files"; body: void; response: Array<Artifact> };
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };

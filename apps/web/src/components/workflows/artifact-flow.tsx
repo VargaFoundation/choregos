@@ -18,6 +18,7 @@ export function highlightOf(flow: ArtifactFlow): Highlight {
 const ORIGINE: Record<string, string> = {
   feedback: "a person's rejection reason",
   field: "a work item field",
+  attached: "a file handed to the work item",
   missing: "nothing produces it",
 };
 

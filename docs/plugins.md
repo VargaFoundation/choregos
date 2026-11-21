@@ -983,6 +983,10 @@ approval).
   tracker with a webhook). Each event is de-duplicated on its `delivery_id`, then its
   item is **re-read** with `tracker_fetch_item`: nothing of the delivery but the key is trusted. The
   event goes to the organisation's project that holds the item, or its only project on that tracker.
+  A sender that signs its deliveries with a bearer token in `Authorization` (a bot service's JWT) is
+  verified by the server that declares `webhook: {path, forward_authorization: true}`
+  ([ADR 0198](adr/0198-a-plugin-server-may-verify-its-sender-s-bearer-token.md)): that header then reaches
+  its `tracker_parse_event`, and no other server's; the platform neither logs nor stores it.
 - **Polling.** `list_candidates` is the profile's `tracker_list_candidates`, read by the tracker
   reconciliation like any external tracker's, for systems that send no events.
 - **Fakes.** Under `TRANIBOR_FAKES=1` a plugin tracker is built as itself and talks to

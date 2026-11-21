@@ -7,6 +7,7 @@ Warnings do not prevent saving but are reported to the front end and the CLI.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,6 +16,7 @@ from jsonschema.exceptions import SchemaError
 from tranibor_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    ATTACHMENTS_INPUT,
     CHECKED_TYPES,
     FACT_TYPES,
     MAX_FACTS,
@@ -43,11 +45,13 @@ from ..domain import REPOSITORY_FIELD, TRACKER_FIELD
 from ..errors import Issue
 from ..gates import (
     ALREADY_FIXED_GATE,
-    DIFF_GATES,
     OVER_WORK_ITEM,
-    RUN_SCOPED_GATES,
+    gate_plugin,
+    gate_requires,
+    is_run_scoped,
     judged_on_a_run,
     known_gates,
+    reads_the_workspace,
     unavailable,
 )
 from .dates import field_of
@@ -82,6 +86,46 @@ class ValidationReport:
         }
 
 
+#: The codes of a refusal only the deployment can settle: a gate or a step effect whose plugin's
+#: extension is not installed in this process (ADR 0181). A process that only reads workflows (the CLI,
+#: a template shipped with the core read before any extension loads) cannot know what it installed.
+DEPLOYMENT_CODES = frozenset({"gate.unknown", "gate.provider_missing"})
+#: A step effect a known plugin serves, whose extension this process lacks (`PLUGIN_EFFECTS`).
+EFFECT_UNAVAILABLE = "transition.effect_unavailable"
+
+
+def _gate_at(wf: Workflow, path: str | None) -> str | None:
+    """The gate an issue's path designates (`transitions[i].gates[j]`), else `None`."""
+    import re
+
+    found = re.fullmatch(r"transitions\[(\d+)\]\.gates\[(\d+)\]", path or "")
+    if found is None:
+        return None
+    try:
+        return wf.transitions[int(found.group(1))].gates[int(found.group(2))].name
+    except IndexError:
+        return None
+
+
+def deployment_issues(wf: Workflow, report: ValidationReport) -> tuple[list[Issue], list[Issue]]:
+    """`(left to the deployment, the others)`: the errors about a gate a known plugin serves, whose
+    extension this process lacks, apart from every other error. A deployment refuses the first ones at
+    publication when it lacks the extension; a reader that is not the deployment reports them."""
+    elsewhere: list[Issue] = []
+    others: list[Issue] = []
+    from ..step_effects import PLUGIN_EFFECTS
+
+    for issue in report.errors:
+        name = _gate_at(wf, issue.path)
+        if (issue.code in DEPLOYMENT_CODES and name is not None and gate_plugin(name) is not None) or (
+            issue.code == EFFECT_UNAVAILABLE and any(f"`{e}`" in issue.message for e in PLUGIN_EFFECTS)
+        ):
+            elsewhere.append(issue)
+        else:
+            others.append(issue)
+    return elsewhere, others
+
+
 def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     """Apply the DSL's static rules to an already deserialised workflow."""
     report = ValidationReport()
@@ -95,6 +139,8 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_retries(wf, report, source)
     _check_gates_have_something_to_check(wf, report, source)
     _check_output_schemas(wf, report, source)
+    _check_output_sections(wf, report, source)
+    _check_numbers_identifiers(wf, report, source)
     _check_known_roles(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
@@ -104,6 +150,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_confidence_thresholds(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
+    _check_attachments(wf, report, source)
     _check_effects(wf, report, source)
     _check_output_types(wf, report, source)
     _check_artifact_declarations(wf, report, source)
@@ -240,7 +287,8 @@ def _check_artifact_declarations(wf: Workflow, report: ValidationReport, source:
         for name in sorted(RESERVED_ARTIFACT_NAMES & set(t.outputs)):
             report.error(
                 "outputs.reserved",
-                f"`{name}` is measured by the platform: no step may declare it as an output",
+                f"transition `{t.key}`: `{name}` is measured by the platform: no step may declare it "
+                "as an output",
                 ["transitions", index, "outputs"],
                 source,
             )
@@ -473,6 +521,7 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 [*location, "action"],
                 source,
             )
+        _check_action_approval(t.action, declared_fields, [*location, "action", "approval"], report, source)
         actor = wf.actors.get(t.by) if t.by else None
         if not isinstance(actor, SystemActor):
             report.error(
@@ -500,6 +549,81 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 [*location, "action", "not_before"],
                 source,
             )
+
+
+#: The one template an action's approval may hold (ADR 0196): a field of the work item.
+_FIELD_REFERENCE = re.compile(r"\{\{\s*fields\.([a-z_][a-z0-9_]{0,62})\s*\}\}")
+
+
+def _check_action_approval(
+    action: Any,
+    declared_fields: dict[str, Any],
+    location: list[str | int],
+    report: ValidationReport,
+    source: Any,
+) -> None:
+    """Who decides comes from the work item only through a DECLARED field (ADR 0196): an approver
+    group holds at most one `{{ fields.x }}` beside its text and the `{project}` placeholder; an
+    exclusion is an address or exactly one `{{ fields.x }}`. Any other template is refused here,
+    not discovered when nobody can approve."""
+    if action.approval is None:
+        return
+
+    def referenced(text: str, where: list[str | int], whole: bool) -> bool:
+        names = _FIELD_REFERENCE.findall(text)
+        rest = _FIELD_REFERENCE.sub("", text)
+        if len(names) > 1 or (whole and names and rest.strip()) or any(t in rest for t in ("{{", "{%", "}}")):
+            report.error(
+                "action.approval_template",
+                f"`{text}`: an approval reads at most one field, written `{{{{ fields.<name> }}}}`"
+                + (", and nothing beside it" if whole else ""),
+                where,
+                source,
+            )
+            return False
+        for name in names:
+            if name not in declared_fields:
+                report.error(
+                    "action.approval_field_unknown",
+                    f"`{text}` reads `fields.{name}`, which `metadata.inputs` does not declare",
+                    where,
+                    source,
+                )
+        return True
+
+    for a_index, approver in enumerate(action.approval.approvers):
+        if approver.group is None:
+            continue
+        where: list[str | int] = [*location, "approvers", a_index, "group"]
+        if referenced(approver.group, where, whole=False):
+            refused = placeholder_error(_FIELD_REFERENCE.sub("", approver.group))
+            if refused is not None:
+                report.error("action.approval_template", refused, where, source)
+    for e_index, entry in enumerate(action.approval.excluded):
+        referenced(entry, [*location, "excluded", e_index], whole=True)
+
+
+def _check_attachments(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`attachments` is the files handed to a work item (ADR 0201 §9): a step reads them, none writes
+    them, and a workflow that could never be handed one cannot ask for them."""
+    can_receive = wf.metadata.attachments is not None or wf.a2a is not None
+    for index, t in enumerate(wf.transitions):
+        if ATTACHMENTS_INPUT in t.inputs and not can_receive:
+            report.error(
+                "inputs.attachments",
+                f"transition `{t.key}` reads `{ATTACHMENTS_INPUT}`, but this workflow takes no file: "
+                "declare `metadata.attachments` or an `a2a:` block",
+                ["transitions", index, "inputs"],
+                source,
+            )
+    if ATTACHMENTS_INPUT in (wf.artifacts or {}):
+        report.error(
+            "artifacts.attachments",
+            f"`{ATTACHMENTS_INPUT}` is the files handed to the work item, each with its own type: "
+            "it is never shown as one value, so `artifacts:` cannot describe it",
+            ["artifacts", ATTACHMENTS_INPUT],
+            source,
+        )
 
 
 def _check_spawns(wf: Workflow, report: ValidationReport, source: Any) -> None:
@@ -795,10 +919,17 @@ def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
     """What the platform does is WRITTEN (#175): `does` on a system transition, `production`
     on a state. An effect still deduced from a name is read (a published workflow does not change
     behaviour), but it announces itself: a rename would lose it."""
-    from ..step_effects import step_effect_of
+    from ..step_effects import step_effect_of, unavailable_effect
 
     for index, t in enumerate(wf.transitions):
         is_system = isinstance(wf.actors.get(t.by or ""), SystemActor)
+        effect = transition_effect(t) if is_system else None
+        missing = unavailable_effect(str(effect)) if effect is not None else None
+        if missing is not None:
+            # A gesture this deployment cannot make is refused now, naming the plugin to install
+            # (ADR 0181), rather than when a work item reaches it.
+            where: list[str | int] = ["transitions", index, "does" if t.does is not None else "to"]
+            report.error(EFFECT_UNAVAILABLE, missing, where, source)
         if t.does is not None and not is_system:
             message = f"`does: {t.does}` is a platform gesture: only a `system` actor carries it"
             report.error("transition.does_requires_system", message, ["transitions", index, "does"], source)
@@ -840,7 +971,7 @@ def _check_merge_holds_a_diff_guarantee(wf: Workflow, report: ValidationReport, 
     for index, t in enumerate(wf.transitions):
         if not isinstance(wf.actors.get(t.by or ""), SystemActor) or transition_effect(t) != "merge_pr":
             continue
-        if any(g.name in DIFF_GATES and not judged_on_a_run(g.name, g.params) for g in t.gates):
+        if any(reads_the_workspace(g.name) and not judged_on_a_run(g.name, g.params) for g in t.gates):
             continue
         report.warn(
             "workflow.no_diff_gate_at_merge",
@@ -861,7 +992,7 @@ def _check_scope_readings(wf: Workflow, report: ValidationReport, source: Any) -
     for index, t in enumerate(wf.transitions):
         by_the_platform = isinstance(wf.actors.get(t.by or ""), SystemActor)
         for g_index, g in enumerate(t.gates):
-            if g.name not in RUN_SCOPED_GATES:
+            if not is_run_scoped(g.name):
                 continue
             over = g.params.get("over")
             if over is not None and over != OVER_WORK_ITEM:
@@ -922,7 +1053,6 @@ GATES_NEEDING_PARAMS: dict[str, tuple[str, str]] = {
     "evidence_facts": ("keys", "`keys:` as a parameter of the guarantee"),
     "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
     "outputs_in": ("values", "`values:` as a parameter of the guarantee"),
-    "markdown_sections": ("paths", "`paths:` as a parameter of the guarantee"),
     "output_schema": ("schemas", "`schemas:` as a parameter of the guarantee"),
     "numbers_measured": ("sources", "`sources:` as a parameter of the guarantee"),
 }
@@ -937,7 +1067,7 @@ def _check_gates_have_something_to_check(wf: Workflow, report: ValidationReport,
     """
     for index, t in enumerate(wf.transitions):
         for g_index, g in enumerate(t.gates):
-            need = GATES_NEEDING_PARAMS.get(g.name)
+            need = GATES_NEEDING_PARAMS.get(g.name) or gate_requires(g.name)
             if need is None:
                 continue
             param, hint = need
@@ -987,6 +1117,72 @@ def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -
                         [*path, name],
                         source,
                     )
+
+
+def _check_numbers_identifiers(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`numbers_measured`'s `identifiers:` is `read` (the default) or `skip` (S85-16): any other value would
+    silently read identifiers, which is not what its author asked."""
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            value = g.params.get("identifiers") if g.name == "numbers_measured" else None
+            if value is not None and value not in ("read", "skip"):
+                report.error(
+                    "gate.numbers_measured",
+                    f"`identifiers:` is `read` or `skip`, not `{value}`",
+                    ["transitions", index, "gates", g_index, "params", "identifiers"],
+                    source,
+                )
+
+
+def _check_output_sections(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """An `output_sections` guarantee names outputs the transition declares, with patterns that compile.
+
+    An empty `outputs:` would check nothing, and a name the transition does not declare would never be
+    produced: the guarantee would fail on every item, or pass on nothing.
+    """
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            if g.name != "output_sections":
+                continue
+            path: list[str | int] = ["transitions", index, "gates", g_index, "params"]
+            wanted = g.params.get("outputs")
+            if not wanted or not isinstance(wanted, dict):
+                report.error(
+                    "gate.nothing_to_check",
+                    "guarantee `output_sections` without `outputs:` as a parameter of the guarantee "
+                    "(an output's name and its sections): it would have nothing to check",
+                    [*path, "outputs"],
+                    source,
+                )
+                continue
+            patterns = g.params.get("patterns") or {}
+            if not isinstance(patterns, dict):
+                report.error(
+                    "gate.output_sections",
+                    "`patterns:` maps an output's name to its regular expressions",
+                    [*path, "patterns"],
+                    source,
+                )
+                patterns = {}
+            for key, field_name in (*((n, "outputs") for n in wanted), *((n, "patterns") for n in patterns)):
+                if key not in t.outputs:
+                    report.error(
+                        "gate.output_sections",
+                        f"`{key}` in `{field_name}:` is not an output the transition declares in `outputs:`",
+                        [*path, field_name, key],
+                        source,
+                    )
+            for key, expressions in patterns.items():
+                for expression in expressions or []:
+                    try:
+                        re.compile(str(expression))
+                    except re.error as exc:
+                        report.error(
+                            "gate.output_sections",
+                            f"the pattern {str(expression)!r} of `{key}` does not compile: {exc}",
+                            [*path, "patterns", key],
+                            source,
+                        )
 
 
 def _check_known_roles(wf: Workflow, report: ValidationReport, source: Any) -> None:

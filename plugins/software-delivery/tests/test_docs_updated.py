@@ -6,14 +6,12 @@ from typing import Any
 
 from tranibor_core import GateContext, evaluate, known_gates
 from tranibor_core.gates import gate_needs
+from tranibor_software_delivery.gates import DeliveryFacts, delivery_context
 
 
 def _ctx(changed: list[str], added: dict[str, str] | None = None, **kw: Any) -> GateContext:
-    return GateContext(
-        changed_files=changed,
-        added_text=added if added is not None else dict.fromkeys(changed, "text"),
-        **kw,
-    )
+    text = added if added is not None else dict.fromkeys(changed, "text")
+    return delivery_context(DeliveryFacts(changed_files=changed, added_text=text, **kw))
 
 
 def test_code_and_a_documentation_page_pass() -> None:

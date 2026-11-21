@@ -36,6 +36,7 @@ from .base import (
     notification_target,
     project_bundle,
     send_courtesy,
+    tracker_for,
     tracker_owns_items,
     work_item_workflow,
 )
@@ -93,7 +94,7 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
             status=(state.tracker.status if state and state.tracker else None),
             label=(state.tracker.label if state and state.tracker else f"choregos:{state_name}"),
         )
-        await bundle.adapters.tracker.set_state(item.tracker_key, mapping)
+        await tracker_for(bundle, item).set_state(item.tracker_key, mapping)
         if previous != state_name:
             # An escalation says where the work item resumes (S22-41): an interpreter started again
             # from the database reads it there (`escalation_context`).
@@ -246,8 +247,8 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
             lines=lines,
         )
         markdown = comment.render()
-        await bundle.adapters.tracker.upsert_status_comment(item.tracker_key, markdown, STATUS_MARKER)
-        await bundle.adapters.tracker.set_fields(
+        await tracker_for(bundle, item).upsert_status_comment(item.tracker_key, markdown, STATUS_MARKER)
+        await tracker_for(bundle, item).set_fields(
             item.tracker_key,
             {
                 # A board from before S22-21 (`Coût (€)`, `Taille`, `Risque`) receives these values in
@@ -300,7 +301,7 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
         )
         console = await console_base(bundle)
         markdown = render_human_request(payload["kind"], outward, console, item.tracker_key)
-        await bundle.adapters.tracker.comment(item.tracker_key, markdown)
+        await tracker_for(bundle, item).comment(item.tracker_key, markdown)
         channel = notification_target(bundle)
         # The notification is a COURTESY, not the request. The request exists (in the database)
         # and can be read (comment on the work item, front-end screen, API) without it.
@@ -516,8 +517,8 @@ async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bo
         f"Delivered{env} in release `{name}` and closed as **{state.display}**."
     )
     try:
-        await bundle.adapters.tracker.upsert_status_comment(item.tracker_key, text, DELIVERED_MARKER)
-        await bundle.adapters.tracker.close_item(item.tracker_key)
+        await tracker_for(bundle, item).upsert_status_comment(item.tracker_key, text, DELIVERED_MARKER)
+        await tracker_for(bundle, item).close_item(item.tracker_key)
     # Deliberately broad: no tracker failure may kill a work item that is already delivered.
     except Exception as exc:
         logger.warning("delivered work item NOT closed in the tracker", key=item.tracker_key, error=str(exc))
@@ -556,7 +557,8 @@ async def _close_already_fixed_item(session: Any, bundle: Any, item: WorkItem) -
     )
     evidence = StageResult.model_validate(run.result).evidence if run is not None else None
     tests = (
-        f"- tests on the default branch: {evidence.tests_run} run, {evidence.tests_failed or 0} failed;\n"
+        f"- tests on the default branch: {evidence.value('tests_run')} run, "
+        f"{evidence.value('tests_failed') or 0} failed;\n"
         if evidence is not None
         else ""
     )
@@ -570,8 +572,8 @@ async def _close_already_fixed_item(session: Any, bundle: Any, item: WorkItem) -
         f"Closed as **{state.display}**, with no pull request."
     )
     try:
-        await bundle.adapters.tracker.upsert_status_comment(item.tracker_key, text, ALREADY_FIXED_MARKER)
-        await bundle.adapters.tracker.close_item(item.tracker_key)
+        await tracker_for(bundle, item).upsert_status_comment(item.tracker_key, text, ALREADY_FIXED_MARKER)
+        await tracker_for(bundle, item).close_item(item.tracker_key)
     # Deliberately broad: no tracker failure may kill a work item that is already settled.
     except Exception as exc:
         logger.warning(
