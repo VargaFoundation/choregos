@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -218,14 +218,17 @@ class AsyncClient:
         return await self.request("POST", path, **kwargs)
 
     async def stream_events(
-        self, method: str, path: str, **kwargs: Any
+        self, method: str, path: str, *, on_open: Callable[[], None] | None = None, **kwargs: Any
     ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-        """`Client.stream_events`, awaited: `(event, data)` in the order they come."""
+        """`Client.stream_events`, awaited: `(event, data)` in the order they come. `on_open` is called once
+        the server has accepted the stream: a quiet stream (only the server's pings) is open, not waiting."""
         headers = {"Accept": "text/event-stream"}
         async with self._client.stream(method, path, headers=headers, timeout=None, **kwargs) as response:
             if response.status_code >= 400:
                 await response.aread()
                 raise _problem(response)
+            if on_open is not None:
+                on_open()
             name, data = "message", list[str]()
             async for line in response.aiter_lines():
                 if not line:

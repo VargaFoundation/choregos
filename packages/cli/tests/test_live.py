@@ -563,7 +563,24 @@ async def test_a_run_ending_re_reads_the_items_once_for_several_endings(platform
         assert platform.item_reads - before <= 2
 
 
-async def test_a_dropped_stream_is_said_then_followed_again(platform: Platform) -> None:
+async def test_a_quiet_stream_is_live_before_its_first_event(platform: Platform) -> None:
+    """A flow where nothing happens only gets the server's pings: once the stream is open it is LIVE, not
+    RECONNECTING (seen on a real instance, S67-13)."""
+    app = make_app()
+    async with app.run_test(size=(190, 40)) as pilot:
+        await ready(pilot)
+        await until(pilot, lambda: platform.stream_opens > 0, "the stream")
+        await until(pilot, lambda: app.flow.connection == "live", "live without an event")
+        assert "LIVE" in screen_text(app) and "RECONNECTING" not in screen_text(app)
+
+
+async def test_a_dropped_stream_is_said_then_followed_again(
+    platform: Platform, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tranibor_cli import live_app
+
+    # A reopened stream is live at once: wait long enough between attempts for the drop to be seen.
+    monkeypatch.setattr(live_app, "RECONNECT_S", 0.6)
     app = make_app()
     async with app.run_test(size=(190, 40)) as pilot:
         await ready(pilot)

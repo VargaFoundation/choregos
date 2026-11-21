@@ -296,14 +296,24 @@ class LiveFlowPane(Vertical, can_focus=True):
             except Exception as exc:  # a dropped connection is a state to show, not a crash
                 self.error = f"{type(exc).__name__}: {exc}"
             self.connection = "reconnecting"
+            self.redraw(force=True)  # the drop is said now, not at the next tick
             await asyncio.sleep(RECONNECT_S)
             if self.loaded:
                 with contextlib.suppress(Exception):
                     await self.refresh_items()
 
+    def _opened(self) -> None:
+        """The stream is accepted: live, even before its first event (a quiet flow only gets pings)."""
+        self.connection = "live"
+        self.error = None
+        self.redraw(force=True)
+
     async def listen(self) -> None:
         async for event, entry in self.api.stream_events(
-            "GET", f"/orgs/{self.organisation}/activity/stream", params={"project": self.slug}
+            "GET",
+            f"/orgs/{self.organisation}/activity/stream",
+            params={"project": self.slug},
+            on_open=self._opened,
         ):
             self.connection = "live"
             self.error = None
