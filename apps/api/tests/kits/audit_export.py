@@ -23,7 +23,8 @@ async def write_chain(org_id: str | None, count: int, *, start: int = 1, prev: s
         for seq in range(start, start + count):
             payload: dict[str, Any] = {"n": seq, "note": "é", "ratio": 0.1}
             link = Link(
-                id=f"{org_id or 'platform'}-{seq:04d}",
+                # audit_log.id is 36 characters: an organisation id is already 36, so the place is hashed in.
+                id=hashlib.sha256(f"{org_id or 'platform'}-{seq}".encode()).hexdigest()[:36],
                 org_id=org_id,
                 seq=seq,
                 ts=T0 + timedelta(seconds=seq),
