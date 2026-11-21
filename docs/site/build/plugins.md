@@ -54,6 +54,12 @@ contents:
 versions the plugin was checked against. `contents` may also list `templates`, `evals`, `procedures`,
 `servers` and `matrix_cases`.
 
+A plugin whose trade needs code inside the platform (its gates, its step effects, its connector types)
+names that code's extension in `requires.extensions`, by the name of its `choregos.plugins` entry point:
+`requires: { extensions: [software-delivery] }` for the `software-delivery` plugin. A deployment that has
+not installed the extension refuses the plugin, naming it ([Plugins, extensions and
+editions](plugins-and-trades.md)).
+
 An agent is a catalogue entry: what the catalogue shows (`catalogue`) and the agent itself (`agent`,
 the same keys as when you [create one](agents.md#1-create-the-agent)):
 

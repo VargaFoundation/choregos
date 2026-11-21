@@ -292,6 +292,13 @@
       },
       "default": []
     },
+    "accepts_items_from": {
+      "description": "The projects of the organisation whose workflows may file work items here, by slug (the `work_item.file` effect, ADR 0197). Empty: none may.",
+      "type": "array",
+      "maxItems": 50,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+      "default": []
+    },
     "a2a": {
       "description": "What the A2A door takes for this project's skills (ADR 0078 §6).",
       "type": "object",

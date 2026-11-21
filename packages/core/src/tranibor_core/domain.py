@@ -385,6 +385,9 @@ class Spend(Model):
     #: The input tokens written to the provider's cache (Anthropic cache creation), part of
     #: `tokens_in`; dearer than a fresh token, where a read is far cheaper (S4-07, ADR 0188).
     tokens_cache_write: int = 0
+    #: The part of `tokens_cache_write` written with the 1-hour TTL (2x the input price, where the
+    #: 5-minute write is 1.25x); 0 when the provider does not say (S4-12, ADR 0200).
+    tokens_cache_write_1h: int = 0
     cost_usd: float = 0.0
     requests: int = 0
     models_used: list[str] = Field(default_factory=list)
@@ -395,6 +398,7 @@ class Spend(Model):
             tokens_out=self.tokens_out + other.tokens_out,
             tokens_cached=self.tokens_cached + other.tokens_cached,
             tokens_cache_write=self.tokens_cache_write + other.tokens_cache_write,
+            tokens_cache_write_1h=self.tokens_cache_write_1h + other.tokens_cache_write_1h,
             cost_usd=self.cost_usd + other.cost_usd,
             requests=self.requests + other.requests,
             models_used=sorted(set(self.models_used) | set(other.models_used)),

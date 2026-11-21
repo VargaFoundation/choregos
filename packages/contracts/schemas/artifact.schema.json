@@ -37,6 +37,11 @@
       "description": "How the console shows this revision (ADR 0129); null when nothing is said beyond its type. Outside the digest.",
       "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/display" }]
     },
+    "handed_by": {
+      "type": ["string", "null"],
+      "enum": ["person", "a2a", null],
+      "description": "Who handed this file to the work item (ADR 0201 §2): a person or an application's A2A task; null for a step's output."
+    },
     "value": {
       "type": ["string", "number", "null"],
       "description": "A `level` or a `metric`, once its digest checked (ADR 0129); anything else is read from its content."

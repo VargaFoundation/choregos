@@ -33,7 +33,7 @@ RULE = {
 
 
 def test_added_text_keeps_the_plus_lines_without_their_sign() -> None:
-    from tranibor_orchestrator.activities.gates import added_text_of
+    from tranibor_software_delivery.facts import added_text_of
 
     patch = "--- a/x.md\n+++ b/x.md\n@@ -1,2 +1,3 @@\n # Title\n-old line\n+new line\n+## Decision Outcome\n"
     assert added_text_of(patch) == "new line\n## Decision Outcome"

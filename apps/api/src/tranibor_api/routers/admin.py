@@ -29,6 +29,7 @@ from ..db.models import (
 from ..db.session import in_platform_scope
 from ..deps import Config, Db, Me, Pagination, require_platform_admin
 from ..errors import conflict, forbidden, not_found, unprocessable
+from ..keyset import keyset_page
 from ..schemas import (
     AgentBackendInfo,
     AgentBackendUpdate,
@@ -38,6 +39,7 @@ from ..schemas import (
     ConformanceReport,
     ExecutorInfo,
     GatewayKeyInfo,
+    GatewayKeyPage,
     MembershipDto,
     MembershipUpsert,
     PageMeta,
@@ -164,29 +166,64 @@ async def list_executors(principal: Me) -> list[ExecutorInfo]:
     ]
 
 
-@router.get("/platform/gateway/keys", response_model=list[GatewayKeyInfo], operation_id="listGatewayKeys")
-async def list_gateway_keys(session: Db, principal: Me) -> list[GatewayKeyInfo]:
+@router.get("/platform/gateway/keys", response_model=GatewayKeyPage, operation_id="listGatewayKeys")
+async def list_gateway_keys(
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    state: Annotated[Literal["active", "revoked"] | None, Query()] = None,
+) -> GatewayKeyPage:
+    """The keys the gateway minted, newest first, one page at a time (ADR 0206).
+
+    `q` matches a substring of the key id, the run id or the project slug; `state` keeps the active or
+    the revoked keys. Until 2026-11-19 the route returned the 200 newest keys and nothing else: the
+    201st was unreachable, and the console filtered what it had been given.
+    """
     await require_platform_admin(session, principal)
-    rows = (
-        (await session.execute(select(GatewayKeyRow).order_by(GatewayKeyRow.created_at.desc()).limit(200)))
-        .scalars()
-        .all()
-    )
-    slug_rows = (await session.execute(select(Project.id, Project.slug))).all()
-    slugs: dict[str, str] = {str(row[0]): str(row[1]) for row in slug_rows}
-    return [
-        GatewayKeyInfo(
-            key_id=row.key_id,
-            run_id=row.run_id,
-            project_slug=slugs.get(row.project_id or ""),
-            budget_usd=row.budget_usd,
-            spend_usd=row.spend_usd,
-            expires_at=row.expires_at,
-            revoked=row.revoked,
-            created_at=row.created_at,
+    query = select(GatewayKeyRow)
+    if state is not None:
+        query = query.where(GatewayKeyRow.revoked.is_(state == "revoked"))
+    if q and q.strip():
+        needle = q.strip()
+        matching_projects = select(Project.id).where(Project.slug.icontains(needle, autoescape=True))
+        query = query.where(
+            or_(
+                GatewayKeyRow.key_id.icontains(needle, autoescape=True),
+                GatewayKeyRow.run_id.icontains(needle, autoescape=True),
+                GatewayKeyRow.project_id.in_(matching_projects),
+            )
         )
-        for row in rows
-    ]
+    # The whole instance: the caller administers every organisation (`require_platform_admin`), and
+    # under the RLS of `gateway_keys` a key minted without a project belongs to no organisation, so
+    # the request's own scope hid it — on PostgreSQL only (found 2026-11-20, ADR 0206).
+    async with in_platform_scope(session):
+        rows, meta = await keyset_page(
+            session, query, sort=GatewayKeyRow.created_at, tiebreak=GatewayKeyRow.id, page=page
+        )
+        # The slugs of this page's projects only, not of every project on the instance.
+        project_ids = {row.project_id for row in rows if row.project_id}
+        slugs: dict[str, str] = {}
+        if project_ids:
+            page_projects = select(Project.id, Project.slug).where(Project.id.in_(project_ids))
+            slug_rows = (await session.execute(page_projects)).all()
+            slugs = {str(row[0]): str(row[1]) for row in slug_rows}
+    return GatewayKeyPage(
+        items=[
+            GatewayKeyInfo(
+                key_id=row.key_id,
+                run_id=row.run_id,
+                project_slug=slugs.get(row.project_id or ""),
+                budget_usd=row.budget_usd,
+                spend_usd=row.spend_usd,
+                expires_at=row.expires_at,
+                revoked=row.revoked,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ],
+        meta=meta,
+    )
 
 
 @router.get("/orgs/{org}/members", response_model=list[MembershipDto], operation_id="listMembers")

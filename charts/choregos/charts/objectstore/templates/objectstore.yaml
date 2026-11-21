@@ -1,5 +1,5 @@
 {{- /*
-One RustFS replica, one volume, an S3 API on 9000 (ADR 0197). The keys are the Secret
+One RustFS replica, one volume, an S3 API on 9000 (ADR 0208). The keys are the Secret
 `global.objectStore.secretRef` (`access-key`, `secret-key`), the same one the API and the backup read.
 Only the API's pods (and the backup) reach it: the chart's NetworkPolicy walls it when they are on.
 The console of the server (9001) is not exposed by a Service.
