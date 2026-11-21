@@ -112,7 +112,7 @@ async def test_a_project_s_implicit_agents_are_computed_by_the_api(
         )
     response = await client.get(f"/api/v1/projects/{project['id']}/implicit-agents")
     assert response.status_code == 200, response.text
-    hr_ones = [a for a in response.json() if a["workflow"] == "hr"]
+    hr_ones = [a for a in response.json()["items"] if a["workflow"] == "hr"]
     assert hr_ones == [
         {
             "workflow": "hr",

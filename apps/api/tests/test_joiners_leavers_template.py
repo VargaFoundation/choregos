@@ -37,7 +37,7 @@ async def test_an_hr_project_is_born_with_its_workflows_and_the_organisation_rec
     client: AsyncClient, admin: str
 ) -> None:
     pid = (await _project(client))["id"]
-    assert {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()} == {
+    assert {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()["items"]} == {
         "onboarding",
         "offboarding",
     }

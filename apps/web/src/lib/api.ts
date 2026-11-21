@@ -191,6 +191,12 @@ import type {
   OrgPage,
   ApiTokenPage,
   BrowserSessionPage,
+  ImplicitAgentPage,
+  MachineAccountPage,
+  ProjectAgentPage,
+  WorkflowAgentPage,
+  WorkflowDefPage,
+  WorkflowSummaryPage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -734,9 +740,16 @@ export const api = {
   /** The registry's columns — runs, success rate, cost — for every agent at once (S30-04). */
   agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
   /** A project's implicit agents, computed by the API (S30-04). */
-  implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  implicitAgentsPage: (id: string, params: PageParams = {}) =>
+    request<ImplicitAgentPage>(`/projects/${qualify(id)}/implicit-agents${pageQuery(params)}`),
+  /** All of them, page after page (the page needs the count and the whole list to register from). */
+  implicitAgents: (id: string): Promise<ImplicitAgent[]> =>
+    followPages((params) => api.implicitAgentsPage(id, params)),
   /** Every agent the project's active workflows run, named or built in (S47-39). */
-  workflowAgents: (id: string) => request<WorkflowAgent[]>(`/projects/${qualify(id)}/workflow-agents`),
+  workflowAgentsPage: (id: string, params: PageParams = {}) =>
+    request<WorkflowAgentPage>(`/projects/${qualify(id)}/workflow-agents${pageQuery(params)}`),
+  workflowAgents: (id: string): Promise<WorkflowAgent[]> =>
+    followPages((params) => api.workflowAgentsPage(id, params)),
   /** Who a person step addressed to a group waits for, and who of them may answer in the project. */
   groupMembers: (id: string, group: string) =>
     request<GroupMembers>(`/projects/${qualify(id)}/groups/${encodeURIComponent(group)}/members`),
@@ -783,7 +796,9 @@ export const api = {
     }),
   detachAgentCredential: (org: string, slug: string, id: string) =>
     request<void>(`/orgs/${org}/agents/${slug}/credentials/${id}`, { method: "DELETE" }),
-  projectAgents: (id: string) => request<ProjectAgent[]>(`/projects/${qualify(id)}/agents`),
+  /** The project's pins by agent slug, one page at a time (ADR 0206). */
+  projectAgents: (id: string, params: PageParams = {}) =>
+    request<ProjectAgentPage>(`/projects/${qualify(id)}/agents${pageQuery(params)}`),
   pinProjectAgent: (id: string, slug: string, body: ProjectAgentPut) =>
     request<ProjectAgent>(`/projects/${qualify(id)}/agents/${slug}`, { method: "PUT", body: JSON.stringify(body) }),
   unpinProjectAgent: (id: string, slug: string) =>
@@ -1251,7 +1266,10 @@ export const api = {
   putWorkflow: (id: string, yaml: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflow`, { method: "PUT", body: JSON.stringify({ yaml }) }),
   // Several workflows per project, each by its name (ADR 0031).
-  workflows: (id: string) => request<WorkflowSummary[]>(`/projects/${qualify(id)}/workflows`),
+  workflowsPage: (id: string, params: PageParams = {}) =>
+    request<WorkflowSummaryPage>(`/projects/${qualify(id)}/workflows${pageQuery(params)}`),
+  /** Every active workflow, page after page: the pickers, the board and the flow need the whole set. */
+  workflows: (id: string): Promise<WorkflowSummary[]> => followPages((params) => api.workflowsPage(id, params)),
   workflowNamed: (id: string, name: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`),
   /** Publishes the next version; `baseVersion` is the one that was read, and if stale the API answers 409. */
@@ -1266,8 +1284,13 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ yaml, create_only: true }),
     }),
-  workflowVersions: (id: string, name: string) =>
-    request<WorkflowDef[]>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions`),
+  workflowVersionsPage: (id: string, name: string, params: PageParams = {}) =>
+    request<WorkflowDefPage>(
+      `/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions${pageQuery(params)}`,
+    ),
+  /** Every version, newest first, page after page: the history diffs any two of them. */
+  workflowVersions: (id: string, name: string): Promise<WorkflowDef[]> =>
+    followPages((params) => api.workflowVersionsPage(id, name, params)),
   /** Republishes a past version as the next one: nothing is rewritten, the history grows. */
   restoreWorkflowVersion: (id: string, name: string, version: number) =>
     request<WorkflowDef>(
@@ -1357,7 +1380,8 @@ export const api = {
   receivedEvents: (id: string, params?: Record<string, string>) =>
     request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
   /** The applications that call the A2A door under their own name (ADR 0131), and their tokens. */
-  machineAccounts: (id: string) => request<MachineAccount[]>(`/projects/${qualify(id)}/machine-accounts`),
+  machineAccounts: (id: string, params: PageParams = {}) =>
+    request<MachineAccountPage>(`/projects/${qualify(id)}/machine-accounts${pageQuery(params)}`),
   createMachineAccount: (id: string, body: MachineAccountCreate) =>
     request<MachineAccount>(`/projects/${qualify(id)}/machine-accounts`, { method: "POST", body: JSON.stringify(body) }),
   removeMachineAccount: (id: string, slug: string) =>
@@ -1632,6 +1656,34 @@ async function allWorkItems(
     hasMore = page.meta.has_more;
   } while (hasMore && cursor && items.length < cap);
   return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
+}
+
+/** The paging parameters of a list route (ADR 0206). */
+export type PageParams = { cursor?: string; limit?: number };
+
+function pageQuery(params: PageParams): string {
+  return query(compact({ cursor: params.cursor, limit: params.limit?.toString() }));
+}
+
+/** How many rows `followPages` reads at most: ten pages of 200. */
+export const FOLLOW_PAGES_CAP = 2000;
+
+/**
+ * Every row of a paged list, page after page, up to `cap`. For the screens that need the whole set
+ * (a picker, a graph, a count); a table asks for a page and offers "More" instead.
+ */
+async function followPages<T>(
+  read: (params: PageParams) => Promise<{ items: T[]; meta: { has_more: boolean; next_cursor?: string | null } }>,
+  cap: number = FOLLOW_PAGES_CAP,
+): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const page = await read({ cursor, limit: 200 });
+    items.push(...page.items);
+    if (!page.meta.has_more || !page.meta.next_cursor || items.length >= cap) return items;
+    cursor = page.meta.next_cursor;
+  }
 }
 
 function query(params?: Record<string, string>): string {

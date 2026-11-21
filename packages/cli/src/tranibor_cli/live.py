@@ -61,8 +61,7 @@ def live(
     try:
         projects = api.get(f"/orgs/{organisation}/projects")["items"]
         chosen = _pick(projects, project)
-        workflows = api.get(f"/projects/{chosen['slug']}/workflows")
-        workflows = workflows["items"] if isinstance(workflows, dict) else workflows
+        workflows = api.get_pages(f"/projects/{chosen['slug']}/workflows")
         name, is_default = _workflow(workflows, workflow)
     except ApiError as exc:
         main.fail(str(exc))

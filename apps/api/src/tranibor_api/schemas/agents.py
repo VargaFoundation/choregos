@@ -24,7 +24,7 @@ from tranibor_core.network import validate_pattern
 from tranibor_core.workspace import AgentWorkspace
 
 from .agent_social import AgentSocial
-from .base import Dto
+from .base import Dto, PageMeta
 from .identity import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
@@ -1169,6 +1169,13 @@ class ProjectAgentDto(Dto):
     warning: str | None = None
 
 
+class ProjectAgentPage(Dto):
+    """One page of a project's pins, by agent slug (ADR 0206)."""
+
+    items: list[ProjectAgentDto]
+    meta: PageMeta
+
+
 class SkillApproval(Dto):
     """The body of an approval, optional: `force` lets the importer approve their own version.
 
@@ -1466,6 +1473,20 @@ class WorkflowAgent(ImplicitAgent):
     agent: str | None = None
     #: Whether the agent it names exists in the organisation's registry.
     registered: bool = False
+
+
+class WorkflowAgentPage(Dto):
+    """One page of the agent actors of a project's workflows, by workflow then actor (ADR 0206)."""
+
+    items: list[WorkflowAgent]
+    meta: PageMeta
+
+
+class ImplicitAgentPage(Dto):
+    """One page of the implicit agents, by workflow then actor (ADR 0206)."""
+
+    items: list[ImplicitAgent]
+    meta: PageMeta
 
 
 class BuiltinModelChoice(Dto):

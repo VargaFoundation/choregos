@@ -116,6 +116,7 @@ import { changeOperationAtOutpost, checkOutpostConnector, discoverAtOutpost, out
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
+import { mockPage } from "./paging";
 import { DECK, MEMO, WORKBOOK } from "./office-samples";
 
 export { peopleOpsFixtures };
@@ -2246,7 +2247,7 @@ export const platformAgentImages: AgentImageInfo[] = [
 ];
 
 /** One page of `rows` as the server returns it (ADR 0206): `limit` rows from the opaque `cursor` (here an offset). */
-function mockPage<T>(rows: T[], path: string): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+function pageInOrder<T>(rows: T[], path: string): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
   const search = new URLSearchParams(path.split("?")[1] ?? "");
   const limit = Math.min(200, Math.max(1, Number(search.get("limit") ?? 50) || 50));
   const start = Number(search.get("cursor") ?? 0) || 0;
@@ -2262,7 +2263,7 @@ function membersOf(path: string) {
   const rows = memberships
     .filter((m) => (!project || m.project_slug === project) && (!needle || (m.email ?? "").toLowerCase().includes(needle)))
     .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
-  return mockPage(rows, path);
+  return pageInOrder(rows, path);
 }
 
 /** The registry's columns, one line per agent (S30-04). */
@@ -3549,7 +3550,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const mine = mockLinkedAccounts
       .filter((a) => a.org === org && a.user_id === userId)
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.base_url.localeCompare(b.base_url));
-    return structuredClone(mockPage(mine, path)) as T;
+    return structuredClone(pageInOrder(mine, path)) as T;
   }
   if (method === "GET" && bare === "/me/linked-accounts") {
     return structuredClone({ items: mockLinkedAccounts.filter((a) => a.user_id === "u1"), instances: [...mockForgeInstances] }) as T;
@@ -4545,15 +4546,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
   if (/^\/orgs\/[^/]+\/agents\/rovo\/runs$/.test(route ?? "")) return [remoteRunDrifted, remoteRun] as T;
-  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return mockPage([...remoteCredentials].sort((a, b) => a.name.localeCompare(b.name)), path) as T;
+  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return pageInOrder([...remoteCredentials].sort((a, b) => a.name.localeCompare(b.name)), path) as T;
   if (/^\/runs\/r-remote\/events$/.test(route ?? "")) return remoteEvents(false) as T;
   if (/^\/runs\/r-remote-drift\/events$/.test(route ?? "")) return remoteEvents(true) as T;
   if (/^\/runs\/r-remote(-drift)?$/.test(route ?? "")) return (route?.endsWith("drift") ? remoteRunDrifted : remoteRun) as T;
   // The runs of an agent, newest first (S30-05).
   if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
-  if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
+  const actorKey = (a: ImplicitAgent) => `${a.workflow}\u0000${a.actor}`;
+  if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return mockPage(implicitAgents(), path, actorKey) as T;
   if (/^\/projects\/[^/]+\/workflow-agents$/.test(route ?? ""))
-    return implicitAgents().map((a) => ({ ...a, agent: null, registered: false })) as T;
+    return mockPage(
+      implicitAgents().map((a) => ({ ...a, agent: null, registered: false })),
+      path,
+      actorKey,
+    ) as T;
   if (/^\/projects\/[^/]+\/agent-resolution$/.test(route ?? "")) return resolutionDemo(path) as T;
   if (/^\/projects\/[^/]+\/builtin-agent$/.test(route ?? "")) return builtinAgentDemo(path) as T;
   const groupMatch = /^\/projects\/[^/]+\/groups\/([^/]+)\/members$/.exec(route ?? "");
@@ -4603,7 +4609,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
-    [/^\/projects\/[^/]+\/agents$/, projectAgents],
+    [/^\/projects\/[^/]+\/agents$/, mockPage(projectAgents, path, (pin) => pin.agent)],
     [/^\/orgs\/[^/]+\/skills$/, [...skills, ...[...catalogueSkills.values()].map((c) => c.skill)]],
     [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
     [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
@@ -4683,15 +4689,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/metrics\/dora$/, dora],
     [/^\/projects\/[^/]+\/metrics\/cross-backend$/, crossBackend],
     [/^\/projects\/[^/]+\/workflow$/, workflow],
-    [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
-    [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
+    [/^\/projects\/[^/]+\/workflows$/, mockPage(workflowSummaries, path, (w) => w.name)],
+    [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, mockPage(workflowVersions, path, (w) => w.version, { descending: true })],
     [/^\/projects\/[^/]+\/workflows\/hotfix$/, hotfix],
     [/^\/projects\/[^/]+\/workflows\/release-full$/, releaseFull],
     [/^\/projects\/[^/]+\/workflows\/dev-complex$/, devComplexDef],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     // HTTP triggers (S56-02): one declared trigger, its token minted once, a manual firing.
-    [/^\/projects\/[^/]+\/machine-accounts$/, mockMachineAccounts],
+    [/^\/projects\/[^/]+\/machine-accounts$/, mockPage(mockMachineAccounts, path, (a) => a.slug)],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
     [/^\/projects\/[^/]+\/triggers$/, mockTriggers],

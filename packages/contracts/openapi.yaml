@@ -1038,8 +1038,13 @@ paths:
       tags: [workflows]
       operationId: listWorkflows
       summary: The project's workflows — one active per name, the default one marked (ADR 0031)
+      description: By name, one page at a time (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowSummaryPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/workflow-catalogue:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -1158,8 +1163,13 @@ paths:
     get:
       tags: [workflows]
       operationId: listWorkflowVersions
+      description: The published versions of the workflow, newest first, one page at a time (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowDef" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowDefPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/workflows/{name}/versions/{version}/restore:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -1480,10 +1490,15 @@ paths:
       tags: [projects]
       operationId: listMachineAccounts
       summary: The project's machine accounts and their tokens (never a token's value)
+      description: By slug, one page at a time (ADR 0206); the tokens are those of the page's accounts.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MachineAccount" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MachineAccountPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [projects]
       operationId: createMachineAccount
@@ -5898,16 +5913,28 @@ paths:
     get:
       tags: [agents]
       operationId: listProjectAgents
+      description: The project's pins by agent slug, one page at a time (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The pinned versions, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectAgent" } } } } }
+        "200": { description: A page of the pinned versions, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectAgentPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/implicit-agents:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [agents]
       operationId: listImplicitAgents
-      description: The `agent` actors of the project's active workflows that name no agent of the registry — computed by the API, not by one read per workflow (S30-04).
+      description: >-
+        The `agent` actors of the project's active workflows that name no agent of the registry — computed by the API,
+        not by one read per workflow (S30-04). Paged by workflow name then actor name (ADR 0206): the cursor is the
+        last item's pair.
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The implicit agents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ImplicitAgent" } } } } }
+        "200": { description: A page of the implicit agents, content: { application/json: { schema: { $ref: "#/components/schemas/ImplicitAgentPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/builtin-agent:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -5950,9 +5977,15 @@ paths:
     get:
       tags: [agents]
       operationId: listWorkflowAgents
-      description: Every `agent` actor of the project's active workflows, the registry agent it names or none, so the console lists the agents a project runs in one table (S47-39).
+      description: >-
+        Every `agent` actor of the project's active workflows, the registry agent it names or none, so the console
+        lists the agents a project runs in one table (S47-39). Paged by workflow name then actor name (ADR 0206).
+      parameters:
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The workflows' agents, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/WorkflowAgent" } } } } }
+        "200": { description: A page of the workflows' agents, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowAgentPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/agent-resolution:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -12326,6 +12359,42 @@ components:
         work_item_id: { type: [string, "null"] }
         work_item_key: { type: [string, "null"] }
         workflow: { type: [string, "null"] }
+    ProjectAgentPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ProjectAgent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ImplicitAgentPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ImplicitAgent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    WorkflowAgentPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WorkflowAgent" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    WorkflowSummaryPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WorkflowSummary" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    WorkflowDefPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/WorkflowDef" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    MachineAccountPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MachineAccount" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     ReceivedEventPage:
       type: object
       required: [items, meta]

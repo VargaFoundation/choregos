@@ -5458,6 +5458,36 @@ export type TriggerAck = {
   workflow?: string | null;
 };
 
+export type ProjectAgentPage = {
+  items: Array<ProjectAgent>;
+  meta: PageMeta;
+};
+
+export type ImplicitAgentPage = {
+  items: Array<ImplicitAgent>;
+  meta: PageMeta;
+};
+
+export type WorkflowAgentPage = {
+  items: Array<WorkflowAgent>;
+  meta: PageMeta;
+};
+
+export type WorkflowSummaryPage = {
+  items: Array<WorkflowSummary>;
+  meta: PageMeta;
+};
+
+export type WorkflowDefPage = {
+  items: Array<WorkflowDef>;
+  meta: PageMeta;
+};
+
+export type MachineAccountPage = {
+  items: Array<MachineAccount>;
+  meta: PageMeta;
+};
+
 export type ReceivedEventPage = {
   items: Array<ReceivedEvent>;
   meta: PageMeta;
@@ -6976,10 +7006,10 @@ export interface Operations {
   listGitHubRepositories: { method: "GET"; path: "/orgs/{org}/github/repositories"; body: never; response: GitHubRepositoryPage };
   listGlobalPendingMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/pending"; body: never; response: Array<Memory> };
   listGroupMembers: { method: "GET"; path: "/projects/{id}/groups/{group}/members"; body: never; response: GroupMembers };
-  listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
+  listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: ImplicitAgentPage };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
-  listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: Array<MachineAccount> };
+  listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: MachineAccountPage };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMemberLinkedAccounts: { method: "GET"; path: "/orgs/{org}/members/{user_id}/linked-accounts"; body: never; response: LinkedAccountPage };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: MembershipPage };
@@ -7013,7 +7043,7 @@ export interface Operations {
   listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
   listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
-  listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
+  listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: ProjectAgentPage };
   listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
   listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: ProjectOperationPage };
   listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: ProjectOrgConnectorPage };
@@ -7033,11 +7063,11 @@ export interface Operations {
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
-  listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: Array<WorkflowAgent> };
+  listWorkflowAgents: { method: "GET"; path: "/projects/{id}/workflow-agents"; body: never; response: WorkflowAgentPage };
   listWorkflowCatalogue: { method: "GET"; path: "/orgs/{org}/workflow-catalogue"; body: never; response: Array<WorkflowCatalogueEntry> };
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
-  listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
-  listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: WorkflowDefPage };
+  listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: WorkflowSummaryPage };
   mintMyEmbedToken: { method: "POST"; path: "/me/assistants/{org}/{slug}/embed-token"; body: never; response: EmbedToken };
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };

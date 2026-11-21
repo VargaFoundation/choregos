@@ -48,15 +48,45 @@ def test_a_projects_workflows_are_listed() -> None:
     respx.get(f"{API}/api/v1/projects/hr/workflows").mock(
         return_value=Response(
             200,
-            json=[
-                {"name": "onboarding", "version": 3, "is_default": True, "open_items": 2},
-                {"name": "offboarding", "version": 1, "is_default": False, "open_items": 0},
-            ],
+            json={
+                "items": [
+                    {"name": "onboarding", "version": 3, "is_default": True, "open_items": 2},
+                    {"name": "offboarding", "version": 1, "is_default": False, "open_items": 0},
+                ],
+                "meta": {"has_more": False, "next_cursor": None},
+            },
         )
     )
     result = _run("workflow", "list", "hr")
     assert result.exit_code == 0, result.output
     assert "onboarding" in result.output and "v3" in result.output and "offboarding" in result.output
+
+
+@respx.mock
+def test_workflow_list_follows_the_cursor_to_the_last_page() -> None:
+    """The server pages the list (ADR 0206): a workflow past the first page is still listed."""
+    route = respx.get(f"{API}/api/v1/projects/hr/workflows").mock(
+        side_effect=[
+            Response(
+                200,
+                json={
+                    "items": [{"name": "alpha", "version": 1, "is_default": False, "open_items": 0}],
+                    "meta": {"has_more": True, "next_cursor": "after-alpha"},
+                },
+            ),
+            Response(
+                200,
+                json={
+                    "items": [{"name": "zulu", "version": 2, "is_default": True, "open_items": 1}],
+                    "meta": {"has_more": False, "next_cursor": None},
+                },
+            ),
+        ]
+    )
+    result = _run("workflow", "list", "hr")
+    assert result.exit_code == 0, result.output
+    assert "alpha" in result.output and "zulu" in result.output
+    assert route.calls[1].request.url.params["cursor"] == "after-alpha"
 
 
 @respx.mock

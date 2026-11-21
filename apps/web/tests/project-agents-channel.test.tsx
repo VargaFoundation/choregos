@@ -14,7 +14,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      projectAgents: vi.fn().mockResolvedValue([]),
+      projectAgents: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       agents: vi.fn(),
       implicitAgents: vi.fn().mockResolvedValue([]),
       workflowAgents: vi.fn().mockResolvedValue([]),

@@ -760,7 +760,7 @@ curl -X PUT  $API/projects/acme:hr/workflows/onboarding  -d '{"yaml": "..."}'   
 curl -X PUT  $API/projects/acme:hr/workflows/leaver -d '{"yaml": "...", "create_only": true}'  # creates; a taken name → 409
 curl -X PUT  $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding",
   "rules": [{"when": {"labels_any": ["leaver"]}, "workflow": "offboarding"}]}'
-curl         $API/projects/acme:hr/workflows                                    # one active version per name
+curl         $API/projects/acme:hr/workflows                                    # one active version per name; {items, meta}, 50 a page: ?limit=, ?cursor= (ADR 0206)
 ```
 
 - One version is active per name; every publication adds a version, none is overwritten, and

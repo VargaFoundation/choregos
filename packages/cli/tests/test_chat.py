@@ -344,7 +344,9 @@ class Platform:
         ]
         self.workflows_status = 200
         self.flow_reads: list[str] = []
-        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows$").mock(side_effect=self._workflows)
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows(\?.*)?$").mock(
+            side_effect=self._workflows
+        )
         router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows/delivery$").mock(
             return_value=Response(
                 200,
@@ -384,7 +386,11 @@ class Platform:
         if self.workflows_status != 200:
             return Response(self.workflows_status, json={"title": "Forbidden", "detail": "no"})
         summary = {"name": "delivery", "version": 3, "is_default": True, "open_items": 2}
-        return Response(200, json=[self.contract("WorkflowSummary", summary)])
+        page = {
+            "items": [self.contract("WorkflowSummary", summary)],
+            "meta": {"has_more": False, "next_cursor": None},
+        }
+        return Response(200, json=page)
 
     def _flow(self, request: Any) -> Response:
         self.flow_reads.append(request.url.path)

@@ -19,8 +19,9 @@ from tranibor_core.policy_ceiling import PolicyCeiling, widenings
 
 from ..audit import record
 from ..db.models import Organization, PolicyDef, Project, WorkflowDef, WorkItem
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Db, Me, Pagination, ProjectCtx
 from ..errors import conflict, forbidden, not_found, unprocessable
+from ..keyset import keyset_page
 from ..rbac import Permission, Principal
 from ..schemas import (
     PolicyCeilingDto,
@@ -35,12 +36,14 @@ from ..schemas import (
     StepCalibration,
     WorkflowActivity,
     WorkflowDefDto,
+    WorkflowDefPage,
     WorkflowEditRequest,
     WorkflowEditResult,
     WorkflowIssue,
     WorkflowPut,
     WorkflowRoutingDto,
     WorkflowSummaryDto,
+    WorkflowSummaryPage,
     WorkflowTemplateDto,
     WorkflowValidateRequest,
     WorkflowValidation,
@@ -234,39 +237,49 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
     return workflow_dto(row, ctx.project)
 
 
-@router.get("/projects/{id}/workflows", response_model=list[WorkflowSummaryDto], operation_id="listWorkflows")
-async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDto]:
-    active = (
-        await session.execute(
-            select(WorkflowDef)
-            .where(WorkflowDef.project_id == ctx.id, WorkflowDef.is_active.is_(True))
-            .order_by(WorkflowDef.name)
-        )
-    ).scalars()
+@router.get("/projects/{id}/workflows", response_model=WorkflowSummaryPage, operation_id="listWorkflows")
+async def list_workflows(ctx: ProjectCtx, session: Db, page: Pagination) -> WorkflowSummaryPage:
+    """The project's active workflows by name, one page at a time (ADR 0206); the open items are counted
+    for the page's workflows only."""
+    active, meta = await keyset_page(
+        session,
+        select(WorkflowDef).where(WorkflowDef.project_id == ctx.id, WorkflowDef.is_active.is_(True)),
+        sort=WorkflowDef.name,
+        tiebreak=WorkflowDef.id,
+        page=page,
+        descending=False,
+    )
     # A `Result` has a `keys()` method (its columns): `dict(result)` would index it. Iterate over it instead.
     counts = await session.execute(
         select(WorkflowDef.name, func.count(WorkItem.id))
         .join(WorkItem, WorkItem.workflow_def_id == WorkflowDef.id)
-        .where(WorkflowDef.project_id == ctx.id, WorkItem.closed_at.is_(None))
+        .where(
+            WorkflowDef.project_id == ctx.id,
+            WorkflowDef.name.in_([row.name for row in active]),
+            WorkItem.closed_at.is_(None),
+        )
         .group_by(WorkflowDef.name)
     )
     open_counts: dict[str, int] = {str(workflow_name): int(n) for workflow_name, n in counts.tuples()}
     from ..services.agent_governance import is_admin
 
     can_share = is_admin(ctx.principal, ctx.org_slug)
-    return [
-        WorkflowSummaryDto(
-            name=row.name,
-            version=row.version,
-            description=(row.json_doc or {}).get("metadata", {}).get("description"),
-            is_default=row.name == ctx.project.default_workflow,
-            open_items=int(open_counts.get(row.name, 0)),
-            created_by=row.created_by,
-            updated_at=row.created_at,
-            can_share=can_share,
-        )
-        for row in active
-    ]
+    return WorkflowSummaryPage(
+        items=[
+            WorkflowSummaryDto(
+                name=row.name,
+                version=row.version,
+                description=(row.json_doc or {}).get("metadata", {}).get("description"),
+                is_default=row.name == ctx.project.default_workflow,
+                open_items=int(open_counts.get(row.name, 0)),
+                created_by=row.created_by,
+                updated_at=row.created_at,
+                can_share=can_share,
+            )
+            for row in active
+        ],
+        meta=meta,
+    )
 
 
 async def _active(session: Any, ctx: Any, name: str) -> WorkflowDef:
@@ -331,18 +344,19 @@ async def deactivate_workflow(name: str, ctx: ProjectCtx, session: Db) -> Respon
 
 @router.get(
     "/projects/{id}/workflows/{name}/versions",
-    response_model=list[WorkflowDefDto],
+    response_model=WorkflowDefPage,
     operation_id="listWorkflowVersions",
 )
-async def list_versions(name: str, ctx: ProjectCtx, session: Db) -> list[WorkflowDefDto]:
-    rows = (
-        await session.execute(
-            select(WorkflowDef)
-            .where(WorkflowDef.project_id == ctx.id, WorkflowDef.name == name)
-            .order_by(WorkflowDef.version.desc())
-        )
-    ).scalars()
-    return [workflow_dto(row, ctx.project) for row in rows]
+async def list_versions(name: str, ctx: ProjectCtx, session: Db, page: Pagination) -> WorkflowDefPage:
+    """The published versions of one workflow, newest first, one page at a time (ADR 0206)."""
+    rows, meta = await keyset_page(
+        session,
+        select(WorkflowDef).where(WorkflowDef.project_id == ctx.id, WorkflowDef.name == name),
+        sort=WorkflowDef.version,
+        tiebreak=WorkflowDef.id,
+        page=page,
+    )
+    return WorkflowDefPage(items=[workflow_dto(row, ctx.project) for row in rows], meta=meta)
 
 
 @router.get(

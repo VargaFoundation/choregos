@@ -108,7 +108,7 @@ def _after(
 
 async def keyset_page(  # noqa: PLR0913 - each option is a route's real need (ADR 0206)
     session: AsyncSession,
-    query: Select[Any],
+    query: Select[*tuple[Any, ...]],
     *,
     sort: Key,
     tiebreak: Key,

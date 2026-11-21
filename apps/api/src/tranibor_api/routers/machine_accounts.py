@@ -20,14 +20,16 @@ from tranibor_core import utcnow
 from ..audit import record
 from ..db.models import ApiToken, MachineAccount, Membership, User
 from ..db.session import in_platform_scope
-from ..deps import Db, ProjectCtx
+from ..deps import Db, Pagination, ProjectCtx
 from ..errors import conflict, forbidden, not_found
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     ApiTokenCreated,
     ApiTokenDto,
     MachineAccountCreate,
     MachineAccountDto,
+    MachineAccountPage,
     MachineTokenCreate,
 )
 from ..security import generate_api_token
@@ -91,29 +93,37 @@ def _dto(account: MachineAccount, address: str, tokens: list[ApiToken], ctx: Pro
 
 @router.get(
     "/projects/{id}/machine-accounts",
-    response_model=list[MachineAccountDto],
+    response_model=MachineAccountPage,
     operation_id="listMachineAccounts",
 )
-async def list_machine_accounts(ctx: ProjectCtx, session: Db) -> list[MachineAccountDto]:
+async def list_machine_accounts(ctx: ProjectCtx, session: Db, page: Pagination) -> MachineAccountPage:
+    """The project's machine accounts by slug, one page at a time (ADR 0206); the tokens and addresses
+    are read for the page's accounts only."""
     ctx.require(Permission.MEMBER_READ)
-    accounts = list(
-        (
-            await session.execute(
-                select(MachineAccount)
-                .where(MachineAccount.project_id == ctx.id, MachineAccount.removed_at.is_(None))
-                .order_by(MachineAccount.slug)
-            )
-        ).scalars()
+    accounts, meta = await keyset_page(
+        session,
+        select(MachineAccount).where(
+            MachineAccount.project_id == ctx.id, MachineAccount.removed_at.is_(None)
+        ),
+        sort=MachineAccount.slug,
+        tiebreak=MachineAccount.id,
+        page=page,
+        descending=False,
     )
     owners = [account.user_id for account in accounts]
     async with in_platform_scope(session):
         tokens = list((await session.execute(select(ApiToken).where(ApiToken.user_id.in_(owners)))).scalars())
         rows = (await session.execute(select(User.id, User.email).where(User.id.in_(owners)))).all()
         addresses = {row.id: row.email for row in rows}
-    return [
-        _dto(account, addresses[account.user_id], [t for t in tokens if t.user_id == account.user_id], ctx)
-        for account in accounts
-    ]
+    return MachineAccountPage(
+        items=[
+            _dto(
+                account, addresses[account.user_id], [t for t in tokens if t.user_id == account.user_id], ctx
+            )
+            for account in accounts
+        ],
+        meta=meta,
+    )
 
 
 @router.post(

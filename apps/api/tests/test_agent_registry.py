@@ -111,10 +111,10 @@ async def test_a_project_tightens_and_cannot_widen(client: AsyncClient, project:
     ):
         refused = await client.put(pin, json={"version": 1, "overrides": widened})
         assert refused.status_code == 422, (widened, refused.text)
-    pins = (await client.get(f"/api/v1/projects/{project['id']}/agents")).json()
+    pins = (await client.get(f"/api/v1/projects/{project['id']}/agents")).json()["items"]
     assert [(e["agent"], e["version"]) for e in pins] == [("onboarding-coordinator", 1)]
     assert (await client.delete(pin)).status_code == 204
-    assert (await client.get(f"/api/v1/projects/{project['id']}/agents")).json() == []
+    assert (await client.get(f"/api/v1/projects/{project['id']}/agents")).json()["items"] == []
 
 
 async def test_an_agent_of_another_organisation_cannot_be_pinned(

@@ -139,7 +139,7 @@ function arrange(me: MeDto = ADMIN) {
   } as Edition);
   vi.mocked(api.workflows).mockImplementation(async (slug: string) => SUMMARIES[slug] ?? []);
   vi.mocked(api.workflowNamed).mockImplementation(async (slug: string, name: string) => DEFINITIONS[`${slug}/${name}`]!);
-  vi.mocked(api.machineAccounts).mockResolvedValue([ACCOUNT]);
+  vi.mocked(api.machineAccounts).mockResolvedValue({ items: [ACCOUNT], meta: { has_more: false, next_cursor: null } });
 }
 
 async function snippet() {

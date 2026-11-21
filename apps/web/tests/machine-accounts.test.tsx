@@ -30,6 +30,8 @@ const account = (extra: Partial<MachineAccount> = {}): MachineAccount => ({
   ...extra,
 });
 
+const one = (items: MachineAccount[]) => ({ items, meta: { has_more: false, next_cursor: null } });
+
 function view() {
   render(
     <QueryClientProvider
@@ -46,7 +48,7 @@ describe("a project's applications (ADR 0131)", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("says when there is none, and creates one under a valid name only", async () => {
-    vi.mocked(api.machineAccounts).mockResolvedValue([]);
+    vi.mocked(api.machineAccounts).mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.createMachineAccount).mockResolvedValue(account());
     view();
     expect(await screen.findByText("No application yet.")).toBeInTheDocument();
@@ -67,7 +69,8 @@ describe("a project's applications (ADR 0131)", () => {
   });
 
   it("shows an issued token once, and never one it only lists", async () => {
-    vi.mocked(api.machineAccounts).mockResolvedValue([
+    vi.mocked(api.machineAccounts).mockResolvedValue(
+      one([
       account({
         tokens: [
           {
@@ -79,7 +82,7 @@ describe("a project's applications (ADR 0131)", () => {
           },
         ],
       }),
-    ]);
+    ]));
     vi.mocked(api.createMachineToken).mockResolvedValue({
       token: "chg_once",
     } as ApiTokenCreated);
@@ -96,7 +99,7 @@ describe("a project's applications (ADR 0131)", () => {
   });
 
   it("asks before removing an application", async () => {
-    vi.mocked(api.machineAccounts).mockResolvedValue([account()]);
+    vi.mocked(api.machineAccounts).mockResolvedValue({ items: [account()], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.removeMachineAccount).mockResolvedValue(undefined);
     view();
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
@@ -118,5 +121,21 @@ describe("a project's applications (ADR 0131)", () => {
     expect(
       await screen.findByTestId("machine-accounts-none"),
     ).toBeInTheDocument();
+  });
+
+  it("reads a long list a page at a time: More asks for the next page by its cursor (ADR 0206)", async () => {
+    vi.mocked(api.machineAccounts)
+      .mockResolvedValueOnce({
+        items: [account({ slug: "app-a" })],
+        meta: { has_more: true, next_cursor: "after-a" },
+      })
+      .mockResolvedValueOnce(one([account({ slug: "app-b" })]));
+    view();
+    expect(await screen.findByTestId("machine-account-app-a")).toBeInTheDocument();
+    expect(screen.queryByTestId("machine-account-app-b")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByTestId("machine-account-app-b")).toBeInTheDocument();
+    expect(api.machineAccounts).toHaveBeenLastCalledWith("billing-api", { cursor: "after-a", limit: 50 });
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 });

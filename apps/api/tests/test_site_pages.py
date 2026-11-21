@@ -163,7 +163,7 @@ async def test_from_nothing_to_an_agent_used_in_a_workflow(
     for prefix in ("choregos workflow validate", "choregos workflow push"):
         ran = await run_cli(client, _command("build/agents.md", prefix), cwd=tmp_path)
         assert ran.exit_code == 0, ran.output
-    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()["items"]
     assert "release-notes" in json.dumps(listed)
 
     item = await run_cli(client, _command("build/agents.md", "choregos items create"))

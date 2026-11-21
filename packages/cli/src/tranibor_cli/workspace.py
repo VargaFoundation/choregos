@@ -734,8 +734,7 @@ class Workspace(App[None]):
             )
             return
         try:
-            listed = await self.api.get(f"/projects/{project['slug']}/workflows")
-            listed = listed["items"] if isinstance(listed, dict) else listed or []
+            listed = await self.api.get_pages(f"/projects/{project['slug']}/workflows")
             name, is_default = default_workflow(listed, None)
         except (ApiError, httpx.TransportError, LookupError) as exc:
             self._say_live(Text(f"{project['name']}: {exc}", style="red"))

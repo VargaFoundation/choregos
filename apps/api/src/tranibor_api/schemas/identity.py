@@ -103,6 +103,13 @@ class ApiTokenPage(Dto):
     meta: PageMeta
 
 
+class MachineAccountPage(Dto):
+    """One page of a project's machine accounts, by slug (ADR 0206)."""
+
+    items: list[MachineAccountDto]
+    meta: PageMeta
+
+
 class BrowserSessionDto(Dto):
     """One of the caller's browser sessions that still holds (ADR 0130)."""
 

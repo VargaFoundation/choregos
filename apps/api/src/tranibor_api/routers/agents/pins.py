@@ -18,8 +18,9 @@ from ...db.models import (
     ProjectAgent,
     WorkflowDef,
 )
-from ...deps import Config, Db, ProjectCtx
+from ...deps import Config, Db, Page, Pagination, ProjectCtx
 from ...errors import conflict, not_found, unprocessable
+from ...keyset import decode_cursor, encode_cursor, keyset_page
 from ...rbac import Permission
 from ...schemas import (
     AgentOverrides,
@@ -31,9 +32,13 @@ from ...schemas import (
     GroupMember,
     GroupMembers,
     ImplicitAgent,
+    ImplicitAgentPage,
+    PageMeta,
     ProjectAgentDto,
+    ProjectAgentPage,
     ProjectAgentPut,
     WorkflowAgent,
+    WorkflowAgentPage,
 )
 from ...services.agent_access import (
     agent_in_org,
@@ -97,81 +102,130 @@ async def _project_agent_dto(session: AsyncSession, pin_row: ProjectAgent, agent
     )
 
 
-@router.get("/projects/{id}/agents", response_model=list[ProjectAgentDto], operation_id="listProjectAgents")
-async def list_project_agents(ctx: ProjectCtx, session: Db) -> list[ProjectAgentDto]:
-    db_rows = await session.execute(
+@router.get("/projects/{id}/agents", response_model=ProjectAgentPage, operation_id="listProjectAgents")
+async def list_project_agents(ctx: ProjectCtx, session: Db, page: Pagination) -> ProjectAgentPage:
+    """The project's pins, by agent slug, one page at a time (ADR 0206)."""
+    rows, meta = await keyset_page(
+        session,
         select(ProjectAgent, Agent)
         .join(Agent, Agent.id == ProjectAgent.agent_id)
-        .where(ProjectAgent.project_id == ctx.project.id)
-        .order_by(Agent.slug)
+        .where(ProjectAgent.project_id == ctx.project.id),
+        sort=Agent.slug,
+        tiebreak=ProjectAgent.id,
+        page=page,
+        descending=False,
     )
-    return [await _project_agent_dto(session, pin_row, agent) for pin_row, agent in db_rows.tuples()]
+    return ProjectAgentPage(
+        items=[await _project_agent_dto(session, pin_row, agent) for pin_row, agent in rows], meta=meta
+    )
 
 
-async def _agent_actors(ctx: ProjectCtx, session: Db) -> list[WorkflowAgent]:
-    """Every `agent` actor of the project's active workflows, with the registry agent it names, if any,
-    and whether that agent exists in the organisation."""
+#: How many workflows `_agent_actors` reads from the database at a time while it fills a page.
+_WORKFLOW_BATCH = 50
+
+
+def _actor_of(name: str, actor: str, definition: dict[str, Any], registry: set[str]) -> WorkflowAgent:
+    named = str(definition.get("agent") or "") or None
+    return WorkflowAgent(
+        workflow=name,
+        actor=actor,
+        role=definition.get("role"),
+        model=definition.get("model"),
+        backend=definition.get("backend"),
+        max_turns=definition.get("max_turns"),
+        max_minutes=definition.get("max_minutes"),
+        agent=named,
+        registered=bool(named) and str(named).split("@")[0] in registry,
+    )
+
+
+async def _agent_actors(
+    ctx: ProjectCtx, session: Db, page: Page, *, implicit_only: bool = False
+) -> tuple[list[WorkflowAgent], PageMeta]:
+    """One page of the `agent` actors of the project's active workflows, with the registry agent each names,
+    if any, and whether that agent exists in the organisation (ADR 0206).
+
+    The rows behind it are the active workflows, read in SQL by keyset on their name (`_WORKFLOW_BATCH` at a
+    time, only as many as the page needs); the actors are the entries of each workflow's document, in the
+    order of their names. The cursor is the `(workflow, actor)` of the last item returned. `implicit_only`
+    keeps the actors that name no registry agent: that is decided on the document, so a project with
+    few of them reads its workflows on until the page is full or they run out."""
     registry = set(
         (await session.execute(select(Agent.slug).where(Agent.org_id == ctx.project.org_id))).scalars()
     )
-    workflows = (
-        await session.execute(
-            select(WorkflowDef.name, WorkflowDef.json_doc)
-            .where(WorkflowDef.project_id == ctx.project.id, WorkflowDef.is_active.is_(True))
-            .order_by(WorkflowDef.name)
-        )
-    ).all()
+    bound, resume = "", None
+    # The first batch starts at the cursor's own workflow, whose later actors are still to come.
+    inclusive = bool(page.cursor)
+    if page.cursor:
+        resumed, after_actor = decode_cursor(page.cursor)
+        bound, resume = str(resumed), (str(resumed), after_actor)
     found: list[WorkflowAgent] = []
-    for name, document in workflows:
-        actors = (document or {}).get("actors") or {}
-        for actor, definition in actors.items():
-            if not isinstance(definition, dict) or definition.get("type") != "agent":
-                continue
-            named = str(definition.get("agent") or "") or None
-            found.append(
-                WorkflowAgent(
-                    workflow=name,
-                    actor=actor,
-                    role=definition.get("role"),
-                    model=definition.get("model"),
-                    backend=definition.get("backend"),
-                    max_turns=definition.get("max_turns"),
-                    max_minutes=definition.get("max_minutes"),
-                    agent=named,
-                    registered=bool(named) and str(named).split("@")[0] in registry,
+    while len(found) <= page.limit:
+        batch = (
+            await session.execute(
+                select(WorkflowDef.name, WorkflowDef.json_doc)
+                .where(
+                    WorkflowDef.project_id == ctx.project.id,
+                    WorkflowDef.is_active.is_(True),
+                    WorkflowDef.name >= bound if inclusive else WorkflowDef.name > bound,
                 )
+                .order_by(WorkflowDef.name)
+                .limit(_WORKFLOW_BATCH)
             )
-    return found
+        ).all()
+        for name, document in batch:
+            actors = (document or {}).get("actors") or {}
+            for actor in sorted(actors):
+                definition = actors[actor]
+                if not isinstance(definition, dict) or definition.get("type") != "agent":
+                    continue
+                if resume is not None and (name, actor) <= resume:
+                    continue
+                item = _actor_of(name, actor, definition, registry)
+                if not (implicit_only and item.registered):
+                    found.append(item)
+        if len(batch) < _WORKFLOW_BATCH:
+            break
+        bound, inclusive = batch[-1][0], False
+    has_more = len(found) > page.limit
+    window = found[: page.limit]
+    next_cursor = encode_cursor(window[-1].workflow, window[-1].actor) if has_more else None
+    return window, PageMeta(next_cursor=next_cursor, has_more=has_more)
 
 
 @router.get(
-    "/projects/{id}/implicit-agents", response_model=list[ImplicitAgent], operation_id="listImplicitAgents"
+    "/projects/{id}/implicit-agents", response_model=ImplicitAgentPage, operation_id="listImplicitAgents"
 )
-async def list_implicit_agents(ctx: ProjectCtx, session: Db) -> list[ImplicitAgent]:
+async def list_implicit_agents(ctx: ProjectCtx, session: Db, page: Pagination) -> ImplicitAgentPage:
     """The `agent` actors of the project's active workflows that name no agent of the registry
-    (S30-04): the console used to read every workflow, one request each, to find them."""
-    return [
-        ImplicitAgent(
-            workflow=a.workflow,
-            actor=a.actor,
-            role=a.role,
-            model=a.model,
-            backend=a.backend,
-            max_turns=a.max_turns,
-            max_minutes=a.max_minutes,
-        )
-        for a in await _agent_actors(ctx, session)
-        if not a.registered
-    ]
+    (S30-04): the console used to read every workflow, one request each, to find them. Paged by
+    workflow and actor (ADR 0206)."""
+    actors, meta = await _agent_actors(ctx, session, page, implicit_only=True)
+    return ImplicitAgentPage(
+        items=[
+            ImplicitAgent(
+                workflow=a.workflow,
+                actor=a.actor,
+                role=a.role,
+                model=a.model,
+                backend=a.backend,
+                max_turns=a.max_turns,
+                max_minutes=a.max_minutes,
+            )
+            for a in actors
+        ],
+        meta=meta,
+    )
 
 
 @router.get(
-    "/projects/{id}/workflow-agents", response_model=list[WorkflowAgent], operation_id="listWorkflowAgents"
+    "/projects/{id}/workflow-agents", response_model=WorkflowAgentPage, operation_id="listWorkflowAgents"
 )
-async def list_workflow_agents(ctx: ProjectCtx, session: Db) -> list[WorkflowAgent]:
+async def list_workflow_agents(ctx: ProjectCtx, session: Db, page: Pagination) -> WorkflowAgentPage:
     """Every agent the project's active workflows run (S47-39): the registry agents they name and the
-    built-in ones alike, so the console lists them in one table."""
-    return await _agent_actors(ctx, session)
+    built-in ones alike, so the console lists them in one table; paged by workflow and actor (ADR 0206)."""
+    actors, meta = await _agent_actors(ctx, session, page)
+    return WorkflowAgentPage(items=actors, meta=meta)
 
 
 #: A role or playbook name, as the workflow DSL takes it; also what keeps a name from leaving the
