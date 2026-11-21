@@ -122,6 +122,16 @@ choregos-temporal:
   clients would speak clear.
 
 
+### Self-hosted web search ([ADR 0195](adr/0195-the-core-ships-the-generic-deployment-an-operators-repository-keeps-its-values.md))
+
+`choregos-websearch.enabled=true` deploys what the governed `web_search` tool (the `firecrawl` connector)
+calls: SearXNG, a search-only Firecrawl (`POST /v1/search`; no scrape, crawl or browser) and its Redis,
+which keeps nothing. `choregos-websearch.relay.enabled=true` adds the egress proxy's relay (ADR 0091)
+from the core API image; its Secret (`relay.secretName`) holds `api-token` and `client-token`, and the
+chart only references it. Service names are `<release>-firecrawl`, `<release>-searxng`, ... or the ones
+set in `choregos-websearch.names.*`. Firecrawl has no authentication when self-hosted: open no network
+path to it except from the platform's namespace, and none to the internet from its pod.
+
 ### Temporal over TLS, payloads encrypted ([ADR 0183](adr/0183-temporal-over-tls-payloads-encrypted.md))
 
 Temporal keeps every workflow's inputs, results, signals and failure messages: ticket text, agents'
