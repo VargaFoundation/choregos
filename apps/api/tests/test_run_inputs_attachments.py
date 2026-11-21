@@ -10,7 +10,7 @@ from httpx import AsyncClient
 from tranibor_adapters.fakes import FakeObjectStore
 from tranibor_contracts import artifact_digest
 
-from .test_artifacts_api import _run, _work_item
+from .kits.artifacts import _run, _work_item
 
 QUOTE_A = b"%PDF-1.4\n% Halden Industrial quote A\n%%EOF\n"
 QUOTE_B = b"%PDF-1.4\n% Halden Industrial quote B\n%%EOF\n"
