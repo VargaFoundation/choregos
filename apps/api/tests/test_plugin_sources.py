@@ -420,3 +420,40 @@ async def test_an_invalid_configuration_is_reported(
     reset_settings_cache()
     response = await client.get("/api/v1/orgs/northwind/plugin-sources")
     assert response.status_code == 500 and "trust" in response.json()["detail"]
+
+
+# -- a plugin that needs an extension (ADR 0181, S83-04g) -------------------------------------------------
+
+
+def _needing(tmp_path: Path, fake: FakePluginSource, extensions: list[str]) -> None:
+    copy = tmp_path / "hello"
+    shutil.copytree(HELLO, copy)
+    manifest = yaml.safe_load((copy / "plugin.yaml").read_text())
+    manifest.setdefault("requires", {})["extensions"] = extensions
+    (copy / "plugin.yaml").write_text(yaml.safe_dump(manifest))
+    pinned = fake.push("ghcr.io/acme/hello:1.0.0", _archive(copy, tmp_path))
+    fake.sign(pinned, identity=IDENTITY, issuer=ISSUER)
+    fake.publish_index(
+        "https://acme.example/index.yaml",
+        _index({"digest": digest(copy), "core": ">=0.20.0", "oci": "ghcr.io/acme/hello:1.0.0"}),
+    )
+
+
+async def test_a_plugin_needing_an_extension_the_deployment_lacks_is_refused_naming_it(
+    fake: FakePluginSource, tmp_path: Path
+) -> None:
+    _needing(tmp_path, fake, ["itsm-desk"])
+    refusal = await _refused(_config("https://acme.example/index.yaml"))
+    assert refusal.check == "extension" and "`itsm-desk`" in refusal.message
+
+
+async def test_a_plugin_needing_an_installed_extension_is_fetched(
+    fake: FakePluginSource, tmp_path: Path
+) -> None:
+    from tranibor_api.services.plugin_sources import installed_extensions
+
+    assert "software-delivery" in installed_extensions(), "the workspace installs the first-party extension"
+    _needing(tmp_path, fake, ["software-delivery"])
+    config = _config("https://acme.example/index.yaml")
+    async with fetch_plugin("acme", "hello", "^1", config=config, core=CORE) as fetched:
+        assert fetched.plugin.extensions == ("software-delivery",)
