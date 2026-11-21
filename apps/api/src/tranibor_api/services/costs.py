@@ -107,6 +107,7 @@ async def record_cost(  # noqa: PLR0913 — one ledger line, field by field, as 
     kind: str = "model",
     org_id: str | None = None,
     tokens_cache_write: int = 0,
+    tokens_cache_write_1h: int = 0,
 ) -> CostLedger:
     if project_id is None and org_id is None:
         raise ValueError("a cost line belongs to a project or, failing one, to an organisation")
@@ -126,6 +127,7 @@ async def record_cost(  # noqa: PLR0913 — one ledger line, field by field, as 
         tokens_out=tokens_out,
         tokens_cached=tokens_cached,
         tokens_cache_write=tokens_cache_write,
+        tokens_cache_write_1h=tokens_cache_write_1h,
         cost_usd=cost_usd,
         cost_eur=round(cost_usd * fx_rate, 6),
         fx_rate=fx_rate,

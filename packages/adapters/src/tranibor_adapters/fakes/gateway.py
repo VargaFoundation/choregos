@@ -112,6 +112,7 @@ class FakeGateway:
         cached: int = 0,
         model: str = "platform/standard",
         cache_write: int = 0,
+        cache_write_1h: int = 0,
     ) -> Spend:
         """Simulates requests; refuses beyond the cap, like the real gateway."""
         gateway_model = next((m for m in self.models if model in {m.model_name, m.litellm_model}), None)
@@ -120,7 +121,10 @@ class FakeGateway:
             price_in = gateway_model.input_cost_per_1k or 0
             cost = (tokens_in - cached - cache_write) / 1000 * price_in
             cost += cached / 1000 * price_in * 0.1
-            cost += cache_write / 1000 * price_in * 1.25  # Anthropic's 5-minute write
+            # Anthropic's writes: 1.25x for the 5-minute TTL, 2x for the 1-hour one (the latter is
+            # a part of `cache_write`).
+            cost += (cache_write - cache_write_1h) / 1000 * price_in * 1.25
+            cost += cache_write_1h / 1000 * price_in * 2.0
             cost += tokens_out / 1000 * (gateway_model.output_cost_per_1k or 0)
         current = self.spends.get(key_id, Spend())
         key = self.keys[key_id]
@@ -144,6 +148,7 @@ class FakeGateway:
             tokens_out=tokens_out,
             tokens_cached=cached,
             tokens_cache_write=cache_write,
+            tokens_cache_write_1h=cache_write_1h,
             cost_usd=cost,
             requests=1,
             models_used=[model],

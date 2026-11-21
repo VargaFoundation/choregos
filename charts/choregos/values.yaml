@@ -47,7 +47,7 @@ global:
   # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
   internalApiUrl: ""
   imageRegistry: ghcr.io/graalsystems
-  imageTag: "0.27.17"
+  imageTag: "0.28.0"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -91,7 +91,7 @@ global:
     # runner's environment (run token, git token, egress report key) nor /app. An executor that cannot
     # start that container (it does not declare `separate_agent`) refuses the run, and `/readiness`
     # says so first (`agent-isolation`); the runner refuses too (exit 100) rather than fall back to
-    # `process`. Needs Kubernetes >= 1.29 (native sidecar). `container` is the default from 0.28
+    # `process`. Needs Kubernetes >= 1.29 (native sidecar). `container` is the default from 0.27.17
     # (S65-04m); `tekton` and `aca` cannot start the agent's container, so a deployment on them sets
     # `process`, which stays a choice, journaled on every run (`agent.isolation`). Roll back the same way.
     agentIsolation: container
@@ -301,7 +301,7 @@ global:
     # External gateway: the CIDRs the API and the workers may reach.
     cidrs: []
     ports: [443]
-  # The SIEM export of the audit log (ADR 0196, docs/deployment.md#siem-export-of-the-audit-log): every API
+  # The SIEM export of the audit log (ADR 0207, docs/deployment.md#siem-export-of-the-audit-log): every API
   # replica ships each audit chain (every organisation's and the platform's), in order and at least once, to
   # one sink, from a durable cursor. Off by default: nothing is rendered and the API ships nothing.
   auditExport:
@@ -537,7 +537,7 @@ global:
     # Secret with the keys `access-key` and `secret-key`. Only the API reads and writes the
     # store; a runner never receives these keys. Empty: no signature (an open or IAM-bound store).
     secretRef: ""
-    # ADR 0197. `true`: the chart deploys one S3-compatible server (RustFS), its volume and the Job that
+    # ADR 0208. `true`: the chart deploys one S3-compatible server (RustFS), its volume and the Job that
     # makes the bucket, and `endpoint` may stay empty (it is then the embedded server's Service).
     # `false` (default): the store is the site's, as above.
     embedded: false
@@ -553,7 +553,7 @@ global:
     # Organization to attach the NON-prefixed OIDC groups to (`developers`,
     # `org-admins`…). Empty: only `choregos:<org>:<group>` groups give a role.
     defaultOrg: ""
-    # ADR 0197. `true`: the chart deploys one Keycloak with a realm (`choregos-keycloak.realm`), a client
+    # ADR 0208. `true`: the chart deploys one Keycloak with a realm (`choregos-keycloak.realm`), a client
     # for the console and one for the CLI, and a bootstrap administrator. `issuer` may then stay
     # empty (it is `https://auth.<global.domain>/realms/choregos`). `false` (default): the provider is the site's.
     embedded: false
@@ -638,7 +638,7 @@ global:
       egress: networkpolicy
       resources:
         limits: { cpu: 500m, memory: 512Mi }
-  # All in one (ADR 0197): a cluster with nothing but Kubernetes and a default StorageClass gets a working
+  # All in one (ADR 0208): a cluster with nothing but Kubernetes and a default StorageClass gets a working
   # platform in one `helm install -f values/all-in-one.yaml`. This switch does NOT embed anything by
   # itself (a Helm condition reads values, not templates): the profile sets the `embedded` switches, and
   # this one (a) lets the chart draw the platform's own Secrets (`apiSecretRef`) for lack of a vault,
@@ -987,3 +987,8 @@ networkPolicies:
   # policy leaves out. Empty on a cluster, whose platform team opens the outside its own way (the
   # egress ceiling above says what it opened); the single-node profile opens it here (ADR 0184).
   platformEgress: []
+
+# S80-17: self-hosted web search for the governed `web_search` tool. Off by default; see
+# charts/websearch/values.yaml and docs/deployment.md.
+choregos-websearch:
+  enabled: false

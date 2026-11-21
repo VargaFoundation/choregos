@@ -279,3 +279,36 @@ async def test_a_failure_after_the_ticket_is_filed_files_it_once(setup: Fixture)
     assert again["work_item_key"] == outcome["work_item_key"]
     assert again["work_item_id"] == outcome["work_item_id"]
     assert again["agent_ready"] == outcome["agent_ready"]
+
+
+async def test_a_finding_from_a_fan_out_child_writes_nothing_on_the_child_in_an_external_tracker(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """ADR 0199: the child is held in the platform, the external tracker never heard of it — the finding is
+    filed, and nothing is linked to or commented on the child's key there."""
+    from tranibor_api.db.models import Finding, WorkItem
+    from tranibor_api.db.session import session_scope
+
+    async with session_scope() as session:
+        child = await session.get(WorkItem, setup.work_item_id)
+        assert child is not None
+        child.documents = {**(child.documents or {}), "parent": {"key": "northwind/billing-api#1"}}
+        child_key = child.tracker_key
+    finding_id = await _add_finding(setup, "N+1 query on the lines", "src/orders/repository.py:88")
+    async with worker_factory():
+        handle = await temporal_env.client.start_workflow(
+            "FindingsTriage",
+            {"project_slug": setup.project_slug},
+            id=f"findings-{setup.project_slug}",
+            task_queue="test",
+        )
+        await handle.signal("finding", {"finding_id": finding_id, "project_id": setup.project_id})
+        await _wait(handle, lambda s: s["processed"] >= 1)
+        await handle.signal("stop", {})
+        await handle.result()
+    async with session_scope() as session:
+        row = await session.get(Finding, finding_id)
+        assert row is not None and row.status == "created"
+    tracker = setup.adapters.tracker
+    assert not tracker.links, "nothing linked to a key the tracker never heard of"
+    assert not [c for c in tracker.calls if c[0] == "comment" and c[1] == child_key]

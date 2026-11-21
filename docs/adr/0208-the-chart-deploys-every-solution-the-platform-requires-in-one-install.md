@@ -1,4 +1,4 @@
-# 0197 — The chart deploys every solution the platform requires, in one install
+# 0208 — The chart deploys every solution the platform requires, in one install
 
 - **Status**: proposed, 2026-11-20 (S80-18; the need was set by the product owner, the design not yet reviewed)
 - **Concerns**: `charts/choregos` (two new subcharts, `values/all-in-one.yaml`), `docs/deployment.md`

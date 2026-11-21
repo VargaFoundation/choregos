@@ -2037,7 +2037,7 @@ How people sign in to the instance is on **Administration → Identity** (below)
   deployment's own answer (`TRANIBOR_EXECUTOR_KIND`, `TRANIBOR_EXECUTORS_ALLOWED`); change it in the
   chart (`global.runner.allowedExecutors`). There is no write route: `PUT /platform/executors`
   was removed (S42-07b), only the `GET` remains.
-- **Gateway keys.** A table of the keys the model gateway minted for runs (key id, run, project, spent over budget, expiry, state, creation date), for platform administrators; a key's secret is never shown (`GET /platform/gateway/keys`).
+- **Gateway keys.** A table of the keys the model gateway minted for runs (key id, run, project, spent over budget, expiry, state, creation date), newest first, for platform administrators; a key's secret is never shown (`GET /platform/gateway/keys`). The server filters and pages it (ADR 0206): the text box matches a part of the key id, the run id or the project slug, the state keeps the active or the revoked keys, and **More** reads the next 50.
 
 ### Identity
 
@@ -2683,10 +2683,12 @@ distillation that shows `running` with no progress for 30 minutes no longer bloc
 
 Batch mode (S4-09, ADR 0190, off by default): with `CHOREGOS_KNOWLEDGE_DISTILL_BATCH=true` the map step goes
 through the gateway's OpenAI-compatible batch API (same gateway URL, key and alias as the synchronous call) as one
-batch at half the price, and the run ends within a day (polled every `..._BATCH_POLL_SECONDS`, 120). It needs an
-upstream that serves batches for `platform/standard` (OpenAI-backed aliases do) and a gateway whose managed-files
-hook is on. The estimate is halved, each part is booked at half its price, and a part the batch cannot answer, or a
-gateway or upstream that refuses it, falls back to the synchronous call.
+batch at half the price, and the run ends within a day (polled every `..._BATCH_POLL_SECONDS`, 120). No LiteLLM
+enterprise licence is needed: the adapter uses the open `model=` path (ADR 0190, S4-11 amendment). The alias must
+be a single OpenAI deployment (`platform/standard` is) that the key can list in `/v1/model/info`, and the gateway
+must not set `litellm_settings.require_managed_files`. The estimate is halved and each part is booked at half its
+price; that `kind=distill` ledger line is the cost of record (the gateway's own spend for the key is not read). A
+part the batch cannot answer, or a gateway or upstream that refuses it, falls back to the synchronous call.
 
 A distillation is a job (S42-10d, ADR 0092). **Stop** (`POST …/distill/stop`) marks the run `stopped`
 at once, names who stopped it and cancels its workflow: the call in flight finishes and is booked,
@@ -3340,6 +3342,16 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   A human group (a workflow actor's `group`, an approver rule's `group`, a knowledge base's group
   scope or grant) may arrive from the identity provider bare (`architects`) or as
   `choregos:<org>:<group>`; the second counts only in `<org>` (S40-27).
+- **Approvers from the work item** ([ADR 0196](adr/0196-an-actions-approvers-come-from-its-work-item.md)):
+  in a workflow's action, an approver rule's `group` may read ONE declared field,
+  `{"role": "approver", "group": "owners-{{ fields.tool }}"}`, and `excluded` lists who may not
+  decide, whatever their rank — an address, or one field each:
+  `"excluded": ["{{ fields.upn }}", "{{ fields.requester }}"]`. Both are rendered when the action is
+  proposed and stored rendered. A group whose field is absent or empty refuses the proposal (the
+  transition's `on_fail`); an exclusion that renders empty excludes nobody; an excluded person —
+  an organisation administrator included — gets `403`. The validator refuses any other template, and
+  a field `metadata.inputs` does not declare. Keep a literal prefix (`owners-`): the field then only
+  chooses among the groups the organisation named that way, and the rank is still asked.
 - **Running**: the approval starts `ActionWorkflow` (`action-<id>`) once it is committed, and
   answers at once. If Temporal was unreachable at that moment, the action stays `approved` and every
   API replica starts it again within about a minute; a workflow started for an action that is not
@@ -3406,7 +3418,7 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   **Acknowledge** button appears only to those who may (`can_acknowledge` on each alert), the
   others read who can.
 
-The core ships two effects. `connector.call` is an operation of a connector of the organisation,
+The core ships three effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP
 tool returns **structured** (`structuredContent`) is its result, so a later effect cites
 `effects[0].serial` as it would for a typed connector. An `approval` operation runs here — the
@@ -3417,6 +3429,15 @@ outside: a condition, rendered with the earlier effects' results, that must be t
 action fails, named by its `reason` (`condition: "{{ effects[1].active }}"`); it is `allowed`.
 `verifier` (with `motif`) is the name it had before S39-11: it stays registered as an alias, so a
 workflow or an action written with it keeps running; write `check` and `reason` from now on.
+`work_item.file` ([ADR 0197](adr/0197-a-workflow-files-a-work-item-in-another-project.md)) files
+a work item in **another project** of the organisation, through that project's tracker — internal,
+Jira, GitHub, GitLab or a plugin's — as a person's request is filed there: `{project: <slug>, title,
+body, labels}`; it answers `{project, key, url, work_item_id}`, so a later effect cites
+`effects[0].key`. The target project must list the source in its config's `accepts_items_from`; the
+work item is filed, not started (the target's people or start rules start it), its body saying which
+work item filed it; its labels, with `from:<source>`, choose its workflow in the target's routing and
+reach an external tracker (an internal one keeps none). Played again under the same key, it files
+nothing twice. It is `approval`: a person decides.
 
 **An action at a date, from a workflow.** A system transition can propose the action itself. Its
 title, justification and parameters are rendered (sandboxed Jinja) with the item's `fields` and the
@@ -3656,6 +3677,59 @@ token, and it changes when the token is minted again. The project's settings lis
 the received events: their URL, their workflow, whether a token exists, a button to mint it (shown
 once) and a box to fire it with a payload.
 
+### Handing files to a work item
+
+A workflow that works from documents a person received says so in its metadata
+([ADR 0201](adr/0201-a-person-hands-files-to-a-work-item.md)):
+
+```yaml
+metadata:
+  name: compare-documents
+  version: 1
+  attachments:
+    accept: [pdf, xlsx]   # artifact types
+    min: 2                # a start waits for this many files (default 0)
+    max: 20               # distinct names at most (default 20, 50 at most)
+```
+
+A work item of a workflow that requires files (`min` of 1 or more) is filed in two steps: created
+with `start: false`, given its files, then started. Creating it with `start: true` answers `422`.
+
+```shell
+# 1. file it without starting it
+curl -s "$TRANIBOR_API_URL/api/v1/projects/acme:billing-api/work-items" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title": "Compare the quotes", "workflow": "compare-documents", "start": false}'
+
+# 2. hand it the files (the repeated multipart part `files`), for whoever holds `item:control`
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/BIL-12/files" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" \
+  -F files=@quote-a.pdf -F files=@quote-b.pdf
+
+# 3. start it; `409` while fewer than `min` files were handed
+curl -s "$TRANIBOR_API_URL/api/v1/work-items/BIL-12/actions" \
+  -H "Authorization: Bearer $TRANIBOR_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"action": "mark_agent_ready"}'
+```
+
+Each file becomes an input artifact of the work item (`201`, the artifacts, each with
+`handed_by: "person"`; the artifact list shows them with `handed_by: "a2a"` when an application sent
+them through the A2A door, and files sent that way count toward `min`). What is checked, before
+anything is stored:
+
+- the file's type (from its extension) is in `accept`, and its bytes are what the type says (`422`);
+- its size is within the project's limit for handed files, `a2a.max_file_bytes`: 10 MiB by default,
+  50 MiB at most (`413`);
+- the number of distinct names after the request is within `max` (`422`);
+- the work item is not finished (`409`).
+
+The artifact's name is a slug of the file name: ASCII letters, digits, `_`, `.` and `-`, the extension
+kept, 128 characters at most (`Quote A.pdf` becomes `Quote-A.pdf`). Two files of one request that reach
+the same name are refused together. Handing the same name again makes revision 2; the same bytes again
+make none. A name taken by a step's output is refused. Files are stored before any row is written, so a
+store that fails leaves nothing behind (`502`). Each file leaves one audit entry,
+`work_item.file.attached`, with the name, the digest and the size, never the content.
+
 ### Tracker items that start without `agent-ready`
 
 A project can start tracker items on its own rules (S56-03): a ServiceNow incident in the desk's
@@ -3724,7 +3798,11 @@ finds them and opens none twice. Each child signals its parent as it closes, and
 re-reads its children every 30 minutes in case a signal is lost; its status says how many are still
 open. The join writes `documents.children` on the parent: the count per state, and each child's key,
 title, final state and fields. A list that cannot be read, too long, or a child its workflow refuses,
-follows `on_fail`. Children need the internal tracker; the local mode stops at a fan-out.
+follows `on_fail`. Children are held in the platform whatever the project's tracker
+([ADR 0199](adr/0199-a-fan-outs-children-are-the-platforms.md)): on a project whose tracker keeps its
+items elsewhere (Jira, GitHub, GitLab, a plugin's server), nothing is filed there for a child, and its
+state, status and comments are not written there; the parent's item is. The local mode stops at a
+fan-out.
 
 ## 6. Read what came out
 

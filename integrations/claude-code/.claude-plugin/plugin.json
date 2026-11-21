@@ -1,7 +1,7 @@
 {
   "name": "choregos",
   "displayName": "Choregos",
-  "version": "0.27.17",
+  "version": "0.28.0",
   "description": "Connect Claude Code to Choregos: follow work items, open requests, see what waits for your decision.",
   "author": { "name": "GRAAL.SYSTEMS SAS", "url": "https://github.com/graalsystems" },
   "homepage": "https://github.com/graalsystems/tranibor/blob/main/docs/integrations.md",
