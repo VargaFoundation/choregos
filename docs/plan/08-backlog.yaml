@@ -5788,6 +5788,14 @@ stories:
     size: L
     depends_on: [S80-12]
     notes: "values/all-in-one.yaml, subcharts choregos-objectstore and choregos-keycloak. The agent-sandbox operator is not vendored (k8s_job fallback). Proven by rendering only."
+  - id: S80-19
+    title: "chore(policies): the deleted frozen ghcr.io/vargafoundation namespace leaves the Kyverno policies"
+    stream: S80
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S80-10]
+    notes: "Packages deleted 2026-11-21. Left: infra/bootstrap/gvisor.yaml installer image (no graalsystems equivalent, not built here), example Dockerfiles and code-agent-examples.yml runner 0.17.15."
   - id: S81-01
     title: "docs(adr,plan): the scope freeze is lifted (ADR 0192); the phone is a surface of the platform (ADR 0193); stream S81"
     stream: S81
