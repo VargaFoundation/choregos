@@ -179,9 +179,8 @@ and what it can refuse; the walk-through is the procedure
 - **Administration → Outposts**, the outpost's page, *Recent calls*; or
   `choregos outposts calls <slug>`, with `--state refused` for the refusals. Each call has its state
   and, for a refusal, the outpost's code. Digests only: the platform keeps no arguments and no result
-  of a call there ([Usage](usage.md#4-write-the-policy)). The list reads the newest 1000 calls of the
-  outpost and pages within them: its last page is the end of that window, not of the outpost's
-  history.
+  of a call there ([Usage](usage.md#4-write-the-policy)). The list is paged in SQL (ADR 0206): **Older
+  calls** (or `--cursor`) reads on, down to the oldest call the platform holds.
 - **The network activity** of the organisation: a line per call of a project, under
   `outpost:<name>/<alias>`, `allowed`, `denied`, `rate_limited` or `unreachable`.
 - **The cost ledger and the run's events**, as for any connector. A call that reached no server is
