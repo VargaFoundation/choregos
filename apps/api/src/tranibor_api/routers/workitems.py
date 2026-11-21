@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Query, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from starlette.datastructures import UploadFile
 from tranibor_adapters.storage import ObjectStoreError
 from tranibor_contracts import Artifact, Control, EventType, HumanDecision, HumanRequestKind, Role
@@ -19,6 +19,7 @@ from ..decision_session import POST_DECISION, require_person_session
 from ..deps import Config, Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
+from ..keyset import keyset_page
 from ..knowledge.marked import listed_only, readable, require_readable
 from ..logging import get_logger
 from ..object_store import object_store
@@ -28,7 +29,6 @@ from ..schemas import (
     DecisionRequest,
     HandOff,
     HumanRequestDto,
-    PageMeta,
     TimelineEntry,
     WorkItemAction,
     WorkItemCreate,
@@ -145,18 +145,23 @@ async def list_work_items(
         query = query.where(WorkItem.state == state)
     if size:
         query = query.where(WorkItem.size == size)
-    rows = (await session.execute(query.order_by(WorkItem.created_at.desc()))).scalars().all()
     if q:
-        needle = q.lower()
-        rows = [r for r in rows if needle in r.title.lower() or needle in r.tracker_key.lower()]
-    window, cursor, has_more = page.slice(list(rows))
+        query = query.where(
+            or_(
+                WorkItem.title.icontains(q, autoescape=True),
+                WorkItem.tracker_key.icontains(q, autoescape=True),
+            )
+        )
+    window, meta = await keyset_page(
+        session, query, sort=WorkItem.created_at, tiebreak=WorkItem.id, page=page
+    )
     return WorkItemPage(
         items=[
             dto if await readable(session, ctx.principal, item, ctx.project.org_id) else listed_only(dto)
             for item in window
             for dto in [await work_item_dto(session, item, ctx.project)]
         ],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
+        meta=meta,
     )
 
 

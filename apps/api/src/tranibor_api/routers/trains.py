@@ -19,12 +19,12 @@ from ..decision_session import require_person_session
 from ..deps import Db, Me, Pagination, ProjectCtx, resolve_project
 from ..errors import forbidden, not_found
 from ..extensions import GestureRequest, check_gesture
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     AbortRequest,
     ApproveRequest,
     FreezeRequest,
-    PageMeta,
     ReleaseDto,
     ReleasePage,
     TrainStatusDto,
@@ -47,12 +47,8 @@ async def list_releases(
     query = select(Release).where(Release.project_id == ctx.id)
     if env:
         query = query.where(Release.env == env)
-    rows = (await session.execute(query.order_by(Release.created_at.desc()))).scalars().all()
-    window, cursor, has_more = page.slice(list(rows))
-    return ReleasePage(
-        items=[release_dto(row, ctx.slug) for row in window],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    window, meta = await keyset_page(session, query, sort=Release.created_at, tiebreak=Release.id, page=page)
+    return ReleasePage(items=[release_dto(row, ctx.slug) for row in window], meta=meta)
 
 
 async def _release(session: Any, release_id: str, principal: Any) -> tuple[Release, Project, str]:

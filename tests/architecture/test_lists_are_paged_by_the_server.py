@@ -93,7 +93,9 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
 )
 
 #: The ceiling of `page.slice(` calls in the routers (in-memory pages). Lowered when one migrates.
-SLICE_CEILING = 8
+#: The one left is `listOutpostCalls`: its 1000-call window is stated by the contract, the console, the CLI
+#: and docs/usage.md, so lifting it is a contract decision, not a refactor.
+SLICE_CEILING = 1
 
 
 def _array_routes() -> set[str]:

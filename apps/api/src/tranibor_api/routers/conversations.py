@@ -27,6 +27,7 @@ from ..db.models import AgentSessionRecord, Organization
 from ..db.session import release_connection
 from ..deps import Db, Me, Pagination
 from ..errors import ApiError, conflict
+from ..keyset import keyset_page
 from ..schemas.agent_sessions import (
     AgentResponse,
     Conversation,
@@ -34,7 +35,6 @@ from ..schemas.agent_sessions import (
     ConversationPage,
     ConversationSummary,
 )
-from ..schemas.base import PageMeta
 from ..services.assistant_conversations import require_audience
 from ..services.conversation_assistant import with_assistant
 from ..services.conversation_signals import with_signals
@@ -53,34 +53,31 @@ router = APIRouter(tags=["agents"])
 
 @router.get("/me/conversations", response_model=ConversationPage, operation_id="listMyConversations")
 async def list_my_conversations(session: Db, principal: Me, page: Pagination) -> ConversationPage:
-    rows = (
+    last_active = func.coalesce(AgentSessionRecord.last_activity_at, AgentSessionRecord.created_at)
+    window, meta = await keyset_page(
+        session,
         (
-            await session.execute(
-                select(AgentSessionRecord)
-                .join(Organization, Organization.id == AgentSessionRecord.org_id)
-                .where(
-                    AgentSessionRecord.kind == "conversation",
-                    AgentSessionRecord.user_id == principal.user_id,
-                    Organization.slug.in_(list(principal.org_roles)),
-                )
-                .options(
-                    defer(AgentSessionRecord.messages),
-                    defer(AgentSessionRecord.context),
-                    defer(AgentSessionRecord.stage_input),
-                )
-                .order_by(
-                    func.coalesce(AgentSessionRecord.last_activity_at, AgentSessionRecord.created_at).desc(),
-                    AgentSessionRecord.id,
-                )
+            select(AgentSessionRecord)
+            .join(Organization, Organization.id == AgentSessionRecord.org_id)
+            .where(
+                AgentSessionRecord.kind == "conversation",
+                AgentSessionRecord.user_id == principal.user_id,
+                Organization.slug.in_(list(principal.org_roles)),
             )
-        )
-        .scalars()
-        .all()
+            .options(
+                defer(AgentSessionRecord.messages),
+                defer(AgentSessionRecord.context),
+                defer(AgentSessionRecord.stage_input),
+            )
+        ),
+        sort=last_active,
+        tiebreak=AgentSessionRecord.id,
+        page=page,
+        tiebreak_descending=False,
     )
-    window, cursor, has_more = page.slice(list(rows))
     return ConversationPage(
         items=await with_assistant(session, window, [summary_of(r) for r in window]),
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
+        meta=meta,
     )
 
 
