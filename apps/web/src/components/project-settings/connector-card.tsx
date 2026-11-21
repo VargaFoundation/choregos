@@ -3,20 +3,44 @@
 
 import { useState } from "react";
 import { ConnectorIcon } from "@/components/connector-icon";
-import { hasInstallationOn, InstallOnGitHub, ownerOf, useGitHubStatus } from "@/components/github-repo-field";
-import { ConnectorForm, type ConnectorBody } from "@/components/project-settings/connector-form";
+import {
+  githubRepoOf,
+  hasInstallationOn,
+  InstallOnGitHub,
+  ownerOf,
+  useGitHubStatus,
+} from "@/components/github-repo-field";
+import {
+  ConnectorForm,
+  type ConnectorBody,
+} from "@/components/project-settings/connector-form";
 import type { SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Drawer } from "@/components/ui";
 import { WritesAs } from "@/components/who-writes";
 import { connectorState } from "@/lib/connector-state";
 import { kindTitle } from "@/lib/connector-kinds";
-import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
+import type {
+  ConnectorDto,
+  ConnectorType,
+  ProjectRequirement,
+} from "@/lib/types";
 
 /** The config keys that say WHERE a connector points, in the order a person would look for them. */
-const CONFIG_KEYS = ["repo", "owner", "gitops_repo", "project_key", "base_url", "url", "channel", "namespace"];
+const CONFIG_KEYS = [
+  "repo",
+  "owner",
+  "gitops_repo",
+  "project_key",
+  "base_url",
+  "url",
+  "channel",
+  "namespace",
+];
 
 /** A one-line reading of the configuration: `owner/repo`, a GitOps repository, a base URL. */
-export function configurationEnClair(config: Record<string, unknown> | undefined): string {
+export function configurationEnClair(
+  config: Record<string, unknown> | undefined,
+): string {
   for (const key of CONFIG_KEYS) {
     const value = config?.[key];
     if (typeof value === "string" && value) return value;
@@ -29,11 +53,11 @@ export function configurationEnClair(config: Record<string, unknown> | undefined
  * and keeps the full sentences behind a disclosure.
  */
 export function workflowsQuiExigent(reasons: string[]): string[] {
-  const names = reasons.map((reason) => /^([\w.-]+): /.exec(reason)?.[1]).filter((name): name is string => !!name);
+  const names = reasons
+    .map((reason) => /^([\w.-]+): /.exec(reason)?.[1])
+    .filter((name): name is string => !!name);
   return [...new Set(names)];
 }
-
-const GITHUB_TYPES = new Set(["github", "github-issues", "github-actions"]);
 
 /**
  * The GitHub subtitle of a card: which account's installation the connector goes through, or the way to
@@ -43,7 +67,9 @@ function GitHubVia({ repo }: { repo: string }) {
   const status = useGitHubStatus();
   const owner = ownerOf(repo);
   if (!status.data?.configured || !owner) return null;
-  const installation = status.data.installations.find((i) => i.claimed && !i.suspended && i.account_login.toLowerCase() === owner);
+  const installation = status.data.installations.find(
+    (i) => i.claimed && !i.suspended && i.account_login.toLowerCase() === owner,
+  );
   if (installation) {
     return (
       <p className="text-xs text-ink-muted" data-testid="github-via">
@@ -53,7 +79,10 @@ function GitHubVia({ repo }: { repo: string }) {
   }
   if (hasInstallationOn(status.data, owner)) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-warn" data-testid="github-via">
+    <div
+      className="flex flex-wrap items-center gap-2 text-xs text-warn"
+      data-testid="github-via"
+    >
       <span>The Tranibor App is not installed on {owner}.</span>
       <InstallOnGitHub />
     </div>
@@ -80,9 +109,15 @@ export function ConnectorCard({
   onTest: () => Promise<void>;
 }) {
   const [ouvert, setOuvert] = useState(false);
-  const state = connectorState({ connector: actuel, requirement: exigence, required: exigence !== undefined });
+  const state = connectorState({
+    connector: actuel,
+    requirement: exigence,
+    required: exigence !== undefined,
+  });
   const shownType = actuel?.type ?? exigence?.default_type ?? undefined;
-  const typeName = shownType ? (types.find((t) => t.type === shownType)?.display ?? shownType) : undefined;
+  const typeName = shownType
+    ? (types.find((t) => t.type === shownType)?.display ?? shownType)
+    : undefined;
   const reglage = configurationEnClair(actuel?.config);
   const raisons = exigence?.reasons ?? [];
   const workflows = workflowsQuiExigent(raisons);
@@ -102,15 +137,30 @@ export function ConnectorCard({
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-ink">
-            {title} <code className="ml-1 text-xs font-normal text-ink-muted">{kind}</code>
+            {title}{" "}
+            <code className="ml-1 text-xs font-normal text-ink-muted">
+              {kind}
+            </code>
           </h3>
-          {typeName && <p className="text-xs break-words text-ink-muted" data-verbatim>{typeName}</p>}
-          {reglage && <p className="font-mono text-xs break-all text-ink-muted">{reglage}</p>}
-          {actuel && GITHUB_TYPES.has(actuel.type) && typeof actuel.config?.repo === "string" && (
-            <GitHubVia repo={actuel.config.repo} />
+          {typeName && (
+            <p className="text-xs break-words text-ink-muted" data-verbatim>
+              {typeName}
+            </p>
+          )}
+          {reglage && (
+            <p className="font-mono text-xs break-all text-ink-muted">
+              {reglage}
+            </p>
+          )}
+          {actuel && githubRepoOf(actuel.type, actuel.config) && (
+            <GitHubVia
+              repo={githubRepoOf(actuel.type, actuel.config) as string}
+            />
           )}
           {/* Who the bookkeeping's writes act as (ADR 0107 point 4). */}
-          {actuel && kind === "tracker" && <WritesAs type={actuel.type} config={actuel.config} />}
+          {actuel && kind === "tracker" && (
+            <WritesAs type={actuel.type} config={actuel.config} />
+          )}
         </div>
       </div>
       {state && (
@@ -120,16 +170,21 @@ export function ConnectorCard({
           </Badge>
         </div>
       )}
-      {state && (state.standIn || (state.detail && state.action !== "connect")) && (
-        <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-          {state.standIn && (
-            <Badge tone="warn" dot={false}>
-              Demo stand-in
-            </Badge>
-          )}
-          {state.detail && state.action !== "connect" && state.label !== "Provided by the platform" && <span>{state.detail}</span>}
-        </p>
-      )}
+      {state &&
+        (state.standIn || (state.detail && state.action !== "connect")) && (
+          <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+            {state.standIn && (
+              <Badge tone="warn" dot={false}>
+                Demo stand-in
+              </Badge>
+            )}
+            {state.detail &&
+              state.action !== "connect" &&
+              state.label !== "Provided by the platform" && (
+                <span>{state.detail}</span>
+              )}
+          </p>
+        )}
       {workflows.length > 0 && (
         <p className="text-xs text-ink-muted">
           Needed by: <span className="text-ink">{workflows.join(", ")}</span>
@@ -155,7 +210,11 @@ export function ConnectorCard({
           {actuel ? "Edit" : "Configure"}
         </Button>
       </div>
-      <Drawer open={ouvert} onClose={() => setOuvert(false)} title={`${title}${typeName ? ` · ${typeName}` : ""}`}>
+      <Drawer
+        open={ouvert}
+        onClose={() => setOuvert(false)}
+        title={`${title}${typeName ? ` · ${typeName}` : ""}`}
+      >
         {/* Mounted while the drawer is open only: the native dialog keeps its children in the page,
             and the form's setup procedure (S39-23) opens when the form is shown, not at page load. */}
         {ouvert && (
