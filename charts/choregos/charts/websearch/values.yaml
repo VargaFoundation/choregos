@@ -46,7 +46,7 @@ redis:
 # The egress proxy's relay (ADR 0091): SearXNG hands it its traffic; for each connection it asks the API
 # for the organisation's proxy for `search_engines` traffic and CONNECTs through it, or goes out direct
 # when none applies, never to a private address; a proxy that fails gives a 502, never a direct exit.
-# Off: SearXNG goes out by itself. On, `secretName` holds `api-token` (`python -m choregos_api.relay
+# Off: SearXNG goes out by itself. On, `secretName` holds `api-token` (`python -m tranibor_api.relay
 # mint --org <org>`; it expires) and `client-token` (the password SearXNG gives the relay, 16
 # characters or more).
 relay:

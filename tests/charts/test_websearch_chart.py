@@ -66,7 +66,7 @@ def test_relay_reads_its_tokens_from_the_secret() -> None:
     docs = _docs(*ON, *RELAY)
     relay = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "c-relay")
     container = relay["spec"]["template"]["spec"]["containers"][0]
-    assert container["command"] == ["python", "-m", "choregos_api.relay", "serve"]
+    assert container["command"] == ["python", "-m", "tranibor_api.relay", "serve"]
     refs = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"] if "valueFrom" in e}
     assert refs["CHOREGOS_RELAY_API_TOKEN"] == {"name": "relay-secrets", "key": "api-token"}
     assert refs["CHOREGOS_RELAY_CLIENT_TOKEN"] == {"name": "relay-secrets", "key": "client-token"}

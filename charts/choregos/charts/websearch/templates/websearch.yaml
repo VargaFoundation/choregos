@@ -271,7 +271,7 @@ spec:
       containers:
         - name: relay
           image: {{ include "choregos.image" (dict "global" .Values.global "image" $relay.image) }}
-          command: ["python", "-m", "choregos_api.relay", "serve"]
+          command: ["python", "-m", "tranibor_api.relay", "serve"]
           env:
             - { name: CHOREGOS_RELAY_ORG, value: {{ $relay.organisation | quote }} }
             - { name: CHOREGOS_RELAY_API_URL, value: {{ $relay.apiUrl | default (printf "http://%s-api:8000/api/v1" $r) | quote }} }
