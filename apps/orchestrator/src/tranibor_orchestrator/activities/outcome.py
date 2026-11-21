@@ -113,6 +113,7 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
         "tokens_out": spend.tokens_out,
         "tokens_cached": spend.tokens_cached,
         "tokens_cache_write": spend.tokens_cache_write,
+        "tokens_cache_write_1h": spend.tokens_cache_write_1h,
         "cost_usd": spend.cost_usd,
         "cost_eur": round(spend.cost_usd * settings.fx_usd_eur, 6),
     }
@@ -121,7 +122,7 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
     # does not count a second run.
     resumed = dict(run.tokens or {}) if (run.tokens or {}).get("resumed") else {}
     of_the_run: dict[str, Any] = dict(resumed)
-    for name in ("tokens_in", "tokens_out", "tokens_cached", "tokens_cache_write"):
+    for name in ("tokens_in", "tokens_out", "tokens_cached", "tokens_cache_write", "tokens_cache_write_1h"):
         of_the_run[name] = int(resumed.get(name, 0)) + int(segment[name])
     for name in ("cost_usd", "cost_eur"):
         of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
@@ -157,6 +158,7 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
         tokens_out=spend.tokens_out,
         tokens_cached=spend.tokens_cached,
         tokens_cache_write=spend.tokens_cache_write,
+        tokens_cache_write_1h=spend.tokens_cache_write_1h,
         cost_usd=spend.cost_usd,
         fx_rate=settings.fx_usd_eur,
     )
@@ -167,7 +169,7 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
         totals["requests"] = int(totals.get("requests", 0)) + requests
     else:
         totals.pop("requests", None)
-    for field in ("tokens_in", "tokens_out", "tokens_cached", "tokens_cache_write"):
+    for field in ("tokens_in", "tokens_out", "tokens_cached", "tokens_cache_write", "tokens_cache_write_1h"):
         totals[field] = int(totals.get(field, 0)) + int(segment[field])
     totals["cost_usd"] = round(float(totals.get("cost_usd", 0.0)) + spend.cost_usd, 6)
     totals["cost_eur"] = round(float(totals.get("cost_eur", 0.0)) + segment["cost_eur"], 6)

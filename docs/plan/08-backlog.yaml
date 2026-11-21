@@ -6116,3 +6116,14 @@ stories:
       - "an alias without a single OpenAI deployment is refused before any upload, so the run falls back to the synchronous path"
       - "a batched part is booked once in the ledger (kind distill) and on no run or work-item budget; docs/usage.md says no enterprise licence is needed"
     notes: "ADR 0190 amendment. Read in LiteLLM v1.105.5 source; no live gateway call."
+  - id: S4-12
+    title: "Cache tokens are priced at their own rates — override-priced runs and the 1-hour write"
+    stream: S4
+    sprint: 2
+    priority: 9
+    size: M
+    depends_on: [S4-07]
+    acceptance:
+      - "An `input_per_1k_override` prices cache reads, 5-minute writes and 1-hour writes at their own multipliers (catalogue entry, else gateway cached price, else provider-family default)"
+      - "`cost_ledger.tokens_cache_write_1h` read from the gateway's `cache_creation_token_details`; the cost report carries it (contract PR first)"
+    notes: "ADR 0200; closes #1893 and #1895"
