@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
@@ -25,9 +25,15 @@ export function entryState(entry: AgentCatalogueEntry): { libelle: string; actio
  * in one click, and those that cannot yet here, with the reason.
  */
 export function AgentCatalogue({ org }: { org: string }) {
-  const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org) });
+  // The server filters on `kind` and pages (ADR 0206): "More" asks for the next page by its cursor.
+  const catalogue = useInfiniteQuery({
+    queryKey: ["agent-catalogue", org, "internal"],
+    queryFn: ({ pageParam }) => api.agentCataloguePage(org, { kind: "internal", cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
   if (catalogue.error) return <ErrorNote>{String(catalogue.error)}</ErrorNote>;
-  const internes = (catalogue.data ?? []).filter((e) => e.kind === "internal");
+  const internes = catalogue.data?.pages.flatMap((page) => page.items) ?? [];
   return (
       <div>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
@@ -61,6 +67,13 @@ export function AgentCatalogue({ org }: { org: string }) {
             </table>
           </div>
         )}
+        {catalogue.hasNextPage && (
+        <div className="mt-3">
+          <Button size="sm" disabled={catalogue.isFetchingNextPage} onClick={() => void catalogue.fetchNextPage()}>
+            {catalogue.isFetchingNextPage ? "Reading…" : "More"}
+          </Button>
+        </div>
+      )}
       </div>
   );
 }
@@ -70,9 +83,12 @@ export function AgentCatalogue({ org }: { org: string }) {
  * agents' page is the registry, and everything about clients and tokens lives in one place.
  */
 export function AiClientCatalogue({ org }: { org: string }) {
-  const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org) });
+  const catalogue = useQuery({
+    queryKey: ["agent-catalogue", org, "external"],
+    queryFn: () => api.agentCatalogue(org, "external"),
+  });
   if (catalogue.error) return <ErrorNote>{String(catalogue.error)}</ErrorNote>;
-  const clients = (catalogue.data ?? []).filter((e) => e.kind === "external");
+  const clients = catalogue.data ?? [];
   return (
       <Card title="Connect an AI client">
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">

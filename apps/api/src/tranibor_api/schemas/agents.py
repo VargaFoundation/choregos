@@ -1023,6 +1023,13 @@ class AgentCatalogueEntry(Dto):
     unavailable_reason: str | None = None
 
 
+class AgentCatalogueEntryPage(Dto):
+    """One page of the agents the catalogue offers, in the catalogue's order (ADR 0206)."""
+
+    items: list[AgentCatalogueEntry]
+    meta: PageMeta
+
+
 class AgentCatalogueConnect(Dto):
     #: An `mcp:read` token instead of `mcp:write`: the client reads, it opens and proposes nothing.
     read_only: bool = False

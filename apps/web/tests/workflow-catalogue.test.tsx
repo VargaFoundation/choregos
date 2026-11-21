@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 import WorkflowCataloguePage from "@/app/p/[slug]/workflows/library/page";
-import { filterEntries, readinessPreview, sourceLabel } from "@/components/workflows/catalogue";
+import { readinessPreview, sourceLabel } from "@/components/workflows/catalogue";
 import { api } from "@/lib/api";
 import type { ConnectorDto, WorkflowCatalogueEntry } from "@/lib/types";
 
@@ -37,7 +37,20 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       project: vi.fn(async () => ({ id: "p", slug: "f4f", org: "acme", status: "active", config: { slug: "f4f", org: "acme", repo } })),
-      workflowCatalogue: vi.fn(async () => workflowCatalogue),
+      // The server's page (ADR 0206): it searches, keeps what needs a workspace, and cuts three rows at a time.
+      workflowCataloguePage: vi.fn(
+        async (_org: string, params: { q?: string; needsWorkspace?: boolean; cursor?: string } = {}) => {
+          const q = (params.q ?? "").toLowerCase();
+          const kept = workflowCatalogue.filter(
+            (e) =>
+              (params.needsWorkspace === undefined || e.needs_repository === params.needsWorkspace) &&
+              (!q || [e.name, e.title, e.summary, e.source, ...e.tags].some((t) => t.toLowerCase().includes(q))),
+          );
+          const start = params.cursor ? Number(params.cursor) : 0;
+          const more = start + 3 < kept.length;
+          return { items: kept.slice(start, start + 3), meta: { has_more: more, next_cursor: more ? String(start + 3) : null } };
+        },
+      ),
       connectors: vi.fn(async () => []),
       adoptWorkflow: vi.fn(async () => ({})),
     },
@@ -58,13 +71,7 @@ async function show() {
 }
 
 describe("the workflow catalogue (S49-08, ADR 0111)", () => {
-  it("filters and previews from what the console knows", () => {
-    expect(filterEntries(workflowCatalogue, "", "without").map((e) => e.name)).toEqual([
-      "default-request",
-      "onboarding",
-      "incident-intake",
-    ]);
-    expect(filterEntries(workflowCatalogue, "hr", "any").map((e) => e.name)).toEqual(["onboarding"]);
+  it("previews from what the console knows", () => {
     const simple = workflowCatalogue.find((e) => e.name === "default-simple")!;
     const tracker = { kind: "tracker", type: "jira" } as ConnectorDto;
     expect(readinessPreview(simple, [tracker]).map((l) => [l.capability, l.state])).toEqual([
@@ -119,5 +126,31 @@ describe("the workflow catalogue (S49-08, ADR 0111)", () => {
     const list = await screen.findByRole("list", { name: "Workflow library" });
     await within(list).findByText("default-simple");
     expect(within(list).getByText("default-request")).toBeInTheDocument();
+  });
+
+  it("asks the server to search and filter, and pages with More (ADR 0206)", async () => {
+    repo = { url: "https://github.com/acme/f4f.git" };
+    await show();
+    const list = await screen.findByRole("list", { name: "Workflow library" });
+    await within(list).findByText("default-simple");
+    expect(api.workflowCataloguePage).toHaveBeenCalledWith("acme", expect.objectContaining({ needsWorkspace: undefined, limit: 50 }));
+    expect(within(list).queryByText("Incident intake")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    await within(list).findByText("Incident intake");
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "hr" } });
+    await waitFor(() =>
+      expect(api.workflowCataloguePage).toHaveBeenLastCalledWith("acme", expect.objectContaining({ q: "hr" })),
+    );
+    await waitFor(() => expect(within(list).queryByText("default-request")).toBeNull());
+    expect(within(list).getByText("Onboarding")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Repository"), { target: { value: "with" } });
+    await waitFor(() =>
+      expect(api.workflowCataloguePage).toHaveBeenLastCalledWith("acme", expect.objectContaining({ needsWorkspace: true })),
+    );
+    await waitFor(() => expect(within(list).queryByText("Onboarding")).toBeNull());
   });
 });

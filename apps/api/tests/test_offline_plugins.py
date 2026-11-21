@@ -192,7 +192,7 @@ async def test_the_installer_keeps_the_clients_client_and_reach(
     clients = (await _rows())["mcp-clients"].details["clients"]
     assert clients["claude-ai"] == {"client": "claude-ai", "reach": "cloud"}
     assert clients["copilot-vscode"] == {"client": "vscode", "reach": "always"}
-    listed = {e["slug"]: e for e in (await client.get(f"{ORG}/agent-catalogue")).json()}
+    listed = {e["slug"]: e for e in (await client.get(f"{ORG}/agent-catalogue?limit=200")).json()["items"]}
     assert (listed["chatgpt"]["client"], listed["chatgpt"]["reach"]) == ("chatgpt", "cloud")
     assert listed["claude-code"]["installed"] is True and listed["claude-code"]["own_agent"] is False
 

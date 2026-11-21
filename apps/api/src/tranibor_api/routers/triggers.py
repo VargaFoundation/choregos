@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Header, Path, Request, status
+from fastapi import APIRouter, Body, Header, Path, Query, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -25,10 +25,11 @@ from ..audit import record
 from ..config import get_settings
 from ..db.models import Organization, Project
 from ..db.org_aliases import organisation_by_slug_or_alias
-from ..deps import Db, PlatformDb, ProjectCtx
+from ..deps import Db, Pagination, PlatformDb, ProjectCtx
 from ..errors import PROBLEM_JSON, not_found, unauthorized
+from ..keyset import matches, position_page
 from ..rbac import SYSTEM, Permission
-from ..schemas import TriggerAck, TriggerDto, TriggerTokenDto
+from ..schemas import TriggerAck, TriggerDto, TriggerPage, TriggerTokenDto
 from ..security import body_digest
 from ..services import triggers
 from ..services.definitions import project_config
@@ -68,27 +69,40 @@ def _ack(firing: triggers.Firing) -> TriggerAck | JSONResponse:
 # ───────────────────────────── The project's side ─────────────────────────────
 
 
-@router.get("/projects/{id}/triggers", response_model=list[TriggerDto], operation_id="listTriggers")
-async def list_triggers(ctx: ProjectCtx, session: Db) -> list[TriggerDto]:
-    """The triggers the project's configuration declares; any member reads them, never a token."""
-    declared = project_config(ctx.project).triggers
+@router.get("/projects/{id}/triggers", response_model=TriggerPage, operation_id="listTriggers")
+async def list_triggers(
+    ctx: ProjectCtx,
+    session: Db,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+) -> TriggerPage:
+    """The triggers the project's configuration declares; any member reads them, never a token.
+
+    Declared in the configuration, not stored as rows: the list is read whole, kept in the order it is
+    declared, filtered on `q` (name, title or workflow) and cut by position (ADR 0206).
+    """
+    declared = [t for t in project_config(ctx.project).triggers if matches(q, t.name, t.title, t.workflow)]
+    window, meta = position_page(declared, page)
     rows = {r.name: r for r in await triggers.token_rows(session, ctx.project)}
-    return [
-        TriggerDto(
-            name=t.name,
-            url=trigger_url(ctx.org_slug, ctx.slug, t.name),
-            workflow=t.workflow,
-            title=t.title,
-            key=t.key,
-            labels=list(t.labels),
-            fields=dict(t.fields),
-            when=dict(t.when),
-            auth=t.auth,
-            has_token=t.name in rows,
-            token_created_at=rows[t.name].created_at if t.name in rows else None,
-        )
-        for t in declared
-    ]
+    return TriggerPage(
+        items=[
+            TriggerDto(
+                name=t.name,
+                url=trigger_url(ctx.org_slug, ctx.slug, t.name),
+                workflow=t.workflow,
+                title=t.title,
+                key=t.key,
+                labels=list(t.labels),
+                fields=dict(t.fields),
+                when=dict(t.when),
+                auth=t.auth,
+                has_token=t.name in rows,
+                token_created_at=rows[t.name].created_at if t.name in rows else None,
+            )
+            for t in window
+        ],
+        meta=meta,
+    )
 
 
 @router.post(

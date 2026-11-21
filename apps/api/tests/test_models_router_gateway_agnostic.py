@@ -32,7 +32,7 @@ async def test_the_catalogue_comes_from_the_configured_gateway_type(
     monkeypatch.setenv("TRANIBOR_GATEWAY_TYPE", "scripted-test")
     response = await client.get("/api/v1/platform/models")
     assert response.status_code == 200, response.text
-    assert [m["model_name"] for m in response.json()] == ["acme/chat"]
+    assert [m["model_name"] for m in response.json()["items"]] == ["acme/chat"]
     assert asked == ["scripted"]
 
 
@@ -49,5 +49,5 @@ async def test_an_openai_compatible_gateway_is_listed_through_its_models_endpoin
         )
         response = await client.get("/api/v1/platform/models")
     assert response.status_code == 200, response.text
-    assert [m["model_name"] for m in response.json()] == ["gpt-x"]
+    assert [m["model_name"] for m in response.json()["items"]] == ["gpt-x"]
     assert route.calls.last.request.headers["authorization"] == "Bearer discovery-key"

@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from fastapi import Response, status
+from typing import Annotated, Literal
+
+from fastapi import Query, Response, status
 from sqlalchemy import select
 from tranibor_core import utcnow
 
@@ -13,12 +15,14 @@ from ...db.models import (
     AgentCredential,
     ApiToken,
 )
-from ...deps import Config, Db, Me
+from ...deps import Config, Db, Me, Pagination
 from ...errors import conflict, forbidden, not_found
+from ...keyset import matches, position_page
 from ...schemas import (
     AgentCatalogueConnect,
     AgentCatalogueConnection,
     AgentCatalogueEntry,
+    AgentCatalogueEntryPage,
     AgentCatalogueInstall,
     AgentDto,
     ApiTokenCreated,
@@ -36,20 +40,45 @@ from ._router import Slug, router
 
 @router.get(
     "/orgs/{org}/agent-catalogue",
-    response_model=list[AgentCatalogueEntry],
+    response_model=AgentCatalogueEntryPage,
     operation_id="listAgentCatalogue",
 )
 async def list_agent_catalogue(
-    org: str, session: Db, principal: Me, settings: Config
-) -> list[AgentCatalogueEntry]:
+    org: str,
+    session: Db,
+    principal: Me,
+    settings: Config,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    kind: Annotated[Literal["internal", "external", "remote"] | None, Query()] = None,
+) -> AgentCatalogueEntryPage:
     """The agents the platform offers, and where they stand in the organisation: installed, in
-    which version, an update available — or an agent of the organisation that carries that name."""
+    which version, an update available — or an agent of the organisation that carries that name.
+
+    One page at a time (ADR 0206). The catalogue is code and plugins, not a table: it is read whole, in its
+    order, filtered on `q` (slug, name, role, summary or tag) and `kind`, and cut by position; the state
+    of an entry in the organisation (a read per entry) is read for the page's entries only.
+    """
     from ...services import agent_catalogue as catalogue
 
     require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
+    kept = [
+        proposal
+        for proposal in (await catalogue.catalogue_of(session, organisation.id)).entries
+        if (kind is None or proposal.kind == kind)
+        and matches(
+            q,
+            proposal.slug,
+            proposal.document["display_name"],
+            proposal.role,
+            proposal.summary,
+            *proposal.tags,
+        )
+    ]
+    window, meta = position_page(kept, page)
     rendered = []
-    for proposal in (await catalogue.catalogue_of(session, organisation.id)).entries:
+    for proposal in window:
         offer_state = await catalogue.state(session, organisation.id, proposal)
         is_offered, reason_text = catalogue.offer(proposal, settings)
         rendered.append(
@@ -74,7 +103,7 @@ async def list_agent_catalogue(
                 unavailable_reason=reason_text,
             )
         )
-    return rendered
+    return AgentCatalogueEntryPage(items=rendered, meta=meta)
 
 
 @router.post(

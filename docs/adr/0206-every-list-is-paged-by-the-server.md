@@ -74,6 +74,17 @@ the admin manifest's sections) may stay a bare array. It is named, with its reas
 
 At this ADR: 7 bounded, 53 not yet paged, 8 in-memory pages.
 
+### 7. A list that is not a SQL table is built whole, then cut by position
+
+Some lists have no table to keyset: a project's triggers live in its configuration, the workflow and
+agent catalogues are files the platform ships merged with rows, the model lists come from the gateway
+and are cut by the organisation's policy. Each is **built exactly as before** (same order, same
+permission and policy cuts), filtered on `q` and the route's own parameters, and cut with
+`position_page` (the cursor is the position of the next item), before any per-row read: a page reads the
+agents' resolutions or install states of its own items only. The cost is the build, which a page does
+not reduce; the payload is one page. A list like this is `BOUNDED` only when code caps its length, not
+because it is small today.
+
 ## Consequences
 
 - Each migration is a `contract-change` (the response shape changes) and breaks a client that read the

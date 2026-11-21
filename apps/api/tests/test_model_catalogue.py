@@ -354,8 +354,8 @@ async def test_usable_models_follow_the_catalogue_roles_and_usages(
     )
 
     async def names(**query: str) -> dict[str, Any]:
-        found = (await client.get(f"{BASE}/usable", params=query)).json()
-        return {m["model_name"]: m for m in found}
+        found = (await client.get(f"{BASE}/usable", params={**query, "limit": "200"})).json()
+        return {m["model_name"]: m for m in found["items"]}
 
     assert set(await names(role="implement")) == {"platform/standard"}
     assert set(await names(role="review")) == {"platform/standard", "platform/strong"}
