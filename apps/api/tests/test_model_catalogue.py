@@ -433,3 +433,30 @@ async def test_distillation_is_refused_when_its_model_lost_its_usage(
     await conversions.drain()
     outcome = (await client.get("/api/v1/orgs/northwind/knowledge/kb")).json()["distillation"]
     assert outcome["status"] == "failed" and "/admin/models" in outcome["error"], outcome
+
+
+async def test_the_cache_multipliers_are_set_read_back_with_their_effective_value_and_cleared(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    """S4-12: the entry carries its own multipliers; the entry also says what applies (the provider
+    family's defaults for the ones it leaves null)."""
+    await client.post(f"{BASE}/sync")
+    entry = (await _entries(client))["platform/standard"]
+    assert entry["cache_multipliers"] is None
+    assert entry["effective_cache_multipliers"] == {
+        "read": 0.1, "write_5m": 1.25, "write_1h": 2.0, "source": "family_default",
+    }  # fmt: skip
+    patched = await client.patch(
+        f"{BASE}/{entry['id']}", json={"cache_multipliers": {"read": 0.05, "write_1h": 1.9}}
+    )
+    assert patched.status_code == 200, patched.text
+    body = patched.json()
+    assert body["cache_multipliers"] == {"read": 0.05, "write_5m": None, "write_1h": 1.9}
+    assert body["effective_cache_multipliers"] == {
+        "read": 0.05, "write_5m": 1.25, "write_1h": 1.9, "source": "override",
+    }  # fmt: skip
+    assert (
+        await client.patch(f"{BASE}/{entry['id']}", json={"cache_multipliers": {"read": -1}})
+    ).status_code == 422
+    cleared = await client.patch(f"{BASE}/{entry['id']}", json={"clear_cache_multipliers": True})
+    assert cleared.json()["cache_multipliers"] is None

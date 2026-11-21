@@ -92,6 +92,61 @@ async def test_litellm_reads_cache_reads_where_its_spend_logs_write_them() -> No
 
 
 @respx.mock
+async def test_litellm_reads_the_ttl_split_of_a_cache_write() -> None:
+    """LiteLLM v1.105.5 keeps Anthropic's `cache_creation` split under
+    `prompt_tokens_details.cache_creation_token_details`: the 1-hour part is its own count (S4-12)."""
+    respx.get(f"{LITELLM}/key/info").mock(return_value=Response(200, json={"info": {"spend": 0.02}}))
+    split = {"ephemeral_5m_input_tokens": 100, "ephemeral_1h_input_tokens": 900}
+    respx.get(f"{LITELLM}/spend/logs").mock(
+        return_value=Response(
+            200,
+            json=[
+                {  # the split in the request's usage
+                    "model": "anthropic/claude",
+                    "prompt_tokens": 2000,
+                    "metadata": {
+                        "usage_object": {
+                            "cache_creation_input_tokens": 1000,
+                            "prompt_tokens_details": {"cache_creation_token_details": split},
+                        }
+                    },
+                },
+                {  # only the copy in additional_usage_values
+                    "model": "anthropic/claude",
+                    "prompt_tokens": 500,
+                    "metadata": {
+                        "usage_object": {"cache_creation_input_tokens": 300},
+                        "additional_usage_values": {
+                            "prompt_tokens_details": {
+                                "cache_creation_token_details": {"ephemeral_1h_input_tokens": 300}
+                            },
+                        },
+                    },
+                },
+                {  # a write with no split is a 5-minute one
+                    "model": "anthropic/claude",
+                    "prompt_tokens": 400,
+                    "metadata": {"usage_object": {"cache_creation_input_tokens": 200}},
+                },
+                {  # a split larger than the writes is clamped to them
+                    "model": "anthropic/claude",
+                    "prompt_tokens": 400,
+                    "metadata": {
+                        "usage_object": {
+                            "cache_creation_input_tokens": 50,
+                            "cache_creation": {"ephemeral_1h_input_tokens": 70},
+                        }
+                    },
+                },
+            ],
+        )
+    )
+    spend = await LiteLlmGateway(LITELLM, "sk").spend("tok-1")
+    assert spend.tokens_cache_write == 1550
+    assert spend.tokens_cache_write_1h == 900 + 300 + 0 + 50
+
+
+@respx.mock
 async def test_litellm_the_spend_comes_from_the_key_and_the_logs() -> None:
     respx.get(f"{LITELLM}/key/info").mock(return_value=Response(200, json={"info": {"spend": 0.42}}))
     respx.get(f"{LITELLM}/spend/logs").mock(
