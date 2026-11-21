@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,10 +21,12 @@ async def write_chain(org_id: str | None, count: int, *, start: int = 1, prev: s
     head moved to the last. `prev` is the hash of entry `start - 1` (`GENESIS` from 1). Returns it."""
     async with session_scope(orgs="*") as session:
         before = prev if prev is not None else GENESIS
+        on_postgres = session.bind.dialect.name == "postgresql"
         for seq in range(start, start + count):
             payload: dict[str, Any] = {"n": seq, "note": "é", "ratio": 0.1}
             link = Link(
-                id=f"{org_id or 'platform'}-{seq:04d}",
+                # `audit_log.id` is a `String(36)`: PostgreSQL refuses a longer one, SQLite does not.
+                id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{org_id or 'platform'}/{seq}")),
                 org_id=org_id,
                 seq=seq,
                 ts=T0 + timedelta(seconds=seq),
@@ -54,6 +57,11 @@ async def write_chain(org_id: str | None, count: int, *, start: int = 1, prev: s
                 )
             )
             before = digest
+            if on_postgres:
+                # PostgreSQL's trigger links each entry itself and moves the head: one at a time, in order.
+                await session.flush()
+        if on_postgres:
+            return before
         chain = org_id or ""
         head = await session.get(AuditChainHead, chain)
         if head is None:
