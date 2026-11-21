@@ -1060,12 +1060,14 @@ export type ActionApproval = {
   approvers?: Array<{
     /** The least rank an approver holds; `developer` and `release_captain` are the former names of `contributor` and `approver` (ADR 0181 C1). */
     role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
-    /** an identity-provider group the approver must also belong to (ADR 0052) */
+    /** an identity-provider group the approver must also belong to (ADR 0052); a workflow's action may name it from a field of its work item, rendered when proposed (ADR 0196) */
     group?: string | null;
     min?: number;
   }>;
   step_up_minutes?: number;
   separation_of_duties?: boolean;
+  /** who may not decide the action, whatever their rank: e-mail addresses, compared without case (ADR 0196) */
+  excluded?: Array<string>;
 };
 
 export type ActionCreate = {

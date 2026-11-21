@@ -691,6 +691,8 @@ export type PluginServer = {
   implements?: Array<"tracker">;
   webhook?: {
     path: string;
+    /** forward the delivery's `Authorization` header to this server's `tracker_parse_event`, for a sender that signs its deliveries with a bearer token the server verifies (ADR 0198); never logged nor stored by the platform, and never forwarded to a server that does not declare it */
+    forward_authorization?: boolean;
   };
   /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`TRANIBOR_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
   fake?: {
@@ -1220,6 +1222,8 @@ export type Project = {
   } | {
     states: unknown;
   }>;
+  /** The projects of the organisation whose workflows may file work items here, by slug (the `work_item.file` effect, ADR 0197). Empty: none may. */
+  accepts_items_from?: Array<string>;
   /** What the A2A door takes for this project's skills (ADR 0078 §6). */
   a2a?: {
     /** The file parts a message carries: each one, and all of them together, at most this many bytes once decoded. 10 MiB by default, 50 MiB at most. */
@@ -1838,12 +1842,14 @@ export type WorkflowActionApproval = {
   approvers?: Array<{
     /** the least rank an approver holds: `contributor`, `approver`, `project_owner` or `org_admin`. `developer` and `release_captain` are their former names, read until the release the window list names (ADR 0181 C1) */
     role?: "contributor" | "approver" | "project_owner" | "org_admin" | "developer" | "release_captain";
-    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052) */
+    /** an identity-provider group the approver must also belong to, as a human actor's `group` names people (ADR 0044, ADR 0052); in a workflow's action, `{{ fields.<name> }}` names the group a field of the work item holds, rendered when the action is proposed (ADR 0196) */
     group?: string;
     min?: number;
   }>;
   step_up_minutes?: number;
   separation_of_duties?: boolean;
+  /** who may not decide the action, whatever their rank: e-mail addresses, or in a workflow's action `{{ fields.<name> }}`, rendered when it is proposed; an empty value excludes nobody (ADR 0196) */
+  excluded?: Array<string>;
 };
 
 /** title, reason and parameters rendered with the work item's fields; a human approval when an operation requires one or when `approval` is declared */

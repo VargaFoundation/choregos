@@ -479,6 +479,7 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 [*location, "action"],
                 source,
             )
+        _check_action_approval(t.action, declared_fields, [*location, "action", "approval"], report, source)
         actor = wf.actors.get(t.by) if t.by else None
         if not isinstance(actor, SystemActor):
             report.error(
@@ -506,6 +507,58 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 [*location, "action", "not_before"],
                 source,
             )
+
+
+#: The one template an action's approval may hold (ADR 0196): a field of the work item.
+_FIELD_REFERENCE = re.compile(r"\{\{\s*fields\.([a-z_][a-z0-9_]{0,62})\s*\}\}")
+
+
+def _check_action_approval(
+    action: Any,
+    declared_fields: dict[str, Any],
+    location: list[str | int],
+    report: ValidationReport,
+    source: Any,
+) -> None:
+    """Who decides comes from the work item only through a DECLARED field (ADR 0196): an approver
+    group holds at most one `{{ fields.x }}` beside its text and the `{project}` placeholder; an
+    exclusion is an address or exactly one `{{ fields.x }}`. Any other template is refused here,
+    not discovered when nobody can approve."""
+    if action.approval is None:
+        return
+
+    def referenced(text: str, where: list[str | int], whole: bool) -> bool:
+        names = _FIELD_REFERENCE.findall(text)
+        rest = _FIELD_REFERENCE.sub("", text)
+        if len(names) > 1 or (whole and names and rest.strip()) or any(t in rest for t in ("{{", "{%", "}}")):
+            report.error(
+                "action.approval_template",
+                f"`{text}`: an approval reads at most one field, written `{{{{ fields.<name> }}}}`"
+                + (", and nothing beside it" if whole else ""),
+                where,
+                source,
+            )
+            return False
+        for name in names:
+            if name not in declared_fields:
+                report.error(
+                    "action.approval_field_unknown",
+                    f"`{text}` reads `fields.{name}`, which `metadata.inputs` does not declare",
+                    where,
+                    source,
+                )
+        return True
+
+    for a_index, approver in enumerate(action.approval.approvers):
+        if approver.group is None:
+            continue
+        where: list[str | int] = [*location, "approvers", a_index, "group"]
+        if referenced(approver.group, where, whole=False):
+            refused = placeholder_error(_FIELD_REFERENCE.sub("", approver.group))
+            if refused is not None:
+                report.error("action.approval_template", refused, where, source)
+    for e_index, entry in enumerate(action.approval.excluded):
+        referenced(entry, [*location, "excluded", e_index], whole=True)
 
 
 def _check_attachments(wf: Workflow, report: ValidationReport, source: Any) -> None:
