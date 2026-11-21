@@ -78,7 +78,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // 2026-11-18 (S67-29): 2625 -> 2650 kB. The workflow's flow view (the stations drawn from the validated graph, the tickets
 // travelling between them with CSS transitions and View Transitions, and the wall mode) adds about 28 kB on top of
 // S67-27; no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2650);
+// 2026-11-21 (ADR 0206, the paged lists): 2650 -> 2675 kB. Every list of the console reads a page and offers
+// "More" (infinite queries, server filters on the pickers): main measures 2656 kB (CI of eb7f34dd), 6 kB over.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2675);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
