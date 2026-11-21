@@ -12,13 +12,13 @@ from tranibor_core import utcnow
 from tranibor_core.domain import Memory
 
 from ..audit import record
-from ..deps import Db, Me, ProjectContext, ProjectCtx
+from ..deps import Db, Me, Pagination, ProjectContext, ProjectCtx
 from ..errors import conflict, forbidden
 from ..knowledge import okf
 from ..rbac import Permission
-from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
+from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryPage, MemoryReimport
 from ..services import effective_policy, memory_export, policy_engine
-from ..services.memory_access import project_adapter, project_namespace
+from ..services.memory_access import pending_page, project_adapter, project_namespace
 from ..temporal import MemoryLoopNotRunningError, signal_memory_loop
 
 router = APIRouter(tags=["memory"])
@@ -70,23 +70,23 @@ async def search(
     return [to_dto(m) for m in results if not wanted or str(m.kind) in wanted][:k]
 
 
-@router.get("/projects/{id}/memory/pending", response_model=list[MemoryDto], operation_id="listPendingMemory")
+@router.get("/projects/{id}/memory/pending", response_model=MemoryPage, operation_id="listPendingMemory")
 async def pending(
     ctx: ProjectCtx,
     session: Db,
+    page: Pagination,
     memory: Annotated[str | None, Query()] = None,
     agent: Annotated[str | None, Query()] = None,
-) -> list[MemoryDto]:
-    """Facts proposed by agents, waiting for a human decision (governed write).
+) -> MemoryPage:
+    """Facts proposed by agents, waiting for a human decision (governed write), oldest first, one page
+    at a time (ADR 0206).
 
     `?memory=` (S40-11): `shared` (the default), `own` with `&agent=<slug>`, or a named memory of the project.
     """
     namespace = await project_namespace(session, ctx.project, memory, agent)
     adapter = await _adapter(ctx, session)
-    rows = getattr(adapter, "pending", {}).get(namespace, []) if hasattr(adapter, "pending") else []
-    if hasattr(adapter, "list_pending"):
-        rows = await adapter.list_pending(namespace)
-    return [to_dto(m) for m in rows]
+    rows, meta = await pending_page(adapter, namespace, page)
+    return MemoryPage(items=[to_dto(m) for m in rows], meta=meta)
 
 
 @router.post("/projects/{id}/memory/pending", operation_id="decidePendingMemory")

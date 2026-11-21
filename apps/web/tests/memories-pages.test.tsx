@@ -136,7 +136,7 @@ describe("the organisation's registry", () => {
 describe("one global memory", () => {
   beforeEach(() => {
     vi.mocked(api.memory).mockResolvedValue(SECURITY);
-    vi.mocked(api.globalMemoryPending).mockResolvedValue([proposal]);
+    vi.mocked(api.globalMemoryPending).mockResolvedValue({ items: [proposal], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.searchGlobalMemory).mockResolvedValue([{ id: "m1", kind: "decision", subject: "tls-min", content: "TLS 1.3 minimum.", status: "active" }]);
     vi.mocked(api.decideGlobalMemory).mockResolvedValue({});
     vi.mocked(api.updateMemory).mockResolvedValue(SECURITY);
@@ -152,6 +152,21 @@ describe("one global memory", () => {
     const proposals = await screen.findByTestId("memory-proposals");
     fireEvent.click(within(proposals).getByRole("button", { name: "Accept" }));
     await waitFor(() => expect(api.decideGlobalMemory).toHaveBeenCalledWith("acme", "security-lessons", "g1", "accept"));
+  });
+
+  it("reads the review queue a page at a time: More asks the server for the next one (ADR 0206)", async () => {
+    const later = { ...proposal, id: "g2", subject: "hsts", content: "HSTS everywhere." };
+    vi.mocked(api.globalMemoryPending)
+      .mockResolvedValueOnce({ items: [proposal], meta: { has_more: true, next_cursor: "c1" } })
+      .mockResolvedValueOnce({ items: [later], meta: { has_more: false, next_cursor: null } });
+    await open();
+    const proposals = await screen.findByTestId("memory-proposals");
+    expect(await within(proposals).findAllByRole("listitem")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByText("HSTS everywhere.")).toBeInTheDocument();
+    expect(api.globalMemoryPending).toHaveBeenLastCalledWith("acme", "security-lessons", { cursor: "c1" });
+    expect(within(proposals).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 
   it("edits its reach with a project picker, and archives it", async () => {
@@ -194,7 +209,7 @@ describe("a project's memories", () => {
   beforeEach(() => {
     vi.mocked(api.projectMemories).mockResolvedValue([...IMPLICIT, DECISIONS, SECURITY]);
     vi.mocked(api.memorySearch).mockResolvedValue([]);
-    vi.mocked(api.memoryPending).mockResolvedValue([proposal]);
+    vi.mocked(api.memoryPending).mockResolvedValue({ items: [proposal], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.memoryDecide).mockResolvedValue({});
     vi.mocked(api.searchGlobalMemory).mockResolvedValue([]);
     vi.mocked(api.createProjectMemory).mockResolvedValue(DECISIONS);
@@ -205,13 +220,13 @@ describe("a project's memories", () => {
     await open();
     const picker = await screen.findByLabelText("Memory");
     await screen.findByRole("option", { name: "Decisions" });
-    await waitFor(() => expect(api.memoryPending).toHaveBeenCalledWith("billing-api", {}));
+    await waitFor(() => expect(api.memoryPending).toHaveBeenCalledWith("billing-api", {}, { cursor: undefined }));
     fireEvent.change(picker, { target: { value: "memory:decisions" } });
-    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "decisions" }));
+    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "decisions" }, { cursor: undefined }));
     fireEvent.change(picker, { target: { value: "own" } });
     expect(screen.getByText("Choose an agent to read its own memory.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "architect" } });
-    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "own", agent: "architect" }));
+    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "own", agent: "architect" }, { cursor: undefined }));
     // A decision is made in the memory being read.
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await waitFor(() => expect(api.memoryDecide).toHaveBeenCalledWith("billing-api", "g1", "accept", { memory: "own", agent: "architect" }));

@@ -24,6 +24,13 @@ class MemoryDto(Dto):
     proposed_by: str | None = None
 
 
+class MemoryPage(Dto):
+    """One page of a memory's review queue, oldest first (ADR 0206)."""
+
+    items: list[MemoryDto]
+    meta: PageMeta
+
+
 class MemoryDecision(Dto):
     id: str
     action: Literal["accept", "reject"]

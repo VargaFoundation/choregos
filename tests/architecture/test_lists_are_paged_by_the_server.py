@@ -60,8 +60,6 @@ BOUNDED: dict[str, str] = {
 NOT_YET_PAGED: frozenset[str] = frozenset(
     {
         "listAgentCatalogue",
-        "listGlobalPendingMemory",
-        "listPendingMemory",
         # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
         # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.
         "listPlatformModels",

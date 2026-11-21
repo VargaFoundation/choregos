@@ -65,8 +65,8 @@ async def test_write_search_propose_and_validate_on_the_database(client: AsyncCl
     )
     via_api = await client.get(f"/api/v1/projects/{project_id}/memory/pending")
     assert via_api.status_code == 200, via_api.text
-    assert [m["id"] for m in via_api.json()] == [proposed]
-    assert via_api.json()[0]["proposed_by"] == "run-1"
+    assert [m["id"] for m in via_api.json()["items"]] == [proposed]
+    assert via_api.json()["items"][0]["proposed_by"] == "run-1"
 
     decision = await client.post(
         f"/api/v1/projects/{project_id}/memory/pending", json={"id": proposed, "action": "accept"}
@@ -193,3 +193,45 @@ async def test_an_agents_own_memory_is_kept_apart_from_the_projects(client: Asyn
     )
     assert [m.content for m in await memory.list_pending(agent)] == ["VAT at 20 %."]
     assert await memory.list_pending("billing") == []
+
+
+async def test_the_review_queue_is_paged_by_keyset_in_sql(client: AsyncClient, org: str) -> None:
+    """ADR 0206: more proposals than a page, several sharing one instant, each reached once, oldest first;
+    a cursor the memory did not write is a 422."""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+    from tranibor_api.db.models import MemoryFact
+    from tranibor_api.db.session import session_scope
+
+    await login(client, "admin@northwind.dev")
+    project_id = await _project(client, org, "billing")
+    memory = _memory(org)
+    ids = [
+        await memory.propose_fact(
+            "billing",
+            Fact(kind="run_lesson", subject=f"s{index}", content=f"lesson {index}"),
+            Provenance(source="agent", run_id=f"run-{index}"),
+        )
+        for index in range(7)
+    ]
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    async with session_scope() as session:
+        for index, memory_id in enumerate(ids):
+            await session.execute(
+                update(MemoryFact)
+                .where(MemoryFact.id == memory_id)
+                .values(created_at=start + timedelta(minutes=index // 3))
+            )
+    url = f"/api/v1/projects/{project_id}/memory/pending"
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        page = (await client.get(url, params={"limit": 2} | ({"cursor": cursor} if cursor else {}))).json()
+        seen += [m["id"] for m in page["items"]]
+        if not page["meta"]["has_more"]:
+            break
+        cursor = page["meta"]["next_cursor"]
+    by_instant = sorted(range(7), key=lambda index: (index // 3, ids[index]))
+    assert seen == [ids[index] for index in by_instant], "oldest first, the id between equals, each once"
+    assert (await client.get(url, params={"cursor": "forged"})).status_code == 422

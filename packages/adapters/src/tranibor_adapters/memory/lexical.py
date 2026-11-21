@@ -27,6 +27,7 @@ from tranibor_core.memory_scope import memory_key, parse_namespace
 from tranibor_core.models import estimate_tokens
 
 from ..errors import ConfigurationError
+from .paging import PendingPage, decode_position, encode_position
 
 #: A session factory: called without argument, it returns an `async with` that yields a
 #: session. An `async_sessionmaker` will do; so will a partial `session_scope(orgs=…)` — and that is
@@ -319,22 +320,45 @@ class LexicalMemory:
             return memory_id
 
     async def list_pending(self, project: str) -> list[Memory]:
+        """The whole review queue, oldest first."""
         MemoryFact = self.models.MemoryFact  # noqa: N806
 
         async with self._sessions()() as session:
             home = await self._home(session, project)
+            query = _select(MemoryFact).where(self._scope(MemoryFact, home), MemoryFact.status == "pending")
             rows = (
-                (
-                    await session.execute(
-                        _select(MemoryFact).where(
-                            self._scope(MemoryFact, home), MemoryFact.status == "pending"
-                        )
-                    )
-                )
+                (await session.execute(query.order_by(MemoryFact.created_at.asc(), MemoryFact.id.asc())))
                 .scalars()
                 .all()
             )
         return [_memory(row) for row in rows]
+
+    async def pending_page(self, project: str, *, limit: int, cursor: str | None = None) -> PendingPage:
+        """One page of the review queue, oldest first, read by keyset in SQL (ADR 0206)."""
+        from sqlalchemy import and_, or_
+
+        MemoryFact = self.models.MemoryFact  # noqa: N806
+
+        async with self._sessions()() as session:
+            home = await self._home(session, project)
+            query = _select(MemoryFact).where(self._scope(MemoryFact, home), MemoryFact.status == "pending")
+            if cursor:
+                when, memory_id = decode_position(cursor)
+                query = query.where(
+                    or_(
+                        MemoryFact.created_at > when,
+                        and_(MemoryFact.created_at == when, MemoryFact.id > memory_id),
+                    )
+                )
+            query = query.order_by(MemoryFact.created_at.asc(), MemoryFact.id.asc()).limit(limit + 1)
+            rows = list((await session.execute(query)).scalars().all())
+        window = rows[:limit]
+        more = len(rows) > limit
+        last = window[-1] if window else None
+        return PendingPage(
+            items=[_memory(row) for row in window],
+            next_cursor=encode_position(last.created_at, str(last.id)) if more and last is not None else None,
+        )
 
     async def list_facts(self, project: str) -> list[Memory]:
         """Every active fact of one memory, and only of it (its export, ADR 0174 point 7)."""

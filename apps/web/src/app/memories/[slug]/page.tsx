@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { Breadcrumbs, Button, Card, Empty, ErrorNote, ReadState, Input, LEGENDE, Select } from "@/components/ui";
@@ -27,11 +27,15 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
     queryFn: () => api.searchGlobalMemory(org, slug, submitted),
     enabled: submitted.length > 0,
   });
-  const pending = useQuery({
+  // The review queue, oldest first, a page at a time (ADR 0206): "More" reads the next one.
+  const pending = useInfiniteQuery({
     queryKey: ["memory-pending-global", org, slug],
-    queryFn: () => api.globalMemoryPending(org, slug),
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) => api.globalMemoryPending(org, slug, { cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
     enabled: admin,
   });
+  const proposals = pending.data?.pages.flatMap((page) => page.items) ?? [];
   const [error, setError] = useState<string | null>(null);
   const [reach, setReach] = useState<"org" | "projects" | null>(null);
   const [chosen, setChosen] = useState<string[] | null>(null);
@@ -119,7 +123,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
           ) : (
             <>
               <ul className="space-y-3" data-testid="memory-proposals">
-                {(pending.data ?? [])
+                {proposals
                   .filter((m) => m.id)
                   .map((m) => (
                     <li key={m.id} className="rounded border border-line border-l-2 border-l-warn bg-surface p-3">
@@ -137,8 +141,13 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
                     </li>
                   ))}
               </ul>
+              {pending.hasNextPage && (
+                <Button size="sm" onClick={() => void pending.fetchNextPage()} disabled={pending.isFetchingNextPage}>
+                  More
+                </Button>
+              )}
               <ReadState lecture={pending} quoi="the proposals" />
-              {pending.data?.length === 0 && <Empty>Nothing waits for a decision</Empty>}
+              {pending.data && proposals.length === 0 && <Empty>Nothing waits for a decision</Empty>}
             </>
           )}
         </Card>

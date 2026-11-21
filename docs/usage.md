@@ -2168,7 +2168,9 @@ resolves it. `GET /orgs/{org}/memories` lists what you see (`?scope=global|proje
 (`status: archived`). To review: `GET /orgs/{org}/memories/{slug}/search?q=…` and
 `GET|POST /orgs/{org}/memories/{slug}/pending` for a global memory (proposals wait for an administrator);
 for a project, `GET /projects/{id}/memory/search?q=…&memory=decisions` and `…/memory/pending?memory=own&agent=architect`
-(`memory` defaults to `shared`). Global memories are stored by the organisation's `memory` connector when
+(`memory` defaults to `shared`). The two `GET …/pending` are review queues read oldest first, one page at a time
+(ADR 0206: `?limit=` and `?cursor=`); the memory backend pages its own queue (the lexical memory in SQL, Ecphoria by
+its cursor), and an Ecphoria too old to page its `/api/v1/pending` gives one page only. Global memories are stored by the organisation's `memory` connector when
 it declares one (`/orgs/{org}/connectors`), else by the deployment default.
 
 **The project's policy decides first.** A project whose policy says `memory: {enabled: false}` binds
