@@ -24,7 +24,13 @@ from typing import Any
 from pydantic import ValidationInfo
 
 from .enums import ConnectorKind, FindingType, InboundEventType, MemoryKind, StageRole
-from .window import DELIVERY_EVENT_TYPES, DELIVERY_FINDING_TYPES, DELIVERY_MEMORY_KINDS, SOFTWARE_DELIVERY
+from .window import (
+    DELIVERY_CONNECTOR_KINDS,
+    DELIVERY_EVENT_TYPES,
+    DELIVERY_FINDING_TYPES,
+    DELIVERY_MEMORY_KINDS,
+    SOFTWARE_DELIVERY,
+)
 
 #: The validation context of a document read back from the platform's own storage (`{STORED: True}`).
 STORED = "stored"
@@ -146,6 +152,10 @@ MEMORY_KINDS = OpenList(
     kept=dict.fromkeys(DELIVERY_MEMORY_KINDS, SOFTWARE_DELIVERY),
 )
 CONNECTOR_KINDS = OpenList(
-    "connector kind", CONNECTOR_KIND_PATTERN, (v.value for v in ConnectorKind), ConnectorKind
+    "connector kind",
+    CONNECTOR_KIND_PATTERN,
+    (v.value for v in ConnectorKind),
+    ConnectorKind,
+    kept=dict.fromkeys(DELIVERY_CONNECTOR_KINDS, SOFTWARE_DELIVERY),
 )
 STAGE_ROLES = OpenList("stage role", STAGE_ROLE_PATTERN, (v.value for v in StageRole), StageRole)

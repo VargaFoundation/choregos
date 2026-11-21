@@ -397,9 +397,9 @@ def _no_secrets(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 
 def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     threshold = float(params.get("x", params.get("min", 0.0)))
-    if ctx.result is None or ctx.result.evidence.coverage_delta is None:
+    delta = ctx.result.evidence.value("coverage_delta") if ctx.result is not None else None
+    if not isinstance(delta, int | float) or isinstance(delta, bool):
         return GateOutcome("coverage_delta_min", False, detail="coverage delta unknown")
-    delta = ctx.result.evidence.coverage_delta
     return GateOutcome(
         "coverage_delta_min",
         delta >= threshold,
@@ -407,12 +407,6 @@ def _coverage_delta_min(ctx: GateContext, params: dict[str, Any]) -> GateOutcome
     )
 
 
-# ───────────────────────────── asynchronous gates ─────────────────────────────
-
-
-# `ci_green` and `scans_ok` read the PR's checks THROUGH THE REPOSITORY (`scm.get_pr`, in
-# `activities/gates.py`), GitHub Actions as well as Tekton. They declared a `ci` that nothing read:
-# a project on GitHub Actions was asked for a Tekton it does not have (S21-23).
 def _ci_green(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     d = DeliveryFacts.of(ctx)
     # `pending` is what `checks_conclusion` returns while a check runs: taking it for a
@@ -483,25 +477,24 @@ def _already_fixed_proven(ctx: GateContext, params: dict[str, Any]) -> GateOutco
     if result is None:
         return GateOutcome(name, False, detail="no stage result")
     evidence = result.evidence
-    measured = set(evidence.measured or [])
     if not unchanged_run(result):
         return GateOutcome(name, False, detail="the run did not measure an empty change")
     if d.branch_pushed is None:
         return GateOutcome(name, False, detail="whether a branch was pushed could not be read from the SCM")
     if d.branch_pushed:
         return GateOutcome(name, False, detail="a work branch was pushed")
-    if not {"tests_run", "tests_failed"} <= measured:
+    if not (evidence.is_measured("tests_run") and evidence.is_measured("tests_failed")):
         return GateOutcome(name, False, detail="the platform did not run the tests (none measured)")
-    if not evidence.tests_run:
+    if not evidence.value("tests_run"):
         return GateOutcome(name, False, detail="no test ran on the default branch")
-    if evidence.tests_failed or evidence.tests_passed is False:
-        failed = evidence.tests_failed or "some"
+    if evidence.value("tests_failed") or evidence.value("tests_passed") is False:
+        failed = evidence.value("tests_failed") or "some"
         return GateOutcome(name, False, detail=f"{failed} test(s) fail on the default branch")
     return GateOutcome(
         name,
         True,
         detail=(
-            f"nothing to change (0 files, 0 lines, no commit, no branch) and {evidence.tests_run} "
+            f"nothing to change (0 files, 0 lines, no commit, no branch) and {evidence.value('tests_run')} "
             "test(s) pass on the default branch, 0 failed — measured by the platform"
         ),
     )

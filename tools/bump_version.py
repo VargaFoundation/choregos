@@ -18,12 +18,35 @@ refuses a tag that does not match the files.
 from __future__ import annotations
 
 import argparse
+import datetime
+import json
 import pathlib
 import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
+#: The release ledger: each release cut and its day (UTC). The window list of ADR 0181 reads it, so a
+#: window closes in the first release cut on or after its day, whatever its number (S83-04w).
+LEDGER = ROOT / "tools" / "releases.json"
+
+
+def record_release(version: str, *, check: bool, today: datetime.date | None = None) -> int:
+    """Write `version` and today's date into the ledger, or check it is there. A pre-release is not a
+    release: it is neither written nor required."""
+    if "-" in version:
+        return 0
+    document = json.loads(LEDGER.read_text(encoding="utf-8"))
+    releases: dict[str, str] = document["releases"]
+    if version in releases:
+        return 0
+    if check:
+        print(f"version {version} missing from {LEDGER.relative_to(ROOT)}", file=sys.stderr)
+        return 1
+    releases[version] = (today or datetime.datetime.now(datetime.UTC).date()).isoformat()
+    LEDGER.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    print(f"{LEDGER.relative_to(ROOT)} → {version} {releases[version]}")
+    return 0
 
 
 def _files() -> list[tuple[pathlib.Path, list[tuple[re.Pattern[str], str]]]]:
@@ -161,7 +184,7 @@ def main() -> int:
     args = parser.parse_args()
     if not SEMVER.match(args.version):
         parser.error(f"semver version expected, got {args.version!r}")
-    return apply(args.version, check=args.check)
+    return apply(args.version, check=args.check) or record_release(args.version, check=args.check)
 
 
 if __name__ == "__main__":
