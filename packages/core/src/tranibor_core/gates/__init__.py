@@ -453,17 +453,12 @@ def matches_any(path: str, patterns: list[str]) -> bool:
 def _evidence_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if ctx.result is None:
         return GateOutcome("evidence_present", False, detail="no stage result")
+    # Read by name, the named fact first (ADR 0181 C2): a result written as facts only is judged alike.
     ev = ctx.result.evidence
-    missing: list[str] = []
-    if ev.tests_passed is None:
-        missing.append("tests_passed")
-    if ev.tests_run is None:
-        missing.append("tests_run")
-    if params.get("require_lint", False) and ev.lint is None:
-        missing.append("lint")
-    if params.get("require_typecheck", False) and ev.typecheck is None:
-        missing.append("typecheck")
-    if ev.tests_passed is False:
+    required = ["tests_passed", "tests_run"]
+    required += [name for name in ("lint", "typecheck") if params.get(f"require_{name}", False)]
+    missing = [name for name in required if ev.value(name) is None]
+    if ev.value("tests_passed") is False:
         return GateOutcome("evidence_present", False, detail="tests are failing")
     return GateOutcome(
         "evidence_present",
@@ -965,9 +960,9 @@ def unchanged_run(result: StageResult | None) -> bool:
     if result is None:
         return False
     evidence = result.evidence
-    if not {"diff_files", "diff_lines"} <= set(evidence.measured or []):
+    if not (evidence.is_measured("diff_files") and evidence.is_measured("diff_lines")):
         return False
-    return not (evidence.diff_files or evidence.diff_lines or result.artifacts.commits)
+    return not (evidence.value("diff_files") or evidence.value("diff_lines") or result.artifacts.commits)
 
 
 __all__ = [

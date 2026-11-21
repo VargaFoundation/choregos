@@ -269,3 +269,15 @@ def test_adr_number_free_follows_its_pattern() -> None:
     )
     assert evaluate("adr_number_free", ctx, pattern).blocking
     assert evaluate("adr_number_free", ctx).passed, "the default pattern does not see these files"
+
+
+def test_the_gates_read_the_evidence_as_named_facts() -> None:
+    """ADR 0181 C2: a result whose evidence is facts only is judged as one with the fields."""
+    facts_only = StageResult(
+        status=StageStatus.DONE,
+        summary="ok",
+        evidence=Evidence(facts={"coverage_delta": 1.5, "tests_passed": True, "tests_run": 3}),
+    )
+    assert evaluate("coverage_delta_min", delivery_context(result=facts_only), {"x": 1}).passed
+    assert not evaluate("coverage_delta_min", delivery_context(result=facts_only), {"x": 2}).passed
+    assert evaluate("evidence_present", delivery_context(result=facts_only)).passed

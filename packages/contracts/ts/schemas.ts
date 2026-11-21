@@ -1265,6 +1265,8 @@ export type StageInput = {
       spec_comment?: string | null;
       plan_comment?: string | null;
       pr?: string | null;
+      /** The change request the work item is on: the successor of `pr`, which a reader takes as a fallback until the window list of ADR 0181 removes it. */
+      change_request?: string | null;
     };
   };
   transition: {
