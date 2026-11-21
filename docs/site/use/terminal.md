@@ -67,8 +67,8 @@ choregos login --fresh
 choregos logout
 ```
 
-The profile is saved in `~/.config/choregos/config.json`. `ask`, `activity` and `chat` take `--org` to name another
-organisation than the profile's.
+The profile is saved in `~/.config/choregos/config.json`. `ask`, `activity`, `chat` and `live` take `--org` to name another
+organisation than the profile's; so does a bare `choregos`, before the workspace opens.
 
 ## Ask
 
@@ -110,7 +110,7 @@ choregos activity --watch --project billing-api
 `activity` draws what runs in the organisation as a tree: project, work item, run (stage, agent, model),
 then your own sessions. Each line has a status (a glyph and a word), the elapsed time, the tokens and the
 cost so far. A cost the platform cannot say shows as "—", never as 0. Below the tree, what ended in the
-last hour; last, a line `N running · X today`, in the organisation's currency (`€` or `$`). An amount the platform gives in the other currency only is converted with the ratio of the organisation's own cost report, or, with no spend yet, printed with its own symbol, never relabelled. It only reads: stopping stays in the console and in the
+last hour; last, a line `organisation · N running · M waiting for you · X today` (`—` when the platform cannot say how many wait), in the organisation's currency (`€` or `$`). An amount the platform gives in the other currency only is converted with the ratio of the organisation's own cost report, or, with no spend yet, printed with its own symbol, never relabelled. It only reads: stopping stays in the console and in the
 [workspace](#the-workspace).
 
 - **`--watch`** keeps the tree live until you press Ctrl-C or the stream ends. Elapsed times move every
