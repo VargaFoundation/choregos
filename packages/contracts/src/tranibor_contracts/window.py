@@ -169,6 +169,35 @@ D = Window(
     removed_on=date(2027, 5, 28),
 )
 
+#: Round C2 of ADR 0181, its `delivery` part: the software fields of the stage, project and policy
+#: contracts become the plugin's (named measured facts, `delivery` sections), read under both forms. The
+#: readers move first (the console, the gates, the train), so its window is the round's own: closed
+#: by 2027-05-07 (ADR 0181, Decision (2026-11-19), point 6).
+C2_DELIVERY = Window(
+    round="C2-delivery",
+    opened_on=date(2026, 11, 21),
+    writers_switch_on=date(2027, 3, 1),
+    removed_on=date(2027, 5, 7),
+)
+
+#: A stage result's evidence of software delivery, as named measured facts (ADR 0056): the runner writes
+#: each in `evidence.facts` beside the field of the same name, `facts.<name>` in `measured` when it
+#: measured the field, and `Evidence.value(name)` reads the fact first.
+DELIVERY_EVIDENCE: tuple[str, ...] = (
+    "tests_passed",
+    "tests_run",
+    "tests_failed",
+    "coverage_delta",
+    "lint",
+    "typecheck",
+    "security_scan",
+    "diff_files",
+    "diff_lines",
+)
+
+#: The former name of a stage input's link to the change request (`WorkItemLinks`).
+FORMER_CHANGE_REQUEST_LINK = "pr"
+
 Surface = Literal["python", "rest", "dsl", "stage-result", "sign-in"]
 
 
@@ -304,6 +333,42 @@ WINDOW: tuple[FormerName, ...] = (
     *_kept(MemoryKind, DELIVERY_MEMORY_KINDS),
     # Round D: the connector kinds leave with the connector types the core still registers under them.
     *_kept(ConnectorKind, DELIVERY_CONNECTOR_KINDS, D),
+    # Round C2, the `delivery` part: a stage result's software evidence becomes named measured facts.
+    *(
+        FormerName(
+            f"evidence.{name}",
+            f"evidence.facts.{name}",
+            "stage-result",
+            f"schema:stage-result.schema.json#/properties/evidence/properties/{name}",
+            C2_DELIVERY,
+        )
+        for name in DELIVERY_EVIDENCE
+    ),
+    *(
+        FormerName(
+            f"Evidence.{name}",
+            f"Evidence.value({name!r})",
+            "python",
+            f"py:tranibor_contracts.stage:Evidence.model_fields[{name}]",
+            C2_DELIVERY,
+        )
+        for name in DELIVERY_EVIDENCE
+    ),
+    # A stage input's link to the change request: `links.pr` becomes `links.change_request`.
+    FormerName(
+        "work_item.links.pr",
+        "work_item.links.change_request",
+        "stage-result",
+        "schema:stage-input.schema.json#/properties/work_item/properties/links/properties/pr",
+        C2_DELIVERY,
+    ),
+    FormerName(
+        "WorkItemLinks.pr",
+        "WorkItemLinks.change_request",
+        "python",
+        "py:tranibor_contracts.stage:WorkItemLinks.model_fields[pr]",
+        C2_DELIVERY,
+    ),
 )
 
 #: A former role and its successor: `Role.neutral` reads through it.

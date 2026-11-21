@@ -10,6 +10,7 @@ from pydantic import AfterValidator, Field, field_validator, model_validator
 from .artifact import ARTIFACT_TYPES, ArtifactDisplay
 from .enums import ApiFormat, Severity, StageStatus
 from .open_lists import FINDING_TYPES
+from .window import DELIVERY_EVIDENCE, FORMER_CHANGE_REQUEST_LINK
 from .workflow import Strict
 
 STAGE_INPUT_SCHEMA = "choregos/StageInput/v1"
@@ -58,6 +59,14 @@ class WorkItemLinks(Strict):
     spec_comment: str | None = None
     plan_comment: str | None = None
     pr: str | None = None
+    #: The change request the work item is on (ADR 0181 C2): the successor of `pr`, which a reader takes
+    #: as a fallback until the window list removes it (`change_request_url()`).
+    change_request: str | None = None
+
+    def change_request_url(self) -> str | None:
+        """The change request's link, under either name."""
+        former = getattr(self, FORMER_CHANGE_REQUEST_LINK)
+        return self.change_request or (str(former) if former else None)
 
 
 class WorkItemRef(Strict):
@@ -526,9 +535,44 @@ class Evidence(Strict):
     #: the list comes from the agent's story; `None`: a runner too old to say.
     measured: list[str] | None = None
 
+    def value(self, name: str) -> str | int | float | bool | None:
+        """A proof by name: the named fact first, else the field of the same name (ADR 0181 C2, where a
+        stage result's software evidence becomes named facts; the runner writes both for one window)."""
+        if self.facts and name in self.facts:
+            return self.facts[name]
+        found = getattr(self, name, None) if name in DELIVERY_EVIDENCE else None
+        return found if isinstance(found, str | int | float | bool) else None
+
+    def is_measured(self, name: str) -> bool:
+        """Whether the platform measured that proof, under either form (`measured`, ADR 0045)."""
+        measured = set(self.measured or [])
+        return name in measured or f"facts.{name}" in measured
+
+    def with_facts(self) -> Evidence:
+        """The same evidence, each field of `DELIVERY_EVIDENCE` that holds a value also written as the
+        named fact (and `facts.<name>` measured when the field is): what the runner returns during the
+        window (ADR 0181 C2). The field wins over a fact of the same name the agent wrote."""
+        data = self.model_dump()
+        facts = dict(data.get("facts") or {})
+        measured = set(data.get("measured") or []) if data.get("measured") is not None else None
+        for name in DELIVERY_EVIDENCE:
+            found = data.get(name)
+            if found is None:
+                continue
+            facts[name] = found
+            if measured is not None:
+                if name in measured:
+                    measured.add(f"facts.{name}")
+                else:
+                    measured.discard(f"facts.{name}")
+        data["facts"] = facts or None
+        if measured is not None:
+            data["measured"] = sorted(measured)
+        return Evidence.model_validate(data)
+
     def is_complete(self) -> bool:
         """Minimal proofs expected by the `evidence_present` gate."""
-        return self.tests_passed is not None and self.tests_run is not None
+        return self.value("tests_passed") is not None and self.value("tests_run") is not None
 
 
 class Diagnostics(Strict):
