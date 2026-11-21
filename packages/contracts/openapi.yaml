@@ -5974,6 +5974,19 @@ paths:
         - { name: X-Gitlab-Event, in: header, required: true, schema: { type: string } }
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
+  /webhooks/azure-devops:
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: azureDevopsWebhook
+      description: The service hooks of Azure Repos pull requests (`git.pullrequest.*`) and of Azure Pipelines builds and runs (`build.complete`, `ms.vss-pipelines.run-state-changed-event`).
+      parameters:
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; the password of the service hook's basic authentication may carry it instead" }
+        - { name: Authorization, in: header, required: false, schema: { type: string }, description: "`Basic` whose password is the shared webhook secret" }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /webhooks/tekton:
     post:
       tags: [webhooks]

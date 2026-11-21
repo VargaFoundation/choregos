@@ -13,6 +13,11 @@ from typing import Any
 
 from tranibor_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATTERN
 
+from .azure_devops import azure_boards_egress as _azure_boards_egress
+from .azure_devops import azure_egress as _azure_egress
+from .azure_devops import check_azure_boards as _check_azure_boards
+from .azure_devops import check_azure_pipelines as _check_azure_pipelines
+from .azure_devops import check_azure_repos as _check_azure_repos
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .forge_accounts import DEFAULT_BASE_URL as _FORGE_DEFAULTS
@@ -35,51 +40,6 @@ def _atlassian_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
     if config.get("auth") == "scoped" and ("api.atlassian.com", 443) not in hosts:
         hosts.append(("api.atlassian.com", 443))
     return hosts
-
-
-def _azure_boards_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
-    """The organisation's (or the Server's) host, plus the Entra login host for a service principal."""
-    from tranibor_core.egress import hosts_of_config
-
-    hosts = hosts_of_config(config)
-    if config.get("auth") == "entra" and ("login.microsoftonline.com", 443) not in hosts:
-        hosts.append(("login.microsoftonline.com", 443))
-    return hosts
-
-
-def _check_azure_boards(cfg: dict[str, Any]) -> None:
-    """The collection to call, and the credential that fits it: a personal access token anywhere, an Entra
-    service principal on the Azure DevOps Services only (Server 2022 has no Entra sign-in for an app)."""
-    from urllib.parse import urlsplit
-
-    from .registry import fakes_enabled
-
-    url = str(cfg.get("base_url") or "").strip()
-    try:
-        parts = urlsplit(url)
-        parts.port  # noqa: B018 - raises ValueError on a port out of range
-    except ValueError as invalid:
-        raise ConfigurationError("`base_url` is not a valid address") from invalid
-    if parts.scheme not in ({"https", "http"} if fakes_enabled() else {"https"}) or not parts.hostname:
-        raise ConfigurationError(
-            "`base_url` must be the https address of the organisation or the collection "
-            "(https://dev.azure.com/<organisation>)"
-        )
-    if not str(cfg.get("project") or "").strip():
-        raise ConfigurationError("`project` is required: the Azure DevOps team project")
-    auth = cfg.get("auth", "pat")
-    if auth not in {"pat", "entra"}:
-        raise ConfigurationError("`auth` is `pat` (a personal access token) or `entra` (a service principal)")
-    if auth == "entra":
-        for field in ("tenant_id", "client_id"):
-            if not str(cfg.get(field) or "").strip():
-                raise ConfigurationError(f"`auth: entra` needs `{field}`")
-        host = (parts.hostname or "").lower()
-        if host != "dev.azure.com" and not host.endswith(".visualstudio.com") and not fakes_enabled():
-            raise ConfigurationError(
-                "`auth: entra` works on Azure DevOps Services (dev.azure.com) only: "
-                "Azure DevOps Server takes a personal access token"
-            )
 
 
 def _firecrawl_egress(config: dict[str, Any]) -> list[tuple[str, int]]:
@@ -361,6 +321,35 @@ _DEMO_CONFIGURATION = _object_schema(
 #: configuration (the one the console draws its form from) and its SECRET fields, which are only
 #: written as a reference. These schemas used to live in the API's router, duplicating the
 #: registry and disagreeing with it (jira was "unavailable" there while it is registered).
+_AZURE_CONNECTION: dict[str, Any] = {
+    "base_url": {
+        "type": "string",
+        "description": "https://dev.azure.com/<organisation> (Azure DevOps Services), or the collection of "
+        "an Azure DevOps Server 2022: https://<server>/<path>/<collection>",
+    },
+    "project": {"type": "string", "description": "the Azure DevOps team project"},
+    "auth": {
+        "type": "string",
+        "enum": ["pat", "entra"],
+        "default": "pat",
+        "description": "`pat`: a personal access token; `entra`: a Microsoft Entra service principal "
+        "(client credentials), Azure DevOps Services only",
+    },
+    "tenant_id": {"type": "string", "description": "`entra` only: the Entra tenant (directory) id"},
+    "client_id": {
+        "type": "string",
+        "description": "`entra` only: the service principal's application (client) id",
+    },
+    "partially_succeeded": {
+        "type": "string",
+        "enum": ["failure", "neutral"],
+        "default": "failure",
+        "description": "how a build that `partiallySucceeded` (a task that continues on error failed) is "
+        "read by the gates: `failure` (the default, a warning is not a pass) or `neutral`",
+    },
+}
+
+
 _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("tracker", "github-issues"): ConnectorTypeSpec(
         "GitHub Issues + Projects v2",
@@ -521,6 +510,54 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("project",),
         ),
         ("token",),
+    ),
+    ("scm", "azure-repos"): ConnectorTypeSpec(
+        "Azure DevOps Repos",
+        ("scm",),
+        _object_schema(
+            {
+                **_AZURE_CONNECTION,
+                "repository": {
+                    "type": "string",
+                    "description": "the Azure Repos Git repository (name or id)",
+                },
+                "default_branch": {"type": "string", "default": "main"},
+                "merge_strategy": {
+                    "type": "string",
+                    "enum": ["squash", "noFastForward", "rebase", "rebaseMerge"],
+                    "default": "squash",
+                    "description": "how a pull request is completed; auto-complete is never set and no "
+                    "branch policy is bypassed",
+                },
+                "delete_source_branch": {"type": "boolean", "default": False},
+            },
+            ("base_url", "project", "repository"),
+        ),
+        ("pat", "client_secret", "run_token"),
+        egress=_azure_egress,
+        check_config=_check_azure_repos,
+    ),
+    ("ci", "azure-pipelines"): ConnectorTypeSpec(
+        "Azure Pipelines",
+        ("ci",),
+        _object_schema(
+            {
+                **_AZURE_CONNECTION,
+                "repository": {
+                    "type": "string",
+                    "description": "optional: only the builds of this Azure Repos repository (name or id)",
+                },
+                "pipeline": {
+                    "type": "string",
+                    "description": "optional: the pipeline (name or id) whose builds are read and which is "
+                    "queued when none is named",
+                },
+            },
+            ("base_url", "project"),
+        ),
+        ("pat", "client_secret"),
+        egress=_azure_egress,
+        check_config=_check_azure_pipelines,
     ),
     ("ci", "tekton"): ConnectorTypeSpec(
         "Tekton Pipelines",

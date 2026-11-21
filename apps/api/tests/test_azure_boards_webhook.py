@@ -197,3 +197,25 @@ async def test_without_a_connector_the_lowercased_team_project_still_routes(
     await _deliver(client, payload(1, "ABC", "acme"))
 
     assert await _keys(client, project) == ["1"]
+
+
+async def test_two_subscriptions_reusing_one_notification_id_are_both_delivered(
+    client: AsyncClient, admin: str
+) -> None:
+    """`notificationId` counts per subscription: only with its `subscriptionId` (or the event GUID) is it a
+    delivery's identity, so another subscription's first delivery is not a redelivery."""
+    project = await _project(client, "yyy")
+    await _azure(client, project, "Billing")
+    first = {**payload(7, "Billing", "acme", notification="1"), "subscriptionId": "sub-a"}
+    other = {**payload(8, "Billing", "acme", notification="1"), "subscriptionId": "sub-b"}
+
+    assert (await _deliver(client, first))["duplicate"] is False
+    assert (await _deliver(client, other))["duplicate"] is False
+    assert sorted(await _keys(client, project)) == ["7", "8"]
+    assert (await _deliver(client, first))["duplicate"] is True, "a true redelivery is still dropped"
+
+    guid_a = {**payload(9, "Billing", "acme", notification="1"), "subscriptionId": "sub-a", "id": "guid-1"}
+    guid_b = {**payload(10, "Billing", "acme", notification="1"), "subscriptionId": "sub-a", "id": "guid-2"}
+    assert (await _deliver(client, guid_a))["duplicate"] is False
+    assert (await _deliver(client, guid_b))["duplicate"] is False, "the event GUID is preferred"
+    assert (await _deliver(client, guid_a))["duplicate"] is True

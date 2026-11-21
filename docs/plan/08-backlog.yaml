@@ -6358,3 +6358,15 @@ stories:
       - "With --skip-decided, a contract whose notes hold a renewal decision within the window is left out and counted"
       - "Without the flag the output and the facts are unchanged"
     notes: "Found by PA-09 on 2026-11-20: a monthly campaign reopened a memo for a contract decided the month before."
+
+  - id: S13-08
+    title: "Azure DevOps Repos SCM adapter and Azure Pipelines CI adapter (PAT or Entra service principal, service hooks for pull requests and builds, ci_green from Azure Pipelines results)"
+    stream: S13
+    sprint: 5
+    priority: 8
+    size: L
+    depends_on: [S13-05]
+    acceptance:
+      - "A work item's pull request opens, is judged at its head commit and is completed at that commit on Azure Repos; a head that moved is refused"
+      - "ci_green reads Azure Pipelines results (policies, statuses, builds of the head commit); a partially succeeded build is not green by default"
+      - "A run can be queued with parameters on a branch or commit and its state and logs read; build and pull request service hooks reach the right project"

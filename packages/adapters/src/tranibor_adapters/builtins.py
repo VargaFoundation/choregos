@@ -71,23 +71,11 @@ def _jira_tracker(cfg: dict[str, Any]) -> Any:
 def _azure_boards_tracker(cfg: dict[str, Any]) -> Any:
     """Azure DevOps Boards: a personal access token as Basic, or an Entra service principal's token, the
     secrets from the vault, never from the repository."""
-    from .specs import _check_azure_boards
-    from .tracker.azure_boards import AzureBoardsTracker, AzureDevOpsClient, EntraClientCredentials
+    from .azure_devops import azure_client, check_azure_boards
+    from .tracker.azure_boards import AzureBoardsTracker
 
-    _check_azure_boards(cfg)
-    entra = (
-        EntraClientCredentials(
-            str(cfg["tenant_id"]),
-            str(cfg["client_id"]),
-            str(cfg.get("client_secret") or ""),
-            login_url=str(cfg.get("login_url") or "https://login.microsoftonline.com"),
-        )
-        if cfg.get("auth") == "entra"
-        else None
-    )
-    client = AzureDevOpsClient(
-        cfg["base_url"], pat=None if entra else str(cfg.get("pat") or ""), entra=entra, service="azure-boards"
-    )
+    check_azure_boards(cfg)
+    client = azure_client(cfg, service="azure-boards")
     return AzureBoardsTracker(
         client,
         cfg["project"],
@@ -95,6 +83,39 @@ def _azure_boards_tracker(cfg: dict[str, Any]) -> Any:
         webhook_secret=cfg.get("webhook_secret", ""),
         field_names=cfg.get("field_names"),
         candidates_wiql=cfg.get("candidates_wiql"),
+    )
+
+
+def _azure_repos_scm(cfg: dict[str, Any]) -> Any:
+    """Azure DevOps Repos: a PAT or an Entra service principal, secrets from the vault. The run token is a
+    separate, narrower PAT: a run never receives the connector's own credential."""
+    from .azure_devops import azure_client, check_azure_repos
+    from .scm.azure_repos import AzureReposScm
+
+    check_azure_repos(cfg)
+    return AzureReposScm(
+        azure_client(cfg, service="azure-repos"),
+        cfg["project"],
+        cfg["repository"],
+        default_branch=cfg.get("default_branch", "main"),
+        merge_strategy=cfg.get("merge_strategy", "squash"),
+        delete_source_branch=bool(cfg.get("delete_source_branch", False)),
+        run_token=str(cfg.get("run_token") or ""),
+        partially_succeeded=cfg.get("partially_succeeded", "failure"),
+    )
+
+
+def _azure_pipelines_ci(cfg: dict[str, Any]) -> Any:
+    from .azure_devops import azure_client, check_azure_pipelines
+    from .ci.azure_pipelines import AzurePipelinesCi
+
+    check_azure_pipelines(cfg)
+    return AzurePipelinesCi(
+        azure_client(cfg, service="azure-pipelines"),
+        cfg["project"],
+        repository=str(cfg.get("repository") or ""),
+        pipeline=str(cfg.get("pipeline") or ""),
+        partially_succeeded=cfg.get("partially_succeeded", "failure"),
     )
 
 
@@ -596,6 +617,8 @@ def _register_forges() -> None:
             default_branch=cfg.get("default_branch", "main"),
         )
     )
+    register("scm", "azure-repos", _SHIPPED_SPECS[("scm", "azure-repos")])(_azure_repos_scm)
+    register("ci", "azure-pipelines", _SHIPPED_SPECS[("ci", "azure-pipelines")])(_azure_pipelines_ci)
     register("ci", "tekton", _SHIPPED_SPECS[("ci", "tekton")])(
         lambda cfg: TektonCi(
             KubernetesClient(**cfg.get("kubernetes", {})),

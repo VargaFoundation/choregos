@@ -14,19 +14,16 @@ the platform's:
   reference name (`Custom.Size`) once and cached;
 * descriptions and comments are HTML, and updates are JSON Patch.
 
-Credentials: a **personal access token** (Basic, empty user name), or, on the Services only, a
-**Microsoft Entra service principal** through the client credentials grant: the token is fetched
-here, for the Azure DevOps resource, and refreshed before it expires.
+Credentials: a **personal access token** or, on the Services only, a **Microsoft Entra service
+principal**; the client that carries them is the one of `tranibor_adapters.azure_devops`, shared with the
+Repos and Pipelines connectors.
 """
 
 from __future__ import annotations
 
-import base64
-import binascii
 import hmac
 import json
 import re
-import time
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Literal
@@ -35,6 +32,12 @@ from urllib.parse import quote
 from tranibor_contracts import InboundEvent, ProjectConfig, Risk, Size, StartRule
 from tranibor_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData
 
+from ..azure_devops import (  # noqa: F401 - the client and the secret reader, re-exported for importers of this module
+    JSON_PATCH,
+    AzureDevOpsClient,
+    EntraClientCredentials,
+    shared_secret_of,
+)
 from ..errors import ConfigurationError, UpstreamError
 from ..http import RestClient
 from .azure_boards_events import identity_text, parse_azure_boards_event, tags_of
@@ -44,13 +47,8 @@ from .ticket_fields import TRACKER_FIELD, answers, person, tracker_block
 
 STATUS_COMMENT_MARKER = "[choregos:status]"
 AGENT_READY_LABEL = "agent-ready"
-API_VERSION = "7.1"
 #: The comments endpoints exist only as a preview in 7.1.
 COMMENTS_API_VERSION = "7.1-preview.4"
-#: The application id of Azure DevOps in Microsoft Entra: the `.default` scope of a token for it.
-AZURE_DEVOPS_RESOURCE = "499b84ac-1321-427f-aa17-267ca6975798"
-LOGIN_URL = "https://login.microsoftonline.com"
-JSON_PATCH = {"Content-Type": "application/json-patch+json"}
 _MAX_COMMENT_PAGES = 10
 
 #: The state categories of Azure Boards, by the Jira-style words the other trackers use for them and by
@@ -63,72 +61,6 @@ _LINK_TYPES = {
     "duplicate": "System.LinkTypes.Duplicate-Forward",
     "blocks": "System.LinkTypes.Dependency-Forward",
 }
-
-
-class EntraClientCredentials:
-    """A Microsoft Entra service principal's access token for Azure DevOps (RFC 6749 §4.4), cached.
-
-    The token is requested through the REST client's own transport, so a test scripts the token
-    endpoint like any other call. Only the Azure DevOps Services accept it."""
-
-    def __init__(
-        self, tenant_id: str, client_id: str, client_secret: str, *, login_url: str = LOGIN_URL
-    ) -> None:
-        self.tenant_id = tenant_id
-        self.client_id = client_id
-        self._secret = client_secret
-        self.login_url = login_url.rstrip("/")
-        self._token: tuple[str, float] | None = None
-
-    async def token(self, client: Any) -> str:
-        if self._token is None or self._token[1] < time.monotonic() + 60:
-            response = await client.post(
-                f"{self.login_url}/{self.tenant_id}/oauth2/v2.0/token",
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": self.client_id,
-                    "client_secret": self._secret,
-                    "scope": f"{AZURE_DEVOPS_RESOURCE}/.default",
-                },
-            )
-            if response.status_code >= 400:
-                raise UpstreamError(
-                    "azure-boards",
-                    f"the Entra token endpoint refused the service principal ({response.status_code})",
-                    status_code=response.status_code,
-                )
-            body = response.json()
-            self._token = (str(body["access_token"]), time.monotonic() + float(body.get("expires_in", 3600)))
-        return self._token[0]
-
-
-class AzureDevOpsClient(RestClient):
-    """The REST client of Azure DevOps: `api-version` on every call, a PAT or an Entra token as credential."""
-
-    def __init__(
-        self,
-        base_url: str,
-        *,
-        pat: str | None = None,
-        entra: EntraClientCredentials | None = None,
-        **kwargs: Any,
-    ) -> None:
-        if bool(pat) == bool(entra):
-            raise ConfigurationError(
-                "the Azure Boards tracker needs a personal access token or an Entra service principal"
-            )
-        super().__init__(base_url, auth=("", pat) if pat else None, **kwargs)
-        self.entra = entra
-
-    async def request(self, method: str, path: str, **kwargs: Any) -> Any:
-        params = dict(kwargs.pop("params", None) or {})
-        params.setdefault("api-version", API_VERSION)
-        kwargs["params"] = params
-        if self.entra is not None:
-            headers = dict(kwargs.pop("headers", None) or {})
-            headers["Authorization"] = f"Bearer {await self.entra.token(self._client)}"
-            kwargs["headers"] = headers
-        return await super().request(method, path, **kwargs)
 
 
 class AzureBoardsTracker:
@@ -508,23 +440,6 @@ class AzureBoardsTracker:
         return bool(self.webhook_secret) and hmac.compare_digest(
             self.webhook_secret, shared_secret_of(headers)
         )
-
-
-def shared_secret_of(headers: Mapping[str, str]) -> str:
-    """The secret a service hook delivery carries: `X-Choregos-Secret` (a custom HTTP header of the
-    subscription), else the password of its `Authorization: Basic` header (any user name). Empty when none."""
-    lowered = {name.lower(): value for name, value in headers.items()}
-    header = lowered.get("x-choregos-secret", "")
-    if header:
-        return header
-    scheme, _, token = lowered.get("authorization", "").partition(" ")
-    if scheme.lower() != "basic" or not token:
-        return ""
-    try:
-        decoded = base64.b64decode(token.strip(), validate=True).decode("utf-8")
-    except (binascii.Error, UnicodeDecodeError):
-        return ""
-    return decoded.partition(":")[2]
 
 
 def _refusal(status_code: int | None, project: str) -> str:
