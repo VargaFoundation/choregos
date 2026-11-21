@@ -457,6 +457,8 @@ global:
     # The gateway adapter: `litellm` (default), `openai-compatible` (discovery only), `direct`.
     type: litellm
     embedded: false
+    # The embedded LiteLLM's Service name, hence the URL the platform dials. Empty: `<release>-litellm`.
+    serviceName: ""
     url: http://litellm.choregos-gateway.svc:4000
     # Gateway secret (key `master-key`). Empty with `embedded: true`: the chart
     # generates one, stable from one update to the next.
@@ -475,6 +477,8 @@ global:
     inputCostPerToken: 0.00000002
   memory:
     embedded: false
+    # The embedded Ecphoria's Service name. Empty: `<release>-ecphoria`.
+    serviceName: ""
     url: http://ecphoria.choregos-memory.svc:8432
     # Secret (key `token`) of a memory that requires an API key. Empty: no header.
     tokenSecret: ""
