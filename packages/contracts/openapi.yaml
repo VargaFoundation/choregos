@@ -2615,8 +2615,18 @@ paths:
     get:
       tags: [admin]
       operationId: listGatewayKeys
+      description: >-
+        The keys the gateway minted, newest first, one page at a time (ADR 0206). `q` matches a substring of the key
+        id, the run id or the project slug; `state` keeps the active or the revoked keys. Platform administrators only.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: state, in: query, schema: { type: string, enum: [active, revoked] } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GatewayKeyPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/policy-ceiling:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -13273,6 +13283,12 @@ components:
         expires_at: { type: [string, "null"], format: date-time }
         revoked: { type: boolean, default: false }
         created_at: { type: string, format: date-time }
+    GatewayKeyPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     AuditEntry:
       type: object
       required: [id, actor_kind, action, ts]
