@@ -774,8 +774,10 @@ async def test_the_recent_calls_are_listed_newest_first_as_digests(
     assert (await client.get(f"{ONE}/calls", params={"state": "lost"})).status_code == 422
     first = (await client.get(f"{ONE}/calls", params={"limit": 3})).json()
     assert [c["id"] for c in first["items"]] == ["call-4", "call-3", "call-2"]
-    assert first["meta"] == {"next_cursor": "call-2", "has_more": True}
-    rest = (await client.get(f"{ONE}/calls", params={"limit": 3, "cursor": "call-2"})).json()
+    assert first["meta"]["has_more"] is True and first["meta"]["next_cursor"]
+    rest = (
+        await client.get(f"{ONE}/calls", params={"limit": 3, "cursor": first["meta"]["next_cursor"]})
+    ).json()
     assert [c["id"] for c in rest["items"]] == ["call-1"] and rest["meta"]["has_more"] is False
 
     held = {i["id"]: i["in_flight"] for i in (await client.get(f"{ONE}/instances")).json()["items"]}
@@ -1104,11 +1106,43 @@ async def test_an_instance_names_the_token_it_enrolled_with_and_who_issued_it(
     assert approved.json()["enrolment_id"] == again["id"], "the approval's answer says it too"
 
 
-async def test_the_calls_window_is_the_one_the_contract_states(client: AsyncClient, admin: str) -> None:
-    """Row 7: the list reads the newest 1000 calls; the contract says so."""
-    from tranibor_api.services import outposts as service
+async def test_every_call_is_reached_page_after_page(client: AsyncClient, admin: str, door: kit.Door) -> None:
+    """No window (ADR 0206): the calls past the old 1000-row cap are read in SQL, each once, the instant
+    shared by several calls kept in order by the id."""
+    await kit.create(client)
+    instant = datetime.now(UTC) - timedelta(hours=1)
+    ids = [f"call-{index:04d}" for index in range(1003)]
+    from tranibor_api.db.models import OutpostCall
+    from tranibor_api.db.session import name_the_outpost, session_scope
 
+    outpost = await kit.outpost_row(SLUG)
+    async with session_scope() as session:
+        await name_the_outpost(session, outpost.id)
+        session.add_all(
+            OutpostCall(
+                id=call_id,
+                org_id=outpost.org_id,
+                outpost_id=outpost.id,
+                kind="call_tool",
+                endpoint="tracker",
+                tool="search_issues",
+                write=False,
+                created_at=instant + timedelta(seconds=index // 3),
+            )
+            for index, call_id in enumerate(ids)
+        )
+        await session.flush()
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        params: dict[str, Any] = {"limit": 200} | ({"cursor": cursor} if cursor else {})
+        page = (await client.get(f"{ONE}/calls", params=params)).json()
+        seen += [c["id"] for c in page["items"]]
+        if not page["meta"]["has_more"]:
+            break
+        cursor = page["meta"]["next_cursor"]
+    assert seen == sorted(ids, reverse=True), "newest first, every call once, the oldest one last"
     described = " ".join(
         contracts.load_openapi()["paths"]["/orgs/{org}/outposts/{slug}/calls"]["get"]["description"].split()
     )
-    assert service.RECENT_CALLS == 1000 and f"the newest {service.RECENT_CALLS} calls" in described
+    assert "1000" not in described and "ADR 0206" in described

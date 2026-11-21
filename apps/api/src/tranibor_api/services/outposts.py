@@ -27,7 +27,7 @@ import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -63,7 +63,9 @@ from ..db.models import (
 from ..db.session import ALL_ORGS, in_outpost_scope, limit_to_organisations, name_the_outpost
 from ..errors import ApiError, conflict, forbidden, not_found
 from ..freshness import require_fresh_authentication
+from ..keyset import keyset_page
 from ..rbac import Permission, Principal, outpost_principal
+from ..schemas import PageMeta
 from ..schemas.outposts import (
     OutpostCallRecord,
     OutpostCreate,
@@ -85,6 +87,9 @@ from ..secret_store import (
     seal,
 )
 
+if TYPE_CHECKING:  # `deps` imports the services
+    from ..deps import Page
+
 #: An instance is online when it polled within this many seconds: a poll waits `MAX_WAIT_S` at most
 #: and the daemon polls again at once, so two polls and a margin. "Offline" on an agent's access tab
 #: is the same window (ADR 0149 §10).
@@ -95,9 +100,6 @@ APPROVAL_STEP_UP_MINUTES: Final = 10
 #: What an enrolment token starts with. The 32 characters after it are its outpost's id: the door has
 #: to name the outpost before row-level security lets it read the token's row.
 ENROLMENT_TOKEN_PREFIX: Final = "choe_"  # noqa: S105 - a prefix, not a secret
-#: How many of an outpost's calls its list reads back, newest first: the window the contract states
-#: (`listOutpostCalls`), within which the cursor pages.
-RECENT_CALLS: Final = 1000
 #: The code of the 403 an approval answers a caller that is not a person's session (S65-24): what a
 #: client tells from a refusal of rights, which carries no code.
 APPROVAL_REQUIRES_SESSION: Final = "approval_requires_session"
@@ -760,17 +762,17 @@ async def revoke_instance(
 
 
 async def list_calls(
-    session: AsyncSession, outpost: Outpost, state: OutpostCallState | None
-) -> list[OutpostCall]:
-    """The recent calls routed to this outpost, newest first."""
+    session: AsyncSession, outpost: Outpost, state: OutpostCallState | None, page: Page
+) -> tuple[list[OutpostCall], PageMeta]:
+    """One page of the calls routed to this outpost, newest first, read in SQL (ADR 0206): every call
+    the platform still holds is reachable, page after page."""
     query = select(OutpostCall).where(OutpostCall.outpost_id == outpost.id)
     if state is not None:
         query = query.where(OutpostCall.state == state.value)
     async with in_outpost_scope(session, outpost.id):
-        rows = await session.execute(
-            query.order_by(OutpostCall.created_at.desc(), OutpostCall.id.desc()).limit(RECENT_CALLS)
+        return await keyset_page(
+            session, query, sort=OutpostCall.created_at, tiebreak=OutpostCall.id, page=page
         )
-        return list(rows.scalars())
 
 
 async def call_records(session: AsyncSession, calls: list[OutpostCall]) -> list[OutpostCallRecord]:

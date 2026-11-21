@@ -2983,7 +2983,7 @@ and creates one from a slug and a name. An outpost's page shows:
   instance is revoked) and **Delete**, which the API refuses while the outpost is not revoked or while
   connectors still route to it: the refusal is shown as the API wrote it, with the connectors it names;
 - **Recent calls**, newest first, with their state and the code of a refusal. Digests only: the platform
-  keeps no arguments and no result of a call. The list reads the newest 1000 calls, and says so where it ends.
+  keeps no arguments and no result of a call. **More** reads older calls until the oldest one (ADR 0206).
 
 A deployment where outposts are off, or whose door has no signing key, says which before anyone tries: the
 list page says it at the top and does not offer a creation while outposts are off, and an outpost's page

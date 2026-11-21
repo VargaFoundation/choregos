@@ -24,7 +24,6 @@ from ..db.models import Organization
 from ..deps import Db, Me, Pagination
 from ..freshness import authentication_age
 from ..rbac import Principal
-from ..schemas.base import PageMeta
 from ..schemas.outposts import (
     OutpostCallPage,
     OutpostCreate,
@@ -310,11 +309,9 @@ async def list_outpost_calls(
     page: Pagination,
     state: Annotated[OutpostCallState | None, Query()] = None,
 ) -> OutpostCallPage:
-    """The recent calls routed to this outpost, newest first: digests, no arguments and no result."""
+    """The calls routed to this outpost, newest first, one page read in SQL (ADR 0206): digests, no
+    arguments and no result."""
     organisation = await _managed(session, principal, org)
     outpost = await service.outpost_by_slug(session, organisation, slug)
-    window, cursor, has_more = page.slice(await service.list_calls(session, outpost, state))
-    return OutpostCallPage(
-        items=await service.call_records(session, window),
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    window, meta = await service.list_calls(session, outpost, state, page)
+    return OutpostCallPage(items=await service.call_records(session, window), meta=meta)

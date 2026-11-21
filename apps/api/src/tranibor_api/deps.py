@@ -599,19 +599,6 @@ class Page:
     cursor: str | None = None
     limit: int = 50
 
-    def slice(self, rows: list[Any]) -> tuple[list[Any], str | None, bool]:
-        """Pagination by opaque cursor: the identifier of the last row returned."""
-        start = 0
-        if self.cursor:
-            for index, row in enumerate(rows):
-                if getattr(row, "id", None) == self.cursor:
-                    start = index + 1
-                    break
-        window = rows[start : start + self.limit]
-        has_more = start + self.limit < len(rows)
-        next_cursor = getattr(window[-1], "id", None) if window and has_more else None
-        return window, next_cursor, has_more
-
 
 async def pagination(
     cursor: Annotated[str | None, Query()] = None,
