@@ -469,7 +469,7 @@ Started on 2026-11-21 (planned 2027-02-08) and split into sub-stories of stream 
   activities stay the orchestrator's, played by the interpreter by name, until round D's worker seam.
 - **S83-04c (#2055).** The `scm.*`, `ci.*`, `cd.*` inbound event types, four finding types and two memory
   kinds are the plugin's; the core's open lists keep them for a window `C2` on the window list
-  (removed in 0.31.0, not before 2026-12-14).
+  (removed in the first release cut on or after 2026-12-14).
 - **S83-04d (#2052).** The release train's operations, `getRunDiff`, `getProjectDora`, their
   components and the fields `has_release_train` and `trains_pending` carry `x-plugin:
   software-delivery` in `openapi.yaml`: they are outside the frozen REST set (point 5), and the
@@ -477,3 +477,8 @@ Started on 2026-11-21 (planned 2027-02-08) and split into sub-stories of stream 
 - **Left (S83-04e).** The `delivery` sections of the project, policy, stage-input and stage-result
   contracts, with dual read; the connector kinds `scm`, `ci`, `cd`; the train's event types and
   `ReleaseStatus` (with round D).
+- **S83-04w.** The windows are keyed on the releases actually cut, not on version numbers guessed
+  ahead: the release ledger `tools/releases.json`, which `tools/bump_version.py` writes, records each
+  release and its day, and a window closes in the first release cut on or after its `removed_on`, two
+  weeks at least after the release that opened it, patch or minor. C1 opened in 0.27.17 and closes on or
+  after 2026-12-07; C2 opens in the first release after 2026-11-21 and closes on or after 2026-12-14.

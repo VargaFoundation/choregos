@@ -102,9 +102,7 @@ def test_the_core_s_operations_reach_no_component_of_the_plugin() -> None:
     comes from a node of the plugin."""
     found: list[tuple[str, bool]] = []
     _refs(_document(), False, found)
-    leaks = sorted(
-        ref for ref, inside in found if not inside and ref.rsplit("/", 1)[-1] in PLUGIN_COMPONENTS
-    )
+    leaks = sorted(ref for ref, inside in found if not inside and ref.rsplit("/", 1)[-1] in PLUGIN_COMPONENTS)
     assert leaks == []
 
 
