@@ -60,6 +60,10 @@ NAMES = frozenset(
         "choregos_context_pack_empty_total",
         "choregos_edition_info",
         "choregos_outpost_poll_conflicts_total",
+        "choregos_audit_export_events_total",
+        "choregos_audit_export_failures_total",
+        "choregos_audit_export_lag_entries",
+        "choregos_audit_export_progress_timestamp_seconds",
     }
 )
 
@@ -117,6 +121,9 @@ class Snapshot:
         self.memory_pending = 0.0
         self.context_pack_empty: dict[str, float] = {}
         self.outpost_poll_conflicts: dict[str, float] = {}
+        #: By sink: the audit entries written and not yet accepted by it, and when its cursors last moved.
+        self.audit_export_lag: dict[str, float] = {}
+        self.audit_export_progress: dict[str, float] = {}
         self.refreshed_at: float | None = None
 
 
@@ -221,6 +228,22 @@ class PlatformCollector(Collector):
         for org, v in s.outpost_poll_conflicts.items():
             g.add_metric([org], v)
         yield g
+        g = GaugeMetricFamily(
+            "choregos_audit_export_lag_entries",
+            "Audit entries written and not yet accepted by the SIEM sink (ADR 0207)",
+            labels=["sink"],
+        )
+        for sink, v in s.audit_export_lag.items():
+            g.add_metric([sink], v)
+        yield g
+        g = GaugeMetricFamily(
+            "choregos_audit_export_progress_timestamp_seconds",
+            "When the SIEM sink's cursors last moved (ADR 0207)",
+            labels=["sink"],
+        )
+        for sink, v in s.audit_export_progress.items():
+            g.add_metric([sink], v)
+        yield g
 
 
 registry.register(PlatformCollector())
@@ -233,6 +256,8 @@ def expose() -> bytes:
 async def refresh() -> Snapshot:
     """Recomputes the snapshot from the database. One pass: about ten bounded queries."""
     from .db.models import (
+        AuditChainHead,
+        AuditExportCursor,
         AuditLog,
         CostLedger,
         MemoryFact,
@@ -344,6 +369,22 @@ async def refresh() -> Snapshot:
             .group_by(Organization.slug)
         )
         fresh.outpost_poll_conflicts = {str(org): float(n) for org, n in conflicts.all()}
+
+        # The export's lag, from the cursors and the chains' heads, the same on every replica (ADR 0207).
+        cursors = await session.execute(
+            select(
+                AuditExportCursor.sink,
+                func.coalesce(func.sum(AuditChainHead.seq - AuditExportCursor.seq), 0),
+                func.max(AuditExportCursor.updated_at),
+            )
+            .select_from(AuditExportCursor)
+            .join(AuditChainHead, AuditChainHead.chain == AuditExportCursor.chain, isouter=True)
+            .group_by(AuditExportCursor.sink)
+        )
+        for sink, behind, moved in cursors.all():
+            fresh.audit_export_lag[str(sink)] = float(max(0, behind or 0))
+            if moved is not None:
+                fresh.audit_export_progress[str(sink)] = _aware(moved).timestamp()
 
     fresh.train_frozen, fresh.train_status = await _trains(list(slug.values()))
     fresh.refreshed_at = now.timestamp()

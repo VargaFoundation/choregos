@@ -3225,6 +3225,80 @@
   ],
   "uniques": []
  },
+ "audit_export_cursors": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "sink",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "chain",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "0",
+    "name": "seq",
+    "nullable": false,
+    "server_default": null,
+    "type": "BigInteger()"
+   },
+   {
+    "default": "'0000000000000000000000000000000000000000000000000000000000000000'",
+    "name": "hash",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_audit_export_cursors_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_audit_export_cursors_org_id",
+    [
+     "audit_export_cursors.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "sink",
+   "chain"
+  ],
+  "uniques": []
+ },
  "audit_log": {
   "checks": [],
   "columns": [

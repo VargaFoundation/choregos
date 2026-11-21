@@ -301,6 +301,53 @@ global:
     # External gateway: the CIDRs the API and the workers may reach.
     cidrs: []
     ports: [443]
+  # The SIEM export of the audit log (ADR 0207, docs/deployment.md#siem-export-of-the-audit-log): every API
+  # replica ships each audit chain (every organisation's and the platform's), in order and at least once, to
+  # one sink, from a durable cursor. Off by default: nothing is rendered and the API ships nothing.
+  auditExport:
+    enabled: false
+    # The sink's name, the key of its cursors: another name ships everything again from entry 1.
+    name: siem
+    # `https` (a JSON POST) or `syslog` (RFC 5424 over TLS).
+    sink: https
+    # https: `webhook` (default), `splunk-hec` or `elastic-bulk`. syslog: `rfc5424` (default) or `cef`.
+    format: ""
+    # https: the receiver's address, `https://` only (`.../services/collector/event` for Splunk HEC,
+    # the cluster's address for Elastic or OpenSearch: `/_bulk` is added).
+    url: ""
+    # Splunk's `index`, or the Elastic index (default `choregos-audit`).
+    index: ""
+    syslog:
+      host: ""
+      port: 6514
+    token:
+      # The Secret that carries the receiver's token, and its entry: `secretKeyRef`, never a value.
+      # Empty: no token is sent (a receiver that trusts the network or a client certificate).
+      secretRef: ""
+      key: audit-export-token
+      # The header and the scheme before the token: `Authorization: Bearer <token>` by default;
+      # Splunk HEC wants `scheme: Splunk`, Elastic `scheme: ApiKey`; an empty scheme sends the bare token.
+      header: Authorization
+      scheme: Bearer
+    # A PEM bundle that signs the receiver's certificate when it is not in the system's roots: a path in
+    # the API pod, mounted with `choregos-api.extraVolumes`.
+    caFile: ""
+    # The organisations exported, by slug; empty: all of them. The platform's chain (sign-ins, tokens) is
+    # exported unless `platform: false`.
+    organisations: []
+    platform: true
+    # Each event carries `canonical`, the text its hash covers, so the receiver verifies the chain.
+    canonical: true
+    # A label put on every event.
+    source: choregos
+    intervalSeconds: 10
+    batch: 500
+    # Egress to the sink, for `networkPolicies.enabled`: CIDRs or a namespace. None given: no policy is
+    # rendered and the cluster's own rules apply. `ports` default to 443 (https) or 6514 (syslog).
+    egress:
+      cidrs: []
+      namespace: ''
+      ports: []
   # Outposts (ADRs 0147-0149, docs/deployment.md#outposts-adrs-0147-0149): places an organisation enrols,
   # which only dial out to this platform, through a door of their own (`/outposts/v1`). Off by default:
   # nothing of the door is rendered and no process is told to serve it. It lives under `global` because

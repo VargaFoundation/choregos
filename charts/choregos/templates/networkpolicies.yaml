@@ -100,6 +100,38 @@ spec:
           port: {{ int . }}
         {{- end }}
 {{- end }}
+{{- $audit := .Values.global.auditExport | default dict }}
+{{- $auditEgress := $audit.egress | default dict }}
+{{- if and $audit.enabled (or $auditEgress.cidrs $auditEgress.namespace) }}
+---
+# The SIEM export of the audit log (ADR 0207): the API, and no other pod, may reach the sink.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: choregos-audit-export-egress
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-api
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        {{- with $auditEgress.namespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+        {{- end }}
+        {{- range $auditEgress.cidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        {{- range ($auditEgress.ports | default (list (ternary 6514 443 (eq ($audit.sink | default "https") "syslog")))) }}
+        - protocol: TCP
+          port: {{ int . }}
+        {{- end }}
+{{- end }}
 ---
 {{- /* The API pods a runner reports to: the platform namespaces above are named, this one is the release's. */ -}}
 {{- $api := index .Values "choregos-api" | default dict }}

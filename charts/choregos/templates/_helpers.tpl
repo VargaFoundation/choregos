@@ -390,6 +390,82 @@ its Secret by reference, and is not optional: a door that could sign nothing wou
 {{- end -}}
 
 {{/*
+The SIEM export of the audit log (ADR 0207): what the API is told when `global.auditExport.enabled`. The
+token comes from a Secret by reference (`secretKeyRef`), never a value; the API refuses to start on a sink
+it cannot build, so the mistakes the chart can see are refused here, at render time.
+*/}}
+{{- define "choregos.auditExportEnv" -}}
+{{- $x := .Values.global.auditExport | default dict -}}
+{{- $sink := $x.sink | default "https" -}}
+{{- if not (has $sink (list "https" "syslog")) -}}
+{{- fail (printf "global.auditExport.sink: %q is not https or syslog" $sink) -}}
+{{- end -}}
+{{- $format := $x.format | default (ternary "webhook" "rfc5424" (eq $sink "https")) -}}
+{{- if not (has $format (ternary (list "webhook" "splunk-hec" "elastic-bulk") (list "rfc5424" "cef") (eq $sink "https"))) -}}
+{{- fail (printf "global.auditExport.format: %q does not fit the %s sink (https: webhook, splunk-hec, elastic-bulk; syslog: rfc5424, cef)" $format $sink) -}}
+{{- end -}}
+{{- if and (eq $sink "https") (not (hasPrefix "https://" (toString ($x.url | default "")))) -}}
+{{- fail "global.auditExport.url: an https:// address is required (the log is not sent in clear)" -}}
+{{- end -}}
+{{- if and (eq $sink "syslog") (not (($x.syslog | default dict).host)) -}}
+{{- fail "global.auditExport.syslog.host: required for the syslog sink" -}}
+{{- end -}}
+{{- $token := $x.token | default dict -}}
+- name: CHOREGOS_AUDIT_EXPORT
+  value: "true"
+- name: CHOREGOS_AUDIT_EXPORT_SINK
+  value: {{ $sink | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_NAME
+  value: {{ $x.name | default "siem" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_FORMAT
+  value: {{ $format | quote }}
+{{- if eq $sink "https" }}
+- name: CHOREGOS_AUDIT_EXPORT_URL
+  value: {{ $x.url | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_HEADER
+  value: {{ $token.header | default "Authorization" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_SCHEME
+  value: {{ if hasKey $token "scheme" }}{{ $token.scheme | quote }}{{ else }}"Bearer"{{ end }}
+{{- with $x.index }}
+- name: CHOREGOS_AUDIT_EXPORT_INDEX
+  value: {{ . | quote }}
+{{- end }}
+{{- else }}
+- name: CHOREGOS_AUDIT_EXPORT_SYSLOG_HOST
+  value: {{ $x.syslog.host | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_SYSLOG_PORT
+  value: {{ int (($x.syslog).port | default 6514) | quote }}
+{{- end }}
+{{- with $token.secretRef }}
+- name: CHOREGOS_AUDIT_EXPORT_TOKEN
+  valueFrom: { secretKeyRef: { name: {{ . | quote }}, key: {{ $token.key | default "audit-export-token" | quote }} } }
+{{- end }}
+{{- with $x.caFile }}
+- name: CHOREGOS_AUDIT_EXPORT_CA_FILE
+  value: {{ . | quote }}
+{{- end }}
+- name: CHOREGOS_AUDIT_EXPORT_ORGS
+  value: {{ toJson ($x.organisations | default list) | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_PLATFORM
+  value: {{ ne (toString $x.platform) "false" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_CANONICAL
+  value: {{ ne (toString $x.canonical) "false" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_SOURCE
+  value: {{ $x.source | default "choregos" | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_INTERVAL_S
+  value: {{ $x.intervalSeconds | default 10 | quote }}
+- name: CHOREGOS_AUDIT_EXPORT_BATCH
+  value: {{ int ($x.batch | default 500) | quote }}
+{{- end -}}
+
+{{/*
+The names `choregos.auditExportEnv` sets: `global.extraEnv` may not set them a second time.
+*/}}
+{{- define "choregos.auditExportOwnedEnv" -}}
+CHOREGOS_AUDIT_EXPORT CHOREGOS_AUDIT_EXPORT_SINK CHOREGOS_AUDIT_EXPORT_NAME CHOREGOS_AUDIT_EXPORT_FORMAT CHOREGOS_AUDIT_EXPORT_URL CHOREGOS_AUDIT_EXPORT_HEADER CHOREGOS_AUDIT_EXPORT_SCHEME CHOREGOS_AUDIT_EXPORT_INDEX CHOREGOS_AUDIT_EXPORT_SYSLOG_HOST CHOREGOS_AUDIT_EXPORT_SYSLOG_PORT CHOREGOS_AUDIT_EXPORT_TOKEN CHOREGOS_AUDIT_EXPORT_CA_FILE CHOREGOS_AUDIT_EXPORT_ORGS CHOREGOS_AUDIT_EXPORT_PLATFORM CHOREGOS_AUDIT_EXPORT_CANONICAL CHOREGOS_AUDIT_EXPORT_SOURCE CHOREGOS_AUDIT_EXPORT_INTERVAL_S CHOREGOS_AUDIT_EXPORT_BATCH
+{{- end -}}
+
+{{/*
 The names the two templates above set: `global.extraEnv` may not set them a second time while
 outposts are on. `only` = "all" (what the API receives) or "common" (what every process receives).
 */}}
@@ -658,6 +734,23 @@ template: `choregos.alertRules` stays plain YAML, which a test reads as such.
   annotations:
     summary: "A second poll arrived under an outpost instance's key: two holders of one key is what a stolen key looks like"
     description: "Organisation {{ "{{" }} $labels.org {{ "}}" }}: the door refused the second poll (409 poll_conflict) and wrote `outpost.poll_conflict` in the organisation's audit log, which names the instance. A daemon restarted while its former poll still held the slot raises it too. If the key may be held twice, revoke the instance: its signature opens nothing from its next request."
+{{- end }}
+
+{{/*
+The alert of the SIEM export (ADR 0207), rendered only while `global.auditExport.enabled`: entries are waiting
+and no cursor has moved for half an hour, which a sink that is down or refusing looks like. Plain YAML, like
+the other rule lists.
+*/}}
+{{- define "choregos.auditExportAlertRules" -}}
+- alert: ChoregosAuditExportStalled
+  expr: |
+    max by (sink) (choregos_audit_export_lag_entries) > 0
+    and on (sink) (time() - max by (sink) (choregos_audit_export_progress_timestamp_seconds)) > 1800
+  for: 10m
+  labels: { severity: warning }
+  annotations:
+    summary: "The audit log is not reaching the SIEM: entries wait and no cursor has moved for 30 minutes"
+    description: "Sink {{ "{{" }} $labels.sink {{ "}}" }}: the API logs `audit.export.failed` with the sink's own error for each chain it could not ship. Nothing is lost: the cursor stays and the batch is sent again."
 {{- end }}
 
 {{/*

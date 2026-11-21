@@ -244,6 +244,11 @@ spec:
             {{- $_ := set $apiOwned $name "global.outposts (its switch, its quotas, the door's url, signingKey, announcedKeys and ratePerMinute)" }}
             {{- end }}
             {{- end }}
+            {{- if (.Values.global.auditExport | default dict).enabled }}
+            {{- range $name := splitList " " (include "choregos.auditExportOwnedEnv" .) }}
+            {{- $_ := set $apiOwned $name "global.auditExport (the SIEM export of the audit log)" }}
+            {{- end }}
+            {{- end }}
             {{- range ($.Values.global.extraEnv | default list) }}
             {{- if hasKey $apiOwned .name }}
             {{- fail (printf "global.extraEnv: %s is set by the choregos-api chart; use %s instead (two values for one name: Kubernetes keeps the last one without saying so)" .name (get $apiOwned .name)) }}
@@ -330,6 +335,11 @@ spec:
             # pin and the origin with an outpost and its enrolment token. The switch and the quotas of
             # calls in flight come with `choregos.commonEnv`: the workers read them too.
             {{- include "choregos.outpostsDoorEnv" . | nindent 12 }}
+            {{- end }}
+            {{- if (.Values.global.auditExport | default dict).enabled }}
+            # The SIEM export of the audit log (ADR 0207): every replica runs the loop; the token is read
+            # from a Secret by reference.
+            {{- include "choregos.auditExportEnv" . | nindent 12 }}
             {{- end }}
             # STRUCTURAL, never optional: an API that starts without a session
             # secret signs cookies with an empty value, and a missing run-token key

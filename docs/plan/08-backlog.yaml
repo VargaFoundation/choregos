@@ -5546,7 +5546,7 @@ stories:
     priority: 5
     size: M
     depends_on: [S80-05]
-    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Also: the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash; `seq` and `hash` in `GET /audit` (a contract change)."
+    notes: "Plan workstream S3, second part (ADR 0182 point 9; the plan dates the SIEM export and retention in May 2027). Delivered, partial (ADR 0207, proposed): the SIEM export of the audit chains, in order and at least once from a durable cursor, to HTTPS JSON (webhook, Splunk HEC, Elastic/OpenSearch) or syslog over TLS (RFC 5424, CEF), off by default; proved on simulated receivers and SQLite, the PostgreSQL tests and the migration written and not yet run. Still to do: retention behind a signed checkpoint, checkpoints signed on a schedule, a migration role distinct from the API's, the enterprise edition's `org.delete` entry carrying the deleted chain's last seq and hash, `seq` and `hash` in `GET /audit` (a contract change)."
   - id: S80-03
     title: "fix(api,orchestrator,runner,charts): the fakes are refused in staging and prod: the render fails, and the API, the outposts' door, the workers and the runner refuse to start"
     stream: S80
