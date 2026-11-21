@@ -6,6 +6,7 @@ import KnowledgeBasePage from "@/app/knowledge/[slug]/page";
 import { api } from "@/lib/api";
 import { SERVING_MODES, baseHealth, indexLine, okfBadge, readersLabel, servedRunsLabel } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeDocument, KnowledgeSource } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "northwind" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -77,8 +78,8 @@ async function show(value: KnowledgeBase) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.orgConnectors).mockResolvedValue([]);
-  vi.mocked(api.members).mockResolvedValue([]);
+  vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([]));
+  vi.mocked(api.members).mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } });
   vi.mocked(api.projects).mockResolvedValue({ items: [] } as never);
 });
 

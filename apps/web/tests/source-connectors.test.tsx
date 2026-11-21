@@ -8,6 +8,7 @@ import { OrganisationMemoryStore, ProjectMemoryStore } from "@/components/memory
 import { api } from "@/lib/api";
 import { orgConnectorHref, projectConnectionsHref } from "@/lib/connector-link";
 import type { ConnectorDto, KnowledgeSource, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -31,7 +32,7 @@ describe("where a connector is read", () => {
 
 describe("a knowledge source says which connector it syncs through", () => {
   it("links the connector, with its type", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([org("sp-docs", "documents", "sharepoint")]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([org("sp-docs", "documents", "sharepoint")]));
     wrap(<KnowledgeSources org="northwind" slug="base" sources={[source("a", "sharepoint", "sp-docs")]} onChange={vi.fn()} canEdit={false} />);
     const line = await screen.findByText(/\(sharepoint\)/);
     const tag = line.closest("[data-testid='source-connector-a']") as HTMLElement;
@@ -48,7 +49,7 @@ describe("a knowledge source says which connector it syncs through", () => {
   });
 
   it("a connector no longer declared says so, and a web source says it has none", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([]));
     wrap(
       <KnowledgeSources
         org="northwind"
@@ -65,7 +66,7 @@ describe("a knowledge source says which connector it syncs through", () => {
 
 describe("a git source read through the platform's GitHub App", () => {
   it("says it reads private repositories, not that the repository is public", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([]));
     const app = { ...source("c", "git", null), config: { url: "https://github.com/acme/private", github_app: true } } as KnowledgeSource;
     wrap(<KnowledgeSources org="northwind" slug="base" sources={[app, source("d", "git", null)]} onChange={vi.fn()} canEdit={false} />);
     const tag = await screen.findByTestId("source-connector-c");
@@ -90,11 +91,11 @@ describe("a memory says which store holds it", () => {
   });
 
   it("the organisation's: its first memory connector by name, as the server picks it", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([
       org("zeta-memory", "memory", "ecphoria"),
       org("alpha-memory", "memory", "lexical"),
       org("sp-docs", "documents", "sharepoint"),
-    ]);
+    ]));
     wrap(<OrganisationMemoryStore org="northwind" />);
     const store = await screen.findByTestId("memory-store");
     expect(store).toHaveTextContent("Stored in the organisation's memory connector alpha-memory (lexical).");

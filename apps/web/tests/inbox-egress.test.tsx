@@ -15,8 +15,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
-      budgetAlerts: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
+      budgetAlerts: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       orgEgress: vi.fn(),
       approveOrgEgressRequest: vi.fn().mockResolvedValue({}),
       refuseOrgEgressRequest: vi.fn().mockResolvedValue({}),
@@ -92,7 +92,7 @@ describe("the inbox's network access card (S39-22)", () => {
   });
 
   it("is an organisation card: a project's inbox does not read it", () => {
-    expect(waitingInProject([], [], "billing-api")).toEqual({ actions: [], budgets: [] });
+    expect(waitingInProject([], "billing-api")).toEqual([]);
     render(
       <QueryClientProvider client={new QueryClient()}>
         <InboxView project="billing-api" />

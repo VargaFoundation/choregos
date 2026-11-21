@@ -77,7 +77,7 @@ async def test_a_viewer_of_the_organisation_reads_every_member(client: AsyncClie
     await _member("viewer@northwind.dev", "northwind", Role.VIEWER)
     response = await _members_as(client, "viewer@northwind.dev")
     assert response.status_code == 200, response.text
-    assert {"admin@northwind.dev", "viewer@northwind.dev"} <= {m["email"] for m in response.json()}
+    assert {"admin@northwind.dev", "viewer@northwind.dev"} <= {m["email"] for m in response.json()["items"]}
 
 
 @pytest.mark.usefixtures("land_in_acme")
@@ -85,7 +85,7 @@ async def test_a_project_member_reads_only_the_members_of_its_project(client: As
     await _member("dev@northwind.dev", "northwind", Role.DEVELOPER, "billing-api")
     response = await _members_as(client, "dev@northwind.dev")
     assert response.status_code == 200, response.text
-    rows = response.json()
+    rows = response.json()["items"]
     assert "dev@northwind.dev" in {m["email"] for m in rows}
     # the project's creator is its owner too; the organisation-wide `org_admin` row is not shown
     assert {m["project_slug"] for m in rows} == {"billing-api"}, "not the organisation-wide memberships"

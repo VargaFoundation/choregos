@@ -11,6 +11,9 @@ from urllib.parse import quote
 import httpx
 from tranibor_contracts import ContextPack, Finding, StageInput, StageResult
 
+#: The page size the runner reads its lists with (the API's ceiling).
+_PAGE_LIMIT = 200
+
 #: The headers that say which door a tool call came through (ADR 0122 §4), as `callRunTool` reads them.
 TOOL_ORIGIN_HEADER = "X-Choregos-Tool-Origin"
 SCRIPT_HEADER = "X-Choregos-Script"
@@ -82,6 +85,24 @@ class InternalClient:
             raise InternalApiError(response.status_code, response.text[:400])
         return response.json() if response.content else None
 
+    async def _every_page(self, suffix: str) -> list[dict[str, Any]]:
+        """A list route read to its end (ADR 0206): the runner needs the whole set, so it follows
+        `meta.next_cursor` page after page. A bare array (an API from before the paging) is the whole set."""
+        items: list[dict[str, Any]] = []
+        cursor: str | None = None
+        while True:
+            params: dict[str, Any] = {"limit": _PAGE_LIMIT}
+            if cursor:
+                params["cursor"] = cursor
+            body = await self._request("GET", suffix, params=params)
+            if isinstance(body, list):
+                return [dict(item) for item in body]
+            items.extend(body.get("items", []) if body else [])
+            meta = (body or {}).get("meta") or {}
+            cursor = meta.get("next_cursor") if meta.get("has_more") else None
+            if not cursor:
+                return items
+
     async def fetch_input(self) -> StageInput:
         return StageInput.model_validate(await self._request("GET", "/input"))
 
@@ -145,11 +166,11 @@ class InternalClient:
 
     async def fetch_skills(self) -> list[dict[str, Any]]:
         """The files of the skills the `StageInput` names (ADR 0033); their digest is checked."""
-        return list(await self._request("GET", "/skills") or [])
+        return await self._every_page("/skills")
 
     async def fetch_inputs(self) -> list[dict[str, Any]]:
         """The declared inputs an earlier step produced (ADR 0049): name, filename, digest, size."""
-        return list(await self._request("GET", "/inputs") or [])
+        return await self._every_page("/inputs")
 
     async def fetch_input_content(self, name: str) -> bytes:
         """The bytes of a declared input; the caller checks them against the listed digest."""
@@ -172,7 +193,7 @@ class InternalClient:
 
     async def fetch_knowledge(self) -> list[dict[str, Any]]:
         """The pinned documents of the run's `files` knowledge bases (ADR 0051); the digest is checked."""
-        return list(await self._request("GET", "/knowledge") or [])
+        return await self._every_page("/knowledge")
 
     async def search_knowledge(
         self, query: str, k: int = 5, knowledge_base: str | None = None

@@ -23,7 +23,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       edition: vi.fn().mockResolvedValue({ edition: "community", features: [] }),
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

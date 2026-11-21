@@ -871,9 +871,8 @@ Usage: choregos outposts calls [OPTIONS] {slug}
   The recent calls routed to the outpost, newest first: their state and the
   code of a refusal.
 
-  Digests only: the platform keeps no arguments and no result of a call. The
-  API reads the newest 1000 calls of the outpost and pages within them: the
-  last page is the end of that window.
+  Digests only: the platform keeps no arguments and no result of a call. One
+  page at a time: `--cursor` reads the older calls, down to the oldest one.
 
 Arguments:
   slug  [required]

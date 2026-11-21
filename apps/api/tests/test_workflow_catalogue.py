@@ -158,7 +158,7 @@ async def test_sharing_copies_a_version_and_an_unresolved_agent_refuses_the_adop
 
 
 async def test_only_an_administrator_shares(client: AsyncClient, project: dict[str, Any]) -> None:
-    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()["items"]
     assert all(w["can_share"] for w in listed), "the server says an org_admin may share"
     await client.post(
         "/api/v1/orgs/northwind/members", json={"email": "po@northwind.dev", "role": "project_owner"}
@@ -166,7 +166,7 @@ async def test_only_an_administrator_shares(client: AsyncClient, project: dict[s
     await login(client, "po@northwind.dev")
     refused = await client.post(BASE, json={"project": "billing-api", "name": "default-simple"})
     assert refused.status_code == 403
-    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/workflows")).json()["items"]
     assert not any(w["can_share"] for w in listed), "and a project owner sees no share gesture"
 
 
@@ -197,6 +197,6 @@ async def test_the_core_catalogue_offers_development_and_audit_workflows_with_th
     )
     assert adopted.status_code == 201, adopted.text
     assert adopted.json()["origin"] == "core/security-audit@1"
-    agents = (await client.get("/api/v1/orgs/northwind/agents")).json()
+    agents = (await client.get("/api/v1/orgs/northwind/agents")).json()["items"]
     listed = {a["slug"] for a in (agents["items"] if isinstance(agents, dict) else agents)}
     assert {"secops", "security-reviewer", "compliance"} <= listed, "the adoption installed its agents"

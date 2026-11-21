@@ -12,7 +12,7 @@
  */
 "use client";
 
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { scopeOf } from "@/components/shell/navigation";
 import { api } from "./api";
 import type { Action, BudgetAlert, EgressRule, HumanRequest, WorkItemDto } from "./types";
@@ -66,20 +66,16 @@ export function waitingTickets(items: WorkItemDto[], now: number = Date.now()): 
 }
 
 /**
- * What waits in ONE project (S39-04): its actions, and the budget alerts of the project itself. An
- * agent's alert stays organisation-level: an agent serves several projects. Pure, so it is tested
- * without React Query.
+ * The actions that wait in ONE project (S39-04). Its budget alerts are not narrowed here: the API
+ * filters them by `project` (ADR 0206), an agent's alert staying organisation-level as an agent serves
+ * several projects. Pure, so it is tested without React Query.
  */
-export function waitingInProject(
-  actions: Action[],
-  budgets: BudgetAlert[],
-  slug: string,
-): { actions: Action[]; budgets: BudgetAlert[] } {
-  return {
-    actions: actions.filter((action) => action.project_slug === slug),
-    budgets: budgets.filter((alert) => alert.scope === "project" && alert.subject === slug),
-  };
+export function waitingInProject(actions: Action[], slug: string): Action[] {
+  return actions.filter((action) => action.project_slug === slug);
 }
+
+/** How many budget alerts the inbox asks for at once; "More" asks the next page. */
+const BUDGET_PAGE = 50;
 
 /**
  * The inbox's reads, shared by the page and the counters. With `project`,
@@ -101,16 +97,19 @@ export function useADecider(org: string, project?: string) {
     })),
   });
   const actions = useQuery({
-    queryKey: ["org-actions", org],
-    queryFn: () => api.orgActions(org, "pending_approval"),
+    queryKey: ["org-actions", org, project ?? null],
+    queryFn: () => api.pendingOrgActions(org, project),
     staleTime: 30_000,
   });
   // A budget that crossed a threshold waits for a person to have seen it (S29-04).
-  const budgets = useQuery({
-    queryKey: ["budget-alerts", org],
-    queryFn: () => api.budgetAlerts(org),
+  const budgets = useInfiniteQuery({
+    queryKey: ["budget-alerts", org, project ?? null],
+    queryFn: ({ pageParam }) => api.budgetAlerts(org, { project, cursor: pageParam, limit: BUDGET_PAGE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
     staleTime: 30_000,
   });
+  const budgetAlerts = budgets.data?.pages.flatMap((page) => page.items) ?? [];
   // Network access someone asked for (S39-22): organisation-level, so never in a project's inbox.
   const egress = useQuery({
     queryKey: ["egress", org],
@@ -120,20 +119,24 @@ export function useADecider(org: string, project?: string) {
   });
   const read = tickets.flatMap((lecture) => lecture.data?.items ?? []);
   const waiting = waitingTickets(read);
-  const narrowed = project
-    ? waitingInProject(actions.data ?? [], budgets.data ?? [], project)
-    : { actions: actions.data ?? [], budgets: budgets.data ?? [] };
+  const narrowedActions = project ? waitingInProject(actions.data?.items ?? [], project) : (actions.data?.items ?? []);
   const egressRequests: EgressRule[] = project ? [] : (egress.data?.requests ?? []);
   const canDecideEgress = !project && !!egress.data?.can_decide;
   return {
     tickets: waiting,
-    actions: narrowed.actions,
-    budgets: narrowed.budgets,
+    actions: narrowedActions,
+    budgets: budgetAlerts,
+    /** More budget alerts wait on the server than the pages read so far. */
+    budgetsHaveMore: !!budgets.hasNextPage,
+    loadMoreBudgets: () => void budgets.fetchNextPage(),
+    loadingMoreBudgets: budgets.isFetchingNextPage,
     /** The requests for network access that wait for an administrator (S39-22). */
     egressRequests,
     canDecideEgress,
     /** The projects whose tickets could not be read: they are not counted, and we say so. */
     projetsIllisibles: slugs.filter((_, index) => tickets[index]?.error),
+    /** More actions wait than the inbox reads: the count is a lower bound (ACTIONS_CAP). */
+    moreActions: actions.data?.meta.has_more ?? false,
     erreur: projects.error ?? actions.error ?? budgets.error ?? egress.error ?? null,
     pret:
       (!!project || !!projects.data) &&
@@ -144,7 +147,7 @@ export function useADecider(org: string, project?: string) {
       (!!budgets.data || !!budgets.error) &&
       (!!project || !!egress.data || !!egress.error),
     // Only those who can decide are told: a request someone else must answer is not their inbox.
-    total: waiting.length + narrowed.actions.length + narrowed.budgets.length + (canDecideEgress ? egressRequests.length : 0),
+    total: waiting.length + narrowedActions.length + budgetAlerts.length + (canDecideEgress ? egressRequests.length : 0),
   };
 }
 

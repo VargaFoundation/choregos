@@ -16,14 +16,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import ArtifactRecord, HandOffReceipt, Run, WorkItem
-from ..schemas import HandOff, HandOffEvent
+from ..keyset import keyset_page
+from ..schemas import HandOff, HandOffEvent, HandOffPage
+
+if TYPE_CHECKING:  # `deps` imports the services
+    from ..deps import Page
 
 PRODUCED = "produced"
 READ = "read"
@@ -124,14 +128,37 @@ def read_by_the_prompt(documents: dict[str, Any], inputs: list[str], prompt: str
     return read
 
 
-async def work_item_handoffs(session: AsyncSession, item: WorkItem) -> list[HandOff]:
-    """A work item's receipts, output by output, with the digest of what it is worth TODAY: an
-    output modified afterwards no longer has the one of its last "produced" receipt."""
+async def work_item_handoffs(session: AsyncSession, item: WorkItem, page: Page) -> HandOffPage:
+    """One page of a work item's receipts, output by output, with the digest of what it is worth TODAY: an
+    output modified afterwards no longer has the one of its last "produced" receipt (ADR 0206).
+
+    A page is a number of OUTPUTS, in the order their first receipt was written; each carries all its
+    receipts. The outputs are paged in SQL (`min(created_at)` per output, then the output's name for
+    two that began in the same instant), and only the receipts of the page's outputs are read.
+    """
+    firsts = (
+        select(HandOffReceipt.output.label("output"), func.min(HandOffReceipt.created_at).label("first_at"))
+        .where(HandOffReceipt.work_item_id == item.id)
+        .group_by(HandOffReceipt.output)
+        .subquery()
+    )
+    heads, meta = await keyset_page(
+        session,
+        select(firsts.c.output, firsts.c.first_at),
+        sort=firsts.c.first_at,
+        tiebreak=firsts.c.output,
+        page=page,
+        descending=False,
+        rows=True,
+    )
+    outputs = [head.output for head in heads]
+    if not outputs:
+        return HandOffPage(items=[], meta=meta)
     receipts = (
         (
             await session.execute(
                 select(HandOffReceipt)
-                .where(HandOffReceipt.work_item_id == item.id)
+                .where(HandOffReceipt.work_item_id == item.id, HandOffReceipt.output.in_(outputs))
                 .order_by(HandOffReceipt.created_at, HandOffReceipt.kind.desc())
             )
         )
@@ -151,23 +178,25 @@ async def work_item_handoffs(session: AsyncSession, item: WorkItem) -> list[Hand
         for row in (
             await session.execute(
                 select(ArtifactRecord)
-                .where(ArtifactRecord.work_item_id == item.id, ArtifactRecord.storage_key.is_not(None))
+                .where(
+                    ArtifactRecord.work_item_id == item.id,
+                    ArtifactRecord.storage_key.is_not(None),
+                    ArtifactRecord.name.in_(outputs),
+                )
                 .order_by(ArtifactRecord.version)
             )
         ).scalars()
     }
     passages: dict[str, HandOff] = {}
-    for receipt in receipts:
-        value = documents.get(receipt.output)
-        passage = passages.setdefault(
-            receipt.output,
-            HandOff(
-                output=receipt.output,
-                current_digest=digest(value) if _present(value) else files.get(receipt.output),
-                events=[],
-            ),
+    for output in outputs:
+        value = documents.get(output)
+        passages[output] = HandOff(
+            output=output,
+            current_digest=digest(value) if _present(value) else files.get(output),
+            events=[],
         )
-        passage.events.append(
+    for receipt in receipts:
+        passages[receipt.output].events.append(
             HandOffEvent(
                 kind=receipt.kind,
                 digest=receipt.digest,
@@ -177,4 +206,4 @@ async def work_item_handoffs(session: AsyncSession, item: WorkItem) -> list[Hand
                 at=receipt.created_at,
             )
         )
-    return list(passages.values())
+    return HandOffPage(items=list(passages.values()), meta=meta)

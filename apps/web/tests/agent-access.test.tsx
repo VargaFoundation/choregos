@@ -28,8 +28,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
       agent: vi.fn(),
       agentAccess: vi.fn(),
       projects: vi.fn(),
-      agentCredentials: vi.fn().mockResolvedValue([]),
-      myTokens: vi.fn().mockResolvedValue([]),
+      agentCredentials: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
+      myTokens: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

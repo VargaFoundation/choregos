@@ -46,6 +46,7 @@ export type {
   Connector as ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  BudgetAlertPage,
   Approver,
   EgressCheck,
   EgressCheckResult,
@@ -141,6 +142,12 @@ export type {
   ReceivedEvent,
   ReceivedEventPage,
   MachineAccount,
+  MachineAccountPage,
+  ImplicitAgentPage,
+  ProjectAgentPage,
+  WorkflowAgentPage,
+  WorkflowDefPage,
+  WorkflowSummaryPage,
   MachineAccountCreate,
   MachineTokenCreate,
   Trigger,
@@ -267,6 +274,7 @@ export type {
   ProjectAgent,
   ProjectAgentPut,
   Skill,
+  SkillPage,
   SkillCandidate,
   SkillFinding,
   SkillGitImport,
@@ -296,6 +304,7 @@ export type { Artifact } from "@choregos/contracts/schemas";
 /** Knowledge bases (ADR 0051). */
 export type {
   KnowledgeBase,
+  KnowledgeBasePage,
   KnowledgeBaseCreate,
   KnowledgeBaseUser,
   KnowledgeDistillEstimate,
@@ -314,14 +323,47 @@ export type {
   KnowledgeSourcePatch,
 } from "@choregos/contracts/api";
 
+/** The agents' lists, one page at a time (ADR 0206). */
+export type {
+  AgentCredentialPage,
+  AgentEvaluationPage,
+  AgentMetricsSummaryPage,
+  AgentPage,
+  AgentReleasePage,
+  AgentRunPage,
+  ConversationCandidatePage,
+} from "@choregos/contracts/api";
+
 /** The organisation's memory A/B report and the platform's gateway keys (S47-18). */
-export type { GatewayKeyInfo, GatewayKeyPage, MemoryAbGroup, MemoryAbReport } from "@choregos/contracts/api";
+export type {
+  ActionPage,
+  ApiTokenPage,
+  ArtifactPage,
+  BrowserSessionPage,
+  GatewayKeyInfo,
+  GatewayKeyPage,
+  HandOffPage,
+  LinkedAccountPage,
+  MembershipPage,
+  MemoryAbGroup,
+  MemoryAbReport,
+  OrgConnectorPage,
+  OrgPage,
+  ProjectOperationPage,
+  ProjectOrgConnectorPage,
+  RemoteCredentialPage,
+  RunEventPage,
+  RunPage,
+  TimelinePage,
+} from "@choregos/contracts/api";
 
 /** Named memories, global and project, and an agent's bindings to them (S40-11, ADR 0075). */
 export type {
   AgentMemoryBinding,
   MemoryStore,
   MemoryStoreCreate,
+  MemoryPage,
+  MemoryStorePage,
   MemoryStorePatch,
   MemoryStoreUser,
   ProjectMemoryCreate,

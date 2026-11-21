@@ -2,13 +2,14 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
 import { Badge, Button, Card, Empty, ErrorNote, Input, ReadState } from "@/components/ui";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
+import { useTokens } from "@/lib/use-tokens";
 
 /**
  * The signed-in person's access tokens: the list, their creation and their revocation. They belong to
@@ -17,7 +18,7 @@ import { relative, shortDate } from "@/lib/format";
  */
 export function AccessTokensCard({ className }: { className?: string }) {
   const queryClient = useQueryClient();
-  const tokens = useQuery({ queryKey: ["tokens"], queryFn: () => api.myTokens() });
+  const tokens = useTokens();
   const [error, setError] = useState<string | null>(null);
   const [tokenName, setTokenName] = useState("");
   const [tokenClair, setTokenClair] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export function AccessTokensCard({ className }: { className?: string }) {
         </Button>
       </form>
       <ul aria-label="Your access tokens" className="divide-y divide-line">
-        {(tokens.data ?? []).map((token) => {
+        {tokens.rows.map((token) => {
           const expired = token.expires_at != null && new Date(token.expires_at).getTime() <= openedAt;
           return (
             <li key={token.id} data-testid="token" className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
@@ -118,7 +119,14 @@ export function AccessTokensCard({ className }: { className?: string }) {
         })}
       </ul>
       <ReadState lecture={tokens} quoi="your access tokens" />
-      {tokens.data?.length === 0 && <Empty>No token</Empty>}
+      {tokens.isSuccess && tokens.rows.length === 0 && <Empty>No token</Empty>}
+      {tokens.hasNextPage && (
+        <div className="mt-3">
+          <Button size="sm" onClick={() => void tokens.fetchNextPage()} disabled={tokens.isFetchingNextPage}>
+            More
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

@@ -56,7 +56,7 @@ async def test_an_mcp_token_bound_to_a_project(client: AsyncClient, project: dic
     created = await _mint(client, scopes=["mcp:write"], project="northwind:billing-api")
     assert created.status_code == 201, created.text
     assert created.json()["project"] == "northwind:billing-api"
-    listed = (await client.get("/api/v1/me/tokens")).json()
+    listed = (await client.get("/api/v1/me/tokens")).json()["items"]
     assert [(t["scopes"], t["project"]) for t in listed] == [(["mcp:write"], "northwind:billing-api")]
 
 
@@ -75,6 +75,6 @@ async def test_the_last_client_is_noted(client: AsyncClient, admin: str) -> None
     await client.get("/api/v1/me", headers=headers)
     # Read back through a session: reading with the token would note the reader's client.
     await login(client, admin)
-    listed = (await client.get("/api/v1/me/tokens")).json()
+    listed = (await client.get("/api/v1/me/tokens")).json()["items"]
     assert listed[0]["last_client"] == "claude-code/2.1"
     assert listed[0]["last_used_at"] is not None

@@ -21,6 +21,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       memories: vi.fn(),
+      memoriesPage: vi.fn(),
       memory: vi.fn(),
       createGlobalMemory: vi.fn(),
       updateMemory: vi.fn(),
@@ -73,6 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   session.me = { memberships: [{ org: "acme", role: "org_admin" }] };
   vi.mocked(api.memories).mockResolvedValue([SECURITY, ARCH]);
+  vi.mocked(api.memoriesPage).mockResolvedValue({ items: [SECURITY, ARCH], meta: { has_more: false, next_cursor: null } });
   vi.mocked(api.projects).mockResolvedValue({ items: [{ slug: "billing-api", name: "Billing API" }, { slug: "checkout-web", name: "Checkout Web" }], meta: { has_more: false } } as never);
   vi.mocked(api.agents).mockResolvedValue([{ slug: "architect", display_name: "Architect" }] as never);
 });
@@ -85,7 +87,22 @@ describe("the organisation's registry", () => {
     expect(within(table).getByText("every project")).toBeInTheDocument();
     expect(within(table).getByText("projects billing-api")).toBeInTheDocument();
     expect(within(table).getByRole("link", { name: "architect v3" })).toHaveAttribute("href", "/agents/architect");
-    expect(api.memories).toHaveBeenCalledWith("acme", { scope: "global" });
+    expect(api.memoriesPage).toHaveBeenCalledWith("acme", { scope: "global", cursor: undefined, limit: 50 });
+  });
+
+  it("reads one page at a time: More asks for the next by its cursor", async () => {
+    vi.mocked(api.memoriesPage).mockImplementation(async (_org, params) =>
+      params?.cursor === "security-lessons"
+        ? { items: [ARCH], meta: { has_more: false, next_cursor: null } }
+        : { items: [SECURITY], meta: { has_more: true, next_cursor: "security-lessons" } },
+    );
+    await show(<MemoriesPage />);
+    const table = await screen.findByTestId("memories");
+    expect(within(table).queryByRole("link", { name: ARCH.display_name })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    await waitFor(() => expect(within(table).getByRole("link", { name: ARCH.display_name })).toBeInTheDocument());
+    expect(within(table).getByRole("link", { name: SECURITY.display_name })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 
   it("an administrator creates one, with a reach", async () => {
@@ -119,7 +136,7 @@ describe("the organisation's registry", () => {
 describe("one global memory", () => {
   beforeEach(() => {
     vi.mocked(api.memory).mockResolvedValue(SECURITY);
-    vi.mocked(api.globalMemoryPending).mockResolvedValue([proposal]);
+    vi.mocked(api.globalMemoryPending).mockResolvedValue({ items: [proposal], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.searchGlobalMemory).mockResolvedValue([{ id: "m1", kind: "decision", subject: "tls-min", content: "TLS 1.3 minimum.", status: "active" }]);
     vi.mocked(api.decideGlobalMemory).mockResolvedValue({});
     vi.mocked(api.updateMemory).mockResolvedValue(SECURITY);
@@ -135,6 +152,21 @@ describe("one global memory", () => {
     const proposals = await screen.findByTestId("memory-proposals");
     fireEvent.click(within(proposals).getByRole("button", { name: "Accept" }));
     await waitFor(() => expect(api.decideGlobalMemory).toHaveBeenCalledWith("acme", "security-lessons", "g1", "accept"));
+  });
+
+  it("reads the review queue a page at a time: More asks the server for the next one (ADR 0206)", async () => {
+    const later = { ...proposal, id: "g2", subject: "hsts", content: "HSTS everywhere." };
+    vi.mocked(api.globalMemoryPending)
+      .mockResolvedValueOnce({ items: [proposal], meta: { has_more: true, next_cursor: "c1" } })
+      .mockResolvedValueOnce({ items: [later], meta: { has_more: false, next_cursor: null } });
+    await open();
+    const proposals = await screen.findByTestId("memory-proposals");
+    expect(await within(proposals).findAllByRole("listitem")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByText("HSTS everywhere.")).toBeInTheDocument();
+    expect(api.globalMemoryPending).toHaveBeenLastCalledWith("acme", "security-lessons", { cursor: "c1" });
+    expect(within(proposals).getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 
   it("edits its reach with a project picker, and archives it", async () => {
@@ -177,7 +209,7 @@ describe("a project's memories", () => {
   beforeEach(() => {
     vi.mocked(api.projectMemories).mockResolvedValue([...IMPLICIT, DECISIONS, SECURITY]);
     vi.mocked(api.memorySearch).mockResolvedValue([]);
-    vi.mocked(api.memoryPending).mockResolvedValue([proposal]);
+    vi.mocked(api.memoryPending).mockResolvedValue({ items: [proposal], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.memoryDecide).mockResolvedValue({});
     vi.mocked(api.searchGlobalMemory).mockResolvedValue([]);
     vi.mocked(api.createProjectMemory).mockResolvedValue(DECISIONS);
@@ -188,13 +220,13 @@ describe("a project's memories", () => {
     await open();
     const picker = await screen.findByLabelText("Memory");
     await screen.findByRole("option", { name: "Decisions" });
-    await waitFor(() => expect(api.memoryPending).toHaveBeenCalledWith("billing-api", {}));
+    await waitFor(() => expect(api.memoryPending).toHaveBeenCalledWith("billing-api", {}, { cursor: undefined }));
     fireEvent.change(picker, { target: { value: "memory:decisions" } });
-    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "decisions" }));
+    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "decisions" }, { cursor: undefined }));
     fireEvent.change(picker, { target: { value: "own" } });
     expect(screen.getByText("Choose an agent to read its own memory.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "architect" } });
-    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "own", agent: "architect" }));
+    await waitFor(() => expect(api.memoryPending).toHaveBeenLastCalledWith("billing-api", { memory: "own", agent: "architect" }, { cursor: undefined }));
     // A decision is made in the memory being read.
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     await waitFor(() => expect(api.memoryDecide).toHaveBeenCalledWith("billing-api", "g1", "accept", { memory: "own", agent: "architect" }));

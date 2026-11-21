@@ -293,7 +293,7 @@ def _saved_organisation(api_url: str) -> str:
 def _choose_organisation(http: Client) -> str:
     """The person's only organisation, or the one they pick in a terminal; "" when it cannot be decided."""
     try:
-        slugs = [str(org["slug"]) for org in http.get("/orgs")]
+        slugs = [str(org["slug"]) for org in http.get_pages("/orgs")]
     except ApiError:
         return ""
     if len(slugs) <= 1:
@@ -361,7 +361,7 @@ def logout() -> None:
         return
     http = TransportSafeClient(profile)
     try:
-        mine = [s for s in http.get("/me/sessions") if s.get("current")]
+        mine = http.get("/me/sessions", params={"current": "true"})["items"]
         for current in mine:
             http.delete(f"/me/sessions/{current['id']}")
     except ApiError as exc:
@@ -390,7 +390,7 @@ def whoami() -> None:
 @orgs_app.command("list")
 def orgs_list() -> None:
     table = Table("organisation", "name", "my role")
-    for org in client().get("/orgs"):
+    for org in client().get_pages("/orgs"):
         table.add_row(org["slug"], org["name"], org.get("role") or "—")
     console.print(table)
 
@@ -487,7 +487,7 @@ def _machines(project: str) -> str:
 def machines_list(project: str) -> None:
     """A project's applications and their tokens, never a token's value."""
     table = Table("application", "name", "writes a day", "token", "token id", "expires", "last used")
-    for account in client().get(_machines(project)):
+    for account in client().get_pages(_machines(project)):
         tokens = account.get("tokens") or [{}]
         for token in tokens:
             table.add_row(
@@ -554,7 +554,7 @@ def machines_remove(project: str, slug: str) -> None:
 @tokens_app.command("list")
 def tokens_list() -> None:
     table = Table("id", "name", "scope", "project", "created", "expires", "last used", "client")
-    for token in client().get("/me/tokens"):
+    for token in client().get_pages("/me/tokens"):
         table.add_row(
             token["id"],
             token["name"],
@@ -756,7 +756,7 @@ def items_show(item_id: str) -> None:
     console.print(f"state: {item.get('state_display') or item['state']} · size {item.get('size') or '—'}")
     totals = item.get("totals", {})
     console.print(f"cost: {_pricing(api).text(money.amount(totals))} ({totals.get('runs', 0)} runs)")
-    timeline = api.get(f"/work-items/{item_id}/timeline")
+    timeline = api.get_pages(f"/work-items/{item_id}/timeline")
     table = Table("when", "what", "detail")
     for entry in timeline[-15:]:
         table.add_row(entry["ts"][:19], entry["title"][:40], (entry.get("detail") or "")[:60])
@@ -810,7 +810,7 @@ def items_action(
 @runs_app.command("list")
 def runs_list(item_id: str) -> None:
     api = client()
-    runs = api.get(f"/work-items/{item_id}/runs")
+    runs = api.get_pages(f"/work-items/{item_id}/runs")
     pricing = _pricing(api)
     table = Table("run", "stage", "attempt", "status", "backend · model", "cost")
     for run in runs:
@@ -933,7 +933,7 @@ def findings_action(
 @workflow_app.command("list")
 def workflow_list(project: str) -> None:
     """A project's workflows: the active version of each, the default, the open work items."""
-    workflows = client().get(f"/projects/{project}/workflows")
+    workflows = client().get_pages(f"/projects/{project}/workflows")
     table = Table("workflow", "version", "default", "open work items", "published by")
     for definition in workflows:
         table.add_row(

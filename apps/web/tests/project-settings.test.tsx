@@ -11,6 +11,7 @@ import { policySummary } from "@/components/project-settings/guardrails-section"
 import { api } from "@/lib/api";
 import { connectorTypes } from "@/mocks/data";
 import type { ConnectorDto, ProjectRequirement } from "@/lib/types";
+import { pageOf } from "./page";
 
 const connector = (kind: string, type: string, status: string, extra: Partial<ConnectorDto> = {}) =>
   ({ id: `c-${kind}`, kind, type, config: {}, secret_refs: {}, status, ...extra }) as unknown as ConnectorDto;
@@ -80,16 +81,19 @@ vi.mock("@/lib/api", async (importOriginal) => {
       models: vi.fn(async () => ({ profiles: {}, allow_unvalidated: false, inherited: {} })),
       platformModels: vi.fn(async () => []),
       usableModels: vi.fn(async () => []),
-      projectOperations: vi.fn(async () => []),
-      orgConnectors: vi.fn(async () => []),
+      projectOperations: vi.fn(async () => pageOf([])),
+      orgConnectors: vi.fn(async () => pageOf([])),
       project: vi.fn(async () => structuredClone(projectDto)),
       updateProject: vi.fn(async () => projectDto),
       templates: vi.fn(async () => []),
       projectReadiness: vi.fn(async () => readiness),
-      members: vi.fn(async () => [
-        { org: "acme", role: "project_owner", user_id: "u2", email: "lea@acme.dev", project_slug: "dev" },
-        { org: "acme", role: "developer", user_id: "u3", email: "marc@acme.dev", project_slug: "dev" },
-      ]),
+      members: vi.fn(async () => ({
+        items: [
+          { org: "acme", role: "project_owner", user_id: "u2", email: "lea@acme.dev", project_slug: "dev" },
+          { org: "acme", role: "developer", user_id: "u3", email: "marc@acme.dev", project_slug: "dev" },
+        ],
+        meta: { next_cursor: null, has_more: false },
+      })),
       knowledgeBases: vi.fn(async () => []),
       backends: vi.fn(async () => [{ name: "claude-code", enabled: true, capabilities: [] }, { name: "codex", enabled: false, capabilities: [] }]),
       suspendProject: vi.fn(async () => projectDto),

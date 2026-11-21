@@ -13,9 +13,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       projects: vi.fn().mockResolvedValue({ items: [{ slug: "billing-api" }], meta: { has_more: false } }),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       orgEgress: vi.fn().mockResolvedValue({ mode: "enforce", ceiling: {}, rules: [], requests: [], can_decide: false }),
-      budgetAlerts: vi.fn().mockResolvedValue([
+      budgetAlerts: vi.fn().mockResolvedValue({ meta: { has_more: false, next_cursor: null }, items: [
         {
           id: "b1",
           scope: "project",
@@ -40,7 +40,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
           status: "open",
           can_acknowledge: false,
         },
-      ]),
+      ] }),
       acknowledgeBudgetAlert,
     },
   };

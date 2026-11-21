@@ -52,7 +52,7 @@ async def test_a_new_skill_named_after_a_console_page_is_refused(
 ) -> None:
     _reserved(await client.post("/api/v1/orgs/northwind/skills", json={"files": _files(slug)}))
     _reserved(await _import(client, _files(slug)))
-    listed = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()}
+    listed = {s["slug"] for s in (await client.get("/api/v1/orgs/northwind/skills")).json()["items"]}
     assert slug not in listed, "nothing was published"
     # A slug that only starts like one is free.
     created = await client.post("/api/v1/orgs/northwind/skills", json={"files": _files(f"{slug}-tools")})

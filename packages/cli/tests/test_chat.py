@@ -344,7 +344,9 @@ class Platform:
         ]
         self.workflows_status = 200
         self.flow_reads: list[str] = []
-        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows$").mock(side_effect=self._workflows)
+        router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows(\?.*)?$").mock(
+            side_effect=self._workflows
+        )
         router.get(url__regex=rf"{re.escape(V1)}/projects/[^/]+/workflows/delivery$").mock(
             return_value=Response(
                 200,
@@ -384,7 +386,11 @@ class Platform:
         if self.workflows_status != 200:
             return Response(self.workflows_status, json={"title": "Forbidden", "detail": "no"})
         summary = {"name": "delivery", "version": 3, "is_default": True, "open_items": 2}
-        return Response(200, json=[self.contract("WorkflowSummary", summary)])
+        page = {
+            "items": [self.contract("WorkflowSummary", summary)],
+            "meta": {"has_more": False, "next_cursor": None},
+        }
+        return Response(200, json=page)
 
     def _flow(self, request: Any) -> Response:
         self.flow_reads.append(request.url.path)
@@ -453,7 +459,11 @@ class Platform:
             self.router.get(f"{V1}/orgs").mock(return_value=Response(403, json={"detail": "no"}))
             return
         org = {"slug": "acme", "name": "Acme", "currency": code}
-        self.router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[org]))
+        self.router.get(f"{V1}/orgs").mock(
+            return_value=Response(
+                200, json={"items": [org], "meta": {"next_cursor": None, "has_more": False}}
+            )
+        )
 
     def pending(self, items: list[dict[str, Any]] | None) -> None:
         """`GET /me/pending`: what waits for the person (None: the route is refused)."""
@@ -1923,7 +1933,13 @@ async def test_the_palette_lists_every_kind_with_the_key_that_also_reaches_it(pl
     )
     platform.currency("EUR")
     platform.router.get(f"{V1}/orgs").mock(
-        return_value=Response(200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex"}])
+        return_value=Response(
+            200,
+            json={
+                "items": [{"slug": "acme", "currency": "EUR"}, {"slug": "globex"}],
+                "meta": {"next_cursor": None, "has_more": False},
+            },
+        )
     )
     app = make_app()
     async with app.run_test(size=(160, 50)) as pilot:
@@ -2015,7 +2031,11 @@ async def test_an_assistant_is_chosen_by_name(platform: Platform) -> None:
 async def test_another_organisation_is_chosen_by_name_and_read_again(platform: Platform) -> None:
     platform.router.get(f"{V1}/orgs").mock(
         return_value=Response(
-            200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}]
+            200,
+            json={
+                "items": [{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}],
+                "meta": {"next_cursor": None, "has_more": False},
+            },
         )
     )
     platform.router.get(f"{V1}/orgs/globex/activity").mock(
@@ -2150,7 +2170,11 @@ def test_the_palette_snapshot(
     )
     platform.router.get(f"{V1}/orgs").mock(
         return_value=Response(
-            200, json=[{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}]
+            200,
+            json={
+                "items": [{"slug": "acme", "currency": "EUR"}, {"slug": "globex", "currency": "USD"}],
+                "meta": {"next_cursor": None, "has_more": False},
+            },
         )
     )
     app = make_app(conversation=CID)

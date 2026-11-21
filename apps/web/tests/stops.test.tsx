@@ -38,7 +38,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       workItem: vi.fn(),
       stopWorkItem: vi.fn(),
-      timeline: vi.fn(none),
+      timeline: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       handOffs: vi.fn(none),
       runs: vi.fn(none),
       connectors: vi.fn(none),

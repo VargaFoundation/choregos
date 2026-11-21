@@ -42,7 +42,9 @@ async def test_a_tool_under_validation_proposes_an_action_and_nothing_reaches_th
     assert call.json()["result"]["decision_path"] == f"/p/billing-api/actions/{action_id}"
     assert supplier.calls == [], "nothing reaches the server before the decision"
 
-    inbox = (await client.get("/api/v1/orgs/northwind/actions", params={"status": "pending_approval"})).json()
+    inbox = (
+        await client.get("/api/v1/orgs/northwind/actions", params={"status": "pending_approval"})
+    ).json()["items"]
     (waiting,) = [a for a in inbox if a["id"] == action_id]
     assert waiting["origin"] == "tool"
     assert waiting["proposed_by"]["id"] == "agent:coordinateur"
@@ -128,7 +130,9 @@ async def test_a_job_steps_proposal_names_its_job_and_no_agent_owner_is_kept_out
     )
     assert call.status_code == 200 and call.json()["status_code"] == 202, call.text
     action_id = call.json()["result"]["action"]
-    inbox = (await client.get("/api/v1/orgs/northwind/actions", params={"status": "pending_approval"})).json()
+    inbox = (
+        await client.get("/api/v1/orgs/northwind/actions", params={"status": "pending_approval"})
+    ).json()["items"]
     (waiting,) = [a for a in inbox if a["id"] == action_id]
     assert waiting["proposed_by"] == {"kind": "job", "id": "job:snapshot", "run_id": "run-courtier-1"}
     assert waiting["justification"] == "proposed by the job step snapshot in run run-courtier-1"

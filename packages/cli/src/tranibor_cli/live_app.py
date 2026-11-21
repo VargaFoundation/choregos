@@ -129,8 +129,7 @@ class ItemScreen(ModalScreen[None]):
     async def load(self) -> None:
         body = self.query_one("#item-run", Static)
         try:
-            runs = await self.api.get(f"/work-items/{self.card['id']}/runs")
-            runs = runs["items"] if isinstance(runs, dict) else runs or []
+            runs = await self.api.get_pages(f"/work-items/{self.card['id']}/runs")
             if not runs:
                 body.update(Text("\nno run yet", style="dim"))
                 return
@@ -139,7 +138,7 @@ class ItemScreen(ModalScreen[None]):
                 lines.append(f"{str(run.get('id'))[:12]}  {run.get('status')}  {run.get('stage') or ''}\n")
             run = runs[0]
             steps = RunSteps()
-            steps.apply(await self.api.get(f"/runs/{run['id']}/events", params={"after_seq": 0}) or [])
+            steps.apply(await self.api.get_pages(f"/runs/{run['id']}/events", params={"after_seq": 0}))
             breakdown = None
             try:
                 breakdown = run_activity.latest_of(
@@ -271,11 +270,9 @@ class LiveFlowPane(Vertical, can_focus=True):
         self.graph = report.get("graph")
         self.initial = (definition.get("json") or {}).get("initial")
         try:
-            orgs = await self.api.get("/orgs")
-            orgs = orgs["items"] if isinstance(orgs, dict) else orgs
-            self.currency = next(
-                (o.get("currency") or "EUR" for o in orgs if o["slug"] == self.organisation), None
-            )
+            # the server finds the organisation by its slug (ADR 0206): no list is read to look it up
+            orgs = (await self.api.get("/orgs", params={"slug": self.organisation, "limit": 1}))["items"]
+            self.currency = next((o.get("currency") or "EUR" for o in orgs), None)
         except ApiError:
             self.currency = None
         items = await self.read_items()

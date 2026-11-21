@@ -6,6 +6,7 @@ import { InstallationDetail } from "@/components/assistants/installation-detail"
 import { InstallationsList } from "@/components/assistants/installations-list";
 import { api, ApiError } from "@/lib/api";
 import { mockCostReport } from "@/mocks/data";
+import { pageOf } from "./page";
 
 const push = vi.hoisted(() => vi.fn());
 const roles = vi.hoisted(() => ({ admin: true }));
@@ -107,7 +108,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   roles.admin = true;
   vi.mocked(api.plugins).mockResolvedValue({ items: [{ name: "investment-assistant", version: "1.0.0" }] } as never);
-  vi.mocked(api.orgConnectors).mockResolvedValue([{ name: "news-feed" }, { name: "broker" }] as never);
+  vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([{ name: "news-feed" }, { name: "broker" }] as never));
   vi.mocked(api.agents).mockResolvedValue([{ slug: "investment-analyst" }] as never);
   mocks.pluginAssistants.mockResolvedValue(shipped);
   mocks.installation.mockResolvedValue(installed());
@@ -117,7 +118,7 @@ beforeEach(() => {
   });
   mocks.knowledgeUpdates.mockResolvedValue({ items: [] });
   mocks.reads.mockResolvedValue({ items: [], meta: { has_more: false } });
-  mocks.feedbackCandidates.mockResolvedValue([]);
+  mocks.feedbackCandidates.mockResolvedValue({ items: [], meta: { has_more: false } });
   mocks.taskEvents.mockResolvedValue({ items: [] });
   mocks.teamsDelivery.mockResolvedValue({ configured: false, version: null, updated_at: null });
   // The organisation's report from the mock ledger, filtered and grouped as the API does (S64-09b).
@@ -489,14 +490,14 @@ describe("one installation, for its owners", () => {
   });
 
   it("lists the candidate cases of an agent's thumbs down", async () => {
-    mocks.feedbackCandidates.mockResolvedValue([
+    mocks.feedbackCandidates.mockResolvedValue({ items: [
       { id: "k1", agent: "investment-analyst", agent_version: 4, status: "proposed", candidate: { case: "why did it fall", comment: "wrong" }, created_at: "2026-11-10T08:00:00Z" },
-    ]);
+    ], meta: { has_more: false } });
     wrap(<InstallationDetail slug="invest" />);
     await screen.findByRole("option", { name: "investment-analyst" });
     fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "investment-analyst" } });
     expect(await screen.findByText(/why did it fall/)).toBeInTheDocument();
-    expect(mocks.feedbackCandidates).toHaveBeenCalledWith("northwind", "investment-analyst");
+    expect(mocks.feedbackCandidates).toHaveBeenCalledWith("northwind", "investment-analyst", { cursor: undefined, limit: 50 });
   });
 
   describe("deciding a candidate (S63-17)", () => {
@@ -509,7 +510,7 @@ describe("one installation, for its owners", () => {
       created_at: "2026-11-10T08:00:00Z",
     };
     async function open() {
-      mocks.feedbackCandidates.mockResolvedValue([candidate]);
+      mocks.feedbackCandidates.mockResolvedValue({ items: [candidate], meta: { has_more: false } });
       wrap(<InstallationDetail slug="invest" />);
       await screen.findByRole("option", { name: "investment-analyst" });
       fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "investment-analyst" } });
@@ -520,7 +521,7 @@ describe("one installation, for its owners", () => {
       mocks.acceptCandidate.mockResolvedValue({ ...candidate, status: "accepted" });
       await open();
       fireEvent.change(screen.getByLabelText("Assertions"), { target: { value: '{"must_not_contain": ["Buy."]}' } });
-      mocks.feedbackCandidates.mockResolvedValue([]);
+      mocks.feedbackCandidates.mockResolvedValue({ items: [], meta: { has_more: false } });
       fireEvent.click(screen.getByRole("button", { name: "Add to the suite" }));
       await waitFor(() =>
         expect(mocks.acceptCandidate).toHaveBeenCalledWith("northwind", "investment-analyst", "k1", {

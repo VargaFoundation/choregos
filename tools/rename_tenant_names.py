@@ -77,6 +77,19 @@ class Tenant:
             raise Failure(f"{method} {path}: {response.status_code} {response.text[:300]}")
         return response.json() if response.content else None
 
+    async def pages(self, path: str) -> list[Any]:
+        """Every row of a list (ADR 0206): follow `next_cursor` until the server says there is no more."""
+        rows: list[Any] = []
+        cursor: str | None = None
+        while True:
+            body = await self.call(
+                "GET", path, params={"limit": 200, **({"cursor": cursor} if cursor else {})}
+            )
+            rows += body["items"]
+            if not body["meta"]["has_more"]:
+                return rows
+            cursor = body["meta"]["next_cursor"]
+
     async def find(self, path: str) -> Any | None:
         response = await self.http.get(f"{API}{path}")
         if response.status_code == 404:
@@ -206,7 +219,7 @@ async def _tightenings(
     """(project id, new connector, operation, policy) a project narrowed on the old connector."""
     out: list[tuple[str, str, str, str]] = []
     for project in projects:
-        operations = await tenant.call("GET", f"/projects/{project['id']}/operations")
+        operations = await tenant.pages(f"/projects/{project['id']}/operations")
         have = {(o["connector"], o["operation"]): o.get("project_policy") for o in operations}
         for entry in operations:
             if entry["connector"] != old or not entry.get("project_policy"):
@@ -237,7 +250,7 @@ async def _plan_workflows(
     marker = mapping["french_marker_state"]
     for project in await _projects(tenant):
         slug = project["slug"]
-        for workflow in await tenant.call("GET", f"/projects/{project['id']}/workflows"):
+        for workflow in await tenant.pages(f"/projects/{project['id']}/workflows"):
             name = workflow["name"]
             current = await tenant.call("GET", f"/projects/{project['id']}/workflows/{name}")
             document = current.get("json") or yaml.safe_load(current["yaml"])

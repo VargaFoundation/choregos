@@ -118,7 +118,7 @@ async def test_apply_republishes_in_english_and_a_second_run_finds_nothing(
     await tool.apply(await tool.plan(api, MAPPING))
 
     assert (await client.get(f"{ORG}/skills/access-profiles")).status_code == 200
-    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()}
+    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()["items"]}
     assert agents["onboarding-coordinator"]["lifecycle"] == "active"
     assert agents["coordinateur-onboarding"]["lifecycle"] == "deprecated"  # lang: fr-ok
 
@@ -139,7 +139,7 @@ async def test_apply_republishes_in_english_and_a_second_run_finds_nothing(
     assert supplier["order_laptop"] == "approval"
     tight = {
         (o["connector"], o["operation"]): o["project_policy"]
-        for o in (await client.get(f"/api/v1/projects/{pid}/operations")).json()
+        for o in (await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"]
     }
     assert tight[("devices", "wipe_device")] == "forbidden", "the project's tightening followed"
 

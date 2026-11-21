@@ -155,7 +155,8 @@ async def test_the_preview_resolves_a_branch_to_its_commit_and_lists_each_skill(
     assert "script" in {f["code"] for f in by_path["skills/pdf"]["findings"]}
     assert "declares no permission" in by_path["skills/greedy"]["problem"]
     assert "not UTF-8" in by_path["skills/fonts"]["problem"]
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "a preview writes nothing"
+    listed = (await client.get("/api/v1/orgs/northwind/skills")).json()["items"]
+    assert listed == [], "a preview writes nothing"
 
 
 async def test_a_link_inside_a_skill_refuses_that_skill(client: AsyncClient, admin: str, fake: Any) -> None:
@@ -178,7 +179,7 @@ async def test_a_branch_a_tag_or_a_short_sha_is_refused(
     assert not [call for call in fake.calls if call[0] == "tarball"], (
         "nothing is fetched for a moving reference"
     )
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == []
 
 
 async def test_an_import_pins_the_commit_and_records_where_the_skill_comes_from(
@@ -209,7 +210,7 @@ async def test_a_refused_or_unknown_skill_is_not_imported(client: AsyncClient, a
     greedy = await _import(client, skills=["onboarding", "greedy"])
     assert greedy.status_code == 422 and "declares no permission" in greedy.text
     assert (await _import(client, skills=["absent"])).status_code == 422
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "all or nothing"
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == [], "all or nothing"
 
 
 @pytest.mark.parametrize(

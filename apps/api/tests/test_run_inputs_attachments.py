@@ -54,7 +54,7 @@ async def test_a_step_declaring_attachments_lists_and_reads_every_handed_file(
 
     listed = await client.get(f"{BASE}/run-att/inputs", headers=headers)
     assert listed.status_code == 200, listed.text
-    assert {(e["name"], e["filename"], e["digest"]) for e in listed.json()} == {
+    assert {(e["name"], e["filename"], e["digest"]) for e in listed.json()["items"]} == {
         ("quote-a.pdf", "quote-a.pdf", artifact_digest(QUOTE_A)),
         ("quote-b.pdf", "quote-b.pdf", artifact_digest(QUOTE_B)),
     }
@@ -62,7 +62,10 @@ async def test_a_step_declaring_attachments_lists_and_reads_every_handed_file(
         read = await client.get(f"{BASE}/run-att/inputs/{name}", headers=headers)
         assert read.status_code == 200 and read.content == data
     hand_offs = {
-        h["output"]: h for h in (await client.get(f"/api/v1/work-items/{item['id']}/hand-offs")).json()
+        h["output"]: h
+        for h in (
+            await client.get(f"/api/v1/work-items/{item['id']}/hand-offs", params={"limit": 200})
+        ).json()["items"]
     }
     reads = [e["run_id"] for e in hand_offs["quote-a.pdf"]["events"] if e["kind"] == "read"]
     assert reads == ["run-att"], "reading a handed file leaves a read receipt, as for any input"
@@ -75,7 +78,7 @@ async def test_a_step_that_does_not_declare_attachments_is_served_none_of_them(
     item = await _work_item(client, project)
     await _hand(item, project, store, "quote-a.pdf", QUOTE_A)
     headers = await _run(item, project, "run-plain", "compare", inputs=["spec_markdown"])
-    assert (await client.get(f"{BASE}/run-plain/inputs", headers=headers)).json() == []
+    assert (await client.get(f"{BASE}/run-plain/inputs", headers=headers)).json()["items"] == []
     assert (await client.get(f"{BASE}/run-plain/inputs/quote-a.pdf", headers=headers)).status_code == 404
 
 
@@ -101,7 +104,7 @@ async def test_a_handed_name_that_is_also_a_declared_input_is_listed_once_with_t
             data=revised,
         )  # fmt: skip
     headers = await _run(item, project, "run-both", "compare", inputs=["quote-a.pdf", "attachments"])
-    listed = (await client.get(f"{BASE}/run-both/inputs", headers=headers)).json()
+    listed = (await client.get(f"{BASE}/run-both/inputs", headers=headers)).json()["items"]
     assert sorted(e["name"] for e in listed) == ["quote-a.pdf", "quote-b.pdf"]
     by_name = {e["name"]: e for e in listed}
     assert by_name["quote-a.pdf"]["digest"] == artifact_digest(revised), "the step's revision wins"

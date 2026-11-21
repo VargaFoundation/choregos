@@ -198,7 +198,7 @@ async def test_the_session_carries_the_approving_sign_ins_authentication_time(
     codes = await _start(anyone)
     assert (await _approve(person, codes)).status_code == 204
     token = (await _poll(anyone, codes)).json()
-    listed = (await anyone.get("/api/v1/me/sessions", headers=_bearer(token))).json()
+    listed = (await anyone.get("/api/v1/me/sessions", headers=_bearer(token))).json()["items"]
     (surface,) = [s for s in listed if s["kind"] == "cli"]
     stamp = surface["auth_time"].replace("Z", "+00:00")
     from datetime import UTC, datetime
@@ -232,7 +232,7 @@ async def test_ending_the_session_on_my_account_makes_the_next_call_a_401(
     codes = await _start(anyone)
     await _approve(person, codes)
     token = (await _poll(anyone, codes)).json()
-    listed = (await person.get("/api/v1/me/sessions")).json()
+    listed = (await person.get("/api/v1/me/sessions")).json()["items"]
     assert {s["kind"] for s in listed} == {"browser", "cli"}
     assert (await person.delete(f"/api/v1/me/sessions/{token['session_id']}")).status_code == 204
     refused = await anyone.get("/api/v1/me", headers=_bearer(token))
@@ -276,7 +276,7 @@ async def test_a_session_idle_for_too_long_is_refused(org: str, anyone: AsyncCli
     assert (await anyone.get("/api/v1/me", headers=_bearer(token))).status_code == 401
     # and it is no longer listed among the person's sessions
     person = await browsers(ALICE)
-    assert {s["kind"] for s in (await person.get("/api/v1/me/sessions")).json()} == {"browser"}
+    assert {s["kind"] for s in (await person.get("/api/v1/me/sessions")).json()["items"]} == {"browser"}
 
 
 async def test_a_use_pushes_the_idle_limit_back(org: str, anyone: AsyncClient, browsers: Any) -> None:

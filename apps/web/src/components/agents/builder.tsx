@@ -278,7 +278,12 @@ export function AgentBuilder({
   const models = useQuery({ queryKey: ["usable-models", org], queryFn: () => usableModels(org, { usage: "agent" }), retry: false });
   const backends = useQuery({ queryKey: ["platform-backends"], queryFn: () => api.backends(), retry: false });
   const images = useQuery({ queryKey: ["platform-agent-images"], queryFn: () => api.agentImages(), retry: false });
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
+  const connectors = useQuery({
+    queryKey: ["org-connectors", org, "mcp"],
+    queryFn: () => api.orgConnectors(org, { kind: "mcp", limit: 200 }),
+    select: (page) => page.items,
+    retry: false,
+  });
   const library = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
   const registry = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org), enabled: mode.kind === "create", retry: false });
   const knownTags = [...new Set((registry.data ?? []).flatMap((a) => a.tags ?? []))].sort();
@@ -288,7 +293,7 @@ export function AgentBuilder({
   const globalMemories = useQuery({ queryKey: ["memories", org, "global"], queryFn: () => api.memories(org, { scope: "global" }), retry: false });
   const projectMemories = useQuery({ queryKey: ["memories", org, "project"], queryFn: () => api.memories(org, { scope: "project" }), retry: false });
 
-  const mcpConnectors = (connectors.data ?? []).filter((c) => c.kind === "mcp");
+  const mcpConnectors = connectors.data ?? [];
   const set = (patch: Partial<AgentSpec>) => setSpec((s) => ({ ...s, ...patch }));
   const creating = mode.kind === "create";
   const problem = creating ? slugProblem(slug) : null;

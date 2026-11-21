@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge, Button, Card, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ProjectOperation } from "@/lib/types";
 
+const PAGE_SIZE = 50;
 const POLITIQUES = ["allowed", "approval", "forbidden"];
 const TON = { allowed: "ok", approval: "warn", forbidden: "danger" } as const;
 
@@ -20,9 +21,15 @@ export function allowedChoices(organisationPolicy: string): string[] {
  * there: the choice offers only the organisation's policy or stricter.
  */
 export function ProjectOperations({ slug }: { slug: string }) {
-  const operations = useQuery({ queryKey: ["project-operations", slug], queryFn: () => api.projectOperations(slug) });
+  const operations = useInfiniteQuery({
+    queryKey: ["project-operations", slug],
+    queryFn: ({ pageParam }) => api.projectOperations(slug, { cursor: pageParam, limit: PAGE_SIZE }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const rows = operations.data?.pages.flatMap((page) => page.items) ?? [];
   if (operations.error) return <ErrorNote>{String(operations.error)}</ErrorNote>;
-  if (!operations.data || operations.data.length === 0) return null;
+  if (rows.length === 0) return null;
   return (
     <Card title="Operations of the organisation's connectors" className="lg:col-span-2">
       <div className="overflow-x-auto">
@@ -37,12 +44,19 @@ export function ProjectOperations({ slug }: { slug: string }) {
             </tr>
           </thead>
           <tbody>
-            {operations.data.map((o) => (
+            {rows.map((o) => (
               <Row key={`${o.connector}/${o.operation}`} slug={slug} operation={o} />
             ))}
           </tbody>
         </table>
       </div>
+      {operations.hasNextPage && (
+        <div className="mt-3 flex justify-center">
+          <Button size="sm" onClick={() => void operations.fetchNextPage()} disabled={operations.isFetchingNextPage}>
+            More
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

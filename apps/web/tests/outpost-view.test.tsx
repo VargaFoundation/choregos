@@ -662,9 +662,11 @@ describe("what the page no longer guesses (S65-24, #1630)", () => {
     expect(said).toHaveTextContent("An instance is approved in a person's session");
   });
 
-  it("the end of the calls is the end of the window the API reads", async () => {
+  it("the last page of calls names no window: the API pages every call (ADR 0206)", async () => {
     given({ calls: [call()] });
     await view();
-    expect(await screen.findByTestId("outpost-calls-window")).toHaveTextContent("the newest 1000 calls");
+    expect((await screen.findAllByText("search_issues")).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("outpost-calls-window")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Older calls" })).toBeNull();
   });
 });

@@ -24,7 +24,7 @@ from tranibor_core.network import validate_pattern
 from tranibor_core.workspace import AgentWorkspace
 
 from .agent_social import AgentSocial
-from .base import Dto
+from .base import Dto, PageMeta
 from .identity import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
@@ -719,6 +719,13 @@ class AgentEvaluation(Dto):
     cases: list[AgentEvaluationCase] = Field(default_factory=list)
 
 
+class AgentEvaluationPage(Dto):
+    """One page of live evaluations of one revision, newest first (ADR 0206)."""
+
+    items: list[AgentEvaluation]
+    meta: PageMeta
+
+
 class AgentReleaseCreate(Dto):
     """Point a channel at a revision."""
 
@@ -778,6 +785,13 @@ class AgentReleaseDto(Dto):
     done_at: datetime | None = None
     reason: str | None = None
     checks: list[AgentReleaseCheck] = Field(default_factory=list)
+
+
+class AgentReleasePage(Dto):
+    """One page of moves of the release channels, newest first (ADR 0206)."""
+
+    items: list[AgentReleaseDto]
+    meta: PageMeta
 
 
 class AgentChannelStats(Dto):
@@ -1134,6 +1148,13 @@ class AgentDto(Dto):
     social: AgentSocial = Field(default_factory=AgentSocial)
 
 
+class AgentPage(Dto):
+    """One page of agents the caller may see, by name (ADR 0206)."""
+
+    items: list[AgentDto]
+    meta: PageMeta
+
+
 class AgentOverrides(Dto):
     """What a project may change on a version: only tighten."""
 
@@ -1167,6 +1188,13 @@ class ProjectAgentDto(Dto):
     effective: AgentSpec
     #: Said when the agent is deprecated: the pin holds, but the agent is on its way out.
     warning: str | None = None
+
+
+class ProjectAgentPage(Dto):
+    """One page of a project's pins, by agent slug (ADR 0206)."""
+
+    items: list[ProjectAgentDto]
+    meta: PageMeta
 
 
 class SkillApproval(Dto):
@@ -1317,6 +1345,13 @@ class SkillDto(Dto):
     review_status: Literal["approved", "pending_review"] = "approved"
 
 
+class SkillPage(Dto):
+    """One page of the skill library, by slug (ADR 0206)."""
+
+    items: list[SkillDto]
+    meta: PageMeta
+
+
 class AgentProjectMetrics(Dto):
     project: str
     runs: int
@@ -1423,6 +1458,13 @@ class AgentMetricsSummary(Dto):
     cost_usd: float = 0.0
 
 
+class AgentMetricsSummaryPage(Dto):
+    """One page of agents' registry lines, by agent name (ADR 0206)."""
+
+    items: list[AgentMetricsSummary]
+    meta: PageMeta
+
+
 class AgentResolution(Dto):
     """Which agent version a run would load for a reference (S39-13), through the runtime's resolver."""
 
@@ -1466,6 +1508,20 @@ class WorkflowAgent(ImplicitAgent):
     agent: str | None = None
     #: Whether the agent it names exists in the organisation's registry.
     registered: bool = False
+
+
+class WorkflowAgentPage(Dto):
+    """One page of the agent actors of a project's workflows, by workflow then actor (ADR 0206)."""
+
+    items: list[WorkflowAgent]
+    meta: PageMeta
+
+
+class ImplicitAgentPage(Dto):
+    """One page of the implicit agents, by workflow then actor (ADR 0206)."""
+
+    items: list[ImplicitAgent]
+    meta: PageMeta
 
 
 class BuiltinModelChoice(Dto):
@@ -1556,6 +1612,13 @@ class AgentCredentialDto(Dto):
     last_client: str | None = None
     #: The slug of the agent the client is attached to (the organisation's list carries it).
     agent: str | None = None
+
+
+class AgentCredentialPage(Dto):
+    """One page of clients attached to agents (ADR 0206)."""
+
+    items: list[AgentCredentialDto]
+    meta: PageMeta
 
 
 class AgentLifecycleChange(Dto):

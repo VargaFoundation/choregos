@@ -5,5 +5,6 @@ from __future__ import annotations
 
 from .ecphoria import EcphoriaMemory
 from .lexical import LexicalMemory
+from .paging import InvalidCursorError, PendingPage
 
-__all__ = ["EcphoriaMemory", "LexicalMemory"]
+__all__ = ["EcphoriaMemory", "InvalidCursorError", "LexicalMemory", "PendingPage"]

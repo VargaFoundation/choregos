@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 
 class WorkflowDefDto(Dto):
@@ -104,6 +104,20 @@ class WorkflowSummaryDto(Dto):
     updated_at: datetime | None = None
     #: The caller may share it to the organisation's catalogue (ADR 0111 §4): the server decides.
     can_share: bool = False
+
+
+class WorkflowSummaryPage(Dto):
+    """One page of a project's workflows, by name (ADR 0206)."""
+
+    items: list[WorkflowSummaryDto]
+    meta: PageMeta
+
+
+class WorkflowDefPage(Dto):
+    """One page of a workflow's versions, newest first (ADR 0206)."""
+
+    items: list[WorkflowDefDto]
+    meta: PageMeta
 
 
 class RoutingCondition(Dto):

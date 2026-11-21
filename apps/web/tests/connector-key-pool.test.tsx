@@ -5,6 +5,7 @@ import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { Connectors } from "@/components/connectors";
 import { inSlotOrder, nextSlot } from "@/components/secret-field";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin/connectors",
@@ -69,7 +70,7 @@ function wrap(ui: React.ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.orgConnectors.mockResolvedValue([declared]);
+  api.orgConnectors.mockResolvedValue(pageOf([declared]));
   api.connectorTypes.mockResolvedValue([sharepoint, jira]);
   api.projects.mockResolvedValue({ items: [], meta: { has_more: false } });
   api.createOrgConnector.mockResolvedValue(declared);
@@ -116,7 +117,7 @@ describe("slots of a pooled field", () => {
 
 describe("admin connectors: a pooled field takes another key (S39-30c)", () => {
   it("lists the keys in slot order, adds one in the first free slot and types it once", async () => {
-    api.orgConnectors.mockResolvedValue([search]);
+    api.orgConnectors.mockResolvedValue(pageOf([search]));
     api.connectorTypes.mockResolvedValue([brave, sharepoint]);
     wrap(<OrgConnectorsPage />);
     const panel = await screen.findByTestId("secrets-search");

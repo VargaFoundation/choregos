@@ -44,7 +44,7 @@ class Platform:
             org = {"slug": "acme", "name": "Acme", "aliases": ["old-acme"]}
             if currency:
                 org["currency"] = currency
-            body = [self.contract("Org", org)]
+            body = {"items": [self.contract("Org", org)], "meta": {"next_cursor": None, "has_more": False}}
         self.orgs = self.router.get(f"{V1}/orgs").mock(return_value=Response(status, json=body))
         return self.orgs
 
@@ -135,7 +135,9 @@ def test_a_dollar_organisation_reads_dollars_where_the_api_gives_them(platform: 
 def test_the_work_item_detail_and_the_runs_follow_the_currency(platform: Platform) -> None:
     platform.org("USD")
     platform.serve("/work-items/w1", "WorkItem", _item(cost_usd=3.0, cost_eur=2.5, runs=2))
-    platform.router.get(f"{V1}/work-items/w1/timeline").mock(return_value=Response(200, json=[]))
+    platform.router.get(f"{V1}/work-items/w1/timeline").mock(
+        return_value=Response(200, json={"items": [], "meta": {"has_more": False, "next_cursor": None}})
+    )
     assert "cost: $3.00 (2 runs)" in _run("items", "show", "w1")
     platform.org("EUR")
     from tranibor_cli import money
@@ -162,7 +164,10 @@ def test_an_amount_given_only_in_the_other_currency_keeps_its_own_symbol(platfor
 def _serve_runs(platform: Platform) -> None:
     run = {"id": "run-1", "status": "succeeded", "stage_role": "coder", "cost_usd": 0.84}
     platform.router.get(f"{V1}/work-items/w1/runs").mock(
-        return_value=Response(200, json=[platform.contract("Run", run)])
+        return_value=Response(
+            200,
+            json={"items": [platform.contract("Run", run)], "meta": {"has_more": False, "next_cursor": None}},
+        )
     )
 
 
@@ -204,7 +209,9 @@ def test_an_unknown_spend_is_a_dash_never_zero(platform: Platform) -> None:
 def test_the_currency_is_read_once_per_command(platform: Platform) -> None:
     route = platform.org("EUR")
     platform.serve("/work-items/w1", "WorkItem", _item(cost_usd=3.0, cost_eur=2.5))
-    platform.router.get(f"{V1}/work-items/w1/timeline").mock(return_value=Response(200, json=[]))
+    platform.router.get(f"{V1}/work-items/w1/timeline").mock(
+        return_value=Response(200, json={"items": [], "meta": {"has_more": False, "next_cursor": None}})
+    )
     _run("items", "show", "w1")
     assert route.call_count == 1
     _serve_items(platform, cost_usd=3.0, cost_eur=2.5)
@@ -306,7 +313,7 @@ def test_the_ask_cost_line_prints_the_gateways_dollars_with_their_symbol(capsys:
 
         def get(self, path: str, **kwargs: Any) -> Any:
             if path == "/orgs":
-                return [{"slug": "acme", "name": "Acme", "currency": "USD"}]
+                return {"items": [{"slug": "acme", "name": "Acme", "currency": "USD"}]}
             return {"cost_usd": 0.0125}
 
     err = Console(stderr=True, force_terminal=False, width=200)

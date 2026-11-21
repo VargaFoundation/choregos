@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { Glossary } from "@/components/glossary";
 import { GitImport, RiskBadge } from "@/components/skills/gate";
 import { SkillView } from "@/components/skills/skill-view";
 import { SkillTabs } from "@/components/skills/tabs";
-import { Card, Empty, ErrorNote } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -40,7 +40,14 @@ function SkillsOrOne() {
 function Skills() {
   const { org } = useSession();
   const client = useQueryClient();
-  const skills = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
+  // One page at a time (ADR 0206): "More" asks for the next by its cursor, nothing is cut in the browser.
+  const skills = useInfiniteQuery({
+    queryKey: ["skills", org, "pages"],
+    queryFn: ({ pageParam }) => api.skillsPage(org, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const rows = skills.data?.pages.flatMap((page) => page.items) ?? [];
   const fileInput = useRef<HTMLInputElement>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [fait, setFait] = useState<string | null>(null);
@@ -80,7 +87,7 @@ function Skills() {
           <ErrorNote>{String(skills.error)}</ErrorNote>
         ) : !skills.data ? (
           <p className="text-sm text-ink-muted">Reading the installed skills…</p>
-        ) : skills.data.length === 0 ? (
+        ) : rows.length === 0 ? (
           <Empty
             title="No skill yet"
             action={
@@ -103,7 +110,7 @@ function Skills() {
                 </tr>
               </thead>
               <tbody>
-                {skills.data.map((skill) => (
+                {rows.map((skill) => (
                   <tr key={skill.slug} className="border-t border-line">
                     <td className="py-2">
                       <Link href={skillHref(skill.slug)} className="font-medium hover:underline">
@@ -134,6 +141,13 @@ function Skills() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {skills.hasNextPage && (
+          <div className="mt-3">
+            <Button size="sm" onClick={() => void skills.fetchNextPage()} disabled={skills.isFetchingNextPage}>
+              More
+            </Button>
           </div>
         )}
       </Card>

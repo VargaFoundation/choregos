@@ -6,6 +6,7 @@ import { Connectors } from "@/components/connectors";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { proceduresApi } from "@/mocks/procedures";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 const { params } = vi.hoisted(() => ({ params: new URLSearchParams() }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/admin/connectors", useSearchParams: () => params }));
@@ -45,7 +46,7 @@ beforeEach(() => {
     return proceduresApi("GET", `/procedures?${search}`);
   });
   api.getProcedure.mockImplementation(async (id: string) => proceduresApi("GET", `/procedures/${id}`));
-  api.orgConnectors.mockResolvedValue([]);
+  api.orgConnectors.mockResolvedValue(pageOf([]));
   api.connectorTypes.mockResolvedValue([
     type("documents", "sharepoint", "SharePoint", ["client_secret"]),
     type("mcp", "mcp", "MCP server", ["token"]),
@@ -95,9 +96,9 @@ describe("the procedure at every add gesture (S39-23b)", () => {
   });
 
   it("a declared connector has a button, not an interruption, on its settings", async () => {
-    api.orgConnectors.mockResolvedValue([
+    api.orgConnectors.mockResolvedValue(pageOf([
       { name: "kb", kind: "documents", type: "sharepoint", config: {}, secret_refs: {}, secrets: [], status: "ok", operations: [] } as unknown as OrgConnector,
-    ]);
+    ]));
     wrap(<OrgConnectorsPage />);
     const panel = await screen.findByTestId("secrets-kb");
     await within(panel).findByRole("button", { name: "How to set this up" });
@@ -105,7 +106,7 @@ describe("the procedure at every add gesture (S39-23b)", () => {
   });
 
   it("a knowledge source: choosing Confluence opens the source procedure, and the connector's is one click away", async () => {
-    api.orgConnectors.mockResolvedValue([]);
+    api.orgConnectors.mockResolvedValue(pageOf([]));
     wrap(<KnowledgeSources org="acme" slug="framework" sources={[]} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Add a source" }));
     // Not when the form opens: only once a kind has been chosen.

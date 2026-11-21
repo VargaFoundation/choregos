@@ -5,18 +5,21 @@ from __future__ import annotations
 
 import asyncio
 from functools import partial
+from typing import Annotated
 
-from fastapi import Response, status
-from sqlalchemy import select
+from fastapi import Query, Response, status
+from sqlalchemy import or_, select
 from sqlalchemy.orm import undefer
 
 from ...audit import record
 from ...db.models import (
     KnowledgeBase,
     KnowledgeDocument,
+    KnowledgeGrant,
 )
-from ...deps import Db, Me, ProjectCtx
+from ...deps import Db, Me, Pagination, ProjectCtx
 from ...errors import conflict, unprocessable
+from ...keyset import keyset_page
 from ...knowledge import okf
 from ...knowledge.access import (
     KnowledgeAction,
@@ -30,6 +33,7 @@ from ...rbac import Permission
 from ...schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseDto,
+    KnowledgeBasePage,
     KnowledgeBasePatch,
     ProjectKnowledgeBaseCreate,
 )
@@ -38,26 +42,52 @@ from ._common import _base, _dto, _grants_of, _known_projects, _manage, _member,
 from ._router import Slug, router
 
 
-@router.get("/orgs/{org}/knowledge", response_model=list[KnowledgeBaseDto], operation_id="listKnowledgeBases")
-async def list_knowledge_bases(org: str, session: Db, principal: Me) -> list[KnowledgeBaseDto]:
+@router.get("/orgs/{org}/knowledge", response_model=KnowledgeBasePage, operation_id="listKnowledgeBases")
+async def list_knowledge_bases(
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    scope: Annotated[str | None, Query(pattern="^(org|projects|groups)$")] = None,
+) -> KnowledgeBasePage:
+    """The bases the caller may read, by slug, by slug, paged (ADR 0206); `q`: slug or name; `scope`: a reach.
+
+    What a caller may read is the reach or a grant (ADR 0081): not a SQL predicate, so the page is filled
+    from successive batches of rows, the grants of each batch read in one query.
+    """
     _member(principal, org)
     organisation = await organisation_by_slug(session, org)
-    bases = list(
-        (
-            await session.execute(
-                select(KnowledgeBase)
-                .where(KnowledgeBase.org_id == organisation.id)
-                .order_by(KnowledgeBase.slug)
+    query = select(KnowledgeBase).where(KnowledgeBase.org_id == organisation.id)
+    if q and q.strip():
+        needle = q.strip()
+        query = query.where(
+            or_(
+                KnowledgeBase.slug.icontains(needle, autoescape=True),
+                KnowledgeBase.name.icontains(needle, autoescape=True),
             )
-        ).scalars()
+        )
+    if scope is not None:
+        query = query.where(KnowledgeBase.scope == scope)
+    grants: dict[str, list[KnowledgeGrant]] = {}
+
+    async def readable(batch: list[KnowledgeBase]) -> list[KnowledgeBase]:
+        # One query for the grants of the batch: no per-base lookup (ADR 0081).
+        grants.update(await _grants_of(session, [base.id for base in batch]))
+        return [base for base in batch if visible_to(principal, org, base, grants[base.id])]
+
+    bases, meta = await keyset_page(
+        session,
+        query,
+        sort=KnowledgeBase.slug,
+        tiebreak=KnowledgeBase.id,
+        page=page,
+        descending=False,
+        keep=readable,
     )
-    # One query for the grants of every base: no per-base lookup (ADR 0081).
-    grants = await _grants_of(session, [base.id for base in bases])
-    return [
-        await _dto(session, principal, org, base, grants=grants[base.id])
-        for base in bases
-        if visible_to(principal, org, base, grants[base.id])
-    ]
+    return KnowledgeBasePage(
+        items=[await _dto(session, principal, org, base, grants=grants[base.id]) for base in bases], meta=meta
+    )
 
 
 @router.post(

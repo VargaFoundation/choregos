@@ -129,7 +129,11 @@ class Platform:
 
     def org(self, currency: str) -> None:
         body = self.contract("Org", {"slug": "acme", "name": "Acme", "currency": currency})
-        self.orgs = self.router.get(f"{V1}/orgs").mock(return_value=Response(200, json=[body]))
+        self.orgs = self.router.get(f"{V1}/orgs").mock(
+            return_value=Response(
+                200, json={"items": [body], "meta": {"next_cursor": None, "has_more": False}}
+            )
+        )
 
     def today(self, cost: float | None, status: int = 200, eur: float = 0.0) -> None:
         body: dict[str, Any] = {"title": "Forbidden", "detail": "no"}

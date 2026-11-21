@@ -64,7 +64,7 @@ async def test_installing_an_agent_installs_its_skills_first(client: AsyncClient
     agent = installed.json()
     assert agent["versions"][0]["created_by"] == "plugin:software-delivery/architect@3"
     assert agent["versions"][0]["spec"]["skills"] == [{"slug": "madr-4", "version": None}]
-    skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
+    skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()["items"]}
     assert skills["madr-4"]["latest_version"] == 1
 
 
@@ -185,7 +185,7 @@ async def test_a_template_can_name_a_catalogue_agent(
     assert created.status_code == 201, created.text
     reviewer = (await client.get(f"{ORG}/agents/reviewer")).json()
     assert reviewer["versions"][0]["spec"]["skills"] == [{"slug": "madr-4", "version": None}]
-    assert "madr-4" in {s["slug"] for s in (await client.get(f"{ORG}/skills")).json()}
+    assert "madr-4" in {s["slug"] for s in (await client.get(f"{ORG}/skills")).json()["items"]}
 
 
 # ───────────────────────── external clients in one click (S21-18) ─────────────────────────
@@ -200,9 +200,9 @@ async def test_connecting_claude_code_creates_the_agent_mints_an_mcp_token_and_a
     assert (body["agent"]["slug"], body["agent"]["kind"]) == ("claude-code", "external")
     assert body["token"]["scopes"] == ["mcp:write"] and body["token"]["token"], "the token, returned once"
     assert body["oauth_client_id"] is None
-    attachments = (await client.get(f"{ORG}/agents/claude-code/credentials")).json()
+    attachments = (await client.get(f"{ORG}/agents/claude-code/credentials")).json()["items"]
     assert [r["token_name"] for r in attachments] == ["Claude Code"]
-    tokens = (await client.get("/api/v1/me/tokens")).json()
+    tokens = (await client.get("/api/v1/me/tokens")).json()["items"]
     assert "token" not in tokens[0], "read back, the token is not shown any more"
 
 
@@ -222,7 +222,9 @@ async def test_a_member_joins_a_clients_agent_but_does_not_create_it(client: Asy
     assert joined.status_code == 201, joined.text
     assert joined.json()["token"]["scopes"] == ["mcp:read"]
     await login(client, "admin@northwind.dev")
-    assert len((await client.get(f"{ORG}/agents/cursor/credentials")).json()) == 2, "one token per person"
+    assert len((await client.get(f"{ORG}/agents/cursor/credentials")).json()["items"]) == 2, (
+        "one token per person"
+    )
 
 
 async def test_an_internal_agent_does_not_connect(client: AsyncClient, admin: str) -> None:
@@ -261,7 +263,7 @@ async def test_a_client_that_calls_from_the_cloud_is_not_offered_without_oauth_o
     connected = await client.post(f"{ORG}/agent-catalogue/chatgpt/connect")
     assert connected.status_code == 201, connected.text
     assert (connected.json()["token"], connected.json()["oauth_client_id"]) == (None, "choregos-chatgpt")
-    attached = (await client.get(f"{ORG}/agents/chatgpt/credentials")).json()
+    attached = (await client.get(f"{ORG}/agents/chatgpt/credentials")).json()["items"]
     assert [(r["kind"], r["client_id"]) for r in attached] == [("oauth_client", "choregos-chatgpt")]
 
 

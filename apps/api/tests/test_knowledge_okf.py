@@ -163,7 +163,7 @@ async def test_a_run_is_served_an_okf_bundle_without_the_withdrawn_document(
         "/api/v1/internal/runs/run-kb/knowledge", headers={"Authorization": f"Bearer {token}"}
     )
     assert read.status_code == 200, read.text
-    (base,) = read.json()
+    (base,) = read.json()["items"]
     assert base["digest"] == pinned[0]["digest"] == knowledge_digest(base["documents"])
     by_path = {d["path"]: d for d in base["documents"]}
     assert sorted(by_path) == ["log-2.md", "orders.md"], "no document takes a name OKF reserves"

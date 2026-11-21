@@ -90,7 +90,7 @@ async def test_the_account_is_listed_with_its_tokens_and_never_their_value(
     listed = await client.get(_base(project))
     assert listed.status_code == 200, listed.text
     assert token not in listed.text
-    entry = listed.json()[0]
+    entry = listed.json()["items"][0]
     assert entry["address"].endswith("@machines.choregos.invalid")
     assert entry["tokens"][0]["scopes"] == ["a2a"]
     assert entry["tokens"][0]["project"] == "northwind:billing-api"
@@ -203,7 +203,7 @@ async def test_revoking_a_token_leaves_the_account(client: AsyncClient, project:
     await _publish(client, project)
     _, first = await _machine(client, project)
     second = (await client.post(f"{_base(project)}/partner-app/tokens", json={"name": "next"})).json()
-    entry = (await client.get(_base(project))).json()[0]
+    entry = (await client.get(_base(project))).json()["items"][0]
     old = next(t["id"] for t in entry["tokens"] if t["name"] == "first")
     gone = await client.delete(f"{_base(project)}/partner-app/tokens/{old}")
     assert gone.status_code == 204, gone.text
@@ -218,7 +218,7 @@ async def test_removing_the_account_ends_it_and_keeps_its_slug(
     await _publish(client, project)
     _, token = await _machine(client, project)
     assert (await client.delete(f"{_base(project)}/partner-app")).status_code == 204
-    assert (await client.get(_base(project))).json() == []
+    assert (await client.get(_base(project))).json()["items"] == []
     again = await client.post(_base(project), json={"slug": "partner-app"})
     assert again.status_code == 409, again.text
     client.cookies.clear()

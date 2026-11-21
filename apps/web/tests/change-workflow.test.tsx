@@ -20,7 +20,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       workItem: vi.fn(),
-      timeline: vi.fn().mockResolvedValue([]),
+      timeline: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       handOffs: vi.fn().mockResolvedValue([]),
       runs: vi.fn().mockResolvedValue([]),
       connectors: vi.fn().mockResolvedValue([]),

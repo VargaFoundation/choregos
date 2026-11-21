@@ -16,11 +16,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
         meta: { has_more: false },
       }),
       workItems,
-      orgActions: vi.fn().mockResolvedValue([
+      orgActions: vi.fn().mockResolvedValue({ items: [
         { id: "a1", title: "Open a billing account", project_slug: "billing-api", status: "pending_approval", proposed_by: "agent:x" },
         { id: "a2", title: "Order a checkout laptop", project_slug: "checkout-web", status: "pending_approval", proposed_by: "agent:x" },
-      ]),
-      budgetAlerts: vi.fn().mockResolvedValue([]),
+      ], meta: { has_more: false, next_cursor: null } }),
+      budgetAlerts: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       orgEgress: vi.fn().mockResolvedValue({ mode: "enforce", ceiling: {}, rules: [], requests: [], can_decide: false }),
     },
   };

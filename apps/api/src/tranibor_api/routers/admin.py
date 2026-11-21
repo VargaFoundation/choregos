@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import contains_eager
 from tranibor_adapters.registry import allowed_executor_kinds
 from tranibor_contracts import Role
 from tranibor_core import backend_enabled, utcnow
@@ -41,8 +42,8 @@ from ..schemas import (
     GatewayKeyInfo,
     GatewayKeyPage,
     MembershipDto,
+    MembershipPage,
     MembershipUpsert,
-    PageMeta,
     SecretsRewrap,
 )
 from ..schemas.network import NetworkActivity, NetworkActivityRow
@@ -226,17 +227,23 @@ async def list_gateway_keys(
     )
 
 
-@router.get("/orgs/{org}/members", response_model=list[MembershipDto], operation_id="listMembers")
+@router.get("/orgs/{org}/members", response_model=MembershipPage, operation_id="listMembers")
 async def list_members(
-    org: str, session: Db, principal: Me, project: Annotated[str | None, Query()] = None
-) -> list[MembershipDto]:
-    """Who belongs to the organisation, or to one of its projects with `?project=`.
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    project: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+) -> MembershipPage:
+    """Who belongs to the organisation, or to one of its projects with `?project=`, one page at a time.
 
     S26-04: any signed-in user could list any organisation. A role in the organisation reads every
     membership; a role on some of its projects only reads the memberships of those projects; anyone
     else gets 403 — before the lookup, so an organisation's existence is not told to a stranger (as
     `/orgs/{org}/agents` does). S30-06: `?project=` narrows to that project and asks the same right
-    on it.
+    on it. `q` matches a substring of the e-mail (ADR 0206). The rows come by e-mail, then id, so one
+    person's memberships are neighbours.
     """
     from ..rbac import Permission
 
@@ -256,26 +263,44 @@ async def list_members(
     if organization is None:
         raise not_found("Organisation", org)
     query = (
-        select(Membership, User, Project)
+        select(Membership)
         .join(User, Membership.user_id == User.id)
+        .options(contains_eager(Membership.user))
         .outerjoin(Project, Membership.project_id == Project.id)
         # A machine account is not a member one invites or removes (ADR 0131): its own page lists it.
         .where(Membership.org_id == organization.id, User.is_service.is_(False))
     )
     if project:
         query = query.where(Project.slug == project)
-    rows = (await session.execute(query)).all()
-    return [
-        MembershipDto(
-            user_id=user.id,
-            email=user.email,
-            org=org,
-            project_slug=row_project.slug if row_project else None,
-            role=Role(membership.role),
-        )
-        for membership, user, row_project in rows
-        if org_wide or (row_project is not None and row_project.slug in readable_projects)
-    ]
+    if not org_wide:
+        # A role on some projects only reads those projects' memberships: decided in SQL, so the page is full.
+        query = query.where(Project.slug.in_(readable_projects))
+    if q and q.strip():
+        query = query.where(User.email.icontains(q.strip(), autoescape=True))
+    rows, meta = await keyset_page(
+        session, query, sort=User.email, tiebreak=Membership.id, page=page, descending=False
+    )
+    # The slugs of this page's projects only.
+    project_ids = {row.project_id for row in rows if row.project_id}
+    slugs: dict[str, str] = {}
+    if project_ids:
+        slug_rows = (
+            await session.execute(select(Project.id, Project.slug).where(Project.id.in_(project_ids)))
+        ).all()
+        slugs = {str(row[0]): str(row[1]) for row in slug_rows}
+    return MembershipPage(
+        items=[
+            MembershipDto(
+                user_id=row.user.id,
+                email=row.user.email,
+                org=org,
+                project_slug=slugs.get(row.project_id or ""),
+                role=Role(row.role),
+            )
+            for row in rows
+        ],
+        meta=meta,
+    )
 
 
 @router.post(
@@ -453,7 +478,7 @@ async def list_audit(
     total = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
     whole_instance = len(readable) >= int(total)
 
-    query = select(AuditLog).order_by(AuditLog.ts.desc())
+    query = select(AuditLog)
     ids = select(Organization.id).where(Organization.slug.in_(readable))
     scope = AuditLog.org_id.in_(ids)
     query = query.where(or_(scope, AuditLog.org_id.is_(None)) if whole_instance else scope)
@@ -461,12 +486,8 @@ async def list_audit(
         query = query.where(AuditLog.actor_id == actor)
     if target_type:
         query = query.where(AuditLog.target_type == target_type)
-    rows = (await session.execute(query.limit(1000))).scalars().all()
-    window, cursor, has_more = page.slice(list(rows))
-    return AuditPage(
-        items=[AuditEntry.model_validate(row) for row in window],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    window, meta = await keyset_page(session, query, sort=AuditLog.ts, tiebreak=AuditLog.id, page=page)
+    return AuditPage(items=[AuditEntry.model_validate(row) for row in window], meta=meta)
 
 
 @router.get("/orgs/{org}/network-activity", response_model=NetworkActivity, operation_id="getNetworkActivity")

@@ -83,7 +83,7 @@ async def test_a_project_born_from_a_two_workflow_template_receives_them(
     assert created.status_code == 201, created.text
     pid = created.json()["id"]
 
-    active = {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()}
+    active = {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()["items"]}
     assert active == {"onboarding", "offboarding"}
     routing = (await client.get(f"/api/v1/projects/{pid}/workflow-routing")).json()
     assert routing["default"] == "onboarding"
@@ -149,7 +149,7 @@ async def test_the_shipped_templates_keep_their_shape(client: AsyncClient, admin
     """`defaults.workflow`, singular: the shape of the templates shipped so far."""
     created = await _project(client, "github-aca@1.0.0", slug="on-azure")
     assert created.status_code == 201, created.text
-    active = (await client.get(f"/api/v1/projects/{created.json()['id']}/workflows")).json()
+    active = (await client.get(f"/api/v1/projects/{created.json()['id']}/workflows")).json()["items"]
     assert [w["name"] for w in active] == ["default-simple"]
 
 

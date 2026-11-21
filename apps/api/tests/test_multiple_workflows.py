@@ -39,7 +39,7 @@ async def test_arrival_and_departure_are_active_together(
     for name in ("onboarding", "offboarding"):
         response = await _publish(client, pid, name)
         assert response.status_code == 200, response.text
-    listing = (await client.get(f"/api/v1/projects/{pid}/workflows")).json()
+    listing = (await client.get(f"/api/v1/projects/{pid}/workflows")).json()["items"]
     names = {w["name"] for w in listing}
     assert {"onboarding", "offboarding"} <= names, listing
     # The default did not move: publishing by name does not make it the default.
@@ -71,7 +71,7 @@ async def test_restoring_creates_the_next_version(client: AsyncClient, project: 
     )
     assert restored.status_code == 200, restored.text
     assert restored.json()["version"] == v2["version"] + 1
-    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()
+    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()["items"]
     assert [v["version"] for v in versions] == [v2["version"] + 1, v2["version"], v1["version"]]
     assert [v["is_active"] for v in versions] == [True, False, False]
 
@@ -91,7 +91,7 @@ async def test_the_default_and_a_routing_target_cannot_be_deactivated(
     assert (await client.post(f"/api/v1/projects/{pid}/workflows/onboarding/deactivate")).status_code == 409
     assert (await client.post(f"/api/v1/projects/{pid}/workflows/offboarding/deactivate")).status_code == 409
     assert (await client.post(f"/api/v1/projects/{pid}/workflows/mobility/deactivate")).status_code == 204
-    names = {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()}
+    names = {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()["items"]}
     assert "mobility" not in names
     assert (await client.get(f"/api/v1/projects/{pid}/workflow")).json()["name"] == "onboarding"
 
@@ -162,7 +162,7 @@ async def test_creating_does_not_republish_an_existing_workflow(
     second = await _publish(client, pid, "onboarding", create_only=True)
     assert second.status_code == 409, second.text
     assert "already exists" in second.json()["detail"]
-    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()
+    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()["items"]
     assert [v["version"] for v in versions] == [1]
     # Deactivated, the name stays taken: recreating it would republish its history.
     assert (await _publish(client, pid, "offboarding", create_only=True)).status_code == 200
@@ -188,5 +188,5 @@ async def test_two_simultaneous_creations_one_gets_409(
     second_try = await _publish(client, pid, "onboarding", create_only=True)
     assert second_try.status_code == 409, second_try.text
     monkeypatch.undo()
-    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()
+    versions = (await client.get(f"/api/v1/projects/{pid}/workflows/onboarding/versions")).json()["items"]
     assert len(versions) == 1

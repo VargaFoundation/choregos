@@ -8,6 +8,7 @@
  */
 import devComplex from "./dev-complex.json";
 import { agentSocialApi } from "./agent-social";
+import { pageOf } from "./paging";
 import { agentReleasesApi, applyPolicy, decorateAgent, savedRevision, touchAgent } from "./agent-releases";
 import type {
   Action,
@@ -116,6 +117,7 @@ import { changeOperationAtOutpost, checkOutpostConnector, discoverAtOutpost, out
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
+import { mockPage } from "./paging";
 import { DECK, MEMO, WORKBOOK } from "./office-samples";
 
 export { peopleOpsFixtures };
@@ -1101,6 +1103,25 @@ export const memoryStores: MemoryStore[] = [
 
 /** `acme:billing-api` (how the client qualifies a project) or `billing-api`: the slug. */
 const bareSlug = (id: string): string => decodeURIComponent(id).split(/[:/]/).pop() ?? id;
+
+/**
+ * One page of a paged list, as the server cuts it (ADR 0206): by slug, the cursor is the last slug read,
+ * `limit` rows, `has_more` when others follow. `text` is what `q` is matched against.
+ */
+export function pageBySlug<T extends { slug: string }>(
+  rows: T[],
+  search: URLSearchParams,
+  text: (row: T) => string = (row) => row.slug,
+): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+  const needle = (search.get("q") ?? "").trim().toLowerCase();
+  const limit = Number(search.get("limit") ?? "50");
+  const after = search.get("cursor");
+  const sorted = rows.filter((row) => !needle || text(row).toLowerCase().includes(needle)).sort((a, b) => a.slug.localeCompare(b.slug));
+  const rest = after === null ? sorted : sorted.filter((row) => row.slug > after);
+  const items = rest.slice(0, limit);
+  const more = rest.length > limit;
+  return { items: structuredClone(items), meta: { has_more: more, next_cursor: more ? (items.at(-1)?.slug ?? null) : null } };
+}
 
 /** What `GET /projects/{id}/memories` returns for a project: the implicit memories, its own, the global ones that reach it. */
 export function projectMemoryList(project: string): MemoryStore[] {
@@ -2245,10 +2266,24 @@ export const platformAgentImages: AgentImageInfo[] = [
   { name: "scratch-bench", digest_pinned: false },
 ];
 
-/** The memberships the API returns: the organisation's, or one project's with `?project=` (S30-06). */
-function membersOf(path: string): Membership[] {
-  const project = new URLSearchParams(path.split("?")[1] ?? "").get("project");
-  return project ? memberships.filter((m) => m.project_slug === project) : memberships;
+/** One page of `rows` as the server returns it (ADR 0206): `limit` rows from the opaque `cursor` (here an offset). */
+function pageInOrder<T>(rows: T[], path: string): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+  const search = new URLSearchParams(path.split("?")[1] ?? "");
+  const limit = Math.min(200, Math.max(1, Number(search.get("limit") ?? 50) || 50));
+  const start = Number(search.get("cursor") ?? 0) || 0;
+  const hasMore = rows.length > start + limit;
+  return { items: rows.slice(start, start + limit), meta: { has_more: hasMore, next_cursor: hasMore ? String(start + limit) : null } };
+}
+
+/** The memberships the API returns, by e-mail: the organisation's, or one project's with `?project=` (S30-06), filtered by `?q=`. */
+function membersOf(path: string) {
+  const search = new URLSearchParams(path.split("?")[1] ?? "");
+  const project = search.get("project");
+  const needle = (search.get("q") ?? "").toLowerCase();
+  const rows = memberships
+    .filter((m) => (!project || m.project_slug === project) && (!needle || (m.email ?? "").toLowerCase().includes(needle)))
+    .sort((a, b) => (a.email ?? "").localeCompare(b.email ?? ""));
+  return pageInOrder(rows, path);
 }
 
 /** The registry's columns, one line per agent (S30-04). */
@@ -3532,7 +3567,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       if (at >= 0) mockLinkedAccounts.splice(at, 1);
       return undefined as T;
     }
-    return structuredClone(mockLinkedAccounts.filter((a) => a.org === org && a.user_id === userId)) as T;
+    const mine = mockLinkedAccounts
+      .filter((a) => a.org === org && a.user_id === userId)
+      .sort((a, b) => a.provider.localeCompare(b.provider) || a.base_url.localeCompare(b.base_url));
+    return structuredClone(pageInOrder(mine, path)) as T;
   }
   if (method === "GET" && bare === "/me/linked-accounts") {
     return structuredClone({ items: mockLinkedAccounts.filter((a) => a.user_id === "u1"), instances: [...mockForgeInstances] }) as T;
@@ -3566,6 +3604,48 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       verdict: "Memory helps: more tickets merge at first pass, at a lower cost.",
       detail: `Over ${weeks} weeks, 33 tickets in two projects. The groups are small: read the gap as a signal, not a proof.`,
     } as T;
+  }
+  if (method === "GET" && /^\/orgs\/[^/]+\/budget-alerts$/.test(bare)) {
+    // Filtered like the server (ADR 0206): status (open by default), then the project; the two demo alerts fit one page.
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const status = search.get("status") ?? "open";
+    const project = search.get("project");
+    const items = budgetAlerts.filter(
+      (alert) => (status === "all" || alert.status === status) && (!project || (alert.scope === "project" && alert.subject === project)),
+    );
+    return { items, meta: { has_more: false, next_cursor: null } } as T;
+  }
+  // The three paged lists of the person (ADR 0206): the mock filters and pages as the server does, so a
+  // screen that forgot "More" or filtered in the browser is caught here too.
+  if (method === "GET" && (bare === "/orgs" || bare === "/me/tokens" || bare === "/me/sessions")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const needle = (search.get("q") ?? "").toLowerCase();
+    let rows: unknown[];
+    if (bare === "/orgs") {
+      const slug = search.get("slug");
+      rows = [{ ...mockOrg, aliases: [] as string[] }].filter(
+        (o) =>
+          (!slug || o.slug === slug || o.aliases.includes(slug)) &&
+          (!needle || o.slug.includes(needle) || o.name.toLowerCase().includes(needle)),
+      );
+    } else if (bare === "/me/tokens") {
+      const kind = search.get("kind");
+      const id = search.get("id");
+      rows = myTokens.filter(
+        (t) =>
+          (!id || t.id === id) &&
+          (!needle || t.name.toLowerCase().includes(needle)) &&
+          (kind === null || (t.scopes ?? []).some((x) => x.startsWith("mcp:")) === (kind === "mcp")),
+      );
+    } else {
+      const current = search.get("current");
+      rows = mySessions.filter((x) => current === null || x.current === (current === "true"));
+    }
+    const limit = Number(search.get("limit") ?? 50);
+    const start = Number(search.get("cursor") ?? 0);
+    const items = rows.slice(start, start + limit);
+    const more = start + limit < rows.length;
+    return { items, meta: { has_more: more, next_cursor: more ? String(start + limit) : null } } as T;
   }
   if (method === "GET" && bare === "/platform/gateway/keys") {
     // Filtered like the server (ADR 0206); the two demo keys fit one page.
@@ -4403,45 +4483,121 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (installedVersion && catalogueSkills.has(installedVersion[1]!)) return catalogueSkills.get(installedVersion[1]!)!.version as T;
   const installedSkill = /^\/orgs\/[^/]+\/skills\/([^/]+)$/.exec(route ?? "");
   if (installedSkill && catalogueSkills.has(installedSkill[1]!)) return catalogueSkills.get(installedSkill[1]!)!.skill as T;
+  // The skill library and the knowledge bases, paged by slug like the server (ADR 0206).
+  if (method === "GET" && /^\/orgs\/[^/]+\/skills$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return pageBySlug([...skills, ...[...catalogueSkills.values()].map((c) => c.skill)], search, (k) => `${k.slug} ${k.description ?? ""}`) as T;
+  }
+  if (method === "GET" && /^\/orgs\/[^/]+\/knowledge$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const reach = search.get("scope");
+    return pageBySlug(knowledgeBases.filter((b) => !reach || b.scope === reach).map((b) => ({ ...b, documents: null })), search, (b) => `${b.slug} ${b.name}`) as T;
+  }
   if (/^\/orgs\/[^/]+\/memories$/.test(route ?? "")) {
     const wanted = new URLSearchParams(path.split("?")[1] ?? "").get("scope");
-    return structuredClone(memoryStores.filter((m) => !wanted || m.scope === wanted)) as T;
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return pageBySlug(
+      memoryStores.filter((m) => !wanted || m.scope === wanted),
+      search,
+      (m) => `${m.slug} ${m.display_name} ${m.description ?? ""}`,
+    ) as T;
   }
   const memoryOf = /^\/orgs\/[^/]+\/memories\/([^/]+)(\/search|\/pending)?$/.exec(route ?? "");
   if (memoryOf) {
     if (memoryOf[2] === "/search") return memories.filter((m) => m.content.toLowerCase().includes((new URLSearchParams(path.split("?")[1] ?? "").get("q") ?? "").toLowerCase().split(" ")[0] ?? "")) as T;
-    if (memoryOf[2] === "/pending") return structuredClone(proposedToGlobal) as T;
+    if (memoryOf[2] === "/pending") return pageOf(proposedToGlobal, path.split("?")[1] ?? "") as T;
     const global = memoryStores.find((m) => m.scope === "global" && m.slug === memoryOf[1]);
     if (!global) throw new ApiError(404, { detail: "memory not found" });
     return structuredClone(global) as T;
   }
   const projectMemories = /^\/projects\/([^/]+)\/memories$/.exec(route ?? "");
-  if (projectMemories) return structuredClone(projectMemoryList(bareSlug(projectMemories[1]!))) as T;
+  if (projectMemories) {
+    // The two implicit memories open the first page, outside its limit, as the server does.
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const all = projectMemoryList(bareSlug(projectMemories[1]!));
+    const page = pageBySlug(
+      all.filter((m) => !m.implicit),
+      search,
+      (m) => `${m.slug} ${m.display_name} ${m.description ?? ""}`,
+    );
+    const needle = (search.get("q") ?? "").trim().toLowerCase();
+    const implicit = search.get("cursor") ? [] : all.filter((m) => m.implicit && (!needle || `${m.slug} ${m.display_name}`.toLowerCase().includes(needle)));
+    return { items: [...structuredClone(implicit), ...page.items], meta: page.meta } as T;
+  }
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
-    const statusFilter = new URLSearchParams(path.split("?")[1] ?? "").get("status");
-    return actions.filter((a) => !statusFilter || a.status === statusFilter) as T;
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const statusFilter = search.get("status");
+    const project = search.get("project");
+    return pageOfMock(
+      actions.filter((a) => (!statusFilter || a.status === statusFilter) && (!project || a.project_slug === project)),
+      search,
+    ) as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/actions$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const statusFilter = search.get("status");
+    return pageOfMock(actions.filter((a) => !statusFilter || a.status === statusFilter), search) as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/operations$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const needle = (search.get("q") ?? "").toLowerCase();
+    const connector = search.get("connector");
+    return pageOfMock(
+      projectOperations.filter(
+        (o) =>
+          (!connector || o.connector === connector) &&
+          (!needle || o.connector.toLowerCase().includes(needle) || o.operation.toLowerCase().includes(needle)),
+      ),
+      search,
+    ) as T;
   }
   // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
   // would be seen by the query cache as unchanged.
-  if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
+  if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return structuredClone(pageOfMock(connectorsFiltered(orgConnectors, search), search)) as T;
+  }
   if (/^\/orgs\/[^/]+\/agents$/.test(route ?? "")) {
-    // Every tag given (AND), as the API filters (S40-10).
-    const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
-    return structuredClone(agents.filter((a) => wanted.every((t) => (a.tags ?? []).includes(t))).map(decorateAgent)) as T;
+    // Filtered, sorted and paged like the API (ADR 0206): `tag` repeated is an AND (S40-10).
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const wanted = search.getAll("tag");
+    const needle = (search.get("q") ?? "").trim().toLowerCase();
+    const scope = search.get("scope");
+    const decorated = agents.map(decorateAgent);
+    const kept = decorated
+      .filter(
+        (a) =>
+          wanted.every((t) => (a.tags ?? []).includes(t)) &&
+          (!scope || (a.scope ?? "org") === scope) &&
+          (search.get("starred") !== "true" || a.social?.starred_by_me === true) &&
+          (search.get("retired") !== "false" || a.lifecycle !== "retired") &&
+          (search.get("awaiting_approval") !== "true" || a.pending_release != null) &&
+          (!needle || a.slug.toLowerCase().includes(needle) || a.display_name.toLowerCase().includes(needle)),
+      )
+      .sort((x, y) =>
+        search.get("sort") === "stars" && (y.social?.stars ?? 0) !== (x.social?.stars ?? 0)
+          ? (y.social?.stars ?? 0) - (x.social?.stars ?? 0)
+          : x.slug.localeCompare(y.slug),
+      );
+    return pageOf(kept, search) as T;
   }
   const projectOrg = /^\/projects\/([^/]+)\/org-connectors$/.exec(route ?? "");
   if (projectOrg) {
     const slug = decodeURIComponent(projectOrg[1]!).replace(/^[^:/]+[:/]/, "");
-    return orgConnectors.map((c) => ({
-      name: c.name,
-      kind: c.kind,
-      type: c.type,
-      availability: c.availability ?? "all_projects",
-      enabled: c.availability !== "selected_projects" || (c.enabled_projects ?? []).includes(slug),
-      can_toggle: c.availability === "selected_projects",
-    })) as T;
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return pageOfMock(
+      connectorsFiltered(orgConnectors, search).map((c) => ({
+        name: c.name,
+        kind: c.kind,
+        type: c.type,
+        availability: c.availability ?? "all_projects",
+        enabled: c.availability !== "selected_projects" || (c.enabled_projects ?? []).includes(slug),
+        can_toggle: c.availability === "selected_projects",
+      })),
+      search,
+    ) as T;
   }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // A copy: the agent changes for the time of the page (S23-13), and a read must see it as new.
@@ -4452,19 +4608,25 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const ticket = /^\/work-items\/([^/]+)$/.exec(route ?? "");
   if (ticket) return ticketDetaille(ticket[1]!) as T;
   if (/^\/orgs\/[^/]+\/agent-credentials$/.test(route ?? "")) {
-    return agentCredentials.map((c) => ({ ...c, agent: "leas-claude-code" })) as T;
+    return pageOf(agentCredentials.map((c) => ({ ...c, agent: "leas-claude-code" })), path.split("?")[1] ?? "") as T;
   }
-  if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? "")) return agentMetricsList() as T;
-  if (/^\/orgs\/[^/]+\/agents\/rovo\/runs$/.test(route ?? "")) return [remoteRunDrifted, remoteRun] as T;
-  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return remoteCredentials as T;
-  if (/^\/runs\/r-remote\/events$/.test(route ?? "")) return remoteEvents(false) as T;
-  if (/^\/runs\/r-remote-drift\/events$/.test(route ?? "")) return remoteEvents(true) as T;
+  if (/^\/orgs\/[^/]+\/agent-metrics$/.test(route ?? ""))
+    return pageOf([...agentMetricsList()].sort((x, y) => x.agent.localeCompare(y.agent)), path.split("?")[1] ?? "") as T;
+  if (/^\/orgs\/[^/]+\/agents\/rovo\/runs$/.test(route ?? "")) return pageOf([remoteRunDrifted, remoteRun], path.split("?")[1] ?? "") as T;
+  if (/^\/orgs\/[^/]+\/remote-credentials$/.test(route ?? "")) return pageInOrder([...remoteCredentials].sort((a, b) => a.name.localeCompare(b.name)), path) as T;
+  if (/^\/runs\/r-remote\/events$/.test(route ?? "")) return onePage(remoteEvents(false)) as T;
+  if (/^\/runs\/r-remote-drift\/events$/.test(route ?? "")) return onePage(remoteEvents(true)) as T;
   if (/^\/runs\/r-remote(-drift)?$/.test(route ?? "")) return (route?.endsWith("drift") ? remoteRunDrifted : remoteRun) as T;
   // The runs of an agent, newest first (S30-05).
-  if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return [...runs].reverse() as T;
-  if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return implicitAgents() as T;
+  if (/^\/orgs\/[^/]+\/agents\/[^/]+\/runs$/.test(route ?? "")) return pageOf([...runs].reverse(), path.split("?")[1] ?? "") as T;
+  const actorKey = (a: ImplicitAgent) => `${a.workflow}\u0000${a.actor}`;
+  if (/^\/projects\/[^/]+\/implicit-agents$/.test(route ?? "")) return mockPage(implicitAgents(), path, actorKey) as T;
   if (/^\/projects\/[^/]+\/workflow-agents$/.test(route ?? ""))
-    return implicitAgents().map((a) => ({ ...a, agent: null, registered: false })) as T;
+    return mockPage(
+      implicitAgents().map((a) => ({ ...a, agent: null, registered: false })),
+      path,
+      actorKey,
+    ) as T;
   if (/^\/projects\/[^/]+\/agent-resolution$/.test(route ?? "")) return resolutionDemo(path) as T;
   if (/^\/projects\/[^/]+\/builtin-agent$/.test(route ?? "")) return builtinAgentDemo(path) as T;
   const groupMatch = /^\/projects\/[^/]+\/groups\/([^/]+)\/members$/.exec(route ?? "");
@@ -4488,7 +4650,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (calibrationMatch)
     return stepCalibrationDemo(decodeURIComponent(calibrationMatch[1]!), decodeURIComponent(calibrationMatch[2]!)) as T;
   const credentials = /^\/orgs\/[^/]+\/agents\/([^/]+)\/credentials$/.exec(route ?? "");
-  if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
+  if (credentials) return pageOf(credentials[1] === "leas-claude-code" ? agentCredentials : [], path.split("?")[1] ?? "") as T;
   if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
     // The project overview's own two reads (`day`, `kind`, no period) keep their fixed fixture.
     const onPage = /^\/projects\//.test(chemin ?? "") && !/since=|group_by=(?!day&|day$|kind)/.test(path);
@@ -4511,36 +4673,27 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       /^\/integrations$/,
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
-    [/^\/me\/tokens$/, myTokens],
-    [/^\/me\/sessions$/, mySessions],
     [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
-    [/^\/projects\/[^/]+\/agents$/, projectAgents],
-    [/^\/orgs\/[^/]+\/skills$/, [...skills, ...[...catalogueSkills.values()].map((c) => c.skill)]],
+    [/^\/projects\/[^/]+\/agents$/, mockPage(projectAgents, path, (pin) => pin.agent)],
     [/^\/orgs\/[^/]+\/skill-catalogue$/, skillCatalogue()],
-    [/^\/orgs\/[^/]+\/knowledge$/, knowledgeBases.map((b) => ({ ...b, documents: null }))],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+\/documents\/[^/]+$/, knowledgeBase.documents![0]],
     [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, withWrittenGrants(projectKnowledgeBase)],
     [/^\/orgs\/[^/]+\/knowledge\/security-policy$/, readOnlyKnowledgeBase],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...withWrittenGrants(knowledgeBase), documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
-    [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
     [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],
     [/^\/ui\/admin-sections$/, [sectionScim, sectionAcmeLayered]],
     [/^\/orgs\/[^/]+\/scim\/settings$/, { enabled: true, default_role: "viewer" }],
     [/^\/orgs\/[^/]+\/scim\/tokens$/, { items: [{ id: "t1", name: "okta", created_at: iso(60 * 24 * 12) }] }],
-    [/^\/orgs$/, [mockOrg]],
     [/^\/orgs\/[^/]+\/members$/, membersOf(path)],
     [/^\/templates$/, [{ name: "github-tekton-argo-k8s", version: "1.0.0", display: "GitHub · Tekton · Argo CD · Kubernetes", is_published: true }]],
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/(?:[^/]*:)?dev\/requirements$/, devRequirements],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
-    [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
     [/^\/orgs\/[^/]+\/connector-catalogue$/, connectorCatalogue()],
-    [/^\/projects\/[^/]+\/actions$/, actions],
-    [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
@@ -4601,28 +4754,27 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/metrics\/dora$/, dora],
     [/^\/projects\/[^/]+\/metrics\/cross-backend$/, crossBackend],
     [/^\/projects\/[^/]+\/workflow$/, workflow],
-    [/^\/projects\/[^/]+\/workflows$/, workflowSummaries],
-    [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, workflowVersions],
+    [/^\/projects\/[^/]+\/workflows$/, mockPage(workflowSummaries, path, (w) => w.name)],
+    [/^\/projects\/[^/]+\/workflows\/[^/]+\/versions$/, mockPage(workflowVersions, path, (w) => w.version, { descending: true })],
     [/^\/projects\/[^/]+\/workflows\/hotfix$/, hotfix],
     [/^\/projects\/[^/]+\/workflows\/release-full$/, releaseFull],
     [/^\/projects\/[^/]+\/workflows\/dev-complex$/, devComplexDef],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     // HTTP triggers (S56-02): one declared trigger, its token minted once, a manual firing.
-    [/^\/projects\/[^/]+\/machine-accounts$/, mockMachineAccounts],
+    [/^\/projects\/[^/]+\/machine-accounts$/, mockPage(mockMachineAccounts, path, (a) => a.slug)],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
     [/^\/projects\/[^/]+\/triggers$/, mockTriggers],
     [/^\/workflows\/templates$/, [{ name: "default-simple", version: 1, display: "default-simple", description: "", yaml: workflow.yaml }]],
     [/^\/orgs\/[^/]+\/workflow-catalogue$/, workflowCatalogue],
     [/^\/projects\/[^/]+\/memory\/search$/, memories],
-    [/^\/projects\/[^/]+\/memory\/pending$/, pendingMemories],
-    [/^\/work-items\/[^/]+\/timeline$/, timeline],
-    [/^\/work-items\/[^/]+\/hand-offs$/, handOffs],
-    [/^\/work-items\/[^/]+\/artifacts$/, artifacts],
-    [/^\/work-items\/[^/]+\/artifacts$/, artifacts],
-    [/^\/work-items\/[^/]+\/runs$/, runs],
-    [/^\/runs\/[^/]+\/events$/, runEvents],
+    [/^\/projects\/[^/]+\/memory\/pending$/, pageOf(pendingMemories, path.split("?")[1] ?? "")],
+    [/^\/work-items\/[^/]+\/timeline$/, onePage(timeline)],
+    [/^\/work-items\/[^/]+\/hand-offs$/, onePage(handOffs)],
+    [/^\/work-items\/[^/]+\/artifacts$/, onePage(artifacts)],
+    [/^\/work-items\/[^/]+\/runs$/, onePage(runs)],
+    [/^\/runs\/[^/]+\/events$/, onePage(runEvents)],
     [/^\/runs\/r-oom\/logs$/, runLogsOom],
     [/^\/runs\/[^/]+\/logs$/, runLogsLive],
     [/^\/runs\/[^/]+\/access$/, runAccess],
@@ -4638,7 +4790,34 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   return {} as T;
 }
 
+/** A list the server pages (ADR 0206): the demo data fits one page, so the whole of it and no cursor. */
+function onePage<T>(items: readonly T[]) {
+  return { items: [...items], meta: { has_more: false, next_cursor: null } };
+}
+
 const mockGatewayKeys: GatewayKeyInfo[] = [
   { key_id: "gk-7f3a91", run_id: "run-1042", project_slug: "billing-api", budget_usd: 5, spend_usd: 1.37, expires_at: "2026-10-30T12:00:00Z", revoked: false, created_at: "2026-10-29T09:00:00Z" },
   { key_id: "gk-2c84be", run_id: "run-1031", project_slug: "checkout-web", budget_usd: 2, spend_usd: 2, expires_at: null, revoked: true, created_at: "2026-10-28T14:30:00Z" },
 ];
+
+/**
+ * A page of a list, the way the server answers one (ADR 0206): `limit` rows from the cursor, which here is
+ * the offset of the next row, and `has_more`. The filters are applied by the caller before this.
+ */
+function pageOfMock<T>(rows: T[], search: URLSearchParams): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+  const start = Number(search.get("cursor") ?? "0") || 0;
+  const limit = Number(search.get("limit") ?? "50") || 50;
+  const items = rows.slice(start, start + limit);
+  const more = start + limit < rows.length;
+  return { items, meta: { has_more: more, next_cursor: more ? String(start + limit) : null } };
+}
+
+/** The organisation's connectors by name, with the server's filters: `q` (part of the name), `kind` and `type`. */
+function connectorsFiltered<T extends { name: string; kind: string; type: string }>(rows: T[], search: URLSearchParams): T[] {
+  const needle = (search.get("q") ?? "").toLowerCase();
+  const kind = search.get("kind");
+  const type = search.get("type");
+  return rows
+    .filter((c) => (!needle || c.name.toLowerCase().includes(needle)) && (!kind || c.kind === kind) && (!type || c.type === type))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

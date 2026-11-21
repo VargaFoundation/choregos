@@ -49,7 +49,7 @@ async def test_creating_a_workflow_named_after_a_console_page_is_refused(
     pid = project["id"]
     _reserved(await _put(client, pid, name, create_only=True))
     _reserved(await _put(client, pid, name))
-    listed = {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()}
+    listed = {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()["items"]}
     assert name not in listed, "nothing was published"
     # A name that only starts like one is free.
     assert (await _put(client, pid, f"{name}-intake", create_only=True)).status_code == 200

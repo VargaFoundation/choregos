@@ -17,12 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_core.pseudonymise import Pseudonymiser
 
 from ..db.models import AgentSessionEvent, AgentSessionRecord, ConversationFeedback, User
+from ..deps import Page
 from ..errors import unprocessable
+from ..keyset import keyset_page
 from ..schemas.agent_sessions import (
     ConversationCandidate,
     ConversationFeedbackCreate,
     ConversationFeedbackDto,
 )
+from ..schemas.base import PageMeta
 
 #: A candidate keeps the last turns of a long conversation: the schema allows 20.
 MAX_TURNS = 20
@@ -139,22 +142,21 @@ def feedback_dto(row: ConversationFeedback) -> ConversationFeedbackDto:
 
 
 async def proposed_candidates(
-    session: AsyncSession, org_id: str, agent_slug: str, limit: int
-) -> list[ConversationCandidate]:
-    """The candidates proposed for an agent, newest first. Only the pseudonymised case: never the
-    person's raw comment, nor who gave it."""
-    rows = (
-        await session.execute(
-            select(ConversationFeedback)
-            .where(
-                ConversationFeedback.org_id == org_id,
-                ConversationFeedback.agent_slug == agent_slug,
-                ConversationFeedback.candidate_status == PROPOSED,
-            )
-            .order_by(ConversationFeedback.created_at.desc())
-            .limit(limit)
-        )
-    ).scalars()
+    session: AsyncSession, org_id: str, agent_slug: str, page: Page
+) -> tuple[list[ConversationCandidate], PageMeta]:
+    """One page of the candidates proposed for an agent, newest first. Only the pseudonymised case:
+    never the person's raw comment, nor who gave it."""
+    rows, meta = await keyset_page(
+        session,
+        select(ConversationFeedback).where(
+            ConversationFeedback.org_id == org_id,
+            ConversationFeedback.agent_slug == agent_slug,
+            ConversationFeedback.candidate_status == PROPOSED,
+        ),
+        sort=ConversationFeedback.created_at,
+        tiebreak=ConversationFeedback.id,
+        page=page,
+    )
     return [
         ConversationCandidate(
             id=row.id,
@@ -165,4 +167,4 @@ async def proposed_candidates(
             created_at=row.created_at,
         )
         for row in rows
-    ]
+    ], meta

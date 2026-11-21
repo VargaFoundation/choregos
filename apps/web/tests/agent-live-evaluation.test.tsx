@@ -69,7 +69,7 @@ const wrap = (node: React.ReactNode) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.agentEvaluations).mockResolvedValue([]);
+  vi.mocked(api.agentEvaluations).mockResolvedValue({ items: [], meta: { has_more: false } } as never);
 });
 
 describe("the live evaluation", () => {
@@ -81,7 +81,7 @@ describe("the live evaluation", () => {
     const project = await screen.findByLabelText("Project");
     await waitFor(() => expect(within(project).getByRole("option", { name: "ops" })).toBeInTheDocument());
     fireEvent.change(project, { target: { value: "ops" } });
-    vi.mocked(api.agentEvaluations).mockResolvedValue([evaluation()]);
+    vi.mocked(api.agentEvaluations).mockResolvedValue({ items: [evaluation()], meta: { has_more: false } } as never);
     fireEvent.click(screen.getByRole("button", { name: "Run live evaluation" }));
     await waitFor(() => expect(api.startAgentEvaluation).toHaveBeenCalledWith("acme", "reviewer", 2, "ops"));
     const score = await screen.findByTestId("live-score");
@@ -91,7 +91,7 @@ describe("the live evaluation", () => {
   });
 
   it("says 'could not run' for an evaluation that had no model, and never a score", async () => {
-    vi.mocked(api.agentEvaluations).mockResolvedValue([evaluation({ status: "not_run", score: null, cases: [] })]);
+    vi.mocked(api.agentEvaluations).mockResolvedValue({ items: [evaluation({ status: "not_run", score: null, cases: [] })], meta: { has_more: false } } as never);
     wrap(<LiveEvaluation org="acme" agent={agent()} version={2} />);
     expect(await screen.findByTestId("live-score")).toHaveTextContent("could not run: no model to call");
     expect(screen.getByTestId("live-score")).not.toHaveTextContent("passed");

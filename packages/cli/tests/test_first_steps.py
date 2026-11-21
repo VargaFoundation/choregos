@@ -104,7 +104,11 @@ def test_a_token_is_minted_and_shown_only_once(profile: Path) -> None:
     assert "chg_secret" in result.output
     respx.get(f"{API}/api/v1/me/tokens").mock(
         return_value=Response(
-            200, json=[{"id": "t-1", "name": "ci", "created_at": "2026-09-24", "expires_at": None}]
+            200,
+            json={
+                "items": [{"id": "t-1", "name": "ci", "created_at": "2026-09-24", "expires_at": None}],
+                "meta": {"next_cursor": None, "has_more": False},
+            },
         )
     )
     result = _run("tokens", "list")
@@ -143,6 +147,8 @@ def test_the_environment_names_the_organisation(tmp_path: Path, monkeypatch: pyt
     route = respx.get(f"{API}/api/v1/orgs/globex/projects").mock(
         return_value=Response(200, json={"items": []})
     )
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
+    respx.get(f"{API}/api/v1/orgs").mock(
+        return_value=Response(200, json={"items": [], "meta": {"next_cursor": None, "has_more": False}})
+    )
     assert _run("projects", "list").exit_code == 0
     assert route.called

@@ -5,6 +5,7 @@ import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
 import { describeRefresh, draftOf, firstUsableKind, intervalLabel, headersOf, nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, sourceState, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
+import { byFilters } from "./page";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -70,7 +71,7 @@ describe("what a source says", () => {
 
 describe("the sources of a base (S33-04)", () => {
   beforeEach(() => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([]));
   });
 
   it("names the documents a sync converted with rows cut (S42-09e)", () => {
@@ -83,7 +84,7 @@ describe("the sources of a base (S33-04)", () => {
   it("shows when each last synced, what it did and why it failed; syncs on demand", async () => {
     vi.mocked(api.syncKnowledgeSource).mockResolvedValue(source);
     const onChange = vi.fn();
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([]));
     view([source], onChange);
     const list = screen.getByTestId("knowledge-sources");
     expect(list).toHaveTextContent("Architecture site");
@@ -128,7 +129,7 @@ describe("the sources of a base (S33-04)", () => {
 
   it("adds a SharePoint source through its connector", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector("sharepoint", "documents", "sharepoint")]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([connector("sharepoint", "documents", "sharepoint")]));
     adding();
     await screen.findByRole("option", { name: "sharepoint" });
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "sharepoint" } });
@@ -147,11 +148,11 @@ describe("the sources of a base (S33-04)", () => {
   });
 
   it("offers only the documents/sharepoint connectors, as a list to pick from", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([
       connector("globex", "documents", "sharepoint"),
       connector("entra-acme", "identity", "entra"),
       connector("wiki", "documents", "confluence"),
-    ]);
+    ]));
     adding();
     await screen.findByRole("option", { name: "globex" });
     const list = screen.getByLabelText("documents connector");
@@ -160,7 +161,7 @@ describe("the sources of a base (S33-04)", () => {
   });
 
   it("says so, with a link to declare one, when the organisation has none", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector("entra-acme", "identity", "entra")]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([connector("entra-acme", "identity", "entra")]));
     adding();
     await screen.findByRole("option", { name: "SharePoint / OneDrive — no connector yet" });
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "sharepoint" } });
@@ -273,10 +274,10 @@ describe("the sources of a base (S33-04)", () => {
 
   it("adds a Confluence space or page tree through its connector (S39-20)", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    vi.mocked(api.orgConnectors).mockResolvedValue([
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([
       connector("globex", "documents", "sharepoint"),
       connector("wiki", "documents", "confluence"),
-    ]);
+    ]));
     adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
     await screen.findByRole("option", { name: "wiki" });
@@ -303,12 +304,12 @@ describe("the sources of a base (S33-04)", () => {
 
   it("adds an MCP server's resources through an mcp connector, never a documents one or an outpost's (ADR 0191)", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    vi.mocked(api.orgConnectors).mockResolvedValue([
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([
       connector("wiki", "documents", "confluence"),
       connector("catalog", "mcp", "mcp"),
       connector("gated", "mcp", "mcp-gateway"),
       connector("far", "mcp", "mcp-outpost"),
-    ]);
+    ]));
     adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "mcp" } });
     await screen.findByRole("option", { name: "catalog" });
@@ -335,7 +336,7 @@ describe("the sources of a base (S33-04)", () => {
   it("says an MCP source cannot sync before an mcp connector exists, and opens on it only when chosen", async () => {
     expect(firstUsableKind([connector("github", "mcp", "mcp")])).toBe("web");
     expect(sourceConfig("mcp", { site: "", folder: "", url: "", ref: "", paths: "" })).toEqual({});
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([connector("wiki", "documents", "confluence")]));
     adding();
     await screen.findByRole("option", { name: "MCP server's resources (a data platform, a catalogue…) — no connector yet" });
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "mcp" } });
@@ -358,7 +359,7 @@ describe("the sources of a base (S33-04)", () => {
 
   it("sends the chosen pages without their sub-pages when the box is cleared", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([connector("wiki", "documents", "confluence")]));
     adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
     await screen.findByRole("option", { name: "wiki" });
@@ -384,7 +385,7 @@ describe("the sources of a base (S33-04)", () => {
 
   it("adds a git source, through a git connector when the repository is private", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector("acme-github", "documents", "git")]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([connector("acme-github", "documents", "git")]));
     adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
     fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://github.com/acme/private.git" } });
@@ -402,10 +403,10 @@ describe("the sources of a base (S33-04)", () => {
 
   it("reads a site behind a login through a documents/web connector, with plain headers of its own (S47-48)", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    vi.mocked(api.orgConnectors).mockResolvedValue([
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([
       connector("intranet", "documents", "web"),
       connector("acme-github", "documents", "git"),
-    ]);
+    ]));
     adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
     fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://intranet.example.com/docs/" } });
@@ -446,7 +447,7 @@ describe("the sources of a base (S33-04)", () => {
 
 describe("a readable sources card", () => {
   beforeEach(() => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([]));
   });
 
   it("lists the sources first; the form to add one opens from a button, never by itself", async () => {
@@ -473,7 +474,7 @@ describe("a readable sources card", () => {
   });
 
   it("opens on Confluence when that is the connector the organisation has", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([connector("wiki", "documents", "confluence")]));
     adding();
     await screen.findByRole("option", { name: "wiki" });
     expect(screen.getByLabelText("source kind")).toHaveValue("confluence");
@@ -529,7 +530,7 @@ describe("reading a git source through the GitHub App", () => {
   };
 
   beforeEach(() => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([]));
     vi.mocked(api.createKnowledgeSource).mockReset().mockResolvedValue(source);
     vi.mocked(api.updateKnowledgeSource).mockReset().mockResolvedValue(source);
   });

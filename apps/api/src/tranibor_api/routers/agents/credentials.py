@@ -13,11 +13,13 @@ from ...db.models import (
     ApiToken,
     Membership,
 )
-from ...deps import Db, Me
+from ...deps import Db, Me, Pagination
 from ...errors import conflict, not_found, unprocessable
+from ...keyset import keyset_page
 from ...schemas import (
     AgentCredentialCreate,
     AgentCredentialDto,
+    AgentCredentialPage,
 )
 from ...services.agent_access import (
     enforce_decision,
@@ -49,48 +51,63 @@ def _credential_dto(db_row: AgentCredential, api_token: ApiToken | None = None) 
 
 @router.get(
     "/orgs/{org}/agent-credentials",
-    response_model=list[AgentCredentialDto],
+    response_model=AgentCredentialPage,
     operation_id="listOrgAgentCredentials",
 )
-async def list_org_credentials(org: str, session: Db, principal: Me) -> list[AgentCredentialDto]:
-    """Every client attached to an agent of the organisation, with its agent (S30-04): the AI
-    clients' page read one list per external agent."""
+async def list_org_credentials(org: str, session: Db, principal: Me, page: Pagination) -> AgentCredentialPage:
+    """The clients attached to the agents of the organisation, with their agent (S30-04), by agent name
+    and one page at a time (ADR 0206): the AI clients' page read one list per external agent."""
     from ...db.session import in_platform_scope
 
     _admin(principal, org)
     organisation = await organisation_by_slug(session, org)
-    db_rows = (
-        await session.execute(
-            select(AgentCredential, Agent.slug)
-            .join(Agent, Agent.id == AgentCredential.agent_id)
-            .where(AgentCredential.org_id == organisation.id)
-            .order_by(Agent.slug)
-        )
-    ).all()
+    db_rows, meta = await keyset_page(
+        session,
+        select(AgentCredential, Agent.slug)
+        .join(Agent, Agent.id == AgentCredential.agent_id)
+        .where(AgentCredential.org_id == organisation.id),
+        sort=Agent.slug,
+        tiebreak=AgentCredential.id,
+        page=page,
+        descending=False,
+        tiebreak_descending=False,
+    )
     ids = [db_row.api_token_id for db_row, _ in db_rows if db_row.api_token_id]
     api_tokens: dict[str, ApiToken] = {}
     if ids:
         async with in_platform_scope(session):
             found_tokens = await session.execute(select(ApiToken).where(ApiToken.id.in_(ids)))
             api_tokens = {api_token.id: api_token for api_token in found_tokens.scalars()}
-    return [
-        _credential_dto(db_row, api_tokens.get(db_row.api_token_id or "")).model_copy(update={"agent": slug})
-        for db_row, slug in db_rows
-    ]
+    return AgentCredentialPage(
+        items=[
+            _credential_dto(db_row, api_tokens.get(db_row.api_token_id or "")).model_copy(
+                update={"agent": slug}
+            )
+            for db_row, slug in db_rows
+        ],
+        meta=meta,
+    )
 
 
 @router.get(
     "/orgs/{org}/agents/{slug}/credentials",
-    response_model=list[AgentCredentialDto],
+    response_model=AgentCredentialPage,
     operation_id="listAgentCredentials",
 )
-async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> list[AgentCredentialDto]:
+async def list_credentials(
+    org: str, slug: Slug, session: Db, principal: Me, page: Pagination
+) -> AgentCredentialPage:
+    """The clients attached to one agent, newest first, one page at a time (ADR 0206)."""
     from ...db.session import in_platform_scope
 
     _, agent, subject = await load_visible_agent(session, principal, org, slug)
     enforce_decision(decide(principal, org, subject, Action.MANAGE))
-    db_rows = list(
-        (await session.execute(select(AgentCredential).where(AgentCredential.agent_id == agent.id))).scalars()
+    db_rows, meta = await keyset_page(
+        session,
+        select(AgentCredential).where(AgentCredential.agent_id == agent.id),
+        sort=AgentCredential.created_at,
+        tiebreak=AgentCredential.id,
+        page=page,
     )
     # The tokens are their humans', outside the organisation's scope: read as at
     # attachment, to say when and with which client each one last called the door.
@@ -100,7 +117,10 @@ async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> 
         async with in_platform_scope(session):
             found_tokens = await session.execute(select(ApiToken).where(ApiToken.id.in_(ids)))
             api_tokens = {api_token.id: api_token for api_token in found_tokens.scalars()}
-    return [_credential_dto(db_row, api_tokens.get(db_row.api_token_id or "")) for db_row in db_rows]
+    return AgentCredentialPage(
+        items=[_credential_dto(db_row, api_tokens.get(db_row.api_token_id or "")) for db_row in db_rows],
+        meta=meta,
+    )
 
 
 @router.post(

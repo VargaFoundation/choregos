@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 from tranibor_core import utcnow
@@ -161,23 +161,22 @@ async def check_surface_session(
     return row
 
 
-async def active_sessions(session: AsyncSession, user_id: str) -> list[UserSession]:
-    """The caller's sessions that still hold, the most recently active first."""
-    rows = (
-        (
-            await session.execute(
-                select(UserSession).where(
-                    UserSession.user_id == user_id,
-                    UserSession.revoked_at.is_(None),
-                    UserSession.expires_at > utcnow(),
-                    or_(UserSession.idle_expires_at.is_(None), UserSession.idle_expires_at > utcnow()),
-                )
-            )
-        )
-        .scalars()
-        .all()
+def active_sessions_query(user_id: str) -> Select[UserSession]:
+    """The caller's sessions that still hold: not revoked, not expired, not idle past their limit."""
+    return select(UserSession).where(
+        UserSession.user_id == user_id,
+        UserSession.revoked_at.is_(None),
+        UserSession.expires_at > utcnow(),
+        or_(UserSession.idle_expires_at.is_(None), UserSession.idle_expires_at > utcnow()),
     )
-    return sorted(rows, key=lambda r: _aware(r.last_seen_at or r.created_at), reverse=True)
+
+
+#: What "most recently active" sorts by: the last request, or the opening for a session never seen again.
+LAST_ACTIVE = func.coalesce(UserSession.last_seen_at, UserSession.created_at)
+
+
+def last_active(row: UserSession) -> datetime:
+    return row.last_seen_at or row.created_at
 
 
 async def end_session(session: AsyncSession, user_id: str, sid: str) -> bool:

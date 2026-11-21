@@ -220,4 +220,4 @@ async def test_discovery_summarises_the_card_and_proposes_an_entry_without_creat
     proposed = body["proposed"]
     assert proposed["kind"] == "remote" and proposed["lifecycle"] == "draft"
     assert proposed["spec"]["runtime"]["credential"] == "rovo-oauth"
-    assert (await client.get(AGENTS)).json() == [], "nothing was created"
+    assert (await client.get(AGENTS)).json()["items"] == [], "nothing was created"

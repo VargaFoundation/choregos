@@ -66,7 +66,7 @@ async def _produce(client: AsyncClient, run_id: str, headers: dict[str, str], sp
 async def _hand_offs(client: AsyncClient, ticket: dict[str, Any]) -> dict[str, Any]:
     read = await client.get(f"/api/v1/work-items/{ticket['id']}/hand-offs")
     assert read.status_code == 200, read.text
-    return {passage["output"]: passage for passage in read.json()}
+    return {passage["output"]: passage for passage in read.json()["items"]}
 
 
 async def test_the_next_stage_reads_the_exact_revision_produced(

@@ -26,7 +26,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...reel,
     api: {
       ...reel.api,
-      orgConnectors: vi.fn().mockResolvedValue([annuaire, fournisseur, parc]),
+      orgConnectors: vi.fn().mockResolvedValue({ items: [annuaire, fournisseur, parc], meta: { has_more: false, next_cursor: null } }),
       projects: vi.fn().mockResolvedValue({
         items: [
           { slug: "billing-api", name: "Billing API" },

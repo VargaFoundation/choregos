@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import {
@@ -42,7 +42,14 @@ import { BuiltinAgentOfActor } from "@/components/agents/builtin-agent";
 export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const { org } = useSession();
-  const pins = useQuery({ queryKey: ["project-agents", slug], queryFn: () => api.projectAgents(slug) });
+  // The server pages the pins (ADR 0206): "More" asks for the next page by its cursor.
+  const pins = useInfiniteQuery({
+    queryKey: ["project-agents", slug],
+    queryFn: ({ pageParam }) => api.projectAgents(slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const pinned = pins.data?.pages.flatMap((page) => page.items);
   const registre = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const implicites = useQuery({ queryKey: ["implicit-agents", slug], queryFn: () => api.implicitAgents(slug) });
   // A project's own agents come first; a personal agent, or another project's, cannot be pinned here (ADR 0061).
@@ -101,19 +108,32 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
       <Card title="Pinned agents">
         {pins.error ? (
           <ErrorNote>{String(pins.error)}</ErrorNote>
-        ) : !pins.data ? (
+        ) : !pinned ? (
           <p className="text-sm text-ink-muted">Reading…</p>
-        ) : pins.data.length === 0 ? (
+        ) : pinned.length === 0 ? (
           <Empty title="Nothing pinned">
             A workflow actor that names an agent runs its production version; pin one to hold a revision or follow a
             channel, and tighten it.
           </Empty>
         ) : (
-          <ul className="space-y-3" data-testid="pins">
-            {pins.data.map((pin) => (
-              <Pinned key={pin.agent} projet={slug} pin={pin} />
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-3" data-testid="pins">
+              {pinned.map((pin) => (
+                <Pinned key={pin.agent} projet={slug} pin={pin} />
+              ))}
+            </ul>
+            {pins.hasNextPage && (
+              <div className="mt-3" data-testid="pins-more">
+                <Button
+                  size="sm"
+                  disabled={pins.isFetchingNextPage}
+                  onClick={() => void pins.fetchNextPage()}
+                >
+                  {pins.isFetchingNextPage ? "Reading…" : "More"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </Card>
       <Epingler projet={slug} agents={pinnable} />

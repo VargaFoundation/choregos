@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Path, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Path, Query, Response, status
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_core.secrets import is_store_reference
 
@@ -27,8 +27,9 @@ from ..db.models import (
     ProjectOperationPolicy,
     User,
 )
-from ..deps import Db, Me, ProjectCtx, is_instance_admin
+from ..deps import Db, Me, Pagination, ProjectCtx, is_instance_admin
 from ..errors import conflict, forbidden, not_found, unprocessable, upstream
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     ConnectorDiscovery,
@@ -36,10 +37,13 @@ from ..schemas import (
     OperationPatch,
     OrgConnectorCreate,
     OrgConnectorDto,
+    OrgConnectorPage,
     OrgConnectorUpdate,
     ProjectOperationDto,
+    ProjectOperationPage,
     ProjectOperationPut,
     ProjectOrgConnectorDto,
+    ProjectOrgConnectorPage,
     SecretValue,
 )
 from ..secret_store import secret_states
@@ -50,7 +54,6 @@ from ..services.catalogue_rights import (
     CatalogueAction,
     connector_enabled_for,
     decide,
-    enabled_ids,
     enabled_projects_of,
     visible_projects,
 )
@@ -159,17 +162,32 @@ async def _audit_secrets(
         )
 
 
-@router.get("/orgs/{org}/connectors", response_model=list[OrgConnectorDto], operation_id="listOrgConnectors")
-async def list_org_connectors(org: str, session: Db, principal: Me) -> list[OrgConnectorDto]:
+@router.get("/orgs/{org}/connectors", response_model=OrgConnectorPage, operation_id="listOrgConnectors")
+async def list_org_connectors(
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    kind: Annotated[str | None, Query(max_length=32)] = None,
+    type_: Annotated[str | None, Query(alias="type", max_length=64)] = None,
+) -> OrgConnectorPage:
+    """The organisation's connectors by name, one page at a time (ADR 0206). `q` matches a part of the
+    name; `kind` (`gateway`, `mcp`, `memory`…) and `type` keep one capability or one type."""
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"the connectors of {org} are readable by its members only")
     organisation = await organisation_by_slug(session, org)
-    instances = (
-        await session.execute(
-            select(OrgConnector).where(OrgConnector.org_id == organisation.id).order_by(OrgConnector.name)
-        )
-    ).scalars()
-    return [await _dto(session, instance, principal) for instance in instances]
+    query = select(OrgConnector).where(OrgConnector.org_id == organisation.id)
+    if q and q.strip():
+        query = query.where(OrgConnector.name.icontains(q.strip(), autoescape=True))
+    if kind:
+        query = query.where(OrgConnector.kind == kind)
+    if type_:
+        query = query.where(OrgConnector.type == type_)
+    rows, meta = await keyset_page(
+        session, query, sort=OrgConnector.name, tiebreak=OrgConnector.id, page=page, descending=False
+    )
+    return OrgConnectorPage(items=[await _dto(session, instance, principal) for instance in rows], meta=meta)
 
 
 @router.post(
@@ -814,41 +832,48 @@ async def discover_operations(org: str, name: Name, session: Db, principal: Me) 
 # ───────────────────────────── what a project sees of it, and tightens ─────────────────────────────
 
 
-async def _project_operations(ctx: ProjectCtx, session: AsyncSession) -> list[ProjectOperationDto]:
-    """The operations open to this project: those whose groups intersect its own (no group:
-    every project), with the organisation's policy, its own, and the effective one."""
-    project_groups = {str(g) for g in ((ctx.project.config or {}).get("groups") or [])}
-    op_rows = (
-        await session.execute(
-            select(ConnectorOperation, OrgConnector.name)
-            .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
-            .where(ConnectorOperation.org_id == ctx.project.org_id)
-            .order_by(OrgConnector.name, ConnectorOperation.name)
+def _open_operations(ctx: ProjectCtx) -> Any:
+    """The operations of the organisation whose connector is on for this project (a connector limited
+    to `selected_projects` is on only where a row says so), with the connector's name: the rows a
+    project may see, before its groups are read."""
+    on_here = select(OrgConnectorProject.connector_id).where(OrgConnectorProject.project_id == ctx.id)
+    return (
+        select(ConnectorOperation, OrgConnector.name)
+        .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
+        .where(
+            ConnectorOperation.org_id == ctx.project.org_id,
+            or_(OrgConnector.availability != SELECTED_PROJECTS, OrgConnector.id.in_(on_here)),
         )
-    ).all()
-    rows = (
+    )
+
+
+def _in_project_groups(ctx: ProjectCtx, operation: ConnectorOperation) -> bool:
+    """No group: every project; otherwise the operation's groups must intersect the project's own."""
+    project_groups = {str(g) for g in ((ctx.project.config or {}).get("groups") or [])}
+    return not operation.groups or bool(project_groups & set(operation.groups))
+
+
+async def _operation_dtos(
+    ctx: ProjectCtx, session: AsyncSession, rows: list[Any]
+) -> list[ProjectOperationDto]:
+    """The organisation's policy of each row, this project's own, and the effective one; the project's
+    policies are read for these rows only."""
+    tightened_rows = (
         (
             await session.execute(
-                select(ProjectOperationPolicy).where(ProjectOperationPolicy.project_id == ctx.id)
+                select(ProjectOperationPolicy).where(
+                    ProjectOperationPolicy.project_id == ctx.id,
+                    ProjectOperationPolicy.operation_id.in_([operation.id for operation, _ in rows]),
+                )
             )
         )
         .scalars()
         .all()
+        if rows
+        else []
     )
-    tightened = {p.operation_id: p.policy for p in rows}
-    narrowed_by = {p.operation_id: p.arguments for p in rows}
-    allumes = await enabled_ids(session, ctx.project)
-    closed_connectors = {
-        row.id
-        for row in (
-            await session.execute(
-                select(OrgConnector).where(
-                    OrgConnector.org_id == ctx.project.org_id, OrgConnector.availability == SELECTED_PROJECTS
-                )
-            )
-        ).scalars()
-        if row.id not in allumes
-    }
+    tightened = {p.operation_id: p.policy for p in tightened_rows}
+    narrowed_by = {p.operation_id: p.arguments for p in tightened_rows}
     return [
         ProjectOperationDto(
             connector=org_connector,
@@ -861,19 +886,54 @@ async def _project_operations(ctx: ProjectCtx, session: AsyncSession) -> list[Pr
             org_arguments=operation.arguments,
             project_arguments=narrowed_by.get(operation.id),
         )
-        for operation, org_connector in op_rows
-        if operation.connector_id not in closed_connectors
-        and (not operation.groups or project_groups & set(operation.groups))
+        for operation, org_connector in rows
     ]
 
 
 @router.get(
     "/projects/{id}/operations",
-    response_model=list[ProjectOperationDto],
+    response_model=ProjectOperationPage,
     operation_id="listProjectOperations",
 )
-async def list_project_operations(ctx: ProjectCtx, session: Db) -> list[ProjectOperationDto]:
-    return await _project_operations(ctx, session)
+async def list_project_operations(
+    ctx: ProjectCtx,
+    session: Db,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    connector: Annotated[str | None, Query(max_length=64)] = None,
+) -> ProjectOperationPage:
+    """The operations open to this project, by connector then operation, one page at a time (ADR 0206),
+    with the organisation's policy, its own, and the effective one. `q` matches a part of the connector
+    or the operation name; `connector` keeps one connector.
+
+    The connector being on for the project is read in the query. The operation's groups (a JSON list
+    that must intersect the project's) are read on the rows the query returns, a batch at a time
+    (`keyset_page`'s `keep`), until the page is full: a page never holds a row the project may not see."""
+    query = _open_operations(ctx)
+    if connector:
+        query = query.where(OrgConnector.name == connector)
+    if q and q.strip():
+        needle = q.strip()
+        query = query.where(
+            or_(
+                OrgConnector.name.icontains(needle, autoescape=True),
+                ConnectorOperation.name.icontains(needle, autoescape=True),
+            )
+        )
+
+    async def in_project_groups(batch: list[Any]) -> list[Any]:
+        return [row for row in batch if _in_project_groups(ctx, row[0])]
+
+    window, meta = await keyset_page(
+        session,
+        query,
+        sort=OrgConnector.name,
+        tiebreak=ConnectorOperation.name,
+        page=page,
+        descending=False,
+        keep=in_project_groups,
+    )
+    return ProjectOperationPage(items=await _operation_dtos(ctx, session, window), meta=meta)
 
 
 @router.put(
@@ -886,10 +946,20 @@ async def tighten_operation(
 ) -> ProjectOperationDto:
     """A project TIGHTENS an operation; it never widens it (422)."""
     ctx.require(Permission.CONNECTOR_WRITE)
-    visible_ops = {(o.connector, o.operation): o for o in await _project_operations(ctx, session)}
-    actuelle = visible_ops.get((connector, operation))
-    if actuelle is None:
+    visible = [
+        row
+        for row in (
+            await session.execute(
+                _open_operations(ctx).where(
+                    OrgConnector.name == connector, ConnectorOperation.name == operation
+                )
+            )
+        ).all()
+        if _in_project_groups(ctx, row[0])
+    ]
+    if not visible:
         raise not_found("Operation", f"{connector}/{operation}")
+    actuelle = (await _operation_dtos(ctx, session, visible))[0]
     if RANK[body.policy] < RANK[actuelle.org_policy]:
         raise unprocessable(
             f"{connector}/{operation} is `{actuelle.org_policy}` in the organisation: a project can "
@@ -1001,17 +1071,27 @@ async def _project_dto(
 
 @router.get(
     "/projects/{id}/org-connectors",
-    response_model=list[ProjectOrgConnectorDto],
+    response_model=ProjectOrgConnectorPage,
     operation_id="listProjectOrgConnectors",
 )
-async def list_project_org_connectors(ctx: ProjectCtx, session: Db) -> list[ProjectOrgConnectorDto]:
-    """The organisation's connectors and whether each is on for this project. Its members can read it."""
-    rows = (
-        await session.execute(
-            select(OrgConnector).where(OrgConnector.org_id == ctx.project.org_id).order_by(OrgConnector.name)
-        )
-    ).scalars()
-    return [await _project_dto(session, ctx, row) for row in rows]
+async def list_project_org_connectors(
+    ctx: ProjectCtx,
+    session: Db,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    kind: Annotated[str | None, Query(max_length=32)] = None,
+) -> ProjectOrgConnectorPage:
+    """The organisation's connectors by name, one page at a time (ADR 0206), and whether each is on for
+    this project. Its members can read it. `q` matches a part of the name; `kind` keeps one capability."""
+    query = select(OrgConnector).where(OrgConnector.org_id == ctx.project.org_id)
+    if q and q.strip():
+        query = query.where(OrgConnector.name.icontains(q.strip(), autoescape=True))
+    if kind:
+        query = query.where(OrgConnector.kind == kind)
+    rows, meta = await keyset_page(
+        session, query, sort=OrgConnector.name, tiebreak=OrgConnector.id, page=page, descending=False
+    )
+    return ProjectOrgConnectorPage(items=[await _project_dto(session, ctx, row) for row in rows], meta=meta)
 
 
 async def _selected(ctx: ProjectCtx, session: Db, connector: str) -> OrgConnector:

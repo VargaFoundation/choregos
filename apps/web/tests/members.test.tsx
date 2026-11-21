@@ -56,13 +56,13 @@ describe("members per scope", () => {
   });
 
   it("the organisation's page lists a person once, and offers a project picker", async () => {
-    vi.mocked(api.members).mockResolvedValue(MEMBERSHIPS);
+    vi.mocked(api.members).mockResolvedValue({ items: MEMBERSHIPS, meta: { has_more: false, next_cursor: null } });
     wrap();
     const table = await screen.findByTestId("members");
     expect(within(table).getAllByTestId("member-lea@acme.dev")).toHaveLength(1);
     expect(within(table).getAllByRole("row")).toHaveLength(4);
     expect(screen.getByTestId("member-lea@acme.dev")).toHaveTextContent("billing-api · Project owner");
-    expect(api.members).toHaveBeenCalledWith("acme", undefined);
+    expect(api.members).toHaveBeenCalledWith("acme", expect.objectContaining({ project: undefined }));
     // The scope of an invitation is a list of the organisation's projects, not free text.
     const scope = screen.getByLabelText("Scope");
     expect(await within(scope).findByRole("option", { name: "Checkout Web" })).toBeInTheDocument();
@@ -74,13 +74,29 @@ describe("members per scope", () => {
   });
 
   it("a project's page lists its members with project roles only", async () => {
-    vi.mocked(api.members).mockResolvedValue([M("lea@acme.dev", "project_owner", "billing-api")]);
+    vi.mocked(api.members).mockResolvedValue({ items: [M("lea@acme.dev", "project_owner", "billing-api")], meta: { has_more: false, next_cursor: null } });
     wrap("billing-api");
     const role = await screen.findByLabelText("Role of lea@acme.dev on billing-api");
     expect(role).toHaveValue("project_owner");
     expect(options(role)).not.toContain("org_admin");
     expect(options(screen.getByLabelText("Role"))).toEqual([...PROJECT_ROLES]);
     expect(screen.queryByLabelText("Scope")).toBeNull();
-    expect(api.members).toHaveBeenCalledWith("acme", "billing-api");
+    expect(api.members).toHaveBeenCalledWith("acme", expect.objectContaining({ project: "billing-api" }));
+  });
+});
+
+describe("members, a page at a time (ADR 0206)", () => {
+  it("reads the next page on More, and shows people from both pages", async () => {
+    vi.mocked(api.members).mockReset();
+    vi.mocked(api.members)
+      .mockResolvedValueOnce({ items: [M("ana@acme.dev", "developer")], meta: { has_more: true, next_cursor: "c1" } })
+      .mockResolvedValueOnce({ items: [M("zoe@acme.dev", "viewer")], meta: { has_more: false, next_cursor: null } });
+    wrap();
+    expect(await screen.findByTestId("member-ana@acme.dev")).toBeInTheDocument();
+    expect(screen.queryByTestId("member-zoe@acme.dev")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(await screen.findByTestId("member-zoe@acme.dev")).toBeInTheDocument();
+    expect(api.members).toHaveBeenLastCalledWith("acme", expect.objectContaining({ cursor: "c1" }));
+    expect(screen.queryByRole("button", { name: "More" })).toBeNull();
   });
 });

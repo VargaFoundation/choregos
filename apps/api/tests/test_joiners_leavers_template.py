@@ -37,20 +37,20 @@ async def test_an_hr_project_is_born_with_its_workflows_and_the_organisation_rec
     client: AsyncClient, admin: str
 ) -> None:
     pid = (await _project(client))["id"]
-    assert {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()} == {
+    assert {w["name"] for w in (await client.get(f"/api/v1/projects/{pid}/workflows")).json()["items"]} == {
         "onboarding",
         "offboarding",
     }
     routing = (await client.get(f"/api/v1/projects/{pid}/workflow-routing")).json()
     assert routing["default"] == "onboarding"
     assert routing["rules"][0]["when"]["labels_any"] == ["offboarding", "leaver"]
-    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()}
+    agents = {a["slug"]: a for a in (await client.get(f"{ORG}/agents")).json()["items"]}
     assert {"onboarding-coordinator", "offboarding-coordinator"} <= set(agents)
     detail = (await client.get(f"{ORG}/agents/onboarding-coordinator")).json()
     (version,) = detail["versions"]
     assert version["created_by"] == "template:joiners-leavers"
     assert [s["slug"] for s in version["spec"]["skills"]] == ["onboarding-procedure", "access-profiles"]
-    skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
+    skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()["items"]}
     assert skills["access-profiles"]["latest_version"] == 1
     assert skills["onboarding-procedure"]["latest_version"] == 1
 
@@ -67,7 +67,7 @@ async def test_a_second_project_does_not_rewrite_what_the_organisation_has_evolv
     published = await client.post(f"{ORG}/skills/access-profiles/versions", json={"files": files})
     assert published.status_code == 201, published.text
     await _project(client, slug="hr-lyon")
-    skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()}
+    skills = {s["slug"]: s for s in (await client.get(f"{ORG}/skills")).json()["items"]}
     assert skills["access-profiles"]["latest_version"] == 2, "the organisation's version stands"
     detail = (await client.get(f"{ORG}/agents/onboarding-coordinator")).json()
     assert len(detail["versions"]) == 1, "the agent is not reinstalled"

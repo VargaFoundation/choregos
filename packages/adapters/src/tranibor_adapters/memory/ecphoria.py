@@ -12,11 +12,15 @@ import asyncio
 from typing import Any
 
 import httpx
+import structlog
 from tranibor_contracts import ContextPack, McpServerRef, MemoryItem, RelatedItem
 from tranibor_core.domain import Fact, Memory, Provenance, utcnow
 from tranibor_core.memory_scope import parse_namespace
 
 from ..errors import UpstreamError
+from .paging import WHOLE_QUEUE_PAGE, InvalidCursorError, PendingPage
+
+log = structlog.get_logger(__name__)
 
 #: What an agent may do on Ecphoria's MCP server for ITS project's memory. Only the tools whose tenant is
 #: the one the caller NAMES (`tenant_id`, which the runner then forces to the run's): the others take the
@@ -219,10 +223,40 @@ class EcphoriaMemory:
         return _written_id(payload)
 
     async def list_pending(self, project: str) -> list[Memory]:
-        payload = await self._request("GET", "/api/v1/pending", project=project, timeout=self.write_timeout)
-        return [
-            _memory(entry) for entry in payload.get("items", payload if isinstance(payload, list) else [])
-        ]
+        """The whole review queue, oldest first: its pages in turn (a cursor that does not move stops)."""
+        rows: list[Memory] = []
+        cursor: str | None = None
+        while True:
+            page = await self.pending_page(project, limit=WHOLE_QUEUE_PAGE, cursor=cursor)
+            rows += page.items
+            if page.next_cursor is None or page.next_cursor == cursor:
+                return rows
+            cursor = page.next_cursor
+
+    async def pending_page(self, project: str, *, limit: int, cursor: str | None = None) -> PendingPage:
+        """One page of the review queue, oldest first, by Ecphoria's own cursor (ADR 0206).
+
+        An Ecphoria older than its paged `/api/v1/pending` answers no `has_more`: its one page is the
+        whole answer, and a full one is logged, since what lies beyond it cannot be reached."""
+        params: dict[str, Any] = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        try:
+            payload = await self._request(
+                "GET", "/api/v1/pending", project=project, timeout=self.write_timeout, params=params
+            )
+        except UpstreamError as error:
+            if cursor and error.status_code == 400:
+                raise InvalidCursorError(cursor) from error
+            raise
+        entries = payload.get("items", []) if isinstance(payload, dict) else payload
+        items = [_memory(entry) for entry in entries or []]
+        if not isinstance(payload, dict) or "has_more" not in payload:
+            if len(items) >= limit:
+                log.warning("ecphoria_pending_unpaged", project=project, returned=len(items))
+            return PendingPage(items=items, next_cursor=None)
+        more = bool(payload.get("has_more")) and bool(payload.get("next_cursor"))
+        return PendingPage(items=items, next_cursor=str(payload["next_cursor"]) if more else None)
 
     async def accept_pending(self, project: str, memory_id: str) -> bool:
         await self._request(

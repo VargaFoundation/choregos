@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_contracts import skill_file_bytes
 
@@ -20,8 +20,9 @@ from ..audit import record
 from ..config import Settings
 from ..db.models import Organization, Skill, SkillVersion
 from ..decision_session import SKILL_VERSIONS, require_person_session
-from ..deps import Config, Db, Me
+from ..deps import Config, Db, Me, Pagination
 from ..errors import conflict, forbidden, not_found, unprocessable
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     SkillApproval,
@@ -32,6 +33,7 @@ from ..schemas import (
     SkillGitImport,
     SkillGitPreview,
     SkillGitPreviewRequest,
+    SkillPage,
     SkillSourceDto,
     SkillSources,
     SkillUpdate,
@@ -88,14 +90,30 @@ def _gerer(principal: Me, org: str) -> None:
         raise forbidden("publishing a skill needs the org_admin role")
 
 
-@router.get("/orgs/{org}/skills", response_model=list[SkillDto], operation_id="listSkills")
-async def list_skills(org: str, session: Db, principal: Me) -> list[SkillDto]:
+@router.get("/orgs/{org}/skills", response_model=SkillPage, operation_id="listSkills")
+async def list_skills(
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+) -> SkillPage:
+    """The skill library by slug, one page at a time (ADR 0206); `q` matches the slug or the description."""
     require_skill_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
-    skills = (
-        await session.execute(select(Skill).where(Skill.org_id == organisation.id).order_by(Skill.slug))
-    ).scalars()
-    return [await skill_dto(session, organisation, skill) for skill in skills]
+    query = select(Skill).where(Skill.org_id == organisation.id)
+    if q and q.strip():
+        needle = q.strip()
+        query = query.where(
+            or_(
+                Skill.slug.icontains(needle, autoescape=True),
+                Skill.description.icontains(needle, autoescape=True),
+            )
+        )
+    skills, meta = await keyset_page(
+        session, query, sort=Skill.slug, tiebreak=Skill.id, page=page, descending=False
+    )
+    return SkillPage(items=[await skill_dto(session, organisation, skill) for skill in skills], meta=meta)
 
 
 @router.post(

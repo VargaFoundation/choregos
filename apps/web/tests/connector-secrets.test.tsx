@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { Connectors } from "@/components/connectors";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin/connectors",
@@ -68,7 +69,7 @@ function wrap(ui: React.ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.orgConnectors.mockResolvedValue([declared]);
+  api.orgConnectors.mockResolvedValue(pageOf([declared]));
   api.connectorTypes.mockResolvedValue([sharepoint, jira]);
   api.projects.mockResolvedValue({ items: [], meta: { has_more: false } });
   api.createOrgConnector.mockResolvedValue(declared);
@@ -79,7 +80,7 @@ beforeEach(() => {
 
 describe("admin connectors: secrets are typed once (S39-06d)", () => {
   it("declares a connector with the typed value as a secret VALUE, not a reference", async () => {
-    api.orgConnectors.mockResolvedValue([]);
+    api.orgConnectors.mockResolvedValue(pageOf([]));
     wrap(<OrgConnectorsPage />);
     await screen.findByRole("option", { name: /SharePoint/ });
     fireEvent.change(screen.getByPlaceholderText("entra-acme"), { target: { value: "globex-sharepoint" } });
@@ -97,7 +98,7 @@ describe("admin connectors: secrets are typed once (S39-06d)", () => {
   });
 
   it("can still declare by reference, for an operator who prefers a vault", async () => {
-    api.orgConnectors.mockResolvedValue([]);
+    api.orgConnectors.mockResolvedValue(pageOf([]));
     wrap(<OrgConnectorsPage />);
     await screen.findByRole("option", { name: /SharePoint/ });
     fireEvent.change(screen.getByPlaceholderText("entra-acme"), { target: { value: "sp" } });

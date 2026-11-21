@@ -26,7 +26,7 @@ OWNER = "owner@northwind.dev"
 async def _tags(client: AsyncClient, **params: Any) -> list[str]:
     response = await client.get(f"{ORG}/agents", params=params)
     assert response.status_code == 200, response.text
-    return [agent["slug"] for agent in response.json()]
+    return [agent["slug"] for agent in response.json()["items"]]
 
 
 async def test_an_agent_is_created_with_its_tags(client: AsyncClient, org: str) -> None:

@@ -545,3 +545,26 @@ async def _until(condition: Callable[[], bool]) -> None:
             return
         await asyncio.sleep(0.001)
     raise AssertionError("the condition never held")
+
+
+async def test_the_runner_follows_the_cursor_of_a_paged_list_to_its_end() -> None:
+    """`/skills`, `/inputs`, `/knowledge` are paged by the server (ADR 0206): the runner needs them all."""
+    seen: list[dict[str, str]] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        seen.append(params)
+        if params.get("cursor") is None:
+            body = {"items": [{"name": "a"}, {"name": "b"}], "meta": {"has_more": True, "next_cursor": "c1"}}
+        else:
+            body = {"items": [{"name": "c"}], "meta": {"has_more": False, "next_cursor": None}}
+        return httpx.Response(200, json=body)
+
+    async with InternalClient(API, RUN, TOKEN, transport=httpx.MockTransport(handle)) as client:
+        assert [i["name"] for i in await client.fetch_inputs()] == ["a", "b", "c"]
+    assert [p.get("cursor") for p in seen] == [None, "c1"] and {p["limit"] for p in seen} == {"200"}
+
+    # An API from before the paging answers a bare array: it is the whole set.
+    old = httpx.MockTransport(lambda request: httpx.Response(200, json=[{"slug": "s"}]))
+    async with InternalClient(API, RUN, TOKEN, transport=old) as client:
+        assert await client.fetch_skills() == [{"slug": "s"}]

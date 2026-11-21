@@ -142,7 +142,7 @@ async def test_the_score_is_read_from_the_trial_runs(client: AsyncClient, projec
     policy = {"on_publish": "candidate", "stable": {"min_live_score": 0.9}}
     await agent_with(client, [live(f"case {n}", ["approved"], cost=0.1) for n in range(3)], policy)
     started = (await evaluate(client, project["slug"])).json()
-    mid = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()[0]
+    mid = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()["items"][0]
     assert mid["status"] == "running" and mid["score"] is None, "no run yet: not passed"
     await write_runs(
         items_of(started),
@@ -152,7 +152,7 @@ async def test_the_score_is_read_from_the_trial_runs(client: AsyncClient, projec
             ("succeeded", "done", "rejected: missing tests"),
         ],
     )
-    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()["items"]
     assert done["status"] == "failed" and done["score"] == pytest.approx(0.6667, abs=1e-3)
     assert [c["status"] for c in done["cases"]] == ["passed", "passed", "failed"]
     assert "missing “approved”" in done["cases"][2]["reason"]
@@ -179,7 +179,7 @@ async def test_what_a_case_judges(
     await agent_with(client, [live("only", ["ok"], cost=0.1, **case_extra)])
     started = (await evaluate(client, project["slug"])).json()
     await write_runs(items_of(started), [run])
-    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()["items"]
     assert done["status"] == ("passed" if passes else "failed")
 
 
@@ -276,7 +276,7 @@ async def test_a_case_is_not_judged_before_the_trial_spend_is_booked(
     await agent_with(client, [live("only", ["ok"], cost=0.1)])
     started = (await evaluate(client, project["slug"])).json()
     await write_runs(items_of(started), [("succeeded", "done", "ok fine")], collected=False)
-    (mid,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    (mid,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()["items"]
     assert mid["status"] == "running" and mid["score"] is None
     assert mid["cases"][0]["status"] == "running" and mid["cases"][0].get("cost_usd") in (None, 0.0)
     from tranibor_api.db.models import Run
@@ -286,7 +286,7 @@ async def test_a_case_is_not_judged_before_the_trial_spend_is_booked(
         run = await session.get(Run, mid["cases"][0]["run_id"])
         assert run is not None
         run.cost_usd, run.spend_collected = 0.07, True
-    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()["items"]
     assert done["status"] == "passed" and done["cases"][0]["cost_usd"] == pytest.approx(0.07)
 
 
@@ -306,5 +306,5 @@ async def test_a_run_whose_spend_never_came_is_judged_after_the_grace(
         run = await session.get(Run, started["cases"][0]["run_id"])
         assert run is not None
         run.ended_at = utcnow() - timedelta(minutes=30)
-    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()
+    (done,) = (await client.get(f"{ORG}/agents/reviewer/versions/1/evaluations")).json()["items"]
     assert done["status"] == "passed"

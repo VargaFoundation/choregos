@@ -221,6 +221,13 @@ class ConversationCandidate(Dto):
     created_at: datetime
 
 
+class ConversationCandidatePage(Dto):
+    """One page of the candidate eval cases proposed for an agent, newest first (ADR 0206)."""
+
+    items: list[ConversationCandidate]
+    meta: PageMeta
+
+
 class ConversationCandidateAccept(Dto):
     """What an owner adds to a candidate to make it a case of the agent's suites: the assertions (without
     them a case passes whatever the agent says), and optionally the scripted tool results and the context."""

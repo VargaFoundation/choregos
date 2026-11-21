@@ -43,8 +43,8 @@ with no `COUNT(*)`. The cursor is the `(sort, tiebreak)` pair of the last row, e
 stable when rows are inserted ahead of it (an offset is not), and served by an index. A cursor the API did
 not write is refused (422).
 
-`Page.slice` is **deprecated**: no new route uses it, and each one migrates to `keyset_page` when its
-subject is next touched.
+`Page.slice` is **gone** (removed with `listOutpostCalls`, the last route that used it): no page is cut in
+Python.
 
 ### 3. Filters are query parameters, applied in the same query
 
@@ -70,7 +70,7 @@ the admin manifest's sections) may stay a bare array. It is named, with its reas
 
 - every array-returning `GET` of the contract is in `BOUNDED` or in `NOT_YET_PAGED`; a new one fails. A
   route that becomes a page must leave `NOT_YET_PAGED` in the same PR (the test refuses a stale entry);
-- the number of `page.slice(` calls in the routers may only go down (`SLICE_CEILING`).
+- `Page.slice` no longer exists and no router cuts a list with `.slice(`.
 
 At this ADR: 7 bounded, 53 not yet paged, 8 in-memory pages.
 

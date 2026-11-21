@@ -21,7 +21,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       workItem: vi.fn(),
-      timeline: vi.fn().mockResolvedValue([]),
+      timeline: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       handOffs: vi.fn().mockResolvedValue([]),
       runs: vi.fn().mockResolvedValue([]),
       connectors: vi.fn().mockResolvedValue([]),
@@ -31,11 +31,11 @@ vi.mock("@/lib/api", async (importOriginal) => {
       workflows: vi.fn().mockResolvedValue([{ name: "release", version: 1, is_default: true, open_items: 1 }]),
       me: vi.fn(),
       project: vi.fn().mockResolvedValue({ id: "p1", slug: "fon", org: "acme", name: "fon" }),
-      members: vi.fn().mockResolvedValue([
+      members: vi.fn().mockResolvedValue({ meta: { has_more: false, next_cursor: null }, items: [
         { user_id: "u2", email: "max@acme.dev", org: "acme", role: "developer" },
         { user_id: "u2", email: "max@acme.dev", org: "acme", project_slug: "fon", role: "project_owner" },
         { user_id: "u1", email: "lea@acme.dev", org: "acme", role: "developer" },
-      ]),
+      ] }),
       reassign: vi.fn(),
     },
   };
@@ -173,5 +173,14 @@ describe("who answers a waiting request (ADR 0153)", () => {
     );
     expect(await screen.findByTestId("request-assignee")).toHaveTextContent("Assigned to lea@acme.dev");
     expect(await screen.findByRole("button", { name: "Reassign" })).toBeInTheDocument();
+  });
+});
+
+describe("the person is searched on the server (ADR 0206)", () => {
+  it("asks for the typed text as `q`, not a browser filter over a partial list", async () => {
+    assignee(admin);
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign" }));
+    fireEvent.change(await screen.findByLabelText("Search people"), { target: { value: "ma" } });
+    await waitFor(() => expect(api.members).toHaveBeenCalledWith("acme", expect.objectContaining({ q: "ma", limit: 200 })));
   });
 });

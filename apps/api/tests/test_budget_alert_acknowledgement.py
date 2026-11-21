@@ -59,7 +59,7 @@ async def test_an_organisation_role_below_project_owner_cannot_acknowledge(
         refused = await member.post(f"/api/v1/orgs/northwind/budget-alerts/{alert}/acknowledge")
         assert refused.status_code == 403, refused.text
         # They still see it: reading the inbox is every member's. The console is told not to offer it.
-        seen = (await member.get("/api/v1/orgs/northwind/budget-alerts")).json()
+        seen = (await member.get("/api/v1/orgs/northwind/budget-alerts")).json()["items"]
         assert [(a["id"], a["can_acknowledge"]) for a in seen] == [(alert, False)]
     assert [a["status"] for a in await _alerts(client)] == ["open"], "a refusal leaves it in the inbox"
 
@@ -71,7 +71,7 @@ async def test_the_owner_of_the_project_acknowledges_its_alert(
     await _member("lea@northwind.dev", "developer")
     await _member("lea@northwind.dev", "project_owner", project["slug"])
     async with _as(client, "lea@northwind.dev") as owner:
-        offered = (await owner.get("/api/v1/orgs/northwind/budget-alerts")).json()
+        offered = (await owner.get("/api/v1/orgs/northwind/budget-alerts")).json()["items"]
         assert [a["can_acknowledge"] for a in offered] == [True]
         done = await owner.post(f"/api/v1/orgs/northwind/budget-alerts/{alert}/acknowledge")
     assert done.status_code == 200, done.text
@@ -87,7 +87,8 @@ async def test_owning_one_project_does_not_acknowledge_an_agents_alert(
     await _member("lea@northwind.dev", "project_owner", project["slug"])
     async with _as(client, "lea@northwind.dev") as owner:
         assert [
-            a["can_acknowledge"] for a in (await owner.get("/api/v1/orgs/northwind/budget-alerts")).json()
+            a["can_acknowledge"]
+            for a in (await owner.get("/api/v1/orgs/northwind/budget-alerts")).json()["items"]
         ] == [False]
         refused = await owner.post(f"/api/v1/orgs/northwind/budget-alerts/{alert}/acknowledge")
     assert refused.status_code == 403, refused.text
@@ -112,7 +113,7 @@ async def test_a_member_of_one_project_only_reads_that_projects_alerts(
         await _drop_organisation_role("hakim@northwind.dev")
         response = await member.get("/api/v1/orgs/northwind/budget-alerts")
         assert response.status_code == 200, response.text
-        seen = response.json()
+        seen = response.json()["items"]
     assert [(a["scope"], a["subject"]) for a in seen] == [("project", project["slug"])]
     assert seen[0]["can_acknowledge"] is False
 

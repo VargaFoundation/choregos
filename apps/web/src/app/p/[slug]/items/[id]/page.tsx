@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
@@ -71,7 +71,14 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   // Live (S59-08): what happens to the ticket refetches the page, decisions and runs included.
   useLiveRefresh(`/work-items/${encodeURIComponent(id)}/events/stream`, keyNames(id));
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
-  const timeline = useQuery({ queryKey: ["timeline", id], queryFn: () => api.timeline(id) });
+  // The timeline grows with the ticket: it is read a page at a time (ADR 0206), "More" asks for the next.
+  const timeline = useInfiniteQuery({
+    queryKey: ["timeline", id],
+    queryFn: ({ pageParam }) => api.timeline(id, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const timelineEntries = timeline.data?.pages.flatMap((page) => page.items);
   // The hand-off receipts (S25-04): who produced each step output, who read it, under which fingerprint.
   const passages = useQuery({ queryKey: ["hand-offs", id], queryFn: () => api.handOffs(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
@@ -394,7 +401,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         <Card title="Timeline">
           {/* A rail, and on it a dot per moment, in the colour of whoever acted (S24-04). */}
           <ol className="relative space-y-3 before:absolute before:top-2 before:bottom-2 before:left-[3.5px] before:w-px before:bg-line">
-            {(timeline.data ?? []).map((entry, index) => (
+            {(timelineEntries ?? []).map((entry, index) => (
               <li key={`${entry.ts}-${index}`} className="relative pl-5">
                 <Dot tone={tonDActeur(entry.actor_kind ?? "system")} size={8} className="absolute top-1.5 left-0" />
                 <p className="flex items-center gap-2 text-sm">
@@ -418,7 +425,14 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               </li>
             ))}
           </ol>
-          {timeline.data?.length === 0 && <Empty>Nothing to show</Empty>}
+          {timelineEntries?.length === 0 && <Empty>Nothing to show</Empty>}
+          {timeline.hasNextPage && (
+            <div className="mt-3">
+              <Button size="sm" onClick={() => void timeline.fetchNextPage()} disabled={timeline.isFetchingNextPage}>
+                More
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
 

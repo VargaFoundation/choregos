@@ -201,12 +201,15 @@ class Platform:
         router.get(f"{V1}/projects/acme-web/workflows").mock(
             return_value=Response(
                 200,
-                json=[
-                    contract(
-                        "WorkflowSummary",
-                        {"name": "delivery", "version": 3, "is_default": True, "open_items": 7},
-                    )
-                ],
+                json={
+                    "items": [
+                        contract(
+                            "WorkflowSummary",
+                            {"name": "delivery", "version": 3, "is_default": True, "open_items": 7},
+                        )
+                    ],
+                    "meta": {"has_more": False, "next_cursor": None},
+                },
             )
         )
         router.get(f"{V1}/projects/acme-web/workflows/delivery").mock(
@@ -236,7 +239,9 @@ class Platform:
         router.get(f"{V1}/projects/acme-web/costs").mock(side_effect=self._costs)
         router.get(f"{V1}/orgs/acme/activity/stream").mock(side_effect=self._stream)
         router.get(url__regex=rf"{V1}/work-items/[^/]+/runs").mock(side_effect=self._runs)
-        router.get(url__regex=rf"{V1}/runs/[^/]+/events").mock(return_value=Response(200, json=[]))
+        router.get(url__regex=rf"{V1}/runs/[^/]+/events").mock(
+            return_value=Response(200, json={"items": [], "meta": {"has_more": False, "next_cursor": None}})
+        )
         router.get(url__regex=rf"{V1}/runs/[^/]+/context-breakdown").mock(
             return_value=Response(404, json={"title": "Not found", "detail": "no breakdown"})
         )
@@ -245,7 +250,11 @@ class Platform:
         if self.orgs_status != 200:
             return Response(self.orgs_status, json={"title": "Forbidden", "detail": "no"})
         return Response(
-            200, json=[self.contract("Org", {"slug": "acme", "name": "Acme", "currency": self.currency})]
+            200,
+            json={
+                "items": [self.contract("Org", {"slug": "acme", "name": "Acme", "currency": self.currency})],
+                "meta": {"next_cursor": None, "has_more": False},
+            },
         )
 
     def _items(self, request: Any) -> Response:
@@ -272,7 +281,7 @@ class Platform:
             "stage_role": "implement",
             "started_at": "2026-11-18T14:57:00Z",
         }
-        return Response(200, json=[run])
+        return Response(200, json={"items": [run], "meta": {"has_more": False, "next_cursor": None}})
 
     def _stream(self, request: Any) -> Response:
         self.stream_opens += 1

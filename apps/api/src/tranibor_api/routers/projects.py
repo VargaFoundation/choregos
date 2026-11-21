@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Path, Request, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Path, Query, Request, status
+from sqlalchemy import func, or_, select
 from sse_starlette.sse import EventSourceResponse
 from tranibor_contracts import EventType, ProjectConfig, Role
 from tranibor_core import utcnow
@@ -18,19 +18,20 @@ from tranibor_core.tool_scripts_switch import org_tool_scripts
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import Membership, Organization, Project
+from ..db.models import Membership, Organization, OrgSlugAlias, Project
 from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
 from ..db.session import ALL_ORGS, limit_to_organisations, release_connection
 from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
 from ..edition import is_enterprise
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
+from ..keyset import keyset_page
 from ..rbac import Permission
 from ..schemas import (
     OrgCreate,
     OrgDto,
+    OrgPage,
     OrgUpdate,
-    PageMeta,
     ProjectCreate,
     ProjectDto,
     ProjectPage,
@@ -49,14 +50,41 @@ from ..temporal import get_temporal, provisioning_id
 router = APIRouter(tags=["projects"])
 
 
-@router.get("/orgs", response_model=list[OrgDto], operation_id="listOrgs")
-async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
-    """The caller's organisations, with their role — what the front end shows in its selector."""
-    slugs = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles}
-    rows = list((await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars())
+@router.get("/orgs", response_model=OrgPage, operation_id="listOrgs")
+async def list_orgs(
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    slug: Annotated[str | None, Query(max_length=64)] = None,
+) -> OrgPage:
+    """The caller's organisations, by slug, one page at a time (ADR 0206), with their role.
+
+    `q` matches a substring of the slug, the name or a former slug (what the console's switcher types);
+    `slug` keeps the one organisation that has that slug, current or former (what a client holding a
+    remembered slug asks, to read that organisation's currency or settings whatever page it is on).
+    """
+    slugs = set(principal.org_roles) | {key.split("/", 1)[0] for key in principal.project_roles}
+    query = select(Organization).where(Organization.slug.in_(slugs))
+    if slug:
+        former = select(OrgSlugAlias.org_id).where(OrgSlugAlias.alias == slug)
+        query = query.where(or_(Organization.slug == slug, Organization.id.in_(former)))
+    if q and q.strip():
+        needle = q.strip()
+        former = select(OrgSlugAlias.org_id).where(OrgSlugAlias.alias.icontains(needle, autoescape=True))
+        query = query.where(
+            or_(
+                Organization.slug.icontains(needle, autoescape=True),
+                Organization.name.icontains(needle, autoescape=True),
+                Organization.id.in_(former),
+            )
+        )
+    rows, meta = await keyset_page(
+        session, query, sort=Organization.slug, tiebreak=Organization.id, page=page, descending=False
+    )
     aliases = await aliases_by_org(session, [o.id for o in rows])
-    return sorted(
-        (
+    return OrgPage(
+        items=[
             OrgDto(
                 slug=o.slug,
                 name=o.name,
@@ -67,8 +95,8 @@ async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
                 complete_agents="required" if org_requires_complete(o.settings) else None,
             )
             for o in rows
-        ),
-        key=lambda o: o.slug,
+        ],
+        meta=meta,
     )
 
 
@@ -273,21 +301,21 @@ async def release_org_alias(org: str, alias: str, session: Db, principal: Me) ->
 @router.get("/orgs/{org}/projects", response_model=ProjectPage, operation_id="listProjects")
 async def list_projects(org: str, session: Db, principal: Me, page: Pagination) -> ProjectPage:
     organization = await organisation_by_slug(session, org)
-    rows = (
-        (
-            await session.execute(
-                select(Project).where(Project.org_id == organization.id, listed()).order_by(Project.slug)
-            )
-        )
-        .scalars()
-        .all()
+    query = select(Project).where(Project.org_id == organization.id, listed())
+    if not principal.can(Permission.PROJECT_READ, org):
+        # No right at the organisation: only the projects where a role of their own grants the read.
+        # `project_roles` is keyed `org/slug`, so the candidates are known without reading the table.
+        granted = [
+            key.partition("/")[2]
+            for key in principal.project_roles
+            if key.startswith(f"{org}/")
+            and principal.can(Permission.PROJECT_READ, org, key.partition("/")[2])
+        ]
+        query = query.where(Project.slug.in_(granted))
+    window, meta = await keyset_page(
+        session, query, sort=Project.slug, tiebreak=Project.id, page=page, descending=False
     )
-    visible = [p for p in rows if principal.can(Permission.PROJECT_READ, org, p.slug)]
-    window, cursor, has_more = page.slice(list(visible))
-    return ProjectPage(
-        items=[await project_dto(session, p, org) for p in window],
-        meta=PageMeta(next_cursor=cursor, has_more=has_more),
-    )
+    return ProjectPage(items=[await project_dto(session, p, org) for p in window], meta=meta)
 
 
 def _with_deployment_defaults(config: ProjectConfig) -> dict[str, Any]:

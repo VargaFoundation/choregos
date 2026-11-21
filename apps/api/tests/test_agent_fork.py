@@ -65,7 +65,7 @@ async def test_a_fork_copies_the_version_byte_for_byte_and_records_its_origin(
     assert after.pop("social")["forks"] == source_before.pop("social")["forks"] + 1
     assert after == source_before, "the source is never modified"
     # nothing else is inherited: no pin, no metrics, no client
-    assert (await client.get(f"{ORG}/agents/dev-developer/credentials")).json() == []
+    assert (await client.get(f"{ORG}/agents/dev-developer/credentials")).json()["items"] == []
 
 
 async def test_a_fork_reports_when_its_upstream_moved_and_defaults_to_the_latest_version(
@@ -89,7 +89,7 @@ async def test_a_fork_reports_when_its_upstream_moved_and_defaults_to_the_latest
     # nothing re-bases by itself
     assert (await client.get(f"{ORG}/agents/my-developer")).json()["latest_version"] == 1
     assert [
-        a["forked_from"]["behind"] for a in (await client.get(f"{ORG}/agents?scope=personal")).json()
+        a["forked_from"]["behind"] for a in (await client.get(f"{ORG}/agents?scope=personal")).json()["items"]
     ] == [True]
 
 

@@ -61,4 +61,4 @@ async def test_a_draft_or_retired_agent_reads_nothing_and_a_listing_does_not_car
     assert retired.status_code == 200, retired.text
     assert [user["agent"] for user in await _used_by(client)] == ["kept"]
     listed = await client.get(BASE)
-    assert listed.json()[0]["used_by"] is None, "the listing stays one query per base cheaper"
+    assert listed.json()["items"][0]["used_by"] is None, "the listing stays one query per base cheaper"

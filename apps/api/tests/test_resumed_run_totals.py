@@ -53,7 +53,7 @@ async def test_a_resumed_run_is_served_with_its_totals(client: AsyncClient, proj
 
     listed = await client.get(f"/api/v1/work-items/{item_id}/runs")
     assert listed.status_code == 200, listed.text
-    assert [r["id"] for r in listed.json()] == ["run-resumed"]
+    assert [r["id"] for r in listed.json()["items"]] == ["run-resumed"]
 
     by_agent = await client.get("/api/v1/orgs/northwind/agents/writer/runs")
     assert by_agent.status_code == 200, by_agent.text

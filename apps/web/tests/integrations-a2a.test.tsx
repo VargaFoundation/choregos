@@ -139,7 +139,7 @@ function arrange(me: MeDto = ADMIN) {
   } as Edition);
   vi.mocked(api.workflows).mockImplementation(async (slug: string) => SUMMARIES[slug] ?? []);
   vi.mocked(api.workflowNamed).mockImplementation(async (slug: string, name: string) => DEFINITIONS[`${slug}/${name}`]!);
-  vi.mocked(api.machineAccounts).mockResolvedValue([ACCOUNT]);
+  vi.mocked(api.machineAccounts).mockResolvedValue({ items: [ACCOUNT], meta: { has_more: false, next_cursor: null } });
 }
 
 async function snippet() {
@@ -151,7 +151,7 @@ describe("Integrations › An application or another agent (A2A), S62-11", () =>
 
   it("is an entry of Integrations, at the organisation's scale and in a project", async () => {
     arrange();
-    vi.mocked(api.myTokens).mockResolvedValue([]);
+    vi.mocked(api.myTokens).mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.agents).mockResolvedValue([]);
     const { unmount } = render(wrap(<IntegrationsPage client="a2a" />));
     const tab = await screen.findByRole("link", { name: "An application or another agent (A2A)" });

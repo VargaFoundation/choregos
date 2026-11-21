@@ -5,6 +5,7 @@ import PluginsPage from "@/app/library/plugins/page";
 import { ApiError } from "@/lib/api";
 import { isPending, shortDigest, trustLabel } from "@/lib/plugins";
 import type { InstalledPlugin, MeDto, OrgConnector, PluginApproval, PluginSource } from "@/lib/types";
+import { pageOf } from "./page";
 
 /**
  * S43-08: Catalogue → Plugins. Install answers 201 or 202 (a second administrator), the approval the API
@@ -136,7 +137,7 @@ beforeEach(() => {
   api.plugins.mockResolvedValue({ items: [SERVICENOW, TRIAGE] });
   api.pluginSources.mockResolvedValue({ sources: SOURCES });
   api.pluginApprovals.mockResolvedValue({ items: [WAITING] });
-  api.orgConnectors.mockResolvedValue([CONNECTOR]);
+  api.orgConnectors.mockResolvedValue(pageOf([CONNECTOR]));
 });
 
 function page() {

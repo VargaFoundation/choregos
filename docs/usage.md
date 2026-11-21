@@ -232,7 +232,7 @@ named, and shared by its projects. It is born with the operations its type decla
 `allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-governed-actions-in-the-core.md)) —
 and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
 groups** it opens to (none: every project) and a price. Only the administrator decides them
-(`tools:grant`). A project sees the operations its groups open (`GET /projects/{id}/operations`)
+(`tools:grant`). A project sees the operations its groups open (`GET /projects/{id}/operations`, paged by the server and filterable by `q` and `connector`, ADR 0206)
 and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operation}` refuses an
 `approval` turned into `allowed` (`422`); `DELETE` returns to the organisation's policy, which a
 later hardening by the organisation always overrides.
@@ -760,7 +760,7 @@ curl -X PUT  $API/projects/acme:hr/workflows/onboarding  -d '{"yaml": "..."}'   
 curl -X PUT  $API/projects/acme:hr/workflows/leaver -d '{"yaml": "...", "create_only": true}'  # creates; a taken name → 409
 curl -X PUT  $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding",
   "rules": [{"when": {"labels_any": ["leaver"]}, "workflow": "offboarding"}]}'
-curl         $API/projects/acme:hr/workflows                                    # one active version per name
+curl         $API/projects/acme:hr/workflows                                    # one active version per name; {items, meta}, 50 a page: ?limit=, ?cursor= (ADR 0206)
 ```
 
 - One version is active per name; every publication adds a version, none is overwritten, and
@@ -1185,8 +1185,9 @@ patch holds a secret shape keeps only its name and counters, and the revision sa
 A diff larger than `TRANIBOR_ARTIFACT_DIFF_MAX_BYTES` (1 MiB by default) is cut file by file, and says so.
 
 Every output is kept as an **artifact** of the ticket, revision by revision:
-`GET /work-items/{id}/artifacts` lists them (type, media type, size, sha256, the run and agent that
-produced each), `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) describes one, and
+`GET /work-items/{id}/artifacts` lists them, a page at a time by name then version (`cursor`, `limit`; the
+answer is `{items, meta}`, ADR 0206): type, media type, size, sha256, the run and agent that
+produced each, `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) describes one, and
 `…/content` serves its bytes after checking the digest again — altered content is refused (409).
 On a work item's page, the **artifacts** card has one tab per output: its revisions, the run and
 agent that produced each one and the runs that read it (the hand-off receipts), a viewer — markdown
@@ -1977,6 +1978,11 @@ releases, and frees its slug; anything else is refused (`409`) with its reasons:
 which keeps its name in the history. It needs the right to manage the agent and is audited
 (`agent.delete`). In the console, **Delete…** sits on the agent's overview and under *Agent status*;
 the registry hides retired agents behind **Show retired**.
+The registry is paged by the server (ADR 0206), like the agents' runs, clients, release history, the
+approvers' inbox and the feedback candidates: `GET /orgs/{org}/agents` answers `{items, meta}` by name
+(or `sort=stars`), filtered in the query by `q` (a part of the slug or name), `tag`, `scope`, `starred`,
+`retired=false` and `awaiting_approval=true`; **More** reads the next 50 with `meta.next_cursor`. The
+scope and tag chips show no counts, since only the rows read so far are known.
 An agent with no run for 60 days says so (`unused`, `last_run_at`), and
 `POST …/agents/{slug}/owner {"email": …}` hands it to another member, credentials included.
 Agents are under the same
@@ -2098,6 +2104,10 @@ a spend back leaves the line `unmeasured`).
 
 ### Registering a remote agent (A2A)
 
+The organisation's credentials are listed by `GET /orgs/{org}/remote-credentials`, paged by the server (ADR 0206):
+`{items, meta}` in name order, `?limit=` (1 to 200, 50 by default) and `?cursor=` from `meta.next_cursor`; the console's
+**Remote agent credentials** table reads 50 and shows **More**.
+
 An agent that runs elsewhere — Atlassian's Rovo, or any A2A agent — is registered as kind `remote`
 ([ADR 0062](adr/0062-remote-agents-over-a2a.md), set-up in [integrations](integrations.md)). Read its
 card first: `POST /orgs/acme/agents/discover {"card_url": "https://…/.well-known/agent.json"}` lists its
@@ -2152,12 +2162,15 @@ An agent version binds them in its spec; earlier bindings win, at most one bindi
 `GET /orgs/{org}/agents/{slug}/versions/{n}` answers `effective_memories`, the list a run binds, derived
 from the legacy `memory` field when `memories` is absent. Publishing refuses (422) a global memory the
 publisher does not see, or is archived; a **project** reference is relative, so it is checked when a run
-resolves it. `GET /orgs/{org}/memories` lists what you see (`?scope=global|project`, `?project=`) with
-`used_by`, the agents whose latest version binds each; `PATCH` renames, changes the reach or archives
+resolves it. `GET /orgs/{org}/memories` lists what you see (`?scope=global|project`, `?project=`, `?q=` on the slug, the name or the description) with
+`used_by`, the agents whose latest version binds each, by slug and one page at a time (ADR 0206: `?limit=` and `?cursor=`, and
+`GET /projects/{id}/memories` pages the same way, its two implicit memories opening the first page); the search routes return at most `k` hits (1 to 100); `PATCH` renames, changes the reach or archives
 (`status: archived`). To review: `GET /orgs/{org}/memories/{slug}/search?q=…` and
 `GET|POST /orgs/{org}/memories/{slug}/pending` for a global memory (proposals wait for an administrator);
 for a project, `GET /projects/{id}/memory/search?q=…&memory=decisions` and `…/memory/pending?memory=own&agent=architect`
-(`memory` defaults to `shared`). Global memories are stored by the organisation's `memory` connector when
+(`memory` defaults to `shared`). The two `GET …/pending` are review queues read oldest first, one page at a time
+(ADR 0206: `?limit=` and `?cursor=`); the memory backend pages its own queue (the lexical memory in SQL, Ecphoria by
+its cursor), and an Ecphoria too old to page its `/api/v1/pending` gives one page only. Global memories are stored by the organisation's `memory` connector when
 it declares one (`/orgs/{org}/connectors`), else by the deployment default.
 
 **The project's policy decides first.** A project whose policy says `memory: {enabled: false}` binds
@@ -2374,6 +2387,10 @@ curl -X POST $API/orgs/acme/knowledge -H 'Content-Type: application/json' \
   -d '{"slug": "architecture", "name": "Architecture framework", "scope": "org", "serving_mode": "files"}'
 curl -X POST $API/orgs/acme/knowledge/architecture/documents -F file=@zoning-principles.pptx
 ```
+
+`GET /orgs/{org}/knowledge` lists the bases you may read by slug, one page at a time (ADR 0206): `?limit=` (1 to 200,
+50 by default), `?cursor=` (the `meta.next_cursor` of the page before), `?q=` (a part of the slug or the name) and
+`?scope=org|projects|groups`. `GET /orgs/{org}/skills` pages the same way (`?q=` on the slug or the description).
 
 An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text, and structured text: YAML (`.yaml`,
 `.yml`), JSON, TOML; 20 MiB by default,
@@ -2968,7 +2985,7 @@ and creates one from a slug and a name. An outpost's page shows:
   instance is revoked) and **Delete**, which the API refuses while the outpost is not revoked or while
   connectors still route to it: the refusal is shown as the API wrote it, with the connectors it names;
 - **Recent calls**, newest first, with their state and the code of a refusal. Digests only: the platform
-  keeps no arguments and no result of a call. The list reads the newest 1000 calls, and says so where it ends.
+  keeps no arguments and no result of a call. **More** reads older calls until the oldest one (ADR 0206).
 
 A deployment where outposts are off, or whose door has no signing key, says which before anyone tries: the
 list page says it at the top and does not offer a creation while outposts are off, and an outpost's page
@@ -3419,7 +3436,9 @@ curl -X POST $API/projects/acme:hr/actions/<id>/decision -d '{"decision": "appro
   it out of everyone's inbox, so it needs the **project owner** role or above: on that project for a
   project's alert, in the organisation for an agent's. Every member still sees it; the
   **Acknowledge** button appears only to those who may (`can_acknowledge` on each alert), the
-  others read who can.
+  others read who can. The budget alerts come fifty at a time, newest first: **More** under the
+  card asks the next fifty, and a project's inbox asks the server for that project's alerts only
+  (ADR 0206).
 
 The core ships three effects. `connector.call` is an operation of a connector of the organisation,
 its key resolved by the platform, its arguments checked against the operation's schema; what an MCP
@@ -3580,6 +3599,11 @@ self-managed instance, `forgejo-oauth`): its address, the OAuth application's cl
 and its hosts in the egress allowlist; the setup procedures say what to register at each forge, with the
 callback address `<api_url>/api/v1/auth/linked-accounts/callback`.
 
+The lists are paged by the server (ADR 0206): `GET /orgs/{org}/members/{user_id}/linked-accounts` answers `{items,
+meta}`, ordered by forge then instance, and the member's page shows **More** when there are further accounts.
+`GET /orgs/{org}/members/{user_id}/tracker-identities` stays an array, one row at most (a member has one GitHub
+link).
+
 An administrator still declares a member's account by its numeric id on **Administration**, **Members**
 (`POST /orgs/{org}/members/{user_id}/linked-accounts`): it is shown as **Declared**, not verified, until the
 member links it themself. One forge account belongs to one member of an organisation, whichever way it was
@@ -3587,6 +3611,14 @@ linked. Today a declared github.com link is honoured for the signed comments abo
 always was); requiring `verified` is a later switch. The routes of S47-14
 (`/orgs/{org}/members/{user_id}/tracker-identities/github`) still answer, deprecated: they read and write the
 member's github.com link.
+
+### The members list
+
+`GET /orgs/{org}/members` answers `{items, meta}` (ADR 0206): one row per membership, ordered by e-mail so one
+person's rows are neighbours, `?project=<slug>` for that project's, `?q=` for a part of the e-mail, `?limit=` (1 to 200, 50
+by default) and `?cursor=`. What a project reader may see is filtered in the query, so a page is full. **Members** reads 50
+at a time and shows **More**; the person pickers (group, knowledge access, reassigning a request) search on the server and
+show its first 200 matches.
 
 ### A member's profile
 
@@ -4011,7 +4043,7 @@ disabled: none of the project's runs is offered them, whatever its policy says.
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
 organisation by its id. A platform administrator granted by an edition extension can rename an
 organisation they do not belong to (the response then carries no `role`). The old slug is kept as an
-**alias** of the organisation (`aliases` in `GET /orgs` and in the `PATCH` response, ADR 0090), so what
+**alias** of the organisation (`aliases` in the `items` of `GET /orgs` and in the `PATCH` response, ADR 0090), so what
 was copied elsewhere keeps working: `/api/v1/orgs/<old>/…` and `/a2a/orgs/<old>` (the response carries
 `Link: <current URL>; rel="canonical"`), MCP addresses and qualified ids `<old>:<project>`, the IdP groups
 `choregos:<old>:<group>`, `oidc.defaultOrg` and `bootstrap.org` when they still name it, and the

@@ -79,7 +79,7 @@ async def test_a_finished_fake_run_gives_its_transcript_lines_back(
     assert ref["size_bytes"] == len(ref["inline"].encode())
     # The URL is one the API answers, not an object-store path nothing wrote.
     linked = await client.get(ref["url"])
-    assert linked.status_code == 200 and [e["seq"] for e in linked.json()] == [1, 2, 3]
+    assert linked.status_code == 200 and [e["seq"] for e in linked.json()["items"]] == [1, 2, 3]
 
 
 async def test_a_run_without_journal_has_no_transcript(client: AsyncClient, project: dict[str, Any]) -> None:

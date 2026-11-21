@@ -11,7 +11,7 @@ import { AccountMenu, personName } from "@/components/account/account-menu";
 import { Count, NavigationList } from "@/components/shell/navigation";
 import { HelpEntry } from "@/components/docs-link";
 import { AboutEntry, EditionBadge } from "@/components/edition";
-import { Select } from "@/components/ui";
+import { OrgSwitcher } from "@/components/org-switcher";
 import { useADecider, useInboxCount } from "@/lib/a-decider";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -29,7 +29,7 @@ import { useSession } from "@/lib/session";
  */
 export function TopNav({ demo = false }: { demo?: boolean }) {
   const pathname = usePathname();
-  const { me, orgs, org, selectOrg, deconnecter } = useSession();
+  const { me, orgs, moreOrgs, org, selectOrg, deconnecter } = useSession();
   // The edition does not change during a session: a single read is enough.
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   // What waits for a person is counted in the header, on every page (S23-02).
@@ -59,22 +59,8 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
   }, [ouvert]);
 
   const orgChoice =
-    orgs.length > 1 ? (
-      <label className="flex items-center gap-2">
-        <span className="text-ink-muted">Organisation</span>
-        <Select
-          aria-label="Current organisation"
-          value={org}
-          onChange={(event) => selectOrg(event.target.value)}
-          className="w-auto h-7 font-mono"
-        >
-          {orgs.map((o) => (
-            <option key={o.slug} value={o.slug}>
-              {o.name}
-            </option>
-          ))}
-        </Select>
-      </label>
+    orgs.length > 1 || moreOrgs ? (
+      <OrgSwitcher org={org} orgs={orgs} more={moreOrgs ?? false} onSelect={selectOrg} />
     ) : (
       <span className="font-mono text-ink-muted" title="Current organisation">
         Org {org}

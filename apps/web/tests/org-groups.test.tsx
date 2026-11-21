@@ -135,11 +135,14 @@ describe("one group's page", () => {
   it("adds a member chosen among the organisation's members, and removes one", async () => {
     vi.mocked(api.orgGroup).mockResolvedValue(group());
     vi.mocked(api.orgGroupMembers).mockResolvedValue({ items: [member("cap@acme.dev", "u-cap")] });
-    vi.mocked(api.members).mockResolvedValue([
-      { org: "acme", project_slug: null, role: "developer", user_id: "u-cap", email: "cap@acme.dev" },
-      { org: "acme", project_slug: null, role: "developer", user_id: "u-dev", email: "dev@acme.dev" },
-      { org: "acme", project_slug: "billing", role: "viewer", user_id: "u-view", email: "view@acme.dev" },
-    ] as Membership[]);
+    vi.mocked(api.members).mockResolvedValue({
+      items: [
+        { org: "acme", project_slug: null, role: "developer", user_id: "u-cap", email: "cap@acme.dev" },
+        { org: "acme", project_slug: null, role: "developer", user_id: "u-dev", email: "dev@acme.dev" },
+        { org: "acme", project_slug: "billing", role: "viewer", user_id: "u-view", email: "view@acme.dev" },
+      ] as Membership[],
+      meta: { has_more: false, next_cursor: null },
+    });
     vi.mocked(api.addOrgGroupMember).mockResolvedValue(member("dev@acme.dev", "u-dev"));
     vi.mocked(api.removeOrgGroupMember).mockResolvedValue(undefined);
     await one();
@@ -158,7 +161,10 @@ describe("one group's page", () => {
   it("says why a person was refused, in the API's words", async () => {
     vi.mocked(api.orgGroup).mockResolvedValue(group());
     vi.mocked(api.orgGroupMembers).mockResolvedValue({ items: [] });
-    vi.mocked(api.members).mockResolvedValue([{ org: "acme", project_slug: null, role: "developer", user_id: "u-dev", email: "dev@acme.dev" }] as Membership[]);
+    vi.mocked(api.members).mockResolvedValue({
+      items: [{ org: "acme", project_slug: null, role: "developer", user_id: "u-dev", email: "dev@acme.dev" }] as Membership[],
+      meta: { has_more: false, next_cursor: null },
+    });
     vi.mocked(api.addOrgGroupMember).mockRejectedValue(new ApiError(422, { detail: "`u-dev` is not a member of acme: only its members join its groups" }));
     await one();
     expect(await screen.findByText("Nobody in this group")).toBeInTheDocument();
@@ -185,7 +191,7 @@ describe("one group's page", () => {
   it("renames an internal group, and deletes it after a confirmation", async () => {
     vi.mocked(api.orgGroup).mockResolvedValue(group());
     vi.mocked(api.orgGroupMembers).mockResolvedValue({ items: [] });
-    vi.mocked(api.members).mockResolvedValue([]);
+    vi.mocked(api.members).mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } });
     vi.mocked(api.updateOrgGroup).mockResolvedValue(group({ name: "Captains" }));
     vi.mocked(api.deleteOrgGroup).mockResolvedValue(undefined);
     await one();

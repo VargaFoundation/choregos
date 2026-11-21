@@ -172,3 +172,63 @@ async def test_a_namespace_that_is_none_of_the_four_forms_is_refused() -> None:
     fil = Wire({("POST", "/api/v1/context-pack"): (200, {})})
     with pytest.raises(ValueError, match="malformed"):
         await memory_for(fil).context_pack("org:northwind", "q", [], 100)
+
+
+def _proposal(memory_id: str) -> dict[str, str]:
+    return {"id": memory_id, "subject": "s", "content": "c", "state": "pending"}
+
+
+async def test_the_review_queue_is_read_page_after_page_by_ecphoria_s_cursor() -> None:
+    """ADR 0206: one page per call, the cursor Ecphoria wrote passed back as it is; the whole queue is
+    its pages in turn, so the auto-accept rule sees every proposal, not the first 100."""
+    fil = Wire(
+        {
+            ("GET", "/api/v1/pending"): [
+                (
+                    200,
+                    {
+                        "items": [_proposal("p1"), _proposal("p2")],
+                        "count": 2,
+                        "has_more": True,
+                        "next_cursor": "c1",
+                    },
+                ),
+                (200, {"items": [_proposal("p3")], "count": 1, "has_more": False, "next_cursor": None}),
+                (
+                    200,
+                    {
+                        "items": [_proposal("p1"), _proposal("p2")],
+                        "count": 2,
+                        "has_more": True,
+                        "next_cursor": "c1",
+                    },
+                ),
+                (200, {"items": [_proposal("p3")], "count": 1, "has_more": False, "next_cursor": None}),
+            ]
+        }
+    )
+    m = memory_for(fil)
+    first = await m.pending_page("billing", limit=2)
+    assert ([p.id for p in first.items], first.next_cursor) == (["p1", "p2"], "c1")
+    rest = await m.pending_page("billing", limit=2, cursor="c1")
+    assert ([p.id for p in rest.items], rest.next_cursor) == (["p3"], None)
+    assert [dict(r.url.params) for r in fil.requests] == [{"limit": "2"}, {"limit": "2", "cursor": "c1"}]
+    assert [p.id for p in await m.list_pending("billing")] == ["p1", "p2", "p3"]
+    assert [r.url.params.get("cursor") for r in fil.requests[2:]] == [None, "c1"]
+
+
+async def test_a_cursor_ecphoria_refuses_is_an_invalid_cursor() -> None:
+    from tranibor_adapters.errors import UpstreamError
+    from tranibor_adapters.memory import InvalidCursorError
+
+    fil = Wire({("GET", "/api/v1/pending"): (400, {"code": "INVALID_CURSOR"})})
+    with pytest.raises(InvalidCursorError):
+        await memory_for(fil).pending_page("billing", limit=2, cursor="forged")
+    with pytest.raises(UpstreamError):  # without a cursor, a 400 is Ecphoria's failure, not the caller's
+        await memory_for(fil).pending_page("billing", limit=2)
+
+
+async def test_an_ecphoria_without_a_paged_queue_gives_its_one_page() -> None:
+    fil = Wire({("GET", "/api/v1/pending"): (200, {"items": [_proposal("p1")], "count": 1})})
+    page = await memory_for(fil).pending_page("billing", limit=50)
+    assert ([p.id for p in page.items], page.next_cursor) == (["p1"], None)

@@ -67,7 +67,6 @@ import type {
   ProjectAgentChannel,
   AgentTrial,
   AgentTrialCreate,
-  AgentMetricsSummary,
   AgentResolution,
   BuiltinAgent,
   GroupMembers,
@@ -85,6 +84,10 @@ import type {
   ProjectAgent,
   ProjectAgentPut,
   Skill,
+  SkillPage,
+  KnowledgeBasePage,
+  MemoryPage,
+  MemoryStorePage,
   SkillGitImport,
   SkillGitPreview,
   SkillGitPreviewRequest,
@@ -108,10 +111,8 @@ import type {
   AgentBackendInfo,
   AgentBackendUpdate,
   AgentImageInfo,
-  ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
-  BrowserSession,
   DeviceRequest,
   EndedSessions,
   Artifact,
@@ -158,10 +159,10 @@ import type {
   RunEventDto,
   RunChain,
   RunLogs,
-  TimelineEntry,
   ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  BudgetAlertPage,
   EgressCheck,
   EgressCheckResult,
   EgressDecision,
@@ -182,6 +183,27 @@ import type {
   Memory,
   MemoryAbReport,
   GatewayKeyPage,
+  ActionPage,
+  OrgConnectorPage,
+  ProjectOperationPage,
+  ProjectOrgConnectorPage,
+  LinkedAccountPage,
+  MembershipPage,
+  RemoteCredentialPage,
+  OrgPage,
+  ApiTokenPage,
+  BrowserSessionPage,
+  ImplicitAgentPage,
+  MachineAccountPage,
+  ProjectAgentPage,
+  WorkflowAgentPage,
+  WorkflowDefPage,
+  WorkflowSummaryPage,
+  ArtifactPage,
+  HandOffPage,
+  RunEventPage,
+  RunPage,
+  TimelinePage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -254,6 +276,12 @@ import type {
   ConversationAction,
   ConversationActionList,
   RunContext,
+  AgentPage,
+  AgentMetricsSummaryPage,
+  AgentRunPage,
+  AgentCredentialPage,
+  AgentReleasePage,
+  AgentEvaluationPage,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -476,6 +504,31 @@ async function cliManifest(): Promise<CliManifest | null> {
   return (await response.json()) as CliManifest;
 }
 
+/** What a paged list takes (ADR 0206): the server filters on `q`, `cursor` is the one the last page gave. */
+export type PageParams = { q?: string; cursor?: string; limit?: number };
+
+/** The query string of a paged list: its paging, its `q`, and the route's own filters in `extra`. */
+function pageQuery(page: PageParams, extra: Record<string, string | undefined> = {}): string {
+  return query(compact({ ...extra, q: page.q, cursor: page.cursor, limit: page.limit?.toString() }));
+}
+
+/**
+ * Every row of a paged list, by following `next_cursor` to the end. For the screens that need the whole
+ * list (an agent's composition resolves its skills by name): tables ask for one page and offer More.
+ */
+async function everyRow<T>(
+  page: (cursor: string | undefined) => Promise<{ items: T[]; meta: { has_more: boolean; next_cursor?: string | null } }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const got = await page(cursor);
+    rows.push(...got.items);
+    if (!got.meta.has_more || !got.meta.next_cursor) return rows;
+    cursor = got.meta.next_cursor;
+  }
+}
+
 export const api = {
   me: () => request<MeDto>("/me"),
   cliManifest,
@@ -541,22 +594,33 @@ export const api = {
     return `${API_BASE}/auth/login${q ? `?${q}` : ""}`;
   },
   logout: () => request<void>("/auth/logout", { method: "POST" }),
-  orgs: () => request<Org[]>("/orgs"),
+  /**
+   * The organisations the caller can see, by slug, one page at a time (ADR 0206). `q` is the server's
+   * filter (slug, name or a former slug, substring); `slug` is the exact address, a former one included.
+   */
+  orgs: (params: { q?: string; slug?: string; cursor?: string; limit?: number } = {}) =>
+    request<OrgPage>(
+      `/orgs${query(compact({ q: params.q, slug: params.slug, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createOrg: (body: OrgCreate) => request<Org>("/orgs", { method: "POST", body: JSON.stringify(body) }),
   /** `PATCH /orgs/{org}`: the name and currency (its administrator), the slug (a platform administrator only). */
   updateOrg: (org: string, body: OrgUpdate) =>
     request<Org>(`/orgs/${encodeURIComponent(org)}`, { method: "PATCH", body: JSON.stringify(body) }),
-  /** The organisation's memberships; with `project`, that project's only (S30-06). */
-  members: (org: string, project?: string) =>
-    request<Membership[]>(`/orgs/${org}/members${project ? `?project=${encodeURIComponent(project)}` : ""}`),
+  /** One page of the organisation's memberships, by e-mail (ADR 0206); with `project`, that project's only (S30-06); `q` filters on the e-mail. */
+  members: (org: string, params: { project?: string; q?: string; cursor?: string; limit?: number } = {}) =>
+    request<MembershipPage>(
+      `/orgs/${org}/members${query(compact({ project: params.project, q: params.q, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** Removes a membership, of the organisation or of the one project named. */
   removeMember: (org: string, userId: string, project?: string | null) =>
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
     }),
   /** A member's accounts on code forges (ADR 0161): verified by the member, or declared by an administrator. */
-  memberLinkedAccounts: (org: string, userId: string) =>
-    request<LinkedAccount[]>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`),
+  memberLinkedAccounts: (org: string, userId: string, params: { cursor?: string; limit?: number } = {}) =>
+    request<LinkedAccountPage>(
+      `/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts${query(compact({ cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** An administrator declares a member's account: stored NOT verified. */
   declareMemberLinkedAccount: (org: string, userId: string, body: LinkedAccountDeclare) =>
     request<LinkedAccount>(`/orgs/${org}/members/${encodeURIComponent(userId)}/linked-accounts`, {
@@ -592,7 +656,12 @@ export const api = {
   addMember: (org: string, body: MembershipUpsert) =>
     request<Membership>(`/orgs/${org}/members`, { method: "POST", body: JSON.stringify(body) }),
   /** The organisation's agent registry (ADR 0033): a version is never modified. */
-  agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
+  agentsPage: (org: string, params: AgentsParams = {}) =>
+    request<AgentPage>(
+      `/orgs/${org}/agents${agentsQuery(params)}`,
+    ),
+  /** The first page of the registry, by name: for a picker or a lookup, narrowed by `q` on the server (ADR 0206). */
+  agents: async (org: string, q?: string) => (await api.agentsPage(org, { q, limit: 200 })).items,
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
   createAgent: (org: string, body: AgentCreate, allowEgress = false) =>
     request<Agent>(`/orgs/${org}/agents${allowEgress ? "?allow_egress=true" : ""}`, {
@@ -655,8 +724,8 @@ export const api = {
   /** Channels (S40-02, ADR 0071): point production or testing at a revision; the history, the checklist. */
   releaseAgentVersion: (org: string, slug: string, body: AgentReleaseCreate) =>
     request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases`, { method: "POST", body: JSON.stringify(body) }),
-  agentReleases: (org: string, slug: string, limit = 50) =>
-    request<AgentRelease[]>(`/orgs/${org}/agents/${slug}/releases?limit=${limit}`),
+  agentReleases: (org: string, slug: string, page: PageParams = {}) =>
+    request<AgentReleasePage>(`/orgs/${org}/agents/${slug}/releases${pageQuery(page)}`),
   agentReleaseReadiness: (org: string, slug: string, version: number, channel: "stable" | "candidate") =>
     request<AgentReleaseReadiness>(`/orgs/${org}/agents/${slug}/versions/${version}/readiness?channel=${channel}`),
   setAgentReleasePolicy: (org: string, slug: string, body: AgentReleasePolicy) =>
@@ -667,21 +736,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ project }),
     }),
-  agentEvaluations: (org: string, slug: string, version: number) =>
-    request<AgentEvaluation[]>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations`),
+  agentEvaluations: (org: string, slug: string, version: number, page: PageParams = {}) =>
+    request<AgentEvaluationPage>(`/orgs/${org}/agents/${slug}/versions/${version}/evaluations${pageQuery(page)}`),
   agentExposure: (org: string, slug: string) => request<AgentExposure>(`/orgs/${org}/agents/${slug}/exposure`),
   decideAgentRelease: (org: string, slug: string, id: string, body: AgentReleaseDecision) =>
     request<AgentRelease>(`/orgs/${org}/agents/${slug}/releases/${id}/decision`, { method: "POST", body: JSON.stringify(body) }),
   /** The approvers' inbox: releases of the agents one may see, by status. */
-  orgAgentReleases: (org: string, status?: AgentRelease["status"]) =>
-    request<AgentRelease[]>(`/orgs/${org}/agent-releases${status ? `?status=${status}` : ""}`),
+  orgAgentReleases: (org: string, status?: AgentRelease["status"], page: PageParams = {}) =>
+    request<AgentReleasePage>(`/orgs/${org}/agent-releases${pageQuery(page, { status })}`),
   projectAgentChannel: (id: string) => request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`),
   setProjectAgentChannel: (id: string, channel: ProjectAgentChannel["channel"]) =>
     request<ProjectAgentChannel>(`/projects/${qualify(id)}/agent-channel`, { method: "PUT", body: JSON.stringify({ channel }) }),
   agentMetrics: (org: string, slug: string, days = 30) =>
     request<AgentMetrics>(`/orgs/${org}/agents/${slug}/metrics?days=${days}`),
   /** Remote agents over A2A (ADR 0062): the organisation's credentials, and the reading of a card. */
-  remoteCredentials: (org: string) => request<RemoteCredential[]>(`/orgs/${org}/remote-credentials`),
+  remoteCredentials: (org: string, params: { cursor?: string; limit?: number } = {}) =>
+    request<RemoteCredentialPage>(
+      `/orgs/${org}/remote-credentials${query(compact({ cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createRemoteCredential: (org: string, body: RemoteCredentialCreate) =>
     request<RemoteCredential>(`/orgs/${org}/remote-credentials`, { method: "POST", body: JSON.stringify(body) }),
   authorizeRemoteCredential: (org: string, name: string) =>
@@ -707,13 +779,22 @@ export const api = {
       body: JSON.stringify({ read_only: readOnly }),
     }),
   /** Every client attached to an agent of the organisation, with its agent: one request (S30-04). */
-  orgAgentCredentials: (org: string) => request<AgentCredential[]>(`/orgs/${org}/agent-credentials`),
+  orgAgentCredentials: (org: string, page: PageParams = {}) =>
+    request<AgentCredentialPage>(`/orgs/${org}/agent-credentials${pageQuery(page)}`),
   /** The registry's columns — runs, success rate, cost — for every agent at once (S30-04). */
-  agentMetricsList: (org: string, days = 30) => request<AgentMetricsSummary[]>(`/orgs/${org}/agent-metrics?days=${days}`),
+  agentMetricsList: (org: string, days = 30, page: PageParams = {}) =>
+    request<AgentMetricsSummaryPage>(`/orgs/${org}/agent-metrics${pageQuery(page, { days: String(days) })}`),
   /** A project's implicit agents, computed by the API (S30-04). */
-  implicitAgents: (id: string) => request<ImplicitAgent[]>(`/projects/${qualify(id)}/implicit-agents`),
+  implicitAgentsPage: (id: string, params: PageParams = {}) =>
+    request<ImplicitAgentPage>(`/projects/${qualify(id)}/implicit-agents${pageQuery(params)}`),
+  /** All of them, page after page (the page needs the count and the whole list to register from). */
+  implicitAgents: (id: string): Promise<ImplicitAgent[]> =>
+    everyRow((cursor) => api.implicitAgentsPage(id, { cursor, limit: 200 })),
   /** Every agent the project's active workflows run, named or built in (S47-39). */
-  workflowAgents: (id: string) => request<WorkflowAgent[]>(`/projects/${qualify(id)}/workflow-agents`),
+  workflowAgentsPage: (id: string, params: PageParams = {}) =>
+    request<WorkflowAgentPage>(`/projects/${qualify(id)}/workflow-agents${pageQuery(params)}`),
+  workflowAgents: (id: string): Promise<WorkflowAgent[]> =>
+    everyRow((cursor) => api.workflowAgentsPage(id, { cursor, limit: 200 })),
   /** Who a person step addressed to a group waits for, and who of them may answer in the project. */
   groupMembers: (id: string, group: string) =>
     request<GroupMembers>(`/projects/${qualify(id)}/groups/${encodeURIComponent(group)}/members`),
@@ -744,15 +825,16 @@ export const api = {
   startAgentTrial: (org: string, body: AgentTrialCreate) =>
     request<AgentTrial>(`/orgs/${org}/agent-trials`, { method: "POST", body: JSON.stringify(body) }),
   /** An agent's latest runs (S30-05). */
-  agentRuns: (org: string, slug: string, limit = 50) => request<Run[]>(`/orgs/${org}/agents/${slug}/runs?limit=${limit}`),
+  agentRuns: (org: string, slug: string, page: PageParams = {}) =>
+    request<AgentRunPage>(`/orgs/${org}/agents/${slug}/runs${pageQuery(page)}`),
   /** What a version of the agent reaches in one project, the five components of its definition (ADR 0127). */
   agentAccess: (org: string, slug: string, project: string, version?: number) => {
     const query = new URLSearchParams({ project });
     if (version != null) query.set("version", String(version));
     return request<AgentAccess>(`/orgs/${org}/agents/${slug}/access?${query}`);
   },
-  agentCredentials: (org: string, slug: string) =>
-    request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
+  agentCredentials: (org: string, slug: string, page: PageParams = {}) =>
+    request<AgentCredentialPage>(`/orgs/${org}/agents/${slug}/credentials${pageQuery(page)}`),
   attachAgentToken: (org: string, slug: string, tokenId: string) =>
     request<AgentCredential>(`/orgs/${org}/agents/${slug}/credentials`, {
       method: "POST",
@@ -760,13 +842,20 @@ export const api = {
     }),
   detachAgentCredential: (org: string, slug: string, id: string) =>
     request<void>(`/orgs/${org}/agents/${slug}/credentials/${id}`, { method: "DELETE" }),
-  projectAgents: (id: string) => request<ProjectAgent[]>(`/projects/${qualify(id)}/agents`),
+  /** The project's pins by agent slug, one page at a time (ADR 0206). */
+  projectAgents: (id: string, params: PageParams = {}) =>
+    request<ProjectAgentPage>(`/projects/${qualify(id)}/agents${pageQuery(params)}`),
   pinProjectAgent: (id: string, slug: string, body: ProjectAgentPut) =>
     request<ProjectAgent>(`/projects/${qualify(id)}/agents/${slug}`, { method: "PUT", body: JSON.stringify(body) }),
   unpinProjectAgent: (id: string, slug: string) =>
     request<void>(`/projects/${qualify(id)}/agents/${slug}`, { method: "DELETE" }),
   /** The skill library: a folder, imported as a zip, versioned, never rewritten. */
-  skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
+  /** One page of the skill library by slug (ADR 0206); `q` matches the slug or the description. */
+  skillsPage: (org: string, params: PageParams = {}) =>
+    request<SkillPage>(`/orgs/${org}/skills${pageQuery(params)}`),
+  /** The whole library, every page: for the screens that resolve skills by name. */
+  skills: (org: string) =>
+    everyRow((cursor) => request<SkillPage>(`/orgs/${org}/skills${pageQuery({ cursor, limit: 200 })}`)),
   /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
   skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
   installSkillCatalogueEntry: (org: string, id: string, allowEgress = false) =>
@@ -791,7 +880,14 @@ export const api = {
       headers: { "Content-Type": "application/zip" },
     }),
   /** Knowledge bases (ADR 0051): a curated corpus, converted to markdown outside the request. */
-  knowledgeBases: (org: string) => request<KnowledgeBase[]>(`/orgs/${org}/knowledge`),
+  /** One page of the bases the caller may read, by slug (ADR 0206); `q` matches the slug or the name. */
+  knowledgeBasesPage: (org: string, params: PageParams & { scope?: "org" | "projects" | "groups" } = {}) =>
+    request<KnowledgeBasePage>(
+      `/orgs/${org}/knowledge${query(compact({ q: params.q, scope: params.scope, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
+  /** Every readable base, every page: for the pickers and the bindings. */
+  knowledgeBases: (org: string) =>
+    everyRow((cursor) => request<KnowledgeBasePage>(`/orgs/${org}/knowledge${pageQuery({ cursor, limit: 200 })}`)),
   knowledgeBase: (org: string, slug: string) => request<KnowledgeBase>(`/orgs/${org}/knowledge/${slug}`),
   createKnowledgeBase: (org: string, body: KnowledgeBaseCreate) =>
     request<KnowledgeBase>(`/orgs/${org}/knowledge`, { method: "POST", body: JSON.stringify(body) }),
@@ -866,11 +962,19 @@ export const api = {
     request<KnowledgeSource>(`/orgs/${org}/knowledge/${slug}/sources/${id}/sync`, { method: "POST" }),
   deleteKnowledgeSource: (org: string, slug: string, id: string) =>
     request<void>(`/orgs/${org}/knowledge/${slug}/sources/${id}`, { method: "DELETE" }),
-  myTokens: () => request<ApiToken[]>("/me/tokens"),
+  /** My tokens, newest first, one page at a time (ADR 0206); `kind`, `q` (name) and `id` filter in SQL. */
+  myTokens: (params: { q?: string; kind?: "mcp" | "api"; id?: string; cursor?: string; limit?: number } = {}) =>
+    request<ApiTokenPage>(
+      `/me/tokens${query(compact({ q: params.q, kind: params.kind, id: params.id, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
-  mySessions: () => request<BrowserSession[]>("/me/sessions"),
+  /** My sessions, most recently active first, one page at a time; `current` keeps this one or all the others. */
+  mySessions: (params: { current?: boolean; cursor?: string; limit?: number } = {}) =>
+    request<BrowserSessionPage>(
+      `/me/sessions${query(compact({ current: params.current?.toString(), cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** My accounts on code forges, and the instances I can link one on (ADR 0161). */
   myLinkedAccounts: () => request<MyLinkedAccounts>("/me/linked-accounts"),
   /** Starts linking my account on an instance: the forge's authorization URL, to open in this browser. */
@@ -989,9 +1093,33 @@ export const api = {
       }[];
     }>(`/projects/${qualify(id)}/tools`),
   /** The governed actions (ADR 0035): the decision inbox, and each action with its journal. */
-  orgActions: (org: string, status?: string) =>
-    request<Action[]>(`/orgs/${org}/actions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
-  projectActions: (id: string) => request<Action[]>(`/projects/${qualify(id)}/actions`),
+  orgActions: (
+    org: string,
+    params: { status?: string; project?: string; cursor?: string; limit?: number } = {},
+  ) =>
+    request<ActionPage>(
+      `/orgs/${org}/actions${query(compact({ status: params.status, project: params.project, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
+  /**
+   * Every action waiting for a decision, read page by page up to `ACTIONS_CAP` (the inbox counts them): past
+   * the cap the page says `has_more`, and the inbox says it is a lower bound rather than a total.
+   */
+  async pendingOrgActions(org: string, project?: string): Promise<ActionPage> {
+    const items: ActionPage["items"] = [];
+    let cursor: string | undefined;
+    let hasMore = false;
+    do {
+      const page = await this.orgActions(org, { status: "pending_approval", project, cursor, limit: 200 });
+      items.push(...page.items);
+      hasMore = page.meta.has_more;
+      cursor = page.meta.next_cursor ?? undefined;
+    } while (hasMore && cursor && items.length < ACTIONS_CAP);
+    return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
+  },
+  projectActions: (id: string, params: { status?: string; cursor?: string; limit?: number } = {}) =>
+    request<ActionPage>(
+      `/projects/${qualify(id)}/actions${query(compact({ status: params.status, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   projectAction: (id: string, actionId: string) => request<Action>(`/projects/${qualify(id)}/actions/${actionId}`),
   /** An approval requires a recent session: a 401 `step_up_required` goes back through the IdP. */
   decideAction: (id: string, actionId: string, body: { decision: "approve" | "reject"; reason?: string }) =>
@@ -1073,7 +1201,14 @@ export const api = {
       `/orgs/${org}/outposts/${slug}/calls${query(compact({ state: params.state, cursor: params.cursor, limit: params.limit?.toString() }))}`,
     ),
   /** The organisation's connectors and the policy of each operation (ADR 0034). */
-  orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
+  /** One page, by name (ADR 0206): `q` is a part of the name, `kind` and `type` keep one capability or type. */
+  orgConnectors: (
+    org: string,
+    params: { q?: string; kind?: string; type?: string; cursor?: string; limit?: number } = {},
+  ) =>
+    request<OrgConnectorPage>(
+      `/orgs/${org}/connectors${query(compact({ q: params.q, kind: params.kind, type: params.type, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createOrgConnector: (org: string, body: OrgConnectorCreate) =>
     request<OrgConnector>(`/orgs/${org}/connectors`, { method: "POST", body: JSON.stringify(body) }),
   deleteOrgConnector: (org: string, name: string) =>
@@ -1131,7 +1266,10 @@ export const api = {
   /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
   connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
   /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */
-  projectOrgConnectors: (id: string) => request<ProjectOrgConnector[]>(`/projects/${qualify(id)}/org-connectors`),
+  projectOrgConnectors: (id: string, params: { q?: string; kind?: string; cursor?: string; limit?: number } = {}) =>
+    request<ProjectOrgConnectorPage>(
+      `/projects/${qualify(id)}/org-connectors${query(compact({ q: params.q, kind: params.kind, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   enableOrgConnector: (id: string, name: string) =>
     request<ProjectOrgConnector>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "PUT" }),
   disableOrgConnector: (id: string, name: string) =>
@@ -1139,7 +1277,10 @@ export const api = {
   /** An MCP server lists its tools; a new one is born closed, a schema that drifts closes it again. */
   discoverConnectorOperations: (org: string, name: string) =>
     request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),
-  projectOperations: (id: string) => request<ProjectOperation[]>(`/projects/${qualify(id)}/operations`),
+  projectOperations: (id: string, params: { q?: string; connector?: string; cursor?: string; limit?: number } = {}) =>
+    request<ProjectOperationPage>(
+      `/projects/${qualify(id)}/operations${query(compact({ q: params.q, connector: params.connector, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   tightenProjectOperation: (id: string, connector: string, operation: string, policy: string) =>
     request<ProjectOperation>(
       `/projects/${qualify(id)}/operations/${connector}/${encodeURIComponent(operation)}`,
@@ -1183,7 +1324,10 @@ export const api = {
   putWorkflow: (id: string, yaml: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflow`, { method: "PUT", body: JSON.stringify({ yaml }) }),
   // Several workflows per project, each by its name (ADR 0031).
-  workflows: (id: string) => request<WorkflowSummary[]>(`/projects/${qualify(id)}/workflows`),
+  workflowsPage: (id: string, params: PageParams = {}) =>
+    request<WorkflowSummaryPage>(`/projects/${qualify(id)}/workflows${pageQuery(params)}`),
+  /** Every active workflow, page after page: the pickers, the board and the flow need the whole set. */
+  workflows: (id: string): Promise<WorkflowSummary[]> => everyRow((cursor) => api.workflowsPage(id, { cursor, limit: 200 })),
   workflowNamed: (id: string, name: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`),
   /** Publishes the next version; `baseVersion` is the one that was read, and if stale the API answers 409. */
@@ -1198,8 +1342,13 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ yaml, create_only: true }),
     }),
-  workflowVersions: (id: string, name: string) =>
-    request<WorkflowDef[]>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions`),
+  workflowVersionsPage: (id: string, name: string, params: PageParams = {}) =>
+    request<WorkflowDefPage>(
+      `/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions${pageQuery(params)}`,
+    ),
+  /** Every version, newest first, page after page: the history diffs any two of them. */
+  workflowVersions: (id: string, name: string): Promise<WorkflowDef[]> =>
+    everyRow((cursor) => api.workflowVersionsPage(id, name, { cursor, limit: 200 })),
   /** Republishes a past version as the next one: nothing is rewritten, the history grows. */
   restoreWorkflowVersion: (id: string, name: string, version: number) =>
     request<WorkflowDef>(
@@ -1289,7 +1438,8 @@ export const api = {
   receivedEvents: (id: string, params?: Record<string, string>) =>
     request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
   /** The applications that call the A2A door under their own name (ADR 0131), and their tokens. */
-  machineAccounts: (id: string) => request<MachineAccount[]>(`/projects/${qualify(id)}/machine-accounts`),
+  machineAccounts: (id: string, params: PageParams = {}) =>
+    request<MachineAccountPage>(`/projects/${qualify(id)}/machine-accounts${pageQuery(params)}`),
   createMachineAccount: (id: string, body: MachineAccountCreate) =>
     request<MachineAccount>(`/projects/${qualify(id)}/machine-accounts`, { method: "POST", body: JSON.stringify(body) }),
   removeMachineAccount: (id: string, slug: string) =>
@@ -1315,11 +1465,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
-  /** A ticket's handover receipts (S25-04): who produced, who read, under which fingerprint. */
-  handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),
-  /** Every revision of every artifact of a work item (ADR 0049). */
-  artifacts: (id: string) => request<Artifact[]>(`/work-items/${id}/artifacts`),
+  /** One page of a ticket's timeline, oldest first (ADR 0206): a list that scrolls, "More" passes `cursor`. */
+  timeline: (id: string, params: { cursor?: string; limit?: number } = {}) =>
+    request<TimelinePage>(`/work-items/${id}/timeline${pageQuery(params)}`),
+  /**
+   * A ticket's handover receipts (S25-04): who produced, who read, under which fingerprint. Every
+   * page, the cursor followed to the end: the artifacts' readers are looked up in the whole set.
+   */
+  handOffs: (id: string): Promise<HandOff[]> =>
+    everyRow((cursor) => request<HandOffPage>(`/work-items/${id}/hand-offs${pageQuery({ cursor, limit: 200 })}`)),
+  /** Every revision of every artifact of a work item (ADR 0049), every page: they are grouped by name. */
+  artifacts: (id: string): Promise<Artifact[]> =>
+    everyRow((cursor) => request<ArtifactPage>(`/work-items/${id}/artifacts${pageQuery({ cursor, limit: 200 })}`)),
   /** The bytes of one revision (`name@version`), digest checked by the API; a refusal is an `ApiError`. */
   artifactContent: (id: string, ref: string) => artifactContent(id, ref),
   /** The ticket's journey in ITS workflow, in one read: what the animated map draws (S22-01). */
@@ -1357,7 +1514,9 @@ export const api = {
   stopWorkItem: (id: string, reason: string) =>
     request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action: "stop", reason }) }),
 
-  runs: (itemId: string) => request<Run[]>(`/work-items/${itemId}/runs`),
+  /** A ticket's runs, oldest first, every page: the table, the proposal and the journey fold the whole set. */
+  runs: (itemId: string): Promise<Run[]> =>
+    everyRow((cursor) => request<RunPage>(`/work-items/${itemId}/runs${pageQuery({ cursor, limit: 200 })}`)),
   run: (runId: string) => request<Run>(`/runs/${runId}`),
   /**
    * Stops one run now, with a reason (ADR 0142 §2): its work item then waits for a person. 409 when the
@@ -1371,8 +1530,13 @@ export const api = {
   /** The same entries as they change (SSE), with the same filter: the path `useLiveRefresh` listens to. */
   activityStreamPath: (org: string, filter: ActivityFilter = {}) =>
     `/orgs/${encodeURIComponent(org)}/activity/stream${query(compact(filter))}`,
-  runEvents: (runId: string, afterSeq?: number) =>
-    request<RunEventDto[]>(`/runs/${runId}/events${query(afterSeq ? { after_seq: String(afterSeq) } : undefined)}`),
+  /** A run's log, oldest first, every page: the views fold it whole (plan, activity, verdicts). */
+  runEvents: (runId: string, afterSeq?: number): Promise<RunEventDto[]> =>
+    everyRow((cursor) =>
+      request<RunEventPage>(
+        `/runs/${runId}/events${query(compact({ after_seq: afterSeq ? String(afterSeq) : undefined, cursor, limit: "200" }))}`,
+      ),
+    ),
   runDiff: (runId: string) => request<DiffSummary>(`/runs/${runId}/diff`),
   /** What fills the run's model context: the last call's sections and the series of totals (ADR 0141 §6). */
   runContext: (runId: string) => request<RunContext>(`/runs/${runId}/context-breakdown`),
@@ -1395,8 +1559,9 @@ export const api = {
   /** `which` picks the project's memory to read (S40-11): `shared` (the default), `own` with an agent, or a named one. */
   memorySearch: (id: string, q: string, which?: MemoryChoice) =>
     request<Memory[]>(`/projects/${qualify(id)}/memory/search${query({ q, ...memoryParams(which) })}`),
-  memoryPending: (id: string, which?: MemoryChoice) =>
-    request<Memory[]>(`/projects/${qualify(id)}/memory/pending${query(memoryParams(which))}`),
+  /** One page of the project memory's review queue, oldest first (ADR 0206): "More" passes `cursor`. */
+  memoryPending: (id: string, which?: MemoryChoice, page: PageParams = {}) =>
+    request<MemoryPage>(`/projects/${qualify(id)}/memory/pending${pageQuery(page, memoryParams(which))}`),
   /** One memory of the project as an OKF bundle (S72-04): its active facts, `verified` where a person accepted one. */
   exportMemory: (id: string, which?: MemoryChoice) =>
     okfBundle(`/projects/${qualify(id)}/memory/export${query(memoryParams(which))}`, `${id}-${which?.memory ?? "shared"}`),
@@ -1418,8 +1583,13 @@ export const api = {
       body: JSON.stringify(sources ? { sources } : {}),
     }),
   /** Named memories (S40-11, ADR 0075): the organisation's, global and project, with who uses each. */
+  memoriesPage: (org: string, filter: { scope?: "global" | "project"; project?: string } & PageParams = {}) =>
+    request<MemoryStorePage>(
+      `/orgs/${org}/memories${query(compact({ scope: filter.scope, project: filter.project, q: filter.q, cursor: filter.cursor, limit: filter.limit?.toString() }))}`,
+    ),
+  /** Every memory of the filter, every page: for the pickers and the bindings. */
   memories: (org: string, filter: { scope?: "global" | "project"; project?: string } = {}) =>
-    request<MemoryStore[]>(`/orgs/${org}/memories${query(compact(filter))}`),
+    everyRow((cursor) => api.memoriesPage(org, { ...filter, cursor, limit: 200 })),
   /** Tickets with and without a memory over the last `weeks` (1-52): the report's verdict says whether memory helps. */
   memoryAbReport: (org: string = DEFAULT_ORG, weeks = 4) =>
     request<MemoryAbReport>(`/orgs/${org}/memory/ab-report${query({ weeks: String(weeks) })}`),
@@ -1435,14 +1605,20 @@ export const api = {
     request<MemoryStore>(`/orgs/${org}/memories/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
   searchGlobalMemory: (org: string, slug: string, q: string) =>
     request<Memory[]>(`/orgs/${org}/memories/${slug}/search${query({ q })}`),
-  globalMemoryPending: (org: string, slug: string) => request<Memory[]>(`/orgs/${org}/memories/${slug}/pending`),
+  /** One page of a global memory's review queue, oldest first (ADR 0206). */
+  globalMemoryPending: (org: string, slug: string, page: PageParams = {}) =>
+    request<MemoryPage>(`/orgs/${org}/memories/${slug}/pending${pageQuery(page)}`),
   decideGlobalMemory: (org: string, slug: string, memoryId: string, action: "accept" | "reject") =>
     request<unknown>(`/orgs/${org}/memories/${slug}/pending`, {
       method: "POST",
       body: JSON.stringify({ id: memoryId, action }),
     }),
   /** What a run of the project may bind: `shared`, `own`, its named memories, the global ones that reach it. */
-  projectMemories: (id: string) => request<MemoryStore[]>(`/projects/${qualify(id)}/memories`),
+  projectMemoriesPage: (id: string, params: PageParams = {}) =>
+    request<MemoryStorePage>(`/projects/${qualify(id)}/memories${pageQuery(params)}`),
+  /** Every memory a run of the project may bind, every page. */
+  projectMemories: (id: string) =>
+    everyRow((cursor) => api.projectMemoriesPage(id, { cursor, limit: 200 })),
   createProjectMemory: (id: string, body: ProjectMemoryCreate) =>
     request<MemoryStore>(`/projects/${qualify(id)}/memories`, { method: "POST", body: JSON.stringify(body) }),
   updateProjectMemory: (id: string, slug: string, body: MemoryStorePatch) =>
@@ -1453,9 +1629,14 @@ export const api = {
   /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow`, `work_item` and `assistant` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
-  /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
-  budgetAlerts: (org: string, status: "open" | "acknowledged" | "all" = "open") =>
-    request<BudgetAlert[]>(`/orgs/${org}/budget-alerts${query({ status })}`),
+  /** The budgets that crossed 80 or 100 % (S29-04), one page at a time (ADR 0206): the inbox lists the open ones. */
+  budgetAlerts: (
+    org: string,
+    params: { status?: "open" | "acknowledged" | "all"; project?: string; cursor?: string; limit?: number } = {},
+  ) =>
+    request<BudgetAlertPage>(
+      `/orgs/${org}/budget-alerts${query(compact({ status: params.status ?? "open", project: params.project, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** The organisation's egress allowlist: rules, requests, the deployment's ceiling (S39-22, ADR 0066). */
   orgEgress: (org: string) => request<EgressOverview>(`/orgs/${org}/egress`),
   checkOrgEgress: (org: string, body: EgressCheck) =>
@@ -1537,6 +1718,8 @@ function memoryParams(which?: MemoryChoice): Record<string, string> {
   return out;
 }
 
+/** How many pending actions the inbox reads at most: five pages of 200. */
+export const ACTIONS_CAP = 1000;
 /** How many tickets a project page reads at most: five pages of 200. */
 export const WORK_ITEMS_CAP = 1000;
 
@@ -1556,6 +1739,27 @@ async function allWorkItems(
     hasMore = page.meta.has_more;
   } while (hasMore && cursor && items.length < cap);
   return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
+}
+
+export type AgentsParams = PageParams & {
+  q?: string;
+  scope?: "platform" | "org" | "project" | "personal";
+  project?: string;
+  tag?: readonly string[];
+  starred?: boolean;
+  sort?: "name" | "stars";
+  retired?: boolean;
+  awaiting_approval?: boolean;
+};
+
+function agentsQuery(params: AgentsParams): string {
+  const search = new URLSearchParams(compact({ q: params.q, scope: params.scope, project: params.project, sort: params.sort, cursor: params.cursor, limit: params.limit?.toString() }));
+  for (const tag of params.tag ?? []) search.append("tag", tag);
+  if (params.starred) search.set("starred", "true");
+  if (params.retired === false) search.set("retired", "false");
+  if (params.awaiting_approval) search.set("awaiting_approval", "true");
+  const text = search.toString();
+  return text ? `?${text}` : "";
 }
 
 function query(params?: Record<string, string>): string {

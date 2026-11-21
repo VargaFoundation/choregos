@@ -176,4 +176,62 @@ describe("section upload (S42-13)", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("follows the cursor to the end for a log the views fold whole (ADR 0206)", async () => {
+    const pages = [
+      { items: [{ seq: 1 }, { seq: 2 }], meta: { has_more: true, next_cursor: "c1" } },
+      { items: [{ seq: 3 }], meta: { has_more: false, next_cursor: null } },
+    ];
+    const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify(pages.shift()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { api } = await import("@/lib/api");
+      const events = await api.runEvents("r1", 7);
+      expect(events.map((e) => e.seq)).toEqual([1, 2, 3]);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/runs/r1/events?after_seq=7&limit=200");
+      expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/runs/r1/events?after_seq=7&cursor=c1&limit=200");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("the whole-list readers follow the cursor to the end (ADR 0206)", () => {
+  it("reads every skill, one 200-row page after the other", async () => {
+    const pages: Record<string, unknown> = {
+      "": { items: [{ slug: "a" }, { slug: "b" }], meta: { has_more: true, next_cursor: "b" } },
+      b: { items: [{ slug: "c" }], meta: { has_more: false, next_cursor: null } },
+    };
+    const fetchMock = vi.fn(async (url: string) => {
+      const cursor = new URL(url, "http://x").searchParams.get("cursor") ?? "";
+      return new Response(JSON.stringify(pages[cursor]), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { api } = await import("@/lib/api");
+      expect((await api.skills("acme")).map((skill) => skill.slug)).toEqual(["a", "b", "c"]);
+      expect(fetchMock.mock.calls.map((call) => (call as unknown as [string])[0])).toEqual([
+        "/api/v1/orgs/acme/skills?limit=200",
+        "/api/v1/orgs/acme/skills?cursor=b&limit=200",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("sends the filters of a page to the server, never to the browser", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [], meta: { has_more: false } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { api } = await import("@/lib/api");
+      await api.knowledgeBasesPage("acme", { scope: "groups", q: "audit", limit: 50 });
+      await api.memoriesPage("acme", { scope: "global", cursor: "x", limit: 50 });
+      expect(fetchMock.mock.calls.map((call) => (call as unknown as [string])[0])).toEqual([
+        "/api/v1/orgs/acme/knowledge?q=audit&scope=groups&limit=50",
+        "/api/v1/orgs/acme/memories?scope=global&cursor=x&limit=50",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

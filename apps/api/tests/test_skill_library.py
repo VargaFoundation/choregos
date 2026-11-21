@@ -88,7 +88,7 @@ async def test_what_an_archive_does_not_let_through(
     refused = await _import(client, content)
     assert refused.status_code == 422, refused.text
     assert reason in refused.text
-    assert (await client.get("/api/v1/orgs/northwind/skills")).json() == [], "nothing is created"
+    assert (await client.get("/api/v1/orgs/northwind/skills")).json()["items"] == [], "nothing is created"
 
 
 async def test_the_name_of_the_next_version_must_be_the_skills(client: AsyncClient, admin: str) -> None:
@@ -149,7 +149,7 @@ async def test_the_runner_reads_the_skills_of_its_run_and_of_no_other(
         "/api/v1/internal/runs/run-with/skills", headers={"Authorization": f"Bearer {token}"}
     )
     assert read_back.status_code == 200, read_back.text
-    (skill,) = read_back.json()
+    (skill,) = read_back.json()["items"]
     assert (skill["slug"], skill["version"], skill["digest"], skill["files"]) == (
         "procedure-onboarding",
         1,
