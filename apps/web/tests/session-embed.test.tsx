@@ -12,7 +12,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       me: vi.fn().mockRejectedValue(new real.ApiError(401, { title: "Not authenticated" })),
-      orgs: vi.fn().mockResolvedValue([]),
+      orgs: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

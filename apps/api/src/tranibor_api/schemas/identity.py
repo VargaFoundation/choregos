@@ -96,6 +96,13 @@ class MachineAccountDto(Dto):
     tokens: list[ApiTokenDto] = Field(default_factory=list)
 
 
+class ApiTokenPage(Dto):
+    """One page of the caller's API tokens, newest first (ADR 0206)."""
+
+    items: list[ApiTokenDto]
+    meta: PageMeta
+
+
 class BrowserSessionDto(Dto):
     """One of the caller's browser sessions that still holds (ADR 0130)."""
 
@@ -134,6 +141,13 @@ class MembershipUpsert(Dto):
     project_slug: str | None = None
 
 
+class BrowserSessionPage(Dto):
+    """One page of the caller's sessions that still hold, the most recently active first (ADR 0206)."""
+
+    items: list[BrowserSessionDto]
+    meta: PageMeta
+
+
 class OrgDto(Dto):
     slug: str
     name: str
@@ -149,6 +163,13 @@ class OrgDto(Dto):
     #: Whether a new version of an internal agent must inherit nothing from its project (S60-05,
     #: ADR 0127 §8): `required`, or `None`. Its administrator changes it.
     complete_agents: OrgCompleteAgents | None = None
+
+
+class OrgPage(Dto):
+    """One page of the caller's organisations, by slug (ADR 0206)."""
+
+    items: list[OrgDto]
+    meta: PageMeta
 
 
 class OrgCreate(Dto):

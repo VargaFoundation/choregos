@@ -27,11 +27,14 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       edition: vi.fn(),
-      myTokens: vi.fn().mockResolvedValue([
-        { id: "t1", name: "laptop-cli", scopes: ["*"], expires_at: null, last_used_at: null },
-        { id: "t2", name: "old-ci", scopes: ["*"], expires_at: "2026-01-01T00:00:00Z", last_used_at: null },
-      ]),
-      mySessions: vi.fn(),
+      myTokens: vi.fn().mockResolvedValue({
+        items: [
+          { id: "t1", name: "laptop-cli", scopes: ["*"], expires_at: null, last_used_at: null },
+          { id: "t2", name: "old-ci", scopes: ["*"], expires_at: "2026-01-01T00:00:00Z", last_used_at: null },
+        ],
+        meta: { has_more: false, next_cursor: null },
+      }),
+      mySessions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       myLinkedAccounts: vi.fn().mockResolvedValue({ items: [], instances: [] }),
       endSession: vi.fn().mockResolvedValue(undefined),
       endOtherSessions: vi.fn().mockResolvedValue({ ended: 1 }),
@@ -91,7 +94,7 @@ describe("my account, your roles", () => {
 
   it("holds what is the person's: profile, sessions, access tokens, linked accounts, roles and preferences", async () => {
     vi.mocked(api.edition).mockResolvedValue({ edition: "community", features: [] } as never);
-    vi.mocked(api.mySessions).mockResolvedValue([]);
+    listSessions([]);
     wrap();
     expect(screen.getByRole("heading", { level: 1, name: "My account" })).toBeTruthy();
     const titles = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
@@ -149,6 +152,14 @@ const SESSIONS = [
   },
 ];
 
+/** The server's answer: `current` filters in SQL, so the mock filters the same way (ADR 0206). */
+function listSessions(all: typeof SESSIONS) {
+  vi.mocked(api.mySessions).mockImplementation(async (params = {}) => ({
+    items: all.filter((s) => params.current === undefined || s.current === params.current),
+    meta: { has_more: false, next_cursor: null },
+  }));
+}
+
 describe("my account, your sessions (ADR 0130)", () => {
   beforeEach(() => {
     memberships.list = [row("northwind", "org_admin")];
@@ -158,7 +169,7 @@ describe("my account, your sessions (ADR 0130)", () => {
   const sessionsCard = () => screen.getByRole("heading", { name: "Sessions" }).closest("section")!;
 
   it("lists each browser, this one marked, with its address", async () => {
-    vi.mocked(api.mySessions).mockResolvedValue(SESSIONS);
+    listSessions(SESSIONS);
     wrap();
     const list = await screen.findByRole("list", { name: "Your sessions" });
     const rows = await within(list).findAllByTestId("session");
@@ -171,7 +182,7 @@ describe("my account, your sessions (ADR 0130)", () => {
   });
 
   it("ends another session after a confirmation", async () => {
-    vi.mocked(api.mySessions).mockResolvedValue(SESSIONS);
+    listSessions(SESSIONS);
     wrap();
     const rows = await within(await screen.findByRole("list", { name: "Your sessions" })).findAllByTestId("session");
     fireEvent.click(within(rows[1]!).getByRole("button", { name: "End" }));
@@ -181,7 +192,7 @@ describe("my account, your sessions (ADR 0130)", () => {
   });
 
   it("signs out of every other session, and offers it only when there is one", async () => {
-    vi.mocked(api.mySessions).mockResolvedValue(SESSIONS);
+    listSessions(SESSIONS);
     wrap();
     fireEvent.click(await within(sessionsCard()).findByRole("button", { name: "Sign out of all other sessions" }));
     fireEvent.click(await screen.findByRole("button", { name: "Sign out of the other sessions" }));
@@ -189,14 +200,14 @@ describe("my account, your sessions (ADR 0130)", () => {
   });
 
   it("alone, offers nothing to end", async () => {
-    vi.mocked(api.mySessions).mockResolvedValue([SESSIONS[0]!]);
+    listSessions([SESSIONS[0]!]);
     wrap();
     await within(sessionsCard()).findByText("This session");
     expect(within(sessionsCard()).queryByRole("button", { name: "Sign out of all other sessions" })).toBeNull();
   });
 
   it("says why this browser is not listed when it signed in before sessions were recorded", async () => {
-    vi.mocked(api.mySessions).mockResolvedValue([SESSIONS[1]!]);
+    listSessions([SESSIONS[1]!]);
     wrap();
     expect(await within(sessionsCard()).findByText(/signed in before sessions were listed/)).toBeTruthy();
   });

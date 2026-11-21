@@ -318,6 +318,8 @@ export type {
 /** The organisation's memory A/B report and the platform's gateway keys (S47-18). */
 export type {
   ActionPage,
+  ApiTokenPage,
+  BrowserSessionPage,
   GatewayKeyInfo,
   GatewayKeyPage,
   LinkedAccountPage,
@@ -325,6 +327,7 @@ export type {
   MemoryAbGroup,
   MemoryAbReport,
   OrgConnectorPage,
+  OrgPage,
   ProjectOperationPage,
   ProjectOrgConnectorPage,
   RemoteCredentialPage,

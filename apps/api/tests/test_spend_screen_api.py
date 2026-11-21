@@ -11,7 +11,7 @@ from httpx import AsyncClient
 async def test_the_currency_is_an_organisation_setting_eur_by_default(
     client: AsyncClient, admin: str
 ) -> None:
-    orgs = (await client.get("/api/v1/orgs")).json()
+    orgs = (await client.get("/api/v1/orgs")).json()["items"]
     assert [(o["slug"], o["currency"]) for o in orgs] == [("northwind", "EUR")]
     assert (await client.get("/api/v1/orgs/northwind/costs")).json()["currency"] == "EUR"
     changed = await client.patch("/api/v1/orgs/northwind", json={"currency": "USD"})

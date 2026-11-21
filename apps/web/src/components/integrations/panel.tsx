@@ -282,14 +282,12 @@ export function Extrait({ code, testId = "snippet" }: { code: string; testId?: s
 /** "Connected": the token's last use, re-read every three seconds until there is one. */
 function TokenState({ id }: { id: string }) {
   const tokens = useQuery({
-    queryKey: ["tokens"],
-    queryFn: () => api.myTokens(),
-    refetchInterval: (query) => {
-      const token = query.state.data?.find((t) => t.id === id);
-      return token?.last_used_at ? false : 3000;
-    },
+    // The server finds the one token by its id: it may be on any page of the person's tokens.
+    queryKey: ["tokens", "id", id],
+    queryFn: () => api.myTokens({ id, limit: 1 }),
+    refetchInterval: (query) => (query.state.data?.items[0]?.last_used_at ? false : 3000),
   });
-  const usedToken = tokens.data?.find((t) => t.id === id);
+  const usedToken = tokens.data?.items[0];
   if (!usedToken?.last_used_at) {
     return (
       <p className="text-xs text-ink-muted" data-testid="connection-status">

@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Path, Request, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Path, Query, Request, status
+from sqlalchemy import func, or_, select
 from sse_starlette.sse import EventSourceResponse
 from tranibor_contracts import EventType, ProjectConfig, Role
 from tranibor_core import utcnow
@@ -18,7 +18,7 @@ from tranibor_core.tool_scripts_switch import org_tool_scripts
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import Membership, Organization, Project
+from ..db.models import Membership, Organization, OrgSlugAlias, Project
 from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
 from ..db.session import ALL_ORGS, limit_to_organisations, release_connection
 from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
@@ -30,6 +30,7 @@ from ..rbac import Permission
 from ..schemas import (
     OrgCreate,
     OrgDto,
+    OrgPage,
     OrgUpdate,
     ProjectCreate,
     ProjectDto,
@@ -49,14 +50,41 @@ from ..temporal import get_temporal, provisioning_id
 router = APIRouter(tags=["projects"])
 
 
-@router.get("/orgs", response_model=list[OrgDto], operation_id="listOrgs")
-async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
-    """The caller's organisations, with their role — what the front end shows in its selector."""
-    slugs = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles}
-    rows = list((await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars())
+@router.get("/orgs", response_model=OrgPage, operation_id="listOrgs")
+async def list_orgs(
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    slug: Annotated[str | None, Query(max_length=64)] = None,
+) -> OrgPage:
+    """The caller's organisations, by slug, one page at a time (ADR 0206), with their role.
+
+    `q` matches a substring of the slug, the name or a former slug (what the console's switcher types);
+    `slug` keeps the one organisation that has that slug, current or former (what a client holding a
+    remembered slug asks, to read that organisation's currency or settings whatever page it is on).
+    """
+    slugs = set(principal.org_roles) | {key.split("/", 1)[0] for key in principal.project_roles}
+    query = select(Organization).where(Organization.slug.in_(slugs))
+    if slug:
+        former = select(OrgSlugAlias.org_id).where(OrgSlugAlias.alias == slug)
+        query = query.where(or_(Organization.slug == slug, Organization.id.in_(former)))
+    if q and q.strip():
+        needle = q.strip()
+        former = select(OrgSlugAlias.org_id).where(OrgSlugAlias.alias.icontains(needle, autoescape=True))
+        query = query.where(
+            or_(
+                Organization.slug.icontains(needle, autoescape=True),
+                Organization.name.icontains(needle, autoescape=True),
+                Organization.id.in_(former),
+            )
+        )
+    rows, meta = await keyset_page(
+        session, query, sort=Organization.slug, tiebreak=Organization.id, page=page, descending=False
+    )
     aliases = await aliases_by_org(session, [o.id for o in rows])
-    return sorted(
-        (
+    return OrgPage(
+        items=[
             OrgDto(
                 slug=o.slug,
                 name=o.name,
@@ -67,8 +95,8 @@ async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
                 complete_agents="required" if org_requires_complete(o.settings) else None,
             )
             for o in rows
-        ),
-        key=lambda o: o.slug,
+        ],
+        meta=meta,
     )
 
 

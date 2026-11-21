@@ -44,7 +44,7 @@ class Platform:
             org = {"slug": "acme", "name": "Acme", "aliases": ["old-acme"]}
             if currency:
                 org["currency"] = currency
-            body = [self.contract("Org", org)]
+            body = {"items": [self.contract("Org", org)], "meta": {"next_cursor": None, "has_more": False}}
         self.orgs = self.router.get(f"{V1}/orgs").mock(return_value=Response(status, json=body))
         return self.orgs
 
@@ -306,7 +306,7 @@ def test_the_ask_cost_line_prints_the_gateways_dollars_with_their_symbol(capsys:
 
         def get(self, path: str, **kwargs: Any) -> Any:
             if path == "/orgs":
-                return [{"slug": "acme", "name": "Acme", "currency": "USD"}]
+                return {"items": [{"slug": "acme", "name": "Acme", "currency": "USD"}]}
             return {"cost_usd": 0.0125}
 
     err = Console(stderr=True, force_terminal=False, width=200)

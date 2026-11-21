@@ -26,12 +26,12 @@ import secrets
 import time
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, not_, or_, select
 from tranibor_contracts import Role
 from tranibor_core import utcnow
 
@@ -40,12 +40,13 @@ from ..browser_sessions import end_session, open_session
 from ..config import Settings, get_settings
 from ..db.models import ApiToken, Membership, Organization, User
 from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
-from ..deps import Config, Db, Me, PlatformDb, resolve_project
+from ..deps import Config, Db, Me, Pagination, PlatformDb, resolve_project
 from ..edition import group_mapper
 from ..errors import ApiError, forbidden, not_found, unauthorized, unprocessable
+from ..keyset import keyset_page
 from ..logging import get_logger
 from ..rbac import Permission, rank_of
-from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
+from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenPage, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
 from ..services.api_tokens import api_token_dto, linked_projects
 from ..services.avatars import avatar_url
@@ -1175,19 +1176,38 @@ async def logout(request: Request, session: PlatformDb, settings: Config, respon
 # ───────────────────────── API tokens ─────────────────────────
 
 
-@router.get("/me/tokens", response_model=list[ApiTokenDto], operation_id="listMyTokens")
-async def list_my_tokens(session: Db, principal: Me) -> list[ApiTokenDto]:
-    rows = list(
-        (
-            await session.execute(
-                select(ApiToken)
-                .where(ApiToken.user_id == principal.user_id)
-                .order_by(ApiToken.created_at.desc())
-            )
-        ).scalars()
-    )
+#: The scopes that open the MCP door (ADR 0030): a token that carries one is an MCP client.
+_MCP_SCOPES = ("mcp:read", "mcp:write")
+
+
+@router.get("/me/tokens", response_model=ApiTokenPage, operation_id="listMyTokens")
+async def list_my_tokens(
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    kind: Annotated[Literal["mcp", "api"] | None, Query()] = None,
+    id: Annotated[str | None, Query(max_length=64)] = None,
+) -> ApiTokenPage:
+    """The caller's tokens, newest first, one page at a time (ADR 0206); never their value.
+
+    `q` matches a substring of the name; `kind` keeps the MCP clients (a token carrying `mcp:read` or
+    `mcp:write`) or the others; `id` keeps one token (the integrations screen re-reads the one it just made).
+    """
+    query = select(ApiToken).where(ApiToken.user_id == principal.user_id)
+    if id:
+        query = query.where(ApiToken.id == id)
+    if q and q.strip():
+        query = query.where(ApiToken.name.icontains(q.strip(), autoescape=True))
+    if kind is not None:
+        # The scopes are a JSON array: matched as text, the same on PostgreSQL and SQLite.
+        carries_mcp = or_(*(cast(ApiToken.scopes, String).contains(f'"{scope}"') for scope in _MCP_SCOPES))
+        query = query.where(carries_mcp if kind == "mcp" else not_(carries_mcp))
+    rows, meta = await keyset_page(session, query, sort=ApiToken.created_at, tiebreak=ApiToken.id, page=page)
     projects_by_id = await linked_projects(session, {row.project_id for row in rows if row.project_id})
-    return [api_token_dto(row, projects_by_id.get(row.project_id or "")) for row in rows]
+    return ApiTokenPage(
+        items=[api_token_dto(row, projects_by_id.get(row.project_id or "")) for row in rows], meta=meta
+    )
 
 
 @router.post(

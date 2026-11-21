@@ -82,12 +82,12 @@ async def test_a_session_and_a_token_issued_before_the_rename_keep_working(
     token = (await client.post("/api/v1/me/tokens", json={"name": "ci", "scopes": ["*"]})).json()["token"]
     await _rename(client)
     mine = await client.get(ORG)  # the cookie of the session opened BEFORE the rename
-    assert [(o["slug"], o["role"]) for o in mine.json()] == [("fondation", "org_admin")]
+    assert [(o["slug"], o["role"]) for o in mine.json()["items"]] == [("fondation", "org_admin")]
     by_token = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
         got = await by_token.get(ORG, headers={"Authorization": f"Bearer {token}"})
         assert got.status_code == 200, got.text
-        assert [o["slug"] for o in got.json()] == ["fondation"]
+        assert [o["slug"] for o in got.json()["items"]] == ["fondation"]
         old = await by_token.get(f"{ORG}/northwind/projects", headers={"Authorization": f"Bearer {token}"})
         assert old.status_code == 200, "the token's old address resolves too"
     finally:
@@ -105,7 +105,7 @@ async def test_a_restart_with_the_old_bootstrap_slug_does_not_create_a_second_or
         Settings(bootstrap_org="northwind", bootstrap_admins="x@northwind.dev")
     )
     assert done == {"organisations": [], "administrateurs": []}
-    assert [o["slug"] for o in (await client.get(ORG)).json()] == ["fondation"]
+    assert [o["slug"] for o in (await client.get(ORG)).json()["items"]] == ["fondation"]
 
 
 async def _other_organisation(slug: str, *, admin_too: bool = True) -> None:
@@ -140,7 +140,7 @@ async def test_listing_shows_the_aliases_and_releasing_one_frees_it(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
     await _rename(client)
-    (org,) = (await client.get(ORG)).json()
+    (org,) = (await client.get(ORG)).json()["items"]
     assert org["aliases"] == ["northwind"]
     # releasing an alias is a platform-administrator act: on an instance with two organisations, the
     # admin of one of them is not one
@@ -161,7 +161,7 @@ async def test_releasing_an_alias_makes_the_old_address_a_404(
         assert gone.status_code == 204, gone.text
         assert (await client.get(f"{ORG}/northwind/projects")).status_code == 404
         assert (await client.delete(f"{ORG}/fondation/aliases/northwind")).status_code == 404
-        assert (await client.get(ORG)).json()[0]["aliases"] == []
+        assert (await client.get(ORG)).json()["items"][0]["aliases"] == []
         assert (await client.patch(f"{ORG}/fondation", json={"slug": "northwind"})).status_code == 200
     finally:
         reset()

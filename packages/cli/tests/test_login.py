@@ -99,7 +99,9 @@ def test_login_fresh_asks_the_console_for_a_recent_sign_in(profile: Path, contra
     respx.post(f"{API}/api/v1/auth/device").mock(return_value=Response(200, json=_codes(contract)))
     respx.post(f"{API}/api/v1/auth/device/token").mock(return_value=_session(contract))
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
+    respx.get(f"{API}/api/v1/orgs").mock(
+        return_value=Response(200, json={"items": [], "meta": {"next_cursor": None, "has_more": False}})
+    )
     result = _run("login", "--api-url", API, "--fresh", "--no-browser")
     assert result.exit_code == 0, result.output
     assert "user_code=BCDF-GH23&fresh=1" in result.output.replace("\n", "")
@@ -118,7 +120,9 @@ def test_login_slow_down_lengthens_the_wait(
         side_effect=[_error("slow_down", interval=10), _error("authorization_pending"), _session(contract)]
     )
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
+    respx.get(f"{API}/api/v1/orgs").mock(
+        return_value=Response(200, json={"items": [], "meta": {"next_cursor": None, "has_more": False}})
+    )
     assert _run("login", "--api-url", API, "--no-browser").exit_code == 0
     assert waits == [5.0, 10.0, 10.0]
 
@@ -157,7 +161,9 @@ def test_login_gives_up_when_the_code_expires_unanswered(
 @respx.mock
 def test_login_with_a_token_keeps_the_old_path(profile: Path) -> None:
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[]))
+    respx.get(f"{API}/api/v1/orgs").mock(
+        return_value=Response(200, json={"items": [], "meta": {"next_cursor": None, "has_more": False}})
+    )
     result = _run("login", "--api-url", API, "--token", "chg_x")
     assert result.exit_code == 0, result.output
     assert json.loads(profile.read_text())["token"] == "chg_x"
@@ -168,9 +174,7 @@ def test_login_with_a_token_keeps_the_old_path(profile: Path) -> None:
 def test_logout_ends_the_session_on_the_server_and_forgets_it_here(profile: Path) -> None:
     profile.write_text(json.dumps({"api_url": API, "token": SECRET, "org": "acme"}))
     respx.get(f"{API}/api/v1/me/sessions").mock(
-        return_value=Response(
-            200, json=[{"id": "ses-other", "current": False}, {"id": "ses-1", "current": True}]
-        )
+        return_value=Response(200, json=_page({"id": "ses-1", "current": True}))
     )
     ended = respx.delete(f"{API}/api/v1/me/sessions/ses-1").mock(return_value=Response(204))
     result = _run("logout")
@@ -193,7 +197,11 @@ def _signs_in(contract: Any) -> None:
     respx.post(f"{API}/api/v1/auth/device").mock(return_value=Response(200, json=_codes(contract)))
     respx.post(f"{API}/api/v1/auth/device/token").mock(return_value=_session(contract))
     respx.get(f"{API}/api/v1/me").mock(return_value=Response(200, json={"email": "v@example.test"}))
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme")]))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=_page(_org("acme"))))
+
+
+def _page(*items: dict[str, Any]) -> dict[str, Any]:
+    return {"items": list(items), "meta": {"next_cursor": None, "has_more": False}}
 
 
 def _org(slug: str) -> dict[str, Any]:
@@ -256,7 +264,7 @@ def test_login_without_an_address_signs_in_to_the_saved_instance(
 ) -> None:
     profile.write_text(json.dumps({"api_url": API, "token": "", "org": "acme"}))
     _signs_in(contract)
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("globex"), _org("acme")]))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=_page(_org("globex"), _org("acme"))))
     result = _run("login")
     assert result.exit_code == 0, result.output
     assert "Instance address" not in result.output, "a known instance is not asked again"
@@ -281,7 +289,7 @@ def test_login_names_the_organisations_it_cannot_choose_between(
     profile: Path, contract: Any, desktop: list[str]
 ) -> None:
     _signs_in(contract)
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme"), _org("globex")]))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=_page(_org("acme"), _org("globex"))))
     result = _run("login", "--api-url", API)
     assert result.exit_code == 0, result.output
     assert json.loads(profile.read_text())["org"] == "", "no organisation is picked for the person"
@@ -295,7 +303,7 @@ def test_login_asks_which_organisation_in_a_terminal(
 ) -> None:
     monkeypatch.setattr("tranibor_cli.chat.interactive", lambda: True)
     _signs_in(contract)
-    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=[_org("acme"), _org("globex")]))
+    respx.get(f"{API}/api/v1/orgs").mock(return_value=Response(200, json=_page(_org("acme"), _org("globex"))))
     from tranibor_cli.main import app
 
     result = CliRunner().invoke(app, ["login", "--api-url", API], input="initech\nglobex\n")

@@ -44,7 +44,7 @@ def main() -> None:
     os.environ["CHOREGOS_DEV_ORG"] = org
     hr = _trial("hr/scenario_hr.py", "scenario_hr")
     with hr.client() as http:
-        known = {o["slug"] for o in hr.expect(http.get("/orgs"), 200)}
+        known = {o["slug"] for o in hr.expect(http.get("/orgs", params={"limit": 200}), 200)["items"]}
         if org not in known:
             response = http.post("/orgs", json={"slug": org, "name": org.capitalize()})
             if response.status_code == 409 and len(known) == 1:

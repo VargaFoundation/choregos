@@ -40,7 +40,7 @@ async def test_the_bootstrap_creates_the_organisation_and_its_admins_only_once(
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await login(client, "alice@acme.test")
-        orgs = (await client.get("/api/v1/orgs")).json()
+        orgs = (await client.get("/api/v1/orgs")).json()["items"]
         assert [(o["slug"], o["role"]) for o in orgs] == [("acme", "org_admin")]
 
 
@@ -68,7 +68,7 @@ async def test_an_admin_creates_an_organisation_a_developer_does_not(client: Asy
         assert created.json()["role"] == "org_admin"
         again = await client.post("/api/v1/orgs", json={"slug": "subsidiary", "name": "again"})
         assert again.status_code == 409, "a slug already taken stays a conflict"
-        slugs = [o["slug"] for o in (await client.get("/api/v1/orgs")).json()]
+        slugs = [o["slug"] for o in (await client.get("/api/v1/orgs")).json()["items"]]
         assert slugs == ["northwind", "subsidiary"]
 
         await login(client, "dev@northwind.dev")

@@ -271,11 +271,9 @@ class LiveFlowPane(Vertical, can_focus=True):
         self.graph = report.get("graph")
         self.initial = (definition.get("json") or {}).get("initial")
         try:
-            orgs = await self.api.get("/orgs")
-            orgs = orgs["items"] if isinstance(orgs, dict) else orgs
-            self.currency = next(
-                (o.get("currency") or "EUR" for o in orgs if o["slug"] == self.organisation), None
-            )
+            # the server finds the organisation by its slug (ADR 0206): no list is read to look it up
+            orgs = (await self.api.get("/orgs", params={"slug": self.organisation, "limit": 1}))["items"]
+            self.currency = next((o.get("currency") or "EUR" for o in orgs), None)
         except ApiError:
             self.currency = None
         items = await self.read_items()

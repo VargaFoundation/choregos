@@ -4,13 +4,19 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { api, ApiError, DEFAULT_ORG, IS_MOCK, setCurrentOrg } from "./api";
-import { pickOrg, rememberOrgCookie } from "./remembered-org";
+import { api, ApiError, DEFAULT_ORG, IS_MOCK, orgSlug, setCurrentOrg } from "./api";
+import { pickOrg, rememberOrgCookie, rememberedOrg } from "./remembered-org";
 import type { MeDto, Org } from "./types";
 
 type Session = {
   me: MeDto | null;
+  /**
+   * The first page of the person's organisations, plus the current and the remembered one even when
+   * they are further down: whoever looks up the current organisation here always finds it.
+   */
   orgs: Org[];
+  /** More organisations than `orgs` holds: the switcher searches the server, it never filters `orgs`. */
+  moreOrgs: boolean;
   org: string;
   selectOrg: (slug: string) => void;
   chargement: boolean;
@@ -19,6 +25,24 @@ type Session = {
 
 const SessionContext = createContext<Session | null>(null);
 const ORG_KEY = "choregos.org";
+const ORG_PAGE = 50;
+
+/**
+ * One page of organisations, then, by the server's exact `slug` filter, the ones the session needs
+ * that the page left out (the remembered choice, the current organisation): nothing is searched in
+ * the browser over a partial list (ADR 0206).
+ */
+async function loadOrgs(): Promise<{ orgs: Org[]; more: boolean }> {
+  const first = await api.orgs({ limit: ORG_PAGE });
+  const orgs = [...first.items];
+  if (first.meta.has_more) {
+    for (const wanted of new Set([rememberedOrg(), orgSlug()])) {
+      if (!wanted || orgs.some((o) => o.slug === wanted || o.aliases?.includes(wanted))) continue;
+      orgs.push(...(await api.orgs({ slug: wanted })).items.filter((o) => !orgs.some((k) => k.slug === o.slug)));
+    }
+  }
+  return { orgs, more: first.meta.has_more };
+}
 
 /**
  * The session and the current organisation, for the whole front end.
@@ -31,21 +55,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.me(), retry: false });
-  const orgs = useQuery({ queryKey: ["orgs"], queryFn: () => api.orgs(), enabled: !!me.data, retry: false });
   const [org, setOrg] = useState<string>(DEFAULT_ORG);
+  const orgs = useQuery({
+    queryKey: ["orgs"],
+    queryFn: loadOrgs,
+    enabled: !!me.data,
+    retry: false,
+  });
   // The chosen organisation is picked when the list arrives, adjusted during the render and not in
   // an effect (the pattern React documents for "state that depends on a prop"): an effect would set
   // the state after the fact and cause a cascading render.
   const [vues, setVues] = useState<Org[] | null>(null);
-  if (orgs.data && orgs.data !== vues) {
-    setVues(orgs.data);
+  if (orgs.data && orgs.data.orgs !== vues) {
+    setVues(orgs.data.orgs);
     let voulue: string | null = null;
     try {
       voulue = window.localStorage.getItem(ORG_KEY);
     } catch {
       voulue = null;
     }
-    const choisie = pickOrg(orgs.data, voulue) ?? DEFAULT_ORG;
+    const choisie = pickOrg(orgs.data.orgs, voulue) ?? DEFAULT_ORG;
     setOrg(choisie);
     setCurrentOrg(choisie);
     rememberOrgCookie(choisie);
@@ -81,7 +110,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     <SessionContext.Provider
       value={{
         me: me.data ?? null,
-        orgs: orgs.data ?? [],
+        orgs: orgs.data?.orgs ?? [],
+        moreOrgs: orgs.data?.more ?? false,
         org,
         selectOrg: chooseOrg,
         chargement: me.isLoading || (!!me.data && orgs.isLoading),
