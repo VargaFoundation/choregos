@@ -129,8 +129,11 @@ def test_a_value_is_one_plugin_s_and_matches_the_pattern(plugin: str) -> None:
         MEMORY_KINDS.declare("runbook", plugin="other")
     with pytest.raises(ValueError, match="must match"):
         INBOUND_EVENT_TYPES.declare("Incident Opened", plugin=plugin)
-    # A plugin may take over a value of the core (what C2 does with `scm.pr.opened`): still valid.
-    INBOUND_EVENT_TYPES.declare("scm.pr.opened", plugin=plugin)
+    # A plugin may take over a value of the core (what C2 does with `scm.pr.opened`): still valid. The
+    # suite registers `software-delivery`, which took that one over: another plugin cannot.
+    INBOUND_EVENT_TYPES.declare("alert.fired", plugin=plugin)
+    with pytest.raises(ValueError, match="already declared by the plugin `software-delivery`"):
+        INBOUND_EVENT_TYPES.declare("scm.pr.opened", plugin=plugin)
     assert (
         InboundEvent(type="scm.pr.opened", source="github", delivery_id="d").type
         is InboundEventType.PR_OPENED
@@ -157,3 +160,51 @@ def test_a_stored_document_reads_a_value_nobody_declares_any_more() -> None:
         {"type": "scm.pr.opened", "source": "github", "delivery_id": "d"}, context={STORED: True}
     )
     assert stored.type is InboundEventType.PR_OPENED
+
+
+def test_the_values_of_software_delivery_are_kept_for_its_plugin_for_one_window() -> None:
+    """Round C2 (ADR 0181): the `scm.*`, `ci.*` and `cd.*` event types, four finding types and two memory
+    kinds are the `software-delivery` plugin's. The core's lists keep them for one window, each enum
+    member on the window list with the release that removes it, and name the plugin for them."""
+    from tranibor_contracts import FINDING_TYPES, INBOUND_EVENT_TYPES, MEMORY_KINDS
+    from tranibor_contracts.window import C2, WINDOW
+
+    expected = {
+        INBOUND_EVENT_TYPES: {
+            v.value for v in InboundEventType if v.value.split(".")[0] in {"scm", "ci", "cd"}
+        },
+        FINDING_TYPES: {"bug", "perf", "tech-debt", "flaky-test"},
+        MEMORY_KINDS: {"flaky_test", "hotspot"},
+    }
+    windowed = {entry.where.rsplit(":", 1)[-1] for entry in WINDOW if entry.window is C2}
+    for open_list, values in expected.items():
+        assert set(open_list.kept) == values and set(open_list.kept.values()) == {"software-delivery"}
+        assert open_list.own() == open_list.core - values
+        for value in values:
+            assert open_list.plugin_of(value) == "software-delivery"
+            assert open_list.check(value) == value, "still read during the window"
+        enum = type(open_list.check(next(iter(values))))
+        assert {f"{enum.__name__}.{m.name}" for m in enum if m.value in values} <= windowed
+    assert len(windowed) == 13 + 4 + 2
+    assert INBOUND_EVENT_TYPES.plugin_of("tracker.item.created") is None
+
+
+def test_the_connector_kinds_of_software_delivery_wait_for_round_d() -> None:
+    """`scm`, `ci` and `cd` are the plugin's, kept in the core's list until the connector types the core
+    still registers under them move (window `D`)."""
+    from tranibor_contracts.window import WINDOW, D
+
+    assert set(CONNECTOR_KINDS.kept) == {"scm", "ci", "cd"}
+    assert {CONNECTOR_KINDS.plugin_of(kind) for kind in ("scm", "ci", "cd")} == {"software-delivery"}
+    assert CONNECTOR_KINDS.plugin_of("tracker") is None and "tracker" in CONNECTOR_KINDS.own()
+    assert {e.name for e in WINDOW if e.window is D} == {
+        "ConnectorKind.SCM",
+        "ConnectorKind.CI",
+        "ConnectorKind.CD",
+    }
+    assert CONNECTOR_KINDS.check("scm") is ConnectorKind.SCM
+
+
+def test_a_kept_value_must_be_the_core_s() -> None:
+    with pytest.raises(ValueError, match="not in the core's list"):
+        OpenList("thing", r"^[a-z]+$", ["a"], kept={"b": "plugin"})

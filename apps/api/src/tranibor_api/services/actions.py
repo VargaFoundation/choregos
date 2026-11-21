@@ -14,6 +14,7 @@ the API before the slightest effect. The decision is guarded four ways:
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -191,7 +192,7 @@ async def propose_for_transition(
         justification=str(render(action.justification, context)) if action.justification else None,
         params=dict(render(action.params, context)),
         effects=[e.model_dump(by_alias=True, exclude_none=True) for e in action.effects],
-        approval=ApprovalSpec.model_validate(action.approval.model_dump())
+        approval=ApprovalSpec.model_validate(rendered_approval(action.approval.model_dump(), context))
         if action.approval
         else ApprovalSpec(),
         work_item_id=item.id,
@@ -216,6 +217,32 @@ async def propose_for_transition(
         # Started by the activity that proposed it, once the row is written (orchestrator).
         await approved_by_policy(session, project, proposed)
     return proposed
+
+
+def rendered_approval(approval: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    """Who decides a workflow's action, from its work item (ADR 0196): an approver `group` written
+    `{{ fields.x }}` names the group that field holds, and each `excluded` entry the person it holds,
+    rendered with the context of the title and the params. A group that renders empty refuses the
+    proposal — a rule nobody can satisfy, or one anybody could, is not presented; an exclusion that
+    renders empty excludes nobody. A missing field is the render's own refusal."""
+    from ..effects import EffectRefused, render
+
+    approvers = []
+    for rule in approval.get("approvers") or []:
+        group = rule.get("group")
+        if isinstance(group, str) and "{{" in group:
+            # The field itself must hold a group: `owners-` alone is not one.
+            held = [
+                str(render(expression, context)).strip() for expression in re.findall(r"\{\{.*?\}\}", group)
+            ]
+            value = str(render(group, context)).strip()
+            if not all(held) or "{{" in value or "{%" in value:
+                raise EffectRefused(f"the approver group `{group}` names no group here: nobody could approve")
+            approvers.append({**rule, "group": value[:200]})
+            continue
+        approvers.append(rule)
+    excluded = [str(render(entry, context)).strip()[:300] for entry in approval.get("excluded") or []]
+    return {**approval, "approvers": approvers, "excluded": [entry for entry in excluded if entry]}
 
 
 def start_once_committed(session: AsyncSession, action: Action, *, again: bool = False) -> None:
@@ -330,6 +357,13 @@ async def _one_of_its_approvers(
     who may settle it once it is in doubt (S65-26). `gesture` and `verb` name the refusal."""
     approval = action.approval or {}
     approvers = approval.get("approvers") or [{"role": "project_owner", "min": 1}]
+    # Named by the action itself (ADR 0196): the person it concerns, who asked for it. Before the
+    # rank, so an organisation administrator is no exception.
+    if principal.email.lower() in {str(e).strip().lower() for e in approval.get("excluded") or []}:
+        raise forbidden(
+            f"{gesture} this action is not yours: it names you among those who may not decide it "
+            "(the person it concerns, or who asked for it)"
+        )
     my_rank = rank(principal, org_slug, project.slug)
     high_enough = [a for a in approvers if my_rank >= _rank_asked(a)]
     if not high_enough:

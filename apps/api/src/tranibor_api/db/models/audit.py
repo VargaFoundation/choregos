@@ -90,7 +90,7 @@ class AuditCheckpoint(Base, PkMixin):
 
 
 class AuditExportCursor(Base):
-    """How far one SIEM sink has been given one audit chain (ADR 0196): the chain's `seq` and `hash` of the
+    """How far one SIEM sink has been given one audit chain (ADR 0207): the chain's `seq` and `hash` of the
     last entry the sink accepted, so a restart resumes there.
 
     Moved only after the sink accepted a batch, in the transaction that holds this row's lock: at-least-once,

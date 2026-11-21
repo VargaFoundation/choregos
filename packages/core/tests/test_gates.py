@@ -1,4 +1,5 @@
-"""Each gate has a green test and a red test (S1-05)."""
+"""Each gate of the core has a green test and a red test (S1-05); those of software delivery are the
+`software-delivery` plugin's since ADR 0181 round C2 (`plugins/software-delivery/tests/test_gates.py`)."""
 
 from __future__ import annotations
 
@@ -20,67 +21,15 @@ def result(**evidence: object) -> StageResult:
 
 
 def test_registry_is_complete() -> None:
-    expected = {
-        "ci_green",
-        "scans_ok",
-        "evidence_present",
-        "scope_respected",
-        "review_approved",
-        "coverage_delta_min",
-        "diff_size_max",
-        "no_secrets",
-        "provenance_signed",
-        "external",
-        "flag_present",
-    }
+    expected = {"evidence_present", "external", "flag_present", "outputs_present", "action_succeeded"}
     assert expected <= set(known_gates())
-    assert is_async_gate("ci_green")
-    assert not is_async_gate("scope_respected")
+    assert is_async_gate("external")
+    assert not is_async_gate("evidence_present")
 
 
 def test_unknown_gate_raises() -> None:
     with pytest.raises(GateError, match="unknown gate"):
         evaluate("licorne", GateContext())
-
-
-@pytest.mark.parametrize(
-    ("changed", "allowed", "expected"),
-    [
-        (["src/a.py"], ["src/**"], True),
-        (["src/orders/deep/x.py"], ["src/orders/**"], True),
-        (["docs/x.md"], ["src/**"], False),
-        (["src/a.py"], [], True),
-    ],
-)
-def test_scope_respected(changed: list[str], allowed: list[str], expected: bool) -> None:
-    out = evaluate("scope_respected", GateContext(changed_files=changed, allowed_paths=allowed))
-    assert out.passed is expected
-
-
-@pytest.mark.parametrize(
-    ("changed", "allowed", "expected"),
-    [
-        ([".github/workflows/ci.yml", "src/a.py"], ["**"], False),
-        (["src/generated/client.py"], ["src/**"], False),
-        ([".github/workflows/ci.yml"], [], False),
-        ([".github/CODEOWNERS", "src/a.py"], ["**"], True),
-    ],
-    ids=["denied-inside-the-scope", "denied-under-an-allowed-folder", "denied-without-a-scope", "beside"],
-)
-def test_scope_respected_fails_on_a_path_the_policy_denies(
-    changed: list[str], allowed: list[str], expected: bool
-) -> None:
-    """`scope.deny_paths` wins over the allowed paths, and holds when none is declared (C2)."""
-    denied = [".github/workflows/**", "src/generated/**"]
-    out = evaluate(
-        "scope_respected", GateContext(changed_files=changed, allowed_paths=allowed, denied_paths=denied)
-    )
-    assert out.passed is expected, out.detail
-    if not expected:
-        assert "scope.deny_paths" in out.detail
-        assert list(out.annotations) == [
-            p for p in changed if p.startswith((".github/workflows/", "src/generated/"))
-        ]
 
 
 def test_evidence_present() -> None:
@@ -94,69 +43,11 @@ def test_evidence_present() -> None:
     assert not evaluate("evidence_present", partial, {"require_lint": True}).passed
 
 
-def test_diff_size_max() -> None:
-    ctx = GateContext(changed_files=["a"] * 10, additions=100, deletions=20)
-    assert evaluate("diff_size_max", ctx, {"files": 20}).passed
-    assert not evaluate("diff_size_max", ctx, {"files": 5}).passed
-    assert not evaluate("diff_size_max", ctx, {"files": 20, "lines": 50}).passed
-
-
-def test_no_secrets() -> None:
-    assert evaluate("no_secrets", GateContext()).passed
-    assert not evaluate("no_secrets", GateContext(secrets_found=["AWS key"])).passed
-
-
 def test_scan_secrets_detects_common_shapes() -> None:
     assert scan_secrets("AKIA1234567890ABCDEF") == ["AWS key"]
     assert scan_secrets("-----BEGIN PRIVATE KEY-----") == ["private key"]
     assert scan_secrets("ghp_" + "a" * 30) == ["GitHub token"]
     assert scan_secrets("nothing to see") == []
-
-
-def test_coverage_delta_min() -> None:
-    ctx = GateContext(result=result(coverage_delta=1.2))
-    assert evaluate("coverage_delta_min", ctx, {"x": 0}).passed
-    assert not evaluate("coverage_delta_min", ctx, {"x": 2}).passed
-    assert not evaluate("coverage_delta_min", GateContext(result=result()), {"x": 0}).passed
-
-
-def test_ci_green_is_pending_then_decides() -> None:
-    pending = evaluate("ci_green", GateContext())
-    assert pending.pending and not pending.blocking
-    assert evaluate("ci_green", GateContext(ci_status="success")).passed
-    failed = evaluate("ci_green", GateContext(ci_status="failure"))
-    assert failed.blocking
-    # What `checks_conclusion` returns while a check runs: pending, not red (S22-14).
-    running = evaluate("ci_green", GateContext(ci_status="pending"))
-    assert running.pending and not running.blocking
-
-
-def test_review_approved() -> None:
-    assert evaluate("review_approved", GateContext()).pending
-    assert evaluate("review_approved", GateContext(review_state="approved")).passed
-    assert evaluate("review_approved", GateContext(review_state="changes_requested")).blocking
-
-
-def test_scans_ok() -> None:
-    assert evaluate("scans_ok", GateContext()).pending
-    ctx = GateContext(scans={"semgrep": "ok", "trivy": "ok", "gitleaks": "ok"})
-    assert evaluate("scans_ok", ctx).passed
-    bad = GateContext(scans={"semgrep": "failed", "trivy": "ok", "gitleaks": "ok"})
-    assert evaluate("scans_ok", bad).blocking
-
-
-def test_provenance_signed() -> None:
-    assert evaluate("provenance_signed", GateContext()).pending
-    assert evaluate("provenance_signed", GateContext(signed=True)).passed
-    assert evaluate("provenance_signed", GateContext(signed=False)).blocking
-
-
-def test_without_a_provenance_check_once_the_ci_is_done_the_guarantee_fails_instead_of_waiting() -> None:
-    """Nothing filled in `signed`: the guarantee waited forever (#283). With the CI done and no
-    provenance check, it fails, saying what to add."""
-    bare = evaluate("provenance_signed", GateContext(ci_status="success"))
-    assert bare.blocking and not bare.pending
-    assert "no provenance check" in bare.detail
 
 
 def test_flag_present() -> None:
@@ -271,20 +162,6 @@ def test_evidence_facts_max_is_a_ceiling_on_numbers_only() -> None:
     assert not evaluate("evidence_facts", GateContext(result=make_result(n=0)), both).passed
 
 
-def test_a_guarantee_without_a_diff_does_not_rule() -> None:
-    """Without a diff (SCM connector unable to compare, unreachable repository) `scope_respected`
-    would declare the perimeter respected and `no_secrets` the absence of secrets, having
-    looked at nothing. A guarantee that cannot be evaluated is not a guarantee."""
-    blind = GateContext(diff_available=False, allowed_paths=["src/**"])
-    for name in ("scope_respected", "diff_size_max", "no_secrets"):
-        verdict = evaluate(name, blind, {"files": 10})
-        assert not verdict.passed, name
-        assert "diff unavailable" in verdict.detail
-
-    # With a diff, nothing changes for the cases already covered.
-    assert evaluate("no_secrets", GateContext()).passed
-
-
 def test_tool_called_reads_the_ledger_not_the_narrative() -> None:
     """Bench of 2026-09-24: ten catalogue listings, zero calls, and `place_verified: true`
     recorded anyway. The guarantee looks at what the platform counted."""
@@ -332,102 +209,4 @@ def test_outputs_in_reads_several_outputs_together() -> None:
     assert too_big.annotations == ["size = 'L' (allowed: S, M)"]
 
 
-ADR = """---
-status: "proposed"
----
-
-# Use row-level security for tenant isolation
-
-## Context and Problem Statement
-
-Tenants share one database.
-
-## Considered Options
-
-* Row-level security
-* One schema per tenant
-
-## Decision Outcome
-
-Chosen option: "Row-level security", because it keeps one schema.
-"""
-MADR = {
-    "paths": ["docs/adr/[0-9][0-9][0-9][0-9]-*.md"],
-    "sections": ["Context and Problem Statement", "Considered Options", "Decision Outcome"],
-    "patterns": ['Chosen option: "'],
-}
-
-
-def test_markdown_sections_reads_the_added_text_not_the_narrative() -> None:
-    good = GateContext(added_text={"docs/adr/0042-rls.md": ADR})
-    assert evaluate("markdown_sections", good, MADR).passed
-    without_decision = ADR.split("## Decision Outcome", maxsplit=1)[0]
-    bad = evaluate(
-        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": without_decision}), MADR
-    )
-    assert bad.blocking
-    assert "docs/adr/0042-rls.md: section “Decision Outcome” missing" in bad.annotations
-    assert any("not found" in a for a in bad.annotations), "the “Chosen option” pattern neither"
-    # The agent's narrative does not count: only the text the branch adds.
-    elsewhere = GateContext(result=_with_outputs(adr_markdown=ADR), added_text={"README.md": ADR})
-    assert "0 file(s) matching" in evaluate("markdown_sections", elsewhere, MADR).detail
-
-
-def test_markdown_sections_refuses_without_a_diff_and_without_a_path() -> None:
-    assert "diff unavailable" in evaluate("markdown_sections", GateContext(diff_available=False), MADR).detail
-    assert evaluate("markdown_sections", GateContext(added_text={"docs/adr/0042-x.md": ADR}), {}).blocking
-
-
-def test_an_accepted_status_is_checked_by_a_pattern() -> None:
-    accepted = {"paths": MADR["paths"], "patterns": ['(?m)^status: "?accepted"?\\s*$']}
-    assert not evaluate(
-        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": ADR}), accepted
-    ).passed
-    written = ADR.replace('status: "proposed"', 'status: "accepted"')
-    assert evaluate(
-        "markdown_sections", GateContext(added_text={"docs/adr/0042-rls.md": written}), accepted
-    ).passed
-
-
 # ───────────────────────── adr_number_free (#287, S22-20) ─────────────────────────
-
-ON_MAIN = ["docs/adr/0001-queue.md", "docs/adr/0002-cache.md", "docs/adr/README.md"]
-
-
-def test_adr_number_free_lets_a_free_number_through() -> None:
-    free = GateContext(changed_files=["docs/adr/0003-rls.md"], default_branch_files=ON_MAIN)
-    out = evaluate("adr_number_free", free)
-    assert out.passed and "docs/adr/0003-rls.md" in out.detail
-
-
-def test_adr_number_free_refuses_a_number_already_taken_on_the_default_branch() -> None:
-    """Two studies read the same "largest plus one": the second to merge is refused."""
-    taken = GateContext(changed_files=["docs/adr/0002-rls.md", "src/x.py"], default_branch_files=ON_MAIN)
-    out = evaluate("adr_number_free", taken)
-    assert out.blocking
-    assert out.annotations == ["docs/adr/0002-rls.md"], "the files at fault"
-    assert "0002 is already taken on the default branch by docs/adr/0002-cache.md" in out.detail
-    assert "next free number: 0003" in out.detail
-
-
-def test_adr_number_free_says_nothing_without_an_added_adr() -> None:
-    without_adr = GateContext(changed_files=["src/x.py", "docs/adr/README.md"], default_branch_files=ON_MAIN)
-    assert evaluate("adr_number_free", without_adr).passed
-    # The same path, already on the default branch, is not an addition: it is the same file.
-    touched_up = GateContext(changed_files=["docs/adr/0002-cache.md"], default_branch_files=ON_MAIN)
-    assert evaluate("adr_number_free", touched_up).passed
-    # Without an ADR, there is nothing to compare: the missing listing does not block.
-    assert evaluate("adr_number_free", GateContext(changed_files=["src/x.py"])).passed
-
-
-def test_adr_number_free_refuses_when_it_cannot_look() -> None:
-    assert "diff unavailable" in evaluate("adr_number_free", GateContext(diff_available=False)).detail
-    blind = evaluate("adr_number_free", GateContext(changed_files=["docs/adr/0003-rls.md"]))
-    assert blind.blocking and "default branch unavailable" in blind.detail
-
-
-def test_adr_number_free_follows_its_pattern() -> None:
-    pattern = {"pattern": "decisions/[0-9][0-9][0-9]-*.md"}
-    ctx = GateContext(changed_files=["decisions/007-x.md"], default_branch_files=["decisions/007-y.md"])
-    assert evaluate("adr_number_free", ctx, pattern).blocking
-    assert evaluate("adr_number_free", ctx).passed, "the default pattern does not see these files"

@@ -52,9 +52,21 @@ def test_every_syncing_dockerfile_copies_every_plugin() -> None:
     assert not missing, missing
 
 
+#: Workspace plugins the API image deliberately leaves out, with the reason.
+NOT_IN_THE_API_IMAGE = {
+    # ADR 0202: the code half of the procurement plugin is a job image of its own.
+    "plugins/procurement": "ADR 0202",
+}
+
+
 def test_the_api_image_carries_each_plugin_code() -> None:
     text = (ROOT / "docker" / "api.Dockerfile").read_text()
     for plugin in _plugins():
+        if plugin in NOT_IN_THE_API_IMAGE:
+            assert not re.search(rf"^COPY {re.escape(plugin)} ", text, re.M), (
+                f"{plugin} is exempted yet copied"
+            )
+            continue
         assert re.search(rf"^COPY {re.escape(plugin)} {re.escape(plugin)}$", text, re.M), plugin
 
 

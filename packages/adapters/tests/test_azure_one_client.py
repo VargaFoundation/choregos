@@ -1,4 +1,4 @@
-"""The three Azure DevOps connectors share one client module (ADR 0198, S13-08 follow-up)."""
+"""The three Azure DevOps connectors share one client module (ADR 0209, S13-08 follow-up)."""
 
 from __future__ import annotations
 

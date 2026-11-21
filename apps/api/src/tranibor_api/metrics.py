@@ -230,7 +230,7 @@ class PlatformCollector(Collector):
         yield g
         g = GaugeMetricFamily(
             "choregos_audit_export_lag_entries",
-            "Audit entries written and not yet accepted by the SIEM sink (ADR 0196)",
+            "Audit entries written and not yet accepted by the SIEM sink (ADR 0207)",
             labels=["sink"],
         )
         for sink, v in s.audit_export_lag.items():
@@ -238,7 +238,7 @@ class PlatformCollector(Collector):
         yield g
         g = GaugeMetricFamily(
             "choregos_audit_export_progress_timestamp_seconds",
-            "When the SIEM sink's cursors last moved (ADR 0196)",
+            "When the SIEM sink's cursors last moved (ADR 0207)",
             labels=["sink"],
         )
         for sink, v in s.audit_export_progress.items():
@@ -370,7 +370,7 @@ async def refresh() -> Snapshot:
         )
         fresh.outpost_poll_conflicts = {str(org): float(n) for org, n in conflicts.all()}
 
-        # The export's lag, from the cursors and the chains' heads, the same on every replica (ADR 0196).
+        # The export's lag, from the cursors and the chains' heads, the same on every replica (ADR 0207).
         cursors = await session.execute(
             select(
                 AuditExportCursor.sink,
