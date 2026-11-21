@@ -2495,7 +2495,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-procurement"
-version = "0.27.17"
+version = "0.28.0"
 source = { editable = "plugins/procurement" }
 dependencies = [
     { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
@@ -2543,7 +2543,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-software-delivery"
-version = "0.27.17"
+version = "0.28.0"
 source = { editable = "plugins/software-delivery" }
 dependencies = [
     { name = "tranibor-contracts" },
@@ -2585,7 +2585,7 @@ requires-dist = [
 
 [[package]]
 name = "tranibor-vault-transit"
-version = "0.27.17"
+version = "0.28.0"
 source = { editable = "plugins/vault-transit" }
 dependencies = [
     { name = "httpx" },
