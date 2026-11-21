@@ -301,9 +301,18 @@ class LiveFlowPane(Vertical, can_focus=True):
                 with contextlib.suppress(Exception):
                     await self.refresh_items()
 
+    def _opened(self) -> None:
+        """The stream is accepted: live, even before its first event (a quiet flow only gets pings)."""
+        self.connection = "live"
+        self.error = None
+        self.redraw(force=True)
+
     async def listen(self) -> None:
         async for event, entry in self.api.stream_events(
-            "GET", f"/orgs/{self.organisation}/activity/stream", params={"project": self.slug}
+            "GET",
+            f"/orgs/{self.organisation}/activity/stream",
+            params={"project": self.slug},
+            on_open=self._opened,
         ):
             self.connection = "live"
             self.error = None
