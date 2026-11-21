@@ -68,7 +68,6 @@ export default function PluginsPage() {
   const installed = useQuery({ queryKey: ["plugins", org], queryFn: () => api.plugins(org) });
   const sources = useQuery({ queryKey: ["plugin-sources", org], queryFn: () => api.pluginSources(org) });
   const approvals = useQuery({ queryKey: ["plugin-approvals", org], queryFn: () => api.pluginApprovals(org) });
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   async function refresh() {
@@ -116,7 +115,6 @@ export default function PluginsPage() {
                 org={org}
                 plugin={plugin}
                 admin={admin}
-                connectors={connectors.data}
                 onDone={done}
               />
             ))
@@ -267,17 +265,25 @@ function Gesture({
   );
 }
 
+/** A plugin's server and its connector, found by the server's name (ADR 0206): never by filtering a partial list. */
+function ServerConnector({ org, server, admin }: { org: string; server: string; admin: boolean }) {
+  const found = useQuery({
+    queryKey: ["org-connectors", org, "server", server],
+    queryFn: () => api.orgConnectors(org, { q: server, kind: "mcp", limit: 200 }),
+    select: (page) => serverConnector(page.items, server),
+  });
+  return <ServerLine server={server} admin={admin} connector={found.data} />;
+}
+
 function InstalledCard({
   org,
   plugin,
   admin,
-  connectors,
   onDone,
 }: {
   org: string;
   plugin: InstalledPlugin;
   admin: boolean;
-  connectors: OrgConnector[] | undefined;
   onDone: (outcome: Outcome) => Promise<void>;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -342,7 +348,7 @@ function InstalledCard({
         {plugin.contents.servers.length > 0 && (
           <ul className="space-y-1" aria-label={`Servers of ${plugin.name}`}>
             {plugin.contents.servers.map((server) => (
-              <ServerLine key={server} server={server} admin={admin} connector={serverConnector(connectors, server)} />
+              <ServerConnector key={server} org={org} server={server} admin={admin} />
             ))}
           </ul>
         )}

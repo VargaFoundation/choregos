@@ -5,6 +5,7 @@ import { McpGatewayCard } from "@/components/admin/mcp-gateway";
 import { api, ApiError } from "@/lib/api";
 import { endpointProblem, isPluginServer } from "@/lib/mcp-gateway";
 import type { McpGatewayState, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -56,7 +57,7 @@ describe("the organisation's MCP gateway (ADR 0105)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(api.mcpGateway).mockResolvedValue(NONE);
-    vi.mocked(api.orgConnectors).mockResolvedValue([connector({ name: "supplier-agent" })]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([connector({ name: "supplier-agent" })]));
   });
 
   it("renders nothing for a non-admin", () => {
@@ -123,7 +124,7 @@ describe("the organisation's MCP gateway (ADR 0105)", () => {
 
   it("does not count a plugin's server as a direct connector", async () => {
     const desk = connector({ name: "desk", config: {}, catalogue_entry: "plugin:desk/desk@0.1.0", created_by: "plugin:desk" });
-    vi.mocked(api.orgConnectors).mockResolvedValue([desk, connector({ name: "supplier-agent" })]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([desk, connector({ name: "supplier-agent" })]));
     expect(isPluginServer(desk)).toBe(true);
     wrap(<McpGatewayCard org="acme" canEdit />);
     await screen.findByLabelText("Mode");

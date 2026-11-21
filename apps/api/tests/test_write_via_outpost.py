@@ -819,7 +819,7 @@ async def test_the_action_of_a_write_whose_lease_is_lost_ends_in_doubt_and_nothi
         assert shown["result"]["in_doubt"] == {"position": 1, "sent": [sent]}
         assert shown["result"]["compensations"] == [] and SLUG in shown["error"]
         listed = await client.get(f"/api/v1/projects/{project['id']}/actions", params={"status": "in_doubt"})
-        assert [row["id"] for row in listed.json()] == [action_id]
+        assert [row["id"] for row in listed.json()["items"]] == [action_id]
 
         # No route replays it. A decision finds nothing to decide.
         decision = f"/api/v1/projects/{project['id']}/actions/{action_id}/decision"

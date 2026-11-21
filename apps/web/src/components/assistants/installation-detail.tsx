@@ -51,7 +51,11 @@ type Ref = { org: string; slug: string };
 function Bindings({ org, slug, assistant, needs }: Ref & { assistant: Assistant; needs: { need: string; required: boolean; access: string }[] }) {
   const client = useQueryClient();
   const readiness = useQuery({ queryKey: ["readiness", org, slug], queryFn: () => assistantsApi.readiness(org, slug) });
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  const connectors = useQuery({
+    queryKey: ["org-connectors", org, "picker"],
+    queryFn: () => api.orgConnectors(org, { limit: 200 }),
+    select: (page) => page.items,
+  });
   const [error, setError] = useState<string | null>(null);
   async function bind(need: string, connector: string, approval?: "inline" | "console") {
     setError(null);
@@ -94,7 +98,13 @@ function Bindings({ org, slug, assistant, needs }: Ref & { assistant: Assistant;
                   onChange={(e) => e.target.value && void bind(n.need, e.target.value, bound?.approval === "inline" ? "inline" : undefined)}
                 >
                   <option value="">Not bound</option>
-                  {(connectors.data ?? []).map((c) => (
+                  {/* The bound connector is always offered, even past the first page of the list. */}
+                  {[
+                    ...(bound && !(connectors.data ?? []).some((c) => c.name === bound.connector)
+                      ? [{ name: bound.connector }]
+                      : []),
+                    ...(connectors.data ?? []),
+                  ].map((c) => (
                     <option key={c.name} value={c.name}>
                       {c.name}
                     </option>

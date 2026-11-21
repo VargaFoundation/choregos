@@ -303,6 +303,13 @@ class OrgConnectorUpdate(Dto):
     allow_egress: bool = False
 
 
+class OrgConnectorPage(Dto):
+    """One page of the organisation's connectors, by name (ADR 0206)."""
+
+    items: list[OrgConnectorDto]
+    meta: PageMeta
+
+
 class ProjectOrgConnectorDto(Dto):
     """An organisation connector, as a project sees it: is it on here, may the caller switch it."""
 
@@ -313,6 +320,13 @@ class ProjectOrgConnectorDto(Dto):
     enabled: bool
     can_toggle: bool
     cannot_reason: str | None = None
+
+
+class ProjectOrgConnectorPage(Dto):
+    """One page of the organisation's connectors as a project sees them, by name (ADR 0206)."""
+
+    items: list[ProjectOrgConnectorDto]
+    meta: PageMeta
 
 
 class OperationPatch(Dto):
@@ -350,6 +364,13 @@ class ProjectOperationDto(Dto):
     #: what the organisation binds of the call's arguments, and what this project binds on top (S60-06)
     org_arguments: dict[str, Any] | None = None
     project_arguments: dict[str, Any] | None = None
+
+
+class ProjectOperationPage(Dto):
+    """One page of the operations open to a project, by connector then operation (ADR 0206)."""
+
+    items: list[ProjectOperationDto]
+    meta: PageMeta
 
 
 class ProjectOperationPut(Dto):

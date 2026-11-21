@@ -5,6 +5,7 @@ import ModelsPage from "@/app/admin/models/page";
 import { contextWindow } from "@/components/model-catalogue";
 import { api } from "@/lib/api";
 import type { ModelCatalogue } from "@/lib/types";
+import { pageOf } from "./page";
 
 /** The Models page of the administration (S39-07c, ADR 0060). */
 const session = vi.hoisted(() => ({ role: "org_admin" }));
@@ -87,7 +88,7 @@ function show() {
 beforeEach(() => {
   session.role = "org_admin";
   vi.mocked(api.modelCatalogue).mockResolvedValue(catalogue());
-  vi.mocked(api.orgConnectors).mockResolvedValue([]);
+  vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([]));
   vi.mocked(api.usableModels).mockResolvedValue([]);
   vi.mocked(api.updateModelCatalogueEntry).mockClear();
   vi.mocked(api.putModelCatalogueSettings).mockClear();
@@ -252,9 +253,9 @@ describe("the Models page", () => {
   });
 
   it("names the organisation's own gateway when it brings one, and offers no second one", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([
-      { name: "acme-llm", kind: "gateway", type: "litellm" } as Awaited<ReturnType<typeof api.orgConnectors>>[number],
-    ]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([
+      { name: "acme-llm", kind: "gateway", type: "litellm" } as Awaited<ReturnType<typeof api.orgConnectors>>["items"][number],
+    ]));
     show();
     await waitFor(() => expect(screen.getByTestId("gateway-owner")).toHaveTextContent("your organisation's gateway acme-llm"));
     expect(screen.queryByRole("link", { name: "Connect your organisation's gateway" })).toBeNull();

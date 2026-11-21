@@ -22,8 +22,8 @@ test("the policy, groups and approver set in the console are the ones the API ke
   expect(discovered.status(), await discovered.text()).toBe(200);
 
   const stored = async (operation: string): Promise<Operation> => {
-    const answer = await page.request.get(CONNECTORS);
-    const supplier = (await answer.json()).find((c: { name: string }) => c.name === NAME);
+    const answer = await page.request.get(`${CONNECTORS}/${NAME}`);
+    const supplier = await answer.json();
     return supplier.operations.find((o: Operation) => o.name === operation);
   };
   const row = (operation: string) =>

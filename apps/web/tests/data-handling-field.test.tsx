@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { dataHandlingProblems } from "@/lib/data-handling";
 import type { ConnectorType, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin/connectors",
@@ -72,7 +73,7 @@ function wrap(ui: React.ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  api.orgConnectors.mockResolvedValue([]);
+  api.orgConnectors.mockResolvedValue(pageOf([]));
   api.connectorTypes.mockResolvedValue([searchType("brave"), searchType("strict")]);
   api.projects.mockResolvedValue({ items: [], meta: { has_more: false } });
   api.createOrgConnector.mockResolvedValue(installed("brave"));
@@ -147,9 +148,9 @@ describe("data_handling editor (S40-01j)", () => {
   });
 
   it("edits an installed connector's declaration and blocks Save on a problem", async () => {
-    api.orgConnectors.mockResolvedValue([
+    api.orgConnectors.mockResolvedValue(pageOf([
       installed("brave", { data_handling: { query_retention_days: 0, terms_ref: "contract" } }),
-    ]);
+    ]));
     wrap(<OrgConnectorsPage />);
     const panel = await screen.findByTestId("secrets-search-brave");
     fireEvent.click(within(panel).getByRole("button", { name: "Edit settings" }));

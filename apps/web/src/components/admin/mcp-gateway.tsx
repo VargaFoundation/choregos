@@ -54,7 +54,11 @@ export function McpGatewayCard({ org, canEdit }: { org: string; canEdit: boolean
 function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }) {
   const client = useQueryClient();
   const guard = useEgressGuard();
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  const connectors = useQuery({
+    queryKey: ["org-connectors", org, "mcp-direct"],
+    queryFn: () => api.orgConnectors(org, { kind: "mcp", type: "mcp", limit: 200 }),
+    select: (page) => page.items,
+  });
   const [mode, setMode] = useState<GatewayMode>(stored?.mode ?? "available");
   const [endpoint, setEndpoint] = useState(stored?.endpoint ?? "");
   const [routing, setRouting] = useState<GatewayRouting>(stored?.routing ?? "path");

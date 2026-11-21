@@ -41,7 +41,7 @@ async def test_a_connector_outside_the_ceiling_is_refused_at_creation(
     refused = await client.post(f"{ORG}/connectors", json=MCP)
     assert refused.status_code == 422, refused.text
     assert "fournisseur.test" in refused.text and "not_allowed" in refused.text
-    assert (await client.get(f"{ORG}/connectors")).json() == [], "nothing was created"
+    assert (await client.get(f"{ORG}/connectors")).json()["items"] == [], "nothing was created"
     inside = {**MCP, "config": {"url": "https://api.vendor.example/mcp"}}
     assert (await client.post(f"{ORG}/connectors", json=inside)).status_code == 201
 
@@ -57,7 +57,7 @@ async def test_a_catalogue_install_outside_the_ceiling_is_refused_and_creates_no
     refused = await client.post(url, json=body)
     assert refused.status_code == 422, refused.text
     assert "api.githubcopilot.com" in refused.text and "not_allowed" in refused.text
-    assert (await client.get(f"{ORG}/connectors")).json() == [], "nothing was created"
+    assert (await client.get(f"{ORG}/connectors")).json()["items"] == [], "nothing was created"
     await _ceiling(client, {"allow_domains": ["githubcopilot.com"]})
     allowed = await client.post(url, json=body)
     assert allowed.status_code == 201, allowed.text

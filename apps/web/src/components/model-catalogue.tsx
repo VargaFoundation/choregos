@@ -39,7 +39,12 @@ export function ModelCataloguePanel() {
   const catalogue = useQuery({ queryKey: ["model-catalogue", org], queryFn: () => api.modelCatalogue(org), retry: false });
   const canEdit = (orgs ?? []).find((o) => o.slug === org)?.role === "org_admin";
   // Whose gateway this is (S44-04): the organisation's own connector of kind `gateway`, else the deployment's.
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org), retry: false });
+  const connectors = useQuery({
+    queryKey: ["org-connectors", org, "gateway"],
+    queryFn: () => api.orgConnectors(org, { kind: "gateway", limit: 200 }),
+    select: (page) => page.items,
+    retry: false,
+  });
   const own = (connectors.data ?? []).find((c) => c.kind === "gateway");
   // In `open` mode every model the gateway lists is usable, synced or not (S44-04): the page showed
   // only the catalogue's rows, so a catalogue never synced read as "no model at all".

@@ -36,7 +36,11 @@ export function ProjectMemoryStore({ slug }: { slug: string }) {
 }
 
 export function OrganisationMemoryStore({ org }: { org: string }) {
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  const connectors = useQuery({
+    queryKey: ["org-connectors", org, "memory"],
+    queryFn: () => api.orgConnectors(org, { kind: "memory", limit: 200 }),
+    select: (page) => page.items,
+  });
   // A member without access to the organisation's connectors is told nothing rather than something wrong.
   if (!connectors.data) return null;
   const memory = connectors.data

@@ -22,7 +22,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
         items: [{ id: "w2", pending_request: { id: "hr", kind: "approval", payload: {}, requested_at: "2026-10-08T10:00:00Z" } }],
         meta: { has_more: false },
       }),
-      orgActions: vi.fn().mockResolvedValue([{ id: "a1" }, { id: "a2" }]),
+      orgActions: vi.fn().mockResolvedValue({ items: [{ id: "a1" }, { id: "a2" }], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

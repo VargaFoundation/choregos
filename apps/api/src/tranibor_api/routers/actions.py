@@ -14,10 +14,12 @@ from sqlalchemy import select
 from tranibor_contracts import ActionOrigin
 
 from ..db.models import Action
-from ..deps import Db, Me, ProjectCtx
+from ..deps import Db, Me, Pagination, ProjectCtx
 from ..errors import not_found
+from ..keyset import keyset_page
 from ..rbac import Permission
-from ..schemas.actions import ActionCreate, ActionDecisionBody, ActionDto, ActionSettlementBody
+from ..schemas import PageMeta
+from ..schemas.actions import ActionCreate, ActionDecisionBody, ActionDto, ActionPage, ActionSettlementBody
 from ..services import actions as service
 
 router = APIRouter(tags=["actions"])
@@ -45,46 +47,52 @@ async def propose_action(ctx: ProjectCtx, body: ActionCreate, session: Db) -> Ac
     return await service.dto(session, action)
 
 
-@router.get("/projects/{id}/actions", response_model=list[ActionDto], operation_id="listActions")
+@router.get("/projects/{id}/actions", response_model=ActionPage, operation_id="listActions")
 async def list_actions(
-    ctx: ProjectCtx, session: Db, status_: Annotated[str | None, Query(alias="status")] = None
-) -> list[ActionDto]:
-    query = select(Action).where(Action.project_id == ctx.id).order_by(Action.created_at.desc()).limit(200)
+    ctx: ProjectCtx,
+    session: Db,
+    page: Pagination,
+    status_: Annotated[str | None, Query(alias="status", max_length=24)] = None,
+) -> ActionPage:
+    """The project's actions, newest first, one page at a time (ADR 0206); `status` keeps one state."""
+    query = select(Action).where(Action.project_id == ctx.id)
     if status_:
         query = query.where(Action.status == status_)
-    return [await service.dto(session, a) for a in (await session.execute(query)).scalars()]
+    rows, meta = await keyset_page(session, query, sort=Action.created_at, tiebreak=Action.id, page=page)
+    return ActionPage(items=[await service.dto(session, a) for a in rows], meta=meta)
 
 
-@router.get("/orgs/{org}/actions", response_model=list[ActionDto], operation_id="listOrgActions")
+@router.get("/orgs/{org}/actions", response_model=ActionPage, operation_id="listOrgActions")
 async def list_org_actions(
-    org: str, session: Db, principal: Me, status_: Annotated[str | None, Query(alias="status")] = None
-) -> list[ActionDto]:
-    """The decision inbox: the actions of the organisation's projects that the caller can see;
-    `status=pending_approval` for what is waiting on someone."""
+    org: str,
+    session: Db,
+    principal: Me,
+    page: Pagination,
+    status_: Annotated[str | None, Query(alias="status", max_length=24)] = None,
+    project: Annotated[str | None, Query(max_length=64)] = None,
+) -> ActionPage:
+    """The decision inbox: the actions of the organisation's projects that the caller can see, newest
+    first, one page at a time (ADR 0206); `status=pending_approval` for what is waiting on someone,
+    `project` for one project's slug."""
     from ..db.models import Organization, Project
 
+    projects = (
+        select(Project).join(Organization, Organization.id == Project.org_id).where(Organization.slug == org)
+    )
+    if project:
+        projects = projects.where(Project.slug == project)
     visible = [
         p
-        for p in (
-            await session.execute(
-                select(Project)
-                .join(Organization, Organization.id == Project.org_id)
-                .where(Organization.slug == org)
-            )
-        ).scalars()
+        for p in (await session.execute(projects)).scalars()
         if principal.can(Permission.PROJECT_READ, org, p.slug)
     ]
     if not visible:
-        return []
-    query = (
-        select(Action)
-        .where(Action.project_id.in_([p.id for p in visible]))
-        .order_by(Action.created_at.desc())
-        .limit(200)
-    )
+        return ActionPage(items=[], meta=PageMeta())
+    query = select(Action).where(Action.project_id.in_([p.id for p in visible]))
     if status_:
         query = query.where(Action.status == status_)
-    return [await service.dto(session, a) for a in (await session.execute(query)).scalars()]
+    rows, meta = await keyset_page(session, query, sort=Action.created_at, tiebreak=Action.id, page=page)
+    return ActionPage(items=[await service.dto(session, a) for a in rows], meta=meta)
 
 
 @router.get("/projects/{id}/actions/{action_id}", response_model=ActionDto, operation_id="getAction")

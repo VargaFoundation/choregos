@@ -39,7 +39,7 @@ async def test_an_mcp_catalogue_install_asks_for_the_servers_host_then_records_t
     asked = await client.post(url, json={"secret_refs": TOKEN})
     assert asked.status_code == 409 and asked.json()["code"] == "egress_required", asked.text
     assert asked.json()["verdicts"][0]["host"] == "api.githubcopilot.com"
-    assert (await client.get(f"{ORG}/connectors")).json() == []
+    assert (await client.get(f"{ORG}/connectors")).json()["items"] == []
     done = await client.post(url, json={"secret_refs": TOKEN, "allow_egress": True})
     assert done.status_code == 201, done.text
     (rule,) = await rules_in_db("allowed")

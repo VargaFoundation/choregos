@@ -15,7 +15,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       budgetAlerts: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       orgEgress: vi.fn(),
       approveOrgEgressRequest: vi.fn().mockResolvedValue({}),

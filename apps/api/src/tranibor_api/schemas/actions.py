@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 
 class ActionEffectSpec(Dto):
@@ -118,3 +118,10 @@ class ActionDto(Dto):
     journal: list[ActionEffectDto] = Field(default_factory=list)
     #: what a person recorded once the action was in doubt (S65-26): the same as on its effect
     settlement: ActionSettlementDto | None = None
+
+
+class ActionPage(Dto):
+    """One page of governed actions, newest first (ADR 0206)."""
+
+    items: list[ActionDto]
+    meta: PageMeta

@@ -6470,6 +6470,26 @@ export type GatewayKeyPage = {
   meta: PageMeta;
 };
 
+export type ActionPage = {
+  items: Array<Action>;
+  meta: PageMeta;
+};
+
+export type OrgConnectorPage = {
+  items: Array<OrgConnector>;
+  meta: PageMeta;
+};
+
+export type ProjectOrgConnectorPage = {
+  items: Array<ProjectOrgConnector>;
+  meta: PageMeta;
+};
+
+export type ProjectOperationPage = {
+  items: Array<ProjectOperation>;
+  meta: PageMeta;
+};
+
 export type AuditEntry = {
   id: string;
   actor_id?: string | null;
@@ -6897,7 +6917,7 @@ export interface Operations {
   jiraWebhook: { method: "POST"; path: "/webhooks/jira"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
-  listActions: { method: "GET"; path: "/projects/{id}/actions"; body: never; response: Array<Action> };
+  listActions: { method: "GET"; path: "/projects/{id}/actions"; body: never; response: ActionPage };
   listAdminSections: { method: "GET"; path: "/ui/admin-sections"; body: never; response: Array<S.UiManifest> };
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
@@ -6944,11 +6964,11 @@ export interface Operations {
   listMyPending: { method: "GET"; path: "/me/pending"; body: never; response: PendingList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
-  listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
+  listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: ActionPage };
   listOrgActivity: { method: "GET"; path: "/orgs/{org}/activity"; body: never; response: ActivityList };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };
   listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
-  listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
+  listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: OrgConnectorPage };
   listOrgGroupMembers: { method: "GET"; path: "/orgs/{org}/groups/{slug}/members"; body: never; response: OrgGroupMemberList };
   listOrgGroups: { method: "GET"; path: "/orgs/{org}/groups"; body: never; response: OrgGroupList };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
@@ -6965,8 +6985,8 @@ export interface Operations {
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
   listProjectAgents: { method: "GET"; path: "/projects/{id}/agents"; body: never; response: Array<ProjectAgent> };
   listProjectMemories: { method: "GET"; path: "/projects/{id}/memories"; body: never; response: Array<MemoryStore> };
-  listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: Array<ProjectOperation> };
-  listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: Array<ProjectOrgConnector> };
+  listProjectOperations: { method: "GET"; path: "/projects/{id}/operations"; body: never; response: ProjectOperationPage };
+  listProjectOrgConnectors: { method: "GET"; path: "/projects/{id}/org-connectors"; body: never; response: ProjectOrgConnectorPage };
   listProjectRequirements: { method: "GET"; path: "/projects/{id}/requirements"; body: never; response: Array<ProjectRequirement> };
   listProjects: { method: "GET"; path: "/orgs/{org}/projects"; body: never; response: ProjectPage };
   listReceivedEvents: { method: "GET"; path: "/projects/{id}/received-events"; body: never; response: ReceivedEventPage };
