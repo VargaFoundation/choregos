@@ -19,7 +19,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       platformModels: vi.fn().mockResolvedValue([]),
       backends: vi.fn().mockResolvedValue([]),
-      orgConnectors: vi.fn().mockResolvedValue([]),
+      orgConnectors: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       skills: vi.fn().mockResolvedValue([]),
       knowledgeBases: vi.fn().mockResolvedValue([]),
       policyCeiling: vi.fn().mockResolvedValue({ ceiling: {} }),

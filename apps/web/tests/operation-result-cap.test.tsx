@@ -26,7 +26,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...reel,
     api: {
       ...reel.api,
-      orgConnectors: vi.fn().mockResolvedValue([journaux]),
+      orgConnectors: vi.fn().mockResolvedValue({ items: [journaux], meta: { has_more: false, next_cursor: null } }),
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       connectors: vi.fn().mockResolvedValue([]),
       connectorTypes: vi.fn().mockResolvedValue([]),

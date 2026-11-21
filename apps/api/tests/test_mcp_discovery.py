@@ -61,7 +61,7 @@ async def test_a_discovered_tool_is_born_closed(
     assert operations["track_order"]["access"] == "read"
     assert operations["order_device"]["access"] == "write", "without readOnlyHint: a write"
     assert operations["order_device"]["schema_digest"].startswith("sha256:")
-    views = (await client.get(f"/api/v1/projects/{project['id']}/operations")).json()
+    views = (await client.get(f"/api/v1/projects/{project['id']}/operations")).json()["items"]
     assert {o["effective_policy"] for o in views} == {"forbidden"}
 
 

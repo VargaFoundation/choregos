@@ -24,7 +24,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       adminSections: vi.fn().mockResolvedValue([]),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

@@ -20,8 +20,8 @@ test("the cap set in the console is the one the API keeps, and the API's refusal
   expect(discovered.status(), await discovered.text()).toBe(200);
 
   const stored = async () => {
-    const answer = await page.request.get(CONNECTORS);
-    const supplier = (await answer.json()).find((c: { name: string }) => c.name === NAME);
+    const answer = await page.request.get(`${CONNECTORS}/${NAME}`);
+    const supplier = await answer.json();
     return supplier.operations.find((o: { name: string }) => o.name === "order_status").result_max_bytes;
   };
   const row = () => page.getByTestId(`operations-${NAME}`).getByRole("row").filter({ hasText: "order_status" });

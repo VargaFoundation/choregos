@@ -183,6 +183,10 @@ import type {
   Memory,
   MemoryAbReport,
   GatewayKeyPage,
+  ActionPage,
+  OrgConnectorPage,
+  ProjectOperationPage,
+  ProjectOrgConnectorPage,
   MemoryStore,
   MemoryStoreCreate,
   MemoryStorePatch,
@@ -990,9 +994,33 @@ export const api = {
       }[];
     }>(`/projects/${qualify(id)}/tools`),
   /** The governed actions (ADR 0035): the decision inbox, and each action with its journal. */
-  orgActions: (org: string, status?: string) =>
-    request<Action[]>(`/orgs/${org}/actions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
-  projectActions: (id: string) => request<Action[]>(`/projects/${qualify(id)}/actions`),
+  orgActions: (
+    org: string,
+    params: { status?: string; project?: string; cursor?: string; limit?: number } = {},
+  ) =>
+    request<ActionPage>(
+      `/orgs/${org}/actions${query(compact({ status: params.status, project: params.project, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
+  /**
+   * Every action waiting for a decision, read page by page up to `ACTIONS_CAP` (the inbox counts them): past
+   * the cap the page says `has_more`, and the inbox says it is a lower bound rather than a total.
+   */
+  async pendingOrgActions(org: string, project?: string): Promise<ActionPage> {
+    const items: ActionPage["items"] = [];
+    let cursor: string | undefined;
+    let hasMore = false;
+    do {
+      const page = await this.orgActions(org, { status: "pending_approval", project, cursor, limit: 200 });
+      items.push(...page.items);
+      hasMore = page.meta.has_more;
+      cursor = page.meta.next_cursor ?? undefined;
+    } while (hasMore && cursor && items.length < ACTIONS_CAP);
+    return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
+  },
+  projectActions: (id: string, params: { status?: string; cursor?: string; limit?: number } = {}) =>
+    request<ActionPage>(
+      `/projects/${qualify(id)}/actions${query(compact({ status: params.status, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   projectAction: (id: string, actionId: string) => request<Action>(`/projects/${qualify(id)}/actions/${actionId}`),
   /** An approval requires a recent session: a 401 `step_up_required` goes back through the IdP. */
   decideAction: (id: string, actionId: string, body: { decision: "approve" | "reject"; reason?: string }) =>
@@ -1074,7 +1102,14 @@ export const api = {
       `/orgs/${org}/outposts/${slug}/calls${query(compact({ state: params.state, cursor: params.cursor, limit: params.limit?.toString() }))}`,
     ),
   /** The organisation's connectors and the policy of each operation (ADR 0034). */
-  orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
+  /** One page, by name (ADR 0206): `q` is a part of the name, `kind` and `type` keep one capability or type. */
+  orgConnectors: (
+    org: string,
+    params: { q?: string; kind?: string; type?: string; cursor?: string; limit?: number } = {},
+  ) =>
+    request<OrgConnectorPage>(
+      `/orgs/${org}/connectors${query(compact({ q: params.q, kind: params.kind, type: params.type, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   createOrgConnector: (org: string, body: OrgConnectorCreate) =>
     request<OrgConnector>(`/orgs/${org}/connectors`, { method: "POST", body: JSON.stringify(body) }),
   deleteOrgConnector: (org: string, name: string) =>
@@ -1132,7 +1167,10 @@ export const api = {
   /** The connector types of the registry, by family, with the caller's rights (ADR 0074). */
   connectorCatalogue: (org: string) => request<ConnectorCatalogue>(`/orgs/${org}/connector-catalogue`),
   /** The organisation's connectors as one project sees them: on or off, and may the caller switch. */
-  projectOrgConnectors: (id: string) => request<ProjectOrgConnector[]>(`/projects/${qualify(id)}/org-connectors`),
+  projectOrgConnectors: (id: string, params: { q?: string; kind?: string; cursor?: string; limit?: number } = {}) =>
+    request<ProjectOrgConnectorPage>(
+      `/projects/${qualify(id)}/org-connectors${query(compact({ q: params.q, kind: params.kind, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   enableOrgConnector: (id: string, name: string) =>
     request<ProjectOrgConnector>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "PUT" }),
   disableOrgConnector: (id: string, name: string) =>
@@ -1140,7 +1178,10 @@ export const api = {
   /** An MCP server lists its tools; a new one is born closed, a schema that drifts closes it again. */
   discoverConnectorOperations: (org: string, name: string) =>
     request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),
-  projectOperations: (id: string) => request<ProjectOperation[]>(`/projects/${qualify(id)}/operations`),
+  projectOperations: (id: string, params: { q?: string; connector?: string; cursor?: string; limit?: number } = {}) =>
+    request<ProjectOperationPage>(
+      `/projects/${qualify(id)}/operations${query(compact({ q: params.q, connector: params.connector, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   tightenProjectOperation: (id: string, connector: string, operation: string, policy: string) =>
     request<ProjectOperation>(
       `/projects/${qualify(id)}/operations/${connector}/${encodeURIComponent(operation)}`,
@@ -1542,6 +1583,9 @@ function memoryParams(which?: MemoryChoice): Record<string, string> {
   if (which?.memory === "own" && which.agent) out.agent = which.agent;
   return out;
 }
+
+/** How many pending actions the inbox reads at most: five pages of 200. */
+export const ACTIONS_CAP = 1000;
 
 /** How many tickets a project page reads at most: five pages of 200. */
 export const WORK_ITEMS_CAP = 1000;

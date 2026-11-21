@@ -35,7 +35,7 @@ import {
 } from "@/lib/knowledge";
 import { orgConnectorHref } from "@/lib/connector-link";
 import { isOrgAdmin } from "@/lib/plugins";
-import type { KnowledgeSource, OrgConnector } from "@/lib/types";
+import type { KnowledgeSource } from "@/lib/types";
 
 type Kind = SourceKind;
 const CONNECTED: Kind[] = CONNECTED_KINDS;
@@ -79,16 +79,17 @@ function Labelled({ label, className, children }: { label: string; className?: s
  * Administration → Installed connectors. A member who cannot read the organisation's connectors still
  * sees its name; one that no longer exists says so; a source without one says what it reads instead.
  */
-function SourceConnector({
-  source,
-  known,
-  unreadable,
-}: {
-  source: KnowledgeSource;
-  known: OrgConnector[] | undefined;
-  unreadable: boolean;
-}) {
+function SourceConnector({ org, source }: { org: string; source: KnowledgeSource }) {
   const name = source.connector;
+  // Found by name on the server (ADR 0206), never by looking through a partial list.
+  const lookup = useQuery({
+    queryKey: ["org-connectors", org, "named", name],
+    queryFn: () => api.orgConnectors(org, { q: name ?? undefined, limit: 200 }),
+    select: (page) => page.items,
+    enabled: !!name,
+  });
+  const known = lookup.data;
+  const unreadable = lookup.isError;
   if (!name && source.config?.github_app === true) {
     return (
       <span className="text-xs text-ink-muted" data-testid={`source-connector-${source.id}`}>
@@ -166,7 +167,21 @@ export function KnowledgeSources({
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.me(), retry: false });
   // Only an organisation administrator may set the flag; the API stays the judge (403/409 are shown as they come).
   const admin = isOrgAdmin(me.data ?? null, org);
-  const connectors = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  // What can serve a source: the `documents` connectors and the `mcp` ones, each asked of the server by kind.
+  const documentConnectors = useQuery({
+    queryKey: ["org-connectors", org, "documents"],
+    queryFn: () => api.orgConnectors(org, { kind: "documents", limit: 200 }),
+    select: (page) => page.items,
+  });
+  const mcpServers = useQuery({
+    queryKey: ["org-connectors", org, "mcp"],
+    queryFn: () => api.orgConnectors(org, { kind: "mcp", limit: 200 }),
+    select: (page) => page.items,
+  });
+  const connectors = {
+    data: documentConnectors.data && mcpServers.data ? [...documentConnectors.data, ...mcpServers.data] : undefined,
+    isError: documentConnectors.isError || mcpServers.isError,
+  };
   const kind: Kind = picked ?? firstUsableKind(connectors.data);
   const pickable = (connectors.data ?? []).filter((c) => servesSource(kind, c));
   const usable = (k: Kind) => !CONNECTED.includes(k) || !connectors.data || connectors.data.some((c) => servesSource(k, c));
@@ -239,7 +254,7 @@ export function KnowledgeSources({
                       <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
                         <span>{KIND[source.kind as Kind] ?? source.kind}</span>
                         <span aria-hidden>·</span>
-                        <SourceConnector source={source} known={connectors.data} unreadable={connectors.isError} />
+                        <SourceConnector org={org} source={source} />
                       </p>
                       <p className="text-xs">
                         {source.last_synced_at ? `Synced ${relative(source.last_synced_at)}` : "Not synced yet"} ·{" "}

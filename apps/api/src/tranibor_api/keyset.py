@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+from collections import namedtuple
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -105,7 +106,7 @@ def _after(
     return or_(*clauses)
 
 
-async def keyset_page(
+async def keyset_page(  # noqa: PLR0913 - each option is a route's real need (ADR 0206)
     session: AsyncSession,
     query: Select[Any],
     *,
@@ -125,9 +126,8 @@ async def keyset_page(
     route whose order was `ts DESC, id ASC`).
 
     The rows come back as the `select` gives them: the entity for a one-entity `select`, else whole `Row`s
-    (`rows=True`, or a `select` of several entities or columns). A `Row` carries the key columns this
-    function selects to write the cursor at its end (`_keyset_0`, …): read a `Row` by name or by the
-    position of what the route selected, never by unpacking it whole.
+    (`rows=True`, or a `select` of several entities or columns) as named tuples of what the route
+    selected, without the key columns this function adds to write the cursor.
 
     `keep` is for a rule SQL cannot express (a permission read from a JSON column): it receives a batch of
     rows in order and returns those that stay. The page is filled from successive batches of `SCAN_BATCH`
@@ -154,22 +154,44 @@ async def keyset_page(
         *[key.desc() if down else key.asc() for key, down in zip(keys, directions, strict=True)]
     )
     wanted = page.limit + 1
+    result = await session.execute(query.limit(wanted if keep is None else SCAN_BATCH))
+    shape = _shaper(list(result.keys())[:width], whole)
     if keep is None:
-        fetched = list((await session.execute(query.limit(wanted))).all())
+        fetched = list(result.all())
     else:
         fetched = []
         offset = 0
-        while len(fetched) < wanted:
-            batch = list((await session.execute(query.limit(SCAN_BATCH).offset(offset))).all())
-            kept = {id(item) for item in await keep([row if whole else row[0] for row in batch])}
-            fetched += [row for row in batch if id(row if whole else row[0]) in kept]
+        batch = list(result.all())
+        while True:
+            kept = {id(item) for item in await keep([shape(row) for row in batch])}
+            fetched += [row for row in batch if id(shape(row)) in kept]
             offset += SCAN_BATCH
-            if len(batch) < SCAN_BATCH:
+            if len(fetched) >= wanted or len(batch) < SCAN_BATCH:
                 break
+            batch = list((await session.execute(query.limit(SCAN_BATCH).offset(offset))).all())
     has_more = len(fetched) > page.limit
     window = fetched[: page.limit]
     next_cursor = encode_cursor(*tuple(window[-1])[width:]) if has_more else None
-    return [row if whole else row[0] for row in window], PageMeta(next_cursor=next_cursor, has_more=has_more)
+    return [shape(row) for row in window], PageMeta(next_cursor=next_cursor, has_more=has_more)
+
+
+def _shaper(names: list[str], whole: bool) -> Callable[[Any], Any]:
+    """How a fetched row is handed back without the key columns: the entity of a one-entity `select`, or
+    a named tuple of what the route selected (unpacked, indexed or read by name like a `Row`)."""
+    if not whole:
+        return lambda row: row[0]
+    shaped = namedtuple("PageRow", names, rename=True)  # type: ignore[misc]
+    width = len(names)
+    cache: dict[int, Any] = {}
+
+    def shape(row: Any) -> Any:
+        # The same object for the same row, so that a `keep` filter is matched by identity.
+        key = id(row)
+        if key not in cache:
+            cache[key] = shaped(*tuple(row)[:width])
+        return cache[key]
+
+    return shape
 
 
 def position_page[T](items: Sequence[T], page: Page) -> tuple[list[T], PageMeta]:

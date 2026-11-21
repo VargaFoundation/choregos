@@ -166,12 +166,12 @@ async def test_the_projects_operations_leave_out_a_connector_not_enabled(
 ) -> None:
     await _prepare(client, project, availability="selected_projects")
     operations = f"/api/v1/projects/{project['id']}/operations"
-    assert (await client.get(operations)).json() == []
-    listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()
+    assert (await client.get(operations)).json()["items"] == []
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()["items"]
     assert [(c["name"], c["enabled"], c["can_toggle"]) for c in listed] == [("vendor", False, True)]
     await client.put(_enablement(project))
-    assert {o["operation"] for o in (await client.get(operations)).json()} == {"lookup", "order"}
-    listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()
+    assert {o["operation"] for o in (await client.get(operations)).json()["items"]} == {"lookup", "order"}
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()["items"]
     assert [(c["name"], c["enabled"]) for c in listed] == [("vendor", True)]
 
 
@@ -184,7 +184,7 @@ async def test_who_may_turn_a_connector_on(client: AsyncClient, project: dict[st
     await project_only(client, "dev@northwind.dev")
     assert (await client.put(_enablement(project))).status_code == 403
     assert (await client.delete(_enablement(project))).status_code == 403
-    listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()
+    listed = (await client.get(f"/api/v1/projects/{project['id']}/org-connectors")).json()["items"]
     assert listed[0]["can_toggle"] is False and "owner" in listed[0]["cannot_reason"]
 
     await project_only(client, "owner@northwind.dev")

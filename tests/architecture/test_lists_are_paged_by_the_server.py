@@ -25,6 +25,18 @@ BOUNDED: dict[str, str] = {
     ),
     "listBackends": "the agent backends the code knows",
     "listConnectorTypes": "the connector types the code registers",
+    "listConnectors": (
+        "one row per connector kind: `UniqueConstraint(project_id, kind)` "
+        "(apps/api/src/tranibor_api/db/models/projects.py:90), and `putConnector` refuses a (kind, type) the "
+        "registry does not hold (apps/api/src/tranibor_api/services/connectors.py:66-73)"
+    ),
+    "listProjectRequirements": (
+        "one entry per capability, never per row: `requirements()` groups reasons by capability "
+        "(packages/core/src/tranibor_core/dsl/requirements.py:121-133); the keys are the fixed ORDER plus "
+        "the connector kinds a workflow's `needs:` names, validated against the registered kinds "
+        "(packages/contracts/src/tranibor_contracts/open_lists.py:110, workflow.py:79); derived in Python, "
+        "so it has no SQL order to keyset on"
+    ),
     "listExecutors": "the five executor kinds",
     "listProcedures": "the shipped procedures",
     "listTemplates": "the shipped project templates",
@@ -40,7 +52,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "getRunSkills",
         "getWorkItemHandOffs",
         "getWorkItemTimeline",
-        "listActions",
         "listAgentCatalogue",
         "listAgentCredentials",
         "listAgentEvaluations",
@@ -49,7 +60,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listAgentReleases",
         "listAgentRuns",
         "listAgents",
-        "listConnectors",
         "listGlobalPendingMemory",
         "listImplicitAgents",
         "listKnowledgeBases",
@@ -59,10 +69,8 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listMemories",
         "listMyTokens",
         "listMySessions",
-        "listOrgActions",
         "listOrgAgentCredentials",
         "listOrgAgentReleases",
-        "listOrgConnectors",
         "listOrgs",
         "listPendingMemory",
         # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
@@ -70,9 +78,6 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listPlatformModels",
         "listProjectAgents",
         "listProjectMemories",
-        "listProjectOperations",
-        "listProjectOrgConnectors",
-        "listProjectRequirements",
         "listRemoteCredentials",
         "listRuns",
         "listSkills",

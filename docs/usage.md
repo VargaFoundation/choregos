@@ -232,7 +232,7 @@ named, and shared by its projects. It is born with the operations its type decla
 `allowed`, a write `approval` (a governed action, [ADR 0035](adr/0035-governed-actions-in-the-core.md)) —
 and each operation carries its **policy** (`allowed`, `approval`, `forbidden`), the **project
 groups** it opens to (none: every project) and a price. Only the administrator decides them
-(`tools:grant`). A project sees the operations its groups open (`GET /projects/{id}/operations`)
+(`tools:grant`). A project sees the operations its groups open (`GET /projects/{id}/operations`, paged by the server and filterable by `q` and `connector`, ADR 0206)
 and may only **tighten** one: `PUT /projects/{id}/operations/{connector}/{operation}` refuses an
 `approval` turned into `allowed` (`422`); `DELETE` returns to the organisation's policy, which a
 later hardening by the organisation always overrides.

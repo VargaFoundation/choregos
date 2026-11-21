@@ -30,7 +30,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       project: vi.fn().mockResolvedValue({ slug: "billing-api", name: "Billing API" }),
       adminSections: vi.fn().mockResolvedValue([{ id: "scim", title: "SCIM" }]),
       workItems: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
     },
   };
 });

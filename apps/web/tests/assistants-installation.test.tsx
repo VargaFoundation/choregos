@@ -6,6 +6,7 @@ import { InstallationDetail } from "@/components/assistants/installation-detail"
 import { InstallationsList } from "@/components/assistants/installations-list";
 import { api, ApiError } from "@/lib/api";
 import { mockCostReport } from "@/mocks/data";
+import { pageOf } from "./page";
 
 const push = vi.hoisted(() => vi.fn());
 const roles = vi.hoisted(() => ({ admin: true }));
@@ -107,7 +108,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   roles.admin = true;
   vi.mocked(api.plugins).mockResolvedValue({ items: [{ name: "investment-assistant", version: "1.0.0" }] } as never);
-  vi.mocked(api.orgConnectors).mockResolvedValue([{ name: "news-feed" }, { name: "broker" }] as never);
+  vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([{ name: "news-feed" }, { name: "broker" }] as never));
   vi.mocked(api.agents).mockResolvedValue([{ slug: "investment-analyst" }] as never);
   mocks.pluginAssistants.mockResolvedValue(shipped);
   mocks.installation.mockResolvedValue(installed());

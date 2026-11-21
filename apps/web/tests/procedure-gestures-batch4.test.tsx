@@ -8,6 +8,7 @@ import { AgentBuilder } from "@/components/agents/builder";
 import { mcpCatalogue } from "@/mocks/data";
 import { proceduresApi } from "@/mocks/procedures";
 import type { McpCatalogue } from "@/lib/types";
+import { pageOf } from "./page";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -63,7 +64,7 @@ beforeEach(() => {
   api.platformModels.mockResolvedValue([]);
   api.backends.mockResolvedValue([{ name: "claude-code", enabled: true, capabilities: [] }]);
   api.agentImages.mockResolvedValue([{ name: "ticket-triager", digest_pinned: true }]);
-  api.orgConnectors.mockResolvedValue([]);
+  api.orgConnectors.mockResolvedValue(pageOf([]));
   api.skills.mockResolvedValue([]);
   api.knowledgeBases.mockResolvedValue([]);
 });

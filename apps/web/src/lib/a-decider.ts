@@ -97,8 +97,8 @@ export function useADecider(org: string, project?: string) {
     })),
   });
   const actions = useQuery({
-    queryKey: ["org-actions", org],
-    queryFn: () => api.orgActions(org, "pending_approval"),
+    queryKey: ["org-actions", org, project ?? null],
+    queryFn: () => api.pendingOrgActions(org, project),
     staleTime: 30_000,
   });
   // A budget that crossed a threshold waits for a person to have seen it (S29-04).
@@ -119,7 +119,7 @@ export function useADecider(org: string, project?: string) {
   });
   const read = tickets.flatMap((lecture) => lecture.data?.items ?? []);
   const waiting = waitingTickets(read);
-  const narrowedActions = project ? waitingInProject(actions.data ?? [], project) : (actions.data ?? []);
+  const narrowedActions = project ? waitingInProject(actions.data?.items ?? [], project) : (actions.data?.items ?? []);
   const egressRequests: EgressRule[] = project ? [] : (egress.data?.requests ?? []);
   const canDecideEgress = !project && !!egress.data?.can_decide;
   return {
@@ -135,6 +135,8 @@ export function useADecider(org: string, project?: string) {
     canDecideEgress,
     /** The projects whose tickets could not be read: they are not counted, and we say so. */
     projetsIllisibles: slugs.filter((_, index) => tickets[index]?.error),
+    /** More actions wait than the inbox reads: the count is a lower bound (ACTIONS_CAP). */
+    moreActions: actions.data?.meta.has_more ?? false,
     erreur: projects.error ?? actions.error ?? budgets.error ?? egress.error ?? null,
     pret:
       (!!project || !!projects.data) &&

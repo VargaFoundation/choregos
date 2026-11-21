@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { api, ApiError } from "@/lib/api";
 import type { ConnectorType, OrgConnector, Outpost } from "@/lib/types";
+import { pageOf } from "./page";
 
 /**
  * The form of a connector at an outpost (S65-17b, ADR 0149 §1): the outpost is chosen among the
@@ -87,7 +88,7 @@ const OUTPOSTS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(api.orgConnectors).mockResolvedValue([atTheFloor]);
+  vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([atTheFloor]));
   vi.mocked(api.connectorTypes).mockResolvedValue([outpostType]);
   vi.mocked(api.outposts).mockResolvedValue({ items: OUTPOSTS, enabled: true, door_signing_key: true });
   vi.mocked(api.createOrgConnector).mockResolvedValue(atTheFloor);
@@ -315,7 +316,7 @@ describe("editing a connector at an outpost", () => {
   });
 
   it("keeps a configuration that names an outpost or an alias the organisation no longer offers, and says so", async () => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([{ ...atTheFloor, config: { outpost: "gone", endpoint: "tracker" } } as OrgConnector]);
+    vi.mocked(api.orgConnectors).mockResolvedValue(pageOf([{ ...atTheFloor, config: { outpost: "gone", endpoint: "tracker" } } as OrgConnector]));
     page();
     const card = await screen.findByTestId("connector-tracker-onsite");
     fireEvent.click(within(card).getByRole("button", { name: "Edit settings" }));

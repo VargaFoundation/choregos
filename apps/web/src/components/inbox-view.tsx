@@ -110,7 +110,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         )}
       </Card>
 
-      <Card title="Actions to approve" action={<span className="text-xs text-ink-muted">{inbox.actions.length} waiting</span>}>
+      <Card title="Actions to approve" action={<span className="text-xs text-ink-muted">{inbox.actions.length}{inbox.moreActions ? "+" : ""} waiting</span>}>
         <p className="mb-3 max-w-3xl text-sm text-ink-muted">
           Writes into systems that are not ours — an account, a laptop order, a badge — run only once a person approves
           them, with a recent sign-in. The platform runs them afterwards, effect by effect, and undoes what it did if a

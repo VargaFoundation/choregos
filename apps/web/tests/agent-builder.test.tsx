@@ -16,6 +16,7 @@ import {
 import { versionSummary } from "@/components/agents/registry";
 import { api } from "@/lib/api";
 import type { AgentSpec, KnowledgeBase, MemoryStore, OrgConnector, Skill } from "@/lib/types";
+import { byFilters } from "./page";
 
 /** The agent builder (S32-01): every field of a version is editable, with what it costs and allows. */
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
@@ -148,7 +149,7 @@ describe("the folded sections", () => {
 
 describe("the builder", () => {
   beforeEach(() => {
-    vi.mocked(api.orgConnectors).mockResolvedValue([CONNECTOR, { name: "entra", kind: "identity", type: "entra", status: "ok" }]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([CONNECTOR, { name: "entra", kind: "identity", type: "entra", status: "ok" }]));
     vi.mocked(api.skills).mockResolvedValue(SKILLS);
     vi.mocked(api.knowledgeBases).mockResolvedValue(BASES);
   });
@@ -371,7 +372,7 @@ describe("the release section of a new agent (S40-02c)", () => {
     );
   beforeEach(() => {
     vi.mocked(api.createAgent).mockClear();
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([]));
     vi.mocked(api.skills).mockResolvedValue([]);
     vi.mocked(api.knowledgeBases).mockResolvedValue([]);
   });
@@ -419,7 +420,7 @@ describe("the tool sources of a version (S60-03, ADR 0127)", () => {
   };
   beforeEach(() => {
     vi.mocked(api.createAgent).mockClear();
-    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.orgConnectors).mockImplementation(byFilters([]));
     vi.mocked(api.skills).mockResolvedValue([]);
     vi.mocked(api.knowledgeBases).mockResolvedValue([]);
   });

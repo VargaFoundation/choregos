@@ -58,7 +58,9 @@ async def test_a_member_lists_the_catalogue_and_nothing_is_installed(client: Asy
     assert len(body["entries"]) == len(shipped.entries) >= 90
     assert {e["state"] for e in body["entries"]} == {"available"}
     assert all(e["installed_as"] == [] for e in body["entries"])
-    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == [], "listing enables nothing"
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json()["items"] == [], (
+        "listing enables nothing"
+    )
     github = _by_id(body)["github"]
     assert github["install"] == "installable" and github["official"] is True
     assert github["remote"]["url"] == "https://api.githubcopilot.com/mcp/"
@@ -140,7 +142,7 @@ async def test_only_the_administrator_installs(client: AsyncClient, admin: str) 
     assert (await client.get(BASE)).status_code == 200, "a member browses"
     refused = await client.post(f"{BASE}/exa/install", json={})
     assert refused.status_code == 403
-    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json()["items"] == []
 
 
 async def test_an_oauth_entry_and_a_hosted_process_are_refused_with_the_reason(
@@ -151,7 +153,7 @@ async def test_an_oauth_entry_and_a_hosted_process_are_refused_with_the_reason(
     hosting = await client.post(f"{BASE}/playwright/install", json={})
     assert hosting.status_code == 422 and "local process" in hosting.text
     assert (await client.post(f"{BASE}/no-such-server/install", json={})).status_code == 404
-    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json()["items"] == []
 
 
 async def test_a_taken_name_is_a_conflict_and_the_name_defaults_to_the_id(
@@ -175,7 +177,7 @@ async def test_a_secret_in_clear_or_a_missing_one_is_refused(client: AsyncClient
     assert missing.status_code == 422 and "secret_refs.token" in missing.text
     unwanted = await client.post(f"{BASE}/exa/install", json={"secret_refs": {"token": "env:CONNECTOR_X"}})
     assert unwanted.status_code == 422 and "no credential" in unwanted.text
-    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json()["items"] == []
 
 
 async def test_atlassian_rovo_installs_with_a_service_account_key(

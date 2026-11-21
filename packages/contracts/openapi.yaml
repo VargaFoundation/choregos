@@ -612,9 +612,20 @@ paths:
     get:
       tags: [connectors]
       operationId: listOrgConnectors
-      description: The organisation's connectors and their operations (ADR 0034); its members can read them.
+      description: >-
+        The organisation's connectors and their operations (ADR 0034), by name, one page at a time (ADR 0206); its
+        members can read them. `q` matches a part of the name; `kind` keeps one capability (`gateway`, `mcp`…) and
+        `type` one type.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: kind, in: query, schema: { type: string, maxLength: 32 } }
+        - { name: type, in: query, schema: { type: string, maxLength: 64 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrgConnector" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrgConnectorPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [connectors]
       operationId: createOrgConnector
@@ -772,9 +783,18 @@ paths:
     get:
       tags: [connectors]
       operationId: listProjectOrgConnectors
-      description: The organisation's connectors and whether each is on for this project, with what the caller may switch (ADR 0074). The project's members can read it.
+      description: >-
+        The organisation's connectors by name, one page at a time (ADR 0206), and whether each is on for this project,
+        with what the caller may switch (ADR 0074). The project's members can read it. `q` matches a part of the name;
+        `kind` keeps one capability.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: kind, in: query, schema: { type: string, maxLength: 32 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectOrgConnector" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOrgConnectorPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/org-connectors/{connector}/enablement:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -834,9 +854,18 @@ paths:
     get:
       tags: [connectors]
       operationId: listProjectOperations
-      description: The operations open to the project (their groups intersect its own), with the organisation's policy, the project's and the effective one.
+      description: >-
+        The operations open to the project (their groups intersect its own), by connector then operation, one page at a
+        time (ADR 0206), with the organisation's policy, the project's and the effective one. `q` matches a part of the
+        connector or the operation name; `connector` keeps one connector.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: connector, in: query, schema: { type: string, maxLength: 64 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ProjectOperation" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectOperationPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/operations/{connector}/{operation}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -864,10 +893,14 @@ paths:
     get:
       tags: [actions]
       operationId: listActions
+      description: The project's actions, newest first, one page at a time (ADR 0206); `status` keeps one state.
       parameters:
-        - { name: status, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { type: string, maxLength: 24 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: The project's actions and the log of their effects, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Action" } } } } }
+        "200": { description: The project's actions and the log of their effects, content: { application/json: { schema: { $ref: "#/components/schemas/ActionPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [actions]
       operationId: proposeAction
@@ -884,11 +917,17 @@ paths:
     get:
       tags: [actions]
       operationId: listOrgActions
-      description: The decision inbox — the actions of the organisation's projects that the caller can see; `status=pending_approval` for what is waiting for someone.
+      description: >-
+        The decision inbox — the actions of the organisation's projects that the caller can see, newest first, one page
+        at a time (ADR 0206); `status=pending_approval` for what is waiting for someone, `project` for one project's slug.
       parameters:
-        - { name: status, in: query, required: false, schema: { type: string } }
+        - { name: status, in: query, required: false, schema: { type: string, maxLength: 24 } }
+        - { name: project, in: query, required: false, schema: { type: string, maxLength: 64 } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Action" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ActionPage" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /projects/{id}/actions/{action_id}:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -13342,6 +13381,30 @@ components:
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ActionPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Action" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    OrgConnectorPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/OrgConnector" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ProjectOrgConnectorPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ProjectOrgConnector" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ProjectOperationPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ProjectOperation" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
     AuditEntry:
       type: object

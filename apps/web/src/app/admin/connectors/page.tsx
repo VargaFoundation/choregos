@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
@@ -63,16 +63,33 @@ const WHAT_IT_ALLOWS = {
  */
 export default function OrgConnectorsPage() {
   const { org } = useSession();
-  const instances = useQuery({ queryKey: ["org-connectors", org], queryFn: () => api.orgConnectors(org) });
+  // The server pages and filters (ADR 0206): the search goes to the query, "More" asks for the next page.
+  const [typed, setTyped] = useState("");
+  const [search, setSearch] = useState("");
+  const instances = useInfiniteQuery({
+    queryKey: ["org-connectors", org, "table", search],
+    queryFn: ({ pageParam }) => api.orgConnectors(org, { q: search || undefined, cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const loaded = instances.data?.pages.flatMap((page) => page.items);
   // Landing from the catalogue (ADR 0065): the connector just installed is marked, with what its
   // first discovery found.
   const arrival = useArrival();
   // Arriving from Library → Plugins (S43-08): the server's connector is marked and its settings open.
   const focus = useFocus();
-  const { metier, mcp } = groupConnectors(instances.data ?? []);
+  const { metier, mcp } = groupConnectors(loaded ?? []);
+  const more = instances.hasNextPage ? "+" : "";
+  // A link that names a connector (`?connector=`) must find it: read on until it shows.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = instances;
+  useEffect(() => {
+    if (focus && loaded && !loaded.some((c) => c.name === focus) && hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [focus, loaded, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const lecture = instances.error ? (
     <ErrorNote>{String(instances.error)}</ErrorNote>
-  ) : !instances.data ? (
+  ) : !loaded ? (
     <p className="text-sm text-ink-muted">Reading…</p>
   ) : null;
   return (
@@ -111,9 +128,27 @@ export default function OrgConnectorsPage() {
         </p>
         <Glossary ici="connectors" ouvert />
       </div>
+      <form
+        className="flex max-w-3xl items-center gap-2"
+        role="search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSearch(typed.trim());
+        }}
+      >
+        <Input
+          aria-label="Search connectors by name"
+          placeholder="Search by name"
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+        />
+        <Button type="submit" size="sm">
+          Search
+        </Button>
+      </form>
       <section className="space-y-3" aria-labelledby="business" data-testid="business-section">
         <h2 id="business" className="text-lg font-semibold">
-          Business systems (API) ({metier.length})
+          Business systems (API) ({metier.length}{more})
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
           Systems your agents act on through the operations their type declares — a directory, a device fleet, a
@@ -131,7 +166,7 @@ export default function OrgConnectorsPage() {
       </section>
       <section className="space-y-3" aria-labelledby="mcp" data-testid="section-mcp">
         <h2 id="mcp" className="text-lg font-semibold">
-          MCP servers ({mcp.length})
+          MCP servers ({mcp.length}{more})
         </h2>
         <p className="max-w-3xl text-sm text-ink-muted">
           Tool servers Tranibor calls over MCP: discover lists their tools, and each new tool is born closed. A
@@ -166,6 +201,13 @@ export default function OrgConnectorsPage() {
             ))
           ))}
       </section>
+      {instances.hasNextPage && (
+        <div className="flex justify-center">
+          <Button size="sm" onClick={() => void instances.fetchNextPage()} disabled={instances.isFetchingNextPage}>
+            More
+          </Button>
+        </div>
+      )}
       <DeliveryTools org={org} />
       <Suspense>
         <DeclareInstance org={org} />

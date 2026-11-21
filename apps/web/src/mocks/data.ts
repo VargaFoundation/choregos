@@ -4430,12 +4430,38 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
-    const statusFilter = new URLSearchParams(path.split("?")[1] ?? "").get("status");
-    return actions.filter((a) => !statusFilter || a.status === statusFilter) as T;
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const statusFilter = search.get("status");
+    const project = search.get("project");
+    return pageOfMock(
+      actions.filter((a) => (!statusFilter || a.status === statusFilter) && (!project || a.project_slug === project)),
+      search,
+    ) as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/actions$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const statusFilter = search.get("status");
+    return pageOfMock(actions.filter((a) => !statusFilter || a.status === statusFilter), search) as T;
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/operations$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const needle = (search.get("q") ?? "").toLowerCase();
+    const connector = search.get("connector");
+    return pageOfMock(
+      projectOperations.filter(
+        (o) =>
+          (!connector || o.connector === connector) &&
+          (!needle || o.connector.toLowerCase().includes(needle) || o.operation.toLowerCase().includes(needle)),
+      ),
+      search,
+    ) as T;
   }
   // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
   // would be seen by the query cache as unchanged.
-  if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) return structuredClone(orgConnectors) as T;
+  if (/^\/orgs\/[^/]+\/connectors$/.test(route ?? "")) {
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return structuredClone(pageOfMock(connectorsFiltered(orgConnectors, search), search)) as T;
+  }
   if (/^\/orgs\/[^/]+\/agents$/.test(route ?? "")) {
     // Every tag given (AND), as the API filters (S40-10).
     const wanted = new URLSearchParams(path.split("?")[1] ?? "").getAll("tag");
@@ -4444,14 +4470,18 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const projectOrg = /^\/projects\/([^/]+)\/org-connectors$/.exec(route ?? "");
   if (projectOrg) {
     const slug = decodeURIComponent(projectOrg[1]!).replace(/^[^:/]+[:/]/, "");
-    return orgConnectors.map((c) => ({
-      name: c.name,
-      kind: c.kind,
-      type: c.type,
-      availability: c.availability ?? "all_projects",
-      enabled: c.availability !== "selected_projects" || (c.enabled_projects ?? []).includes(slug),
-      can_toggle: c.availability === "selected_projects",
-    })) as T;
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    return pageOfMock(
+      connectorsFiltered(orgConnectors, search).map((c) => ({
+        name: c.name,
+        kind: c.kind,
+        type: c.type,
+        availability: c.availability ?? "all_projects",
+        enabled: c.availability !== "selected_projects" || (c.enabled_projects ?? []).includes(slug),
+        can_toggle: c.availability === "selected_projects",
+      })),
+      search,
+    ) as T;
   }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
   // A copy: the agent changes for the time of the page (S23-13), and a read must see it as new.
@@ -4545,11 +4575,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/connectors\/types$/, connectorTypes],
     [/^\/projects\/(?:[^/]*:)?dev\/requirements$/, devRequirements],
     [/^\/projects\/[^/]+\/requirements$/, projectRequirements],
-    [/^\/orgs\/[^/]+\/connectors$/, orgConnectors],
     [/^\/orgs\/[^/]+\/mcp-catalogue$/, mcpCatalogue()],
     [/^\/orgs\/[^/]+\/connector-catalogue$/, connectorCatalogue()],
-    [/^\/projects\/[^/]+\/actions$/, actions],
-    [/^\/projects\/[^/]+\/operations$/, projectOperations],
     [/^\/platform\/models$/, platformModels],
     [/^\/platform\/backends$/, platformBackends],
     [/^\/platform\/agent-images$/, platformAgentImages],
@@ -4651,3 +4678,25 @@ const mockGatewayKeys: GatewayKeyInfo[] = [
   { key_id: "gk-7f3a91", run_id: "run-1042", project_slug: "billing-api", budget_usd: 5, spend_usd: 1.37, expires_at: "2026-10-30T12:00:00Z", revoked: false, created_at: "2026-10-29T09:00:00Z" },
   { key_id: "gk-2c84be", run_id: "run-1031", project_slug: "checkout-web", budget_usd: 2, spend_usd: 2, expires_at: null, revoked: true, created_at: "2026-10-28T14:30:00Z" },
 ];
+
+/**
+ * A page of a list, the way the server answers one (ADR 0206): `limit` rows from the cursor, which here is
+ * the offset of the next row, and `has_more`. The filters are applied by the caller before this.
+ */
+function pageOfMock<T>(rows: T[], search: URLSearchParams): { items: T[]; meta: { has_more: boolean; next_cursor: string | null } } {
+  const start = Number(search.get("cursor") ?? "0") || 0;
+  const limit = Number(search.get("limit") ?? "50") || 50;
+  const items = rows.slice(start, start + limit);
+  const more = start + limit < rows.length;
+  return { items, meta: { has_more: more, next_cursor: more ? String(start + limit) : null } };
+}
+
+/** The organisation's connectors by name, with the server's filters: `q` (part of the name), `kind` and `type`. */
+function connectorsFiltered<T extends { name: string; kind: string; type: string }>(rows: T[], search: URLSearchParams): T[] {
+  const needle = (search.get("q") ?? "").toLowerCase();
+  const kind = search.get("kind");
+  const type = search.get("type");
+  return rows
+    .filter((c) => (!needle || c.name.toLowerCase().includes(needle)) && (!kind || c.kind === kind) && (!type || c.type === type))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

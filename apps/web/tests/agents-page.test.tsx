@@ -26,7 +26,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       agentCatalogue: vi.fn().mockResolvedValue([]),
       platformModels: vi.fn().mockResolvedValue([]),
       backends: vi.fn().mockResolvedValue([]),
-      orgConnectors: vi.fn().mockResolvedValue([]),
+      orgConnectors: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       skills: vi.fn().mockResolvedValue([]),
       projects: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false } }),
       orgAgentCredentials: vi.fn(),

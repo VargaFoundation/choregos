@@ -6,6 +6,7 @@ import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { api, ApiError } from "@/lib/api";
 import { deliveryPatch, isOutpostWrite, statementRefusals } from "@/lib/outposts";
 import type { ConnectorOperation, OrgConnector } from "@/lib/types";
+import { pageOf } from "./page";
 
 /**
  * How a write at an outpost is delivered, in the operation's rule (S65-17c, ADR 0149 §6). A write of a
@@ -76,7 +77,7 @@ function neitherIsSaid(): ApiError {
 }
 
 function page(connectors: OrgConnector[]) {
-  vi.mocked(api.orgConnectors).mockResolvedValue(connectors);
+  vi.mocked(api.orgConnectors).mockResolvedValue(pageOf(connectors));
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <OrgConnectorsPage />

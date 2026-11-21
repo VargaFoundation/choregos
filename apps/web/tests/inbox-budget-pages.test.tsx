@@ -17,7 +17,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       workItems: vi
         .fn()
         .mockResolvedValue({ items: [], meta: { has_more: false } }),
-      orgActions: vi.fn().mockResolvedValue([]),
+      orgActions: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       orgEgress: vi
         .fn()
         .mockResolvedValue({

@@ -38,7 +38,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     ...real,
     api: {
       ...real.api,
-      orgConnectors: vi.fn().mockResolvedValue([through]),
+      orgConnectors: vi.fn().mockResolvedValue({ items: [through], meta: { has_more: false, next_cursor: null } }),
       projects: vi
         .fn()
         .mockResolvedValue({ items: [], meta: { has_more: false } }),

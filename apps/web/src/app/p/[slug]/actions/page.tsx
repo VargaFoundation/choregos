@@ -1,24 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
 import { Status, propose } from "@/components/actions/status";
-import { Card, Empty, ErrorNote } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 
 /** The project's governed actions: proposed, decided, executed, and what has been undone. */
 export default function ProjectActionsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const actions = useQuery({ queryKey: ["actions", slug], queryFn: () => api.projectActions(slug) });
+  const actions = useInfiniteQuery({
+    queryKey: ["actions", slug],
+    queryFn: ({ pageParam }) => api.projectActions(slug, { cursor: pageParam, limit: 50 }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.meta.has_more ? (last.meta.next_cursor ?? undefined) : undefined),
+  });
+  const rows = actions.data?.pages.flatMap((page) => page.items);
   if (actions.error) return <ErrorNote>{String(actions.error)}</ErrorNote>;
   return (
     <Card title="Governed actions">
       {!actions.data ? (
         <p className="text-sm text-ink-muted">Reading…</p>
-      ) : actions.data.length === 0 ? (
+      ) : rows?.length === 0 ? (
         <Empty title="No action yet">A tool under approval, or a step that writes elsewhere, proposes one.</Empty>
       ) : (
         <div className="overflow-x-auto">
@@ -32,7 +38,7 @@ export default function ProjectActionsPage({ params }: { params: Promise<{ slug:
               </tr>
             </thead>
             <tbody>
-              {actions.data.map((action) => (
+              {rows?.map((action) => (
                 <tr key={action.id} className="border-t border-line">
                   <td className="py-2">
                     <Link href={`/p/${slug}/actions/${action.id}`} className="font-medium hover:underline">
@@ -54,6 +60,13 @@ export default function ProjectActionsPage({ params }: { params: Promise<{ slug:
               ))}
             </tbody>
           </table>
+          {actions.hasNextPage && (
+            <div className="mt-3 flex justify-center">
+              <Button size="sm" onClick={() => void actions.fetchNextPage()} disabled={actions.isFetchingNextPage}>
+                More
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </Card>

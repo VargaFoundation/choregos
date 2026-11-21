@@ -124,7 +124,7 @@ async def test_a_gateway_install_with_a_secret_is_refused(client: AsyncClient, a
         f"{BASE}/{hosted}/install", json={"route": "gateway", "secret_values": {"token": "x"}}
     )
     assert refused.status_code == 422, refused.text
-    assert (await client.get("/api/v1/orgs/northwind/connectors")).json() == []
+    assert (await client.get("/api/v1/orgs/northwind/connectors")).json()["items"] == []
 
 
 async def test_a_direct_install_in_required_mode_is_409(client: AsyncClient, admin: str) -> None:

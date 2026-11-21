@@ -76,7 +76,7 @@ async def test_a_project_narrows_but_never_turns_approval_into_allowed(
     pid = project["id"]
     assert (await _declare(client)).status_code == 201
     base = f"/api/v1/projects/{pid}/operations/directory-acme"
-    assert _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json()) == {
+    assert _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"]) == {
         "create_account": "approval",
         "deactivate_account": "approval",
         "read_user": "allowed",
@@ -88,7 +88,7 @@ async def test_a_project_narrows_but_never_turns_approval_into_allowed(
     assert narrowed.status_code == 200, narrowed.text
     assert narrowed.json()["effective_policy"] == "approval"
     assert (await client.put(f"{base}/deactivate_account", json={"policy": "forbidden"})).status_code == 200
-    seen = _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json())
+    seen = _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"])
     assert seen == {
         "create_account": "approval",
         "deactivate_account": "forbidden",
@@ -100,12 +100,15 @@ async def test_a_project_narrows_but_never_turns_approval_into_allowed(
                                 json={"policy": "forbidden"})  # fmt: skip
     assert hardened.status_code == 200
     assert (
-        _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json())["read_user"] == "forbidden"
+        _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"])["read_user"]
+        == "forbidden"
     )
 
     assert (await client.delete(f"{base}/deactivate_account")).status_code == 204
     assert (
-        _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json())["deactivate_account"]
+        _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"])[
+            "deactivate_account"
+        ]
         == "approval"
     )
 
@@ -117,10 +120,14 @@ async def test_the_groups_of_an_operation_say_which_projects_see_it(
     assert (await _declare(client)).status_code == 201
     groups_response = await client.patch(CREATE_ACCOUNT, json={"groups": ["hr"]})
     assert groups_response.status_code == 200 and groups_response.json()["groups"] == ["hr"]
-    assert "create_account" not in _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json())
+    assert "create_account" not in _policies(
+        (await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"]
+    )
     config = {**project["config"], "groups": ["hr"]}
     assert (await client.patch(f"/api/v1/projects/{pid}", json={"config": config})).status_code == 200
-    assert "create_account" in _policies((await client.get(f"/api/v1/projects/{pid}/operations")).json())
+    assert "create_account" in _policies(
+        (await client.get(f"/api/v1/projects/{pid}/operations")).json()["items"]
+    )
 
 
 async def test_a_project_owner_decides_neither_connectors_nor_groups(
@@ -160,6 +167,6 @@ async def test_another_organisation_does_not_exist(client: AsyncClient, admin: s
         )
     # Two organisations: northwind's administrator no longer writes an `env:` reference (ADR 0088).
     assert (await _declare(client, secret_refs={})).status_code == 201
-    names = [c["name"] for c in (await client.get("/api/v1/orgs/northwind/connectors")).json()]
+    names = [c["name"] for c in (await client.get("/api/v1/orgs/northwind/connectors")).json()["items"]]
     assert names == ["directory-acme"]
     assert (await client.get("/api/v1/orgs/other/connectors")).status_code == 403
