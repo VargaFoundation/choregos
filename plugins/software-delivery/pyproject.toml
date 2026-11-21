@@ -1,6 +1,6 @@
 [project]
 name = "tranibor-software-delivery"
-version = "0.27.17"
+version = "0.28.0"
 description = "The code of the software-delivery plugin: the gates that read a diff, a pipeline or a pull request, and the facts they read (ADR 0181)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
