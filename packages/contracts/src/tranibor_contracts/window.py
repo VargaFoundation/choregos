@@ -27,11 +27,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
-from .enums import FindingType, InboundEventType, MemoryKind, Role
+from .enums import ConnectorKind, FindingType, InboundEventType, MemoryKind, Role
 
 __all__ = [
     "C1",
     "C2",
+    "DELIVERY_CONNECTOR_KINDS",
     "DELIVERY_EVENT_TYPES",
     "DELIVERY_FINDING_TYPES",
     "DELIVERY_MEMORY_KINDS",
@@ -39,6 +40,7 @@ __all__ = [
     "ROLE_SUCCESSORS",
     "SOFTWARE_DELIVERY",
     "WINDOW",
+    "D",
     "FormerName",
     "Window",
     "opening_release",
@@ -153,6 +155,19 @@ DELIVERY_FINDING_TYPES: frozenset[str] = frozenset(
     {FindingType.BUG, FindingType.PERF, FindingType.TECH_DEBT, FindingType.FLAKY_TEST}
 )
 DELIVERY_MEMORY_KINDS: frozenset[str] = frozenset({MemoryKind.FLAKY_TEST, MemoryKind.HOTSPOT})
+#: The connector kinds of software delivery: a source control, a pipeline, a deployment.
+DELIVERY_CONNECTOR_KINDS: frozenset[str] = frozenset({ConnectorKind.SCM, ConnectorKind.CI, ConnectorKind.CD})
+
+#: Round D of ADR 0181: what leaves the core with the code of software delivery (its connectors, the
+#: release train), not before that code moves (S83-05, 2027-04-19 → 2027-05-28). The connector kinds
+#: `scm`, `ci` and `cd` wait for it: the core's adapters still register the `github`, `gitlab`, `tekton`
+#: and `argocd` types under them. The list is empty by 2027-06-11 (ADR 0181, 2026-11-19, point 6).
+D = Window(
+    round="D",
+    opened_on=date(2026, 11, 21),
+    writers_switch_on=date(2027, 4, 19),
+    removed_on=date(2027, 5, 28),
+)
 
 Surface = Literal["python", "rest", "dsl", "stage-result", "sign-in"]
 
@@ -189,7 +204,9 @@ def _rest(schema: str, name: str, successor: str) -> FormerName:
 
 
 def _kept(
-    enum: type[InboundEventType | FindingType | MemoryKind], values: frozenset[str]
+    enum: type[InboundEventType | FindingType | MemoryKind | ConnectorKind],
+    values: frozenset[str],
+    window: Window | None = None,
 ) -> tuple[FormerName, ...]:
     """The members of a contract's enumeration whose value the `software-delivery` plugin declares."""
     return tuple(
@@ -198,7 +215,7 @@ def _kept(
             f"`{member.value}`, declared by the software-delivery plugin",
             "python",
             f"py:tranibor_contracts.enums:{enum.__name__}.{member.name}",
-            C2,
+            window or C2,
         )
         for member in enum
         if member.value in values
@@ -285,6 +302,8 @@ WINDOW: tuple[FormerName, ...] = (
     *_kept(InboundEventType, DELIVERY_EVENT_TYPES),
     *_kept(FindingType, DELIVERY_FINDING_TYPES),
     *_kept(MemoryKind, DELIVERY_MEMORY_KINDS),
+    # Round D: the connector kinds leave with the connector types the core still registers under them.
+    *_kept(ConnectorKind, DELIVERY_CONNECTOR_KINDS, D),
 )
 
 #: A former role and its successor: `Role.neutral` reads through it.

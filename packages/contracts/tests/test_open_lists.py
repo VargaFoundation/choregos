@@ -189,6 +189,22 @@ def test_the_values_of_software_delivery_are_kept_for_its_plugin_for_one_window(
     assert INBOUND_EVENT_TYPES.plugin_of("tracker.item.created") is None
 
 
+def test_the_connector_kinds_of_software_delivery_wait_for_round_d() -> None:
+    """`scm`, `ci` and `cd` are the plugin's, kept in the core's list until the connector types the core
+    still registers under them move (window `D`)."""
+    from tranibor_contracts.window import WINDOW, D
+
+    assert set(CONNECTOR_KINDS.kept) == {"scm", "ci", "cd"}
+    assert {CONNECTOR_KINDS.plugin_of(kind) for kind in ("scm", "ci", "cd")} == {"software-delivery"}
+    assert CONNECTOR_KINDS.plugin_of("tracker") is None and "tracker" in CONNECTOR_KINDS.own()
+    assert {e.name for e in WINDOW if e.window is D} == {
+        "ConnectorKind.SCM",
+        "ConnectorKind.CI",
+        "ConnectorKind.CD",
+    }
+    assert CONNECTOR_KINDS.check("scm") is ConnectorKind.SCM
+
+
 def test_a_kept_value_must_be_the_core_s() -> None:
     with pytest.raises(ValueError, match="not in the core's list"):
         OpenList("thing", r"^[a-z]+$", ["a"], kept={"b": "plugin"})
