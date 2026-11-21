@@ -181,8 +181,11 @@ def agent_git_env(env: Mapping[str, str], workspace: Path) -> dict[str, str]:
 #: write. Under `agentIsolation: container` it is also a path of the runner's own container, which
 #: the agent cannot see; in `process` mode the agent and the runner share a user id, so the wall is
 #: the confinement alone, and it is said so in docs/security.md.
+#: The default is per user id (`/var/tmp/choregos-git-<uid>`): `/var/tmp` is shared by every user of a
+#: machine, and one fixed name made the runner of a second user fail on the first one's directory (mode
+#: 0700, someone else's) — on a developer's machine, and in the test suite of anyone but the first.
 GIT_DIR_ROOT_VARIABLE = "TRANIBOR_RUNNER_GIT_DIR_ROOT"
-DEFAULT_GIT_DIR_ROOT = Path("/var/tmp/choregos-git")  # noqa: S108 - not a write root of the agent
+DEFAULT_GIT_DIR_ROOT = Path(f"/var/tmp/choregos-git-{os.getuid()}")  # noqa: S108 - not a write root of the agent
 
 
 def git_dir_for(workspace: Path, root: Path | None = None) -> Path:
@@ -195,6 +198,20 @@ def git_dir_for(workspace: Path, root: Path | None = None) -> Path:
 
 class WorkspaceError(RuntimeError):
     """The workspace could not be prepared (clone, branch)."""
+
+
+def _require_own_directory(path: Path) -> None:
+    """The root of the runner's git directories is the runner's own: a directory someone else made in a
+    shared `/var/tmp` (another user's, or one left writable by others) would hand that someone the hooks
+    and the configuration the runner's git reads with the run's token. Refused, never used."""
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise WorkspaceError(f"{path} is not a directory of the runner: refused")
+    if info.st_uid != os.getuid() or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise WorkspaceError(
+            f"{path} belongs to another user or is writable by others: the runner's git directory needs "
+            f"its own (set {GIT_DIR_ROOT_VARIABLE})"
+        )
 
 
 @dataclass(slots=True)
@@ -409,6 +426,7 @@ class Workspace:
         """`git init` of the runner's own directory, with no template (no sample hook) and no
         `core.worktree`: the work tree is named on every command, never recorded."""
         self.git_dir.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _require_own_directory(self.git_dir.parent)
         init = await self.git("init", "--template=", "--initial-branch", branch)
         if not init.ok:
             raise WorkspaceError(f"git init failed: {init.output}")
