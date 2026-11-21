@@ -91,7 +91,10 @@ async def test_a_remote_agent_carries_the_step_and_its_answer_goes_through_the_p
     assert "response.md" in client.outputs and client.outputs["response.md"][1].startswith(b"Three open")
     assert "issues.csv" in client.outputs, "the remote agent's artifact is a deliverable of the step"
     # Facts the remote agent states are DECLARED: kept, never listed as measured.
-    assert result.evidence.facts == {"issues_found": 3}
+    facts = dict(result.evidence.facts or {})
+    assert facts.pop("issues_found") == 3 and "nested" not in facts
+    # The rest is the runner's own evidence also written as named facts (ADR 0181 C2), field for field.
+    assert all(getattr(result.evidence, name) == value for name, value in facts.items())
     assert "facts.issues_found" not in (result.evidence.measured or [])
     reports = result.artifacts.reports
     assert reports["remote_provenance"] == "remote:rovo"

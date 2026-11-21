@@ -219,11 +219,22 @@ actually executed; `scope_respected` compares the diff to the declared scope;
 minimum. Gates shipped today:
 
 ```
-action_succeeded · adr_number_free · already_fixed_proven · ci_green · coverage_delta_min
-diff_size_max · docs_updated · evidence_facts · evidence_present · external · flag_present · markdown_sections
-no_secrets · numbers_measured · output_schema · outputs_in · outputs_present
-provenance_signed · review_approved · scans_ok · scope_respected · tool_called
+action_succeeded · evidence_facts · evidence_present · external · flag_present
+numbers_measured · output_schema · outputs_in · outputs_present · tool_called
 ```
+
+The gates that read a diff, a pipeline or a pull request are the `software-delivery` plugin's
+(ADR 0181, round C2), under the same names, and the published images install its extension
+(`plugins/software-delivery/`):
+
+```
+adr_number_free · already_fixed_proven · ci_green · coverage_delta_min · diff_size_max · docs_updated
+markdown_sections · no_secrets · provenance_signed · review_approved · scans_ok · scope_respected
+```
+
+A workflow that names one of them where the extension is not installed is refused when it is
+published, naming the plugin; `choregos workflow validate` offline reports it as a warning, since only
+the deployment knows what it installed.
 
 `output_schema` checks each named output against a JSON Schema (2020-12) written in the workflow
 (`schemas: {strategies: {...}}`); the validator refuses a schema that is not one, or one for an

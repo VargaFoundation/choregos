@@ -1,0 +1,66 @@
+# The Service names, hence the addresses clients dial (the `firecrawl` connector's base_url is
+# `http://<firecrawl>:3002`). Empty: `<release>-firecrawl`, `<release>-searxng`, `<release>-firecrawl-redis`,
+# `<release>-relay`. An operator whose connector already names another host keeps it here.
+names:
+  firecrawl: ""
+  searxng: ""
+  redis: ""
+  relay: ""
+# SearXNG, the meta-search engine Firecrawl asks (`SEARXNG_ENDPOINT`; without it Firecrawl queries
+# DuckDuckGo itself). It relays the query, without cookie or identity, to its upstream engines: "local"
+# removes the SaaS third party, not the query's exit. No limiter or bot detection (the only caller is
+# Firecrawl, in this namespace). Pin by tag AND digest: `tag: "2026.10.19-81371861f@sha256:..."`.
+searxng:
+  image:
+    repository: docker.io/searxng/searxng
+    tag: "2026.10.19-81371861f@sha256:5ed0323b5f5f8701264ef65e239a2bd83cb57098f2b971fa30bf79c06eeae271"
+  instanceName: "Choregos search"
+  # Three engines, not the thirty of the default: each engine is a host to open in the namespace's
+  # egress, and an engine that times out slows the whole answer. Extending this list extends that egress.
+  engines: [duckduckgo, brave, wikipedia]
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 768Mi }
+# Choregos only calls `POST /v1/search`: the server alone (`node dist/src/index.js`) answers it with Redis
+# and SearXNG, with no PostgreSQL, no RabbitMQ and no Playwright service. Pinned by digest: the tags of
+# the upstream repository are a deployment counter, not a version.
+#
+# NO AUTHENTICATION: self-hosted, Firecrawl has no API key without its Supabase database. The guard is
+# the network. A search is all a caller gets (no key, no state, and the scrape cannot leave: do not open
+# an egress to this pod).
+firecrawl:
+  image:
+    repository: ghcr.io/firecrawl/firecrawl
+    tag: "2.11.109@sha256:4a1814baf80e323e5c4ac5162edfd130ad645c0d75a21276562df38b90fc75d3"
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { cpu: "1", memory: 1536Mi }
+# Cache and rate limiter, nothing that must survive: no save, no volume, no password.
+redis:
+  image:
+    repository: docker.io/library/redis
+    tag: 7.4-alpine
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 192Mi }
+# The egress proxy's relay (ADR 0091): SearXNG hands it its traffic; for each connection it asks the API
+# for the organisation's proxy for `search_engines` traffic and CONNECTs through it, or goes out direct
+# when none applies, never to a private address; a proxy that fails gives a 502, never a direct exit.
+# Off: SearXNG goes out by itself. On, `secretName` holds `api-token` (`python -m tranibor_api.relay
+# mint --org <org>`; it expires) and `client-token` (the password SearXNG gives the relay, 16
+# characters or more).
+relay:
+  enabled: false
+  organisation: ""
+  secretName: ""
+  # Empty: `http://<release>-api:8000/api/v1`.
+  apiUrl: ""
+  image:
+    # Empty: `global.imageRegistry`. The core's API image, at the deployed core's version.
+    registry: ""
+    repository: choregos-api
+    tag: ""
+    digest: ""
+  resources:
+    requests: { cpu: 20m, memory: 96Mi }
+    limits: { cpu: 500m, memory: 256Mi }

@@ -101,8 +101,18 @@ def template_path(name: str) -> Path:
 
 @lru_cache(maxsize=8)
 def load_template(name: str) -> Workflow:
-    """Load a template shipped with the package or brought by the deployment."""
-    workflow, _ = parse_workflow_file(template_path(name))
+    """Load a template shipped with the package or brought by the deployment.
+
+    A template that names a plugin's gate loads in a process without that plugin's extension (the CLI,
+    a reader before the extensions load): the deployment refuses it at publication (ADR 0181). Any
+    other error refuses it here."""
+    from ..errors import ValidationError
+    from .validator import deployment_issues
+
+    workflow, report = parse_workflow_file(template_path(name), strict=False)
+    _, others = deployment_issues(workflow, report)
+    if others:
+        raise ValidationError(others, subject="workflow")
     return workflow
 
 

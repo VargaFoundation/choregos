@@ -887,6 +887,8 @@ export type Plugin = {
       name: PluginName;
       version: PluginRange;
     }>;
+    /** the extensions the plugin needs inside the platform's processes, by the name of their `choregos.plugins` entry point (ADR 0181): a deployment that has not installed one refuses the plugin, naming it. `software-delivery` for the plugin of the same name. */
+    extensions?: Array<PluginName>;
     /** project connectors, kind → expected type, as in a template */
     connectors?: {
       [key: string]: string;
@@ -1263,6 +1265,8 @@ export type StageInput = {
       spec_comment?: string | null;
       plan_comment?: string | null;
       pr?: string | null;
+      /** The change request the work item is on: the successor of `pr`, which a reader takes as a fallback until the window list of ADR 0181 removes it. */
+      change_request?: string | null;
     };
   };
   transition: {

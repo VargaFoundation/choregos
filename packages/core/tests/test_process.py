@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 
 from tranibor_core import parse_workflow, to_process
-from tranibor_core.dsl import RESUMES
+from tranibor_core.dsl.process import gate_summary
 from tranibor_core.gates import known_gates
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -17,8 +17,9 @@ def _staffing() -> list[dict[str, object]]:
 
 
 def test_every_known_guarantee_has_a_summary() -> None:
-    """A new guarantee without a summary would make the process view speak into the void."""
-    assert sorted(set(known_gates()) - set(RESUMES)) == []
+    """A new guarantee without a summary would make the process view speak into the void: the core's
+    have theirs in `RESUMES`, an extension's say it when they are registered (`gate(..., summary=)`)."""
+    assert sorted(name for name in known_gates() if gate_summary(name, {}) == name) == []
 
 
 def test_an_agent_its_outputs_its_guarantees_and_its_retries() -> None:
