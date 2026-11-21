@@ -113,3 +113,22 @@ def _runner_git_dirs(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pyte
     root = tmp_path_factory.mktemp("git-dirs")
     monkeypatch.setenv("TRANIBOR_RUNNER_GIT_DIR_ROOT", str(root))
     return root
+
+
+@pytest.fixture(autouse=True)
+def _git_independent_of_the_developers_config(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every `git` a test runs ignores the machine's git configuration (#1897): a global
+    `commit.gpgsign=true` with no usable key failed every `git commit` in a temporary repository
+    (exit 128) on a developer machine while CI was green. The global file is replaced by a neutral one
+    (an identity, no signing), the system file is skipped; a test that sets its own identity or
+    `-c` options still wins."""
+    config = tmp_path_factory.mktemp("git-config") / "gitconfig"
+    config.write_text(
+        "[user]\n\tname = test\n\temail = test@example.org\n[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n"
+        "[init]\n\tdefaultBranch = main\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
