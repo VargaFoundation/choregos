@@ -46,6 +46,7 @@ export type {
   Connector as ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  BudgetAlertPage,
   Approver,
   EgressCheck,
   EgressCheckResult,

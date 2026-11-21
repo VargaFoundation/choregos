@@ -236,6 +236,7 @@ from .mcp_gateway import (
 )
 from .measures import (
     BudgetAlertDto,
+    BudgetAlertPage,
     CostReport,
     CostRow,
     CostTotal,
@@ -460,6 +461,7 @@ __all__ = [
     "AvatarDto",
     "BrowserSessionDto",
     "BudgetAlertDto",
+    "BudgetAlertPage",
     "BuiltinAgent",
     "BuiltinMcpServer",
     "BuiltinModelChoice",

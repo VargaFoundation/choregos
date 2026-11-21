@@ -19,6 +19,10 @@ ROUTERS = Path(__file__).resolve().parents[2] / "apps" / "api" / "src" / "tranib
 #: Lists whose length is fixed by the code or the deployment, not by what users create. Never paged.
 BOUNDED: dict[str, str] = {
     "listAdminSections": "the manifest's sections (ADR 0032)",
+    "listAgentImages": (
+        "the operator's TRANIBOR_AGENT_IMAGES, refused at start-up above MAX_AGENT_IMAGES = 200 "
+        "(apps/api/src/tranibor_api/config.py:67, enforced in Settings._images_named_by_the_operator)"
+    ),
     "listBackends": "the agent backends the code knows",
     "listConnectorTypes": "the connector types the code registers",
     "listExecutors": "the five executor kinds",
@@ -41,12 +45,10 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listAgentCredentials",
         "listAgentEvaluations",
         "listAgentFeedbackCandidates",
-        "listAgentImages",
         "listAgentMetrics",
         "listAgentReleases",
         "listAgentRuns",
         "listAgents",
-        "listBudgetAlerts",
         "listConnectors",
         "listGlobalPendingMemory",
         "listImplicitAgents",
@@ -63,6 +65,8 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listOrgConnectors",
         "listOrgs",
         "listPendingMemory",
+        # Read from the gateway, which has no paging: not a SQL read (ADR 0206 "in SQL"). Its only client is
+        # the fallback of `usable-models.ts`, for an API older than the catalogue. Needs a decision.
         "listPlatformModels",
         "listProjectAgents",
         "listProjectMemories",
@@ -74,6 +78,8 @@ NOT_YET_PAGED: frozenset[str] = frozenset(
         "listSkills",
         "listTrackerIdentities",
         "listTriggers",
+        # Catalogue rows merged with the gateway's live list and cut by the role/usage policy in Python;
+        # its clients are whole-list pickers (agent builder, project profiles). Needs a decision.
         "listUsableModels",
         "listWorkItemArtifacts",
         "listWorkflowAgents",

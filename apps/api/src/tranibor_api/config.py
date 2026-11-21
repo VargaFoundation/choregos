@@ -62,6 +62,9 @@ PUBLIC_KEY = re.compile(r"[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]")
 #: The most keys an outpost's policy file pins (`tranibor_contracts.outpost.MAX_DOOR_KEYS`): the key
 #: that signs, and room for a rotation.
 MAX_DOOR_KEYS = 4
+#: The most agent images an operator may name (`TRANIBOR_AGENT_IMAGES`): the cap that keeps
+#: `GET /platform/agent-images` a bare array the console's picker reads whole (ADR 0206 section 5).
+MAX_AGENT_IMAGES = 200
 
 
 @lru_cache(maxsize=4)
@@ -717,6 +720,12 @@ class Settings(BaseSettings):
     def _images_named_by_the_operator(self) -> Settings:
         check_image_map("TRANIBOR_JOB_IMAGES", self.job_images, require_digest=self.require_image_digest)
         check_image_map("TRANIBOR_AGENT_IMAGES", self.agent_images, require_digest=self.require_image_digest)
+        if len(self.agent_images) > MAX_AGENT_IMAGES:
+            # The cap that lets `GET /platform/agent-images` stay a bare array (ADR 0206 section 5).
+            raise ValueError(
+                f"TRANIBOR_AGENT_IMAGES: {len(self.agent_images)} names, at most {MAX_AGENT_IMAGES} "
+                "(the console's picker lists them all)"
+            )
         return self
 
     @model_validator(mode="after")

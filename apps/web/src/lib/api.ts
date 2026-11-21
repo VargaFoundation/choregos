@@ -162,6 +162,7 @@ import type {
   ConnectorDto,
   ConnectorTestResult,
   BudgetAlert,
+  BudgetAlertPage,
   EgressCheck,
   EgressCheckResult,
   EgressDecision,
@@ -1453,9 +1454,14 @@ export const api = {
   /** The organisation's spend, in any grouping (S29-02): `since`, `until` (YYYY-MM-DD), `kind`, `agent`, `workflow`, `work_item` and `assistant` filter it. */
   orgCosts: (org: string, groupBy = "day", filtre: CostFilter = {}) =>
     request<CostReport>(`/orgs/${org}/costs${query({ group_by: groupBy, ...compact(filtre) })}`),
-  /** The budgets that crossed 80 or 100 % (S29-04): the inbox lists the open ones. */
-  budgetAlerts: (org: string, status: "open" | "acknowledged" | "all" = "open") =>
-    request<BudgetAlert[]>(`/orgs/${org}/budget-alerts${query({ status })}`),
+  /** The budgets that crossed 80 or 100 % (S29-04), one page at a time (ADR 0206): the inbox lists the open ones. */
+  budgetAlerts: (
+    org: string,
+    params: { status?: "open" | "acknowledged" | "all"; project?: string; cursor?: string; limit?: number } = {},
+  ) =>
+    request<BudgetAlertPage>(
+      `/orgs/${org}/budget-alerts${query(compact({ status: params.status ?? "open", project: params.project, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** The organisation's egress allowlist: rules, requests, the deployment's ceiling (S39-22, ADR 0066). */
   orgEgress: (org: string) => request<EgressOverview>(`/orgs/${org}/egress`),
   checkOrgEgress: (org: string, body: EgressCheck) =>

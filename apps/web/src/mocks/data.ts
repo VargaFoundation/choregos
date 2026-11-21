@@ -3567,6 +3567,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       detail: `Over ${weeks} weeks, 33 tickets in two projects. The groups are small: read the gap as a signal, not a proof.`,
     } as T;
   }
+  if (method === "GET" && /^\/orgs\/[^/]+\/budget-alerts$/.test(bare)) {
+    // Filtered like the server (ADR 0206): status (open by default), then the project; the two demo alerts fit one page.
+    const search = new URLSearchParams(path.split("?")[1] ?? "");
+    const status = search.get("status") ?? "open";
+    const project = search.get("project");
+    const items = budgetAlerts.filter(
+      (alert) => (status === "all" || alert.status === status) && (!project || (alert.scope === "project" && alert.subject === project)),
+    );
+    return { items, meta: { has_more: false, next_cursor: null } } as T;
+  }
   if (method === "GET" && bare === "/platform/gateway/keys") {
     // Filtered like the server (ADR 0206); the two demo keys fit one page.
     const search = new URLSearchParams(path.split("?")[1] ?? "");
@@ -4524,7 +4534,6 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/knowledge\/billing-runbooks$/, withWrittenGrants(projectKnowledgeBase)],
     [/^\/orgs\/[^/]+\/knowledge\/security-policy$/, readOnlyKnowledgeBase],
     [/^\/orgs\/[^/]+\/knowledge\/[^/]+$/, { ...withWrittenGrants(knowledgeBase), documents: knowledgeBase.documents!.map((d) => ({ ...d, markdown: null })) }],
-    [/^\/orgs\/[^/]+\/budget-alerts$/, budgetAlerts],
     [/^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+$/, skillVersion],
     [/^\/orgs\/[^/]+\/skills\/[^/]+$/, skills[0]],
     [/^\/ui\/admin-sections$/, [sectionScim, sectionAcmeLayered]],

@@ -6033,6 +6033,11 @@ export type BudgetAlert = {
   can_acknowledge?: boolean;
 };
 
+export type BudgetAlertPage = {
+  items: Array<BudgetAlert>;
+  meta: PageMeta;
+};
+
 export type StopRequest = {
   /** why it is stopped; audited and shown on the work item */
   reason: string;
@@ -6911,7 +6916,7 @@ export interface Operations {
   listAssistants: { method: "GET"; path: "/orgs/{org}/assistants"; body: never; response: AssistantList };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
-  listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: Array<BudgetAlert> };
+  listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: BudgetAlertPage };
   listConnectorCatalogue: { method: "GET"; path: "/orgs/{org}/connector-catalogue"; body: never; response: ConnectorCatalogue };
   listConnectorTypes: { method: "GET"; path: "/connectors/types"; body: never; response: Array<ConnectorType> };
   listConnectors: { method: "GET"; path: "/projects/{id}/connectors"; body: never; response: Array<Connector> };
