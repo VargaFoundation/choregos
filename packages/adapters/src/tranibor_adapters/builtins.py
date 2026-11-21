@@ -587,9 +587,12 @@ def _register_fakes() -> None:
 def _register_forges() -> None:
     """Trackers, source control, CI and CD."""
     from .cd.argocd import ArgoCdAdapter
+    from .ci.github_actions import GitHubActionsCi
     from .ci.gitlab import GitLabCi
+    from .ci.jenkins import JenkinsCi
     from .ci.tekton import TektonCi
     from .executor.tekton import KubernetesClient
+    from .http import RestClient
     from .scm.github import GitHubScm
     from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
@@ -645,6 +648,28 @@ def _register_forges() -> None:
         lambda cfg: GitLabCi(
             build_gitlab_client(cfg),
             cfg["project"],
+        )
+    )
+    register("ci", "jenkins", _SHIPPED_SPECS[("ci", "jenkins")])(
+        lambda cfg: JenkinsCi(
+            RestClient(
+                cfg["base_url"],
+                auth=(cfg["user"], cfg["token"]),
+                service="jenkins",
+            ),
+            cfg["job"],
+            multibranch=bool(cfg.get("multibranch", False)),
+            parameters=cfg.get("parameters"),
+            ref_parameter=cfg.get("ref_parameter", "BRANCH"),
+            crumb=bool(cfg.get("crumb", True)),
+        )
+    )
+    register("ci", "github-actions", _SHIPPED_SPECS[("ci", "github-actions")])(
+        lambda cfg: GitHubActionsCi(
+            _github_client(cfg),
+            cfg["repo"],
+            workflow=cfg.get("workflow", ""),
+            inputs=cfg.get("inputs"),
         )
     )
     register("cd", "argocd", _SHIPPED_SPECS[("cd", "argocd")])(

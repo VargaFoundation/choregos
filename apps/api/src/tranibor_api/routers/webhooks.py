@@ -616,6 +616,42 @@ async def tekton_webhook(
     return WebhookAck(accepted=True, events=delivered)
 
 
+# ───────────────────────────── Jenkins ─────────────────────────────
+
+
+@router.post(
+    "/jenkins", response_model=WebhookAck, status_code=status.HTTP_202_ACCEPTED, operation_id="jenkinsWebhook"
+)
+async def jenkins_webhook(
+    request: Request,
+    session: PlatformDb,
+    x_choregos_secret: Annotated[str, Header()] = "",
+) -> WebhookAck:
+    """A build notification from Jenkins: the Notification plugin's payload, or the flat one a pipeline
+    posts (`tranibor_adapters.ci.jenkins.parse_jenkins_event`).
+
+    Authenticated like the Tekton sink, by the shared secret in `X-Choregos-Secret` or in the URL
+    (`?token=`): the Notification plugin takes a URL and no header."""
+    settings = get_settings()
+    supplied = x_choregos_secret or request.query_params.get("token", "")
+    if not settings.generic_webhook_secret:
+        if settings.deployed:
+            raise unauthorized("Jenkins webhook not configured: TRANIBOR_GENERIC_WEBHOOK_SECRET is missing")
+    elif not verify_shared_secret(settings.generic_webhook_secret, supplied):
+        raise unauthorized("invalid shared secret")
+    body = await request.body()
+
+    from tranibor_adapters.ci.jenkins import parse_jenkins_event
+
+    events = parse_jenkins_event(json.loads(body or b"{}"))
+    if not events:
+        return WebhookAck(accepted=True)
+    if await _already_seen(session, "jenkins", events[0].delivery_id, str(events[0].type), body):
+        return WebhookAck(accepted=True, duplicate=True)
+    delivered = await _dispatch(session, events)
+    return WebhookAck(accepted=True, events=delivered)
+
+
 # ───────────────────────────── Argo CD ─────────────────────────────
 
 

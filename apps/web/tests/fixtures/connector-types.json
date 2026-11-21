@@ -17,7 +17,15 @@
  },
  {
   "kind": "ci",
+  "type": "github-actions"
+ },
+ {
+  "kind": "ci",
   "type": "gitlab"
+ },
+ {
+  "kind": "ci",
+  "type": "jenkins"
  },
  {
   "kind": "ci",

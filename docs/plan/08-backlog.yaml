@@ -6382,3 +6382,15 @@ stories:
       - "`flavor: datacenter` uses REST v2, wiki markup, a bearer PAT, users by name/key and a signed webhook; Cloud unchanged"
       - "GitLab tracker, SCM and CI accept a base URL under a path prefix and a ca_bundle, and refuse an instance older than 15.0"
       - "Tests against simulated transports for both flavours; supported versions in docs/integrations.md"
+
+  - id: S13-10
+    title: "Jenkins and GitHub Actions CI adapters (trigger, follow to the result, rerun, inbound events)"
+    stream: S13
+    sprint: 8
+    priority: 3
+    size: L
+    depends_on: [S13-04]
+    acceptance:
+      - "ci/jenkins: a parameterised or multibranch job is triggered with a CSRF crumb and an API token, its queue item is followed to the build, result and console URL are read, and Notification-plugin and flat payloads arrive at /webhooks/jenkins under the shared secret"
+      - "ci/github-actions: a workflow is dispatched on a ref with inputs, the run it started is found, run and job conclusions are read, failed jobs are rerun, and workflow_run deliveries arrive through the GitHub App webhook"
+      - "Both types are registered with specs, setup procedures and egress; the App asks for actions:write and the workflow_run event"
