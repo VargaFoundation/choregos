@@ -42,8 +42,22 @@ STALE_AFTER_S = 600
 STATE_TTL_S = 900
 INSTALLATION_ACTIONS = {"created", "unsuspend", "suspend", "new_permissions_accepted"}
 GITHUB_WEB = "https://github.com"
-#: Connector types whose `repo` is served by the App.
-GITHUB_TYPES = {("tracker", "github-issues"), ("scm", "github"), ("ci", "github-actions")}
+#: Connector types served by the App, and the configuration key that names their repository. Argo CD
+#: writes its promotions to a GitOps repository through the App (`cd/argocd.py`), so it is pinned too.
+GITHUB_REPO_KEY = {
+    ("tracker", "github-issues"): "repo",
+    ("scm", "github"): "repo",
+    ("ci", "github-actions"): "repo",
+    ("cd", "argocd"): "gitops_repo",
+}
+GITHUB_TYPES = set(GITHUB_REPO_KEY)
+
+
+def repo_of(kind: str, type_: str, config: dict[str, Any]) -> str:
+    """The `owner/name` repository a GitHub-served connector reaches, or "" for any other type."""
+    key = GITHUB_REPO_KEY.get((kind, type_))
+    return str(config.get(key) or "") if key else ""
+
 
 _real: dict[tuple[str, str, str, str], GitHubApp] = {}
 
@@ -382,7 +396,7 @@ async def pin_installation(
         return config
     # The adapter about to be built reads the App through the process provider: keep it current.
     await credentials.refresh(session)
-    owner = owner_of(str(config.get("repo") or ""))
+    owner = owner_of(repo_of(kind, type_, config))
     clean = {k: v for k, v in config.items() if k != "installation_id"}
     if owner is None:
         return clean
@@ -402,7 +416,7 @@ async def checked_config(
     clean = {k: v for k, v in config.items() if k != "installation_id"}
     if (kind, type_) not in GITHUB_TYPES or clean.get("api_url"):
         return clean
-    owner = owner_of(str(clean.get("repo") or ""))
+    owner = owner_of(repo_of(kind, type_, clean))
     app = await github_app(session)
     if owner is None or app is None:
         return clean
@@ -428,7 +442,7 @@ async def pin_for_runtime(
     pinned = await pin_installation(session, org_id, kind, type_, config)
     if (kind, type_) not in GITHUB_TYPES or "installation_id" in pinned or pinned.get("api_url"):
         return pinned
-    owner = owner_of(str(pinned.get("repo") or ""))
+    owner = owner_of(repo_of(kind, type_, pinned))
     if owner is None or await github_app(session) is None or await implicit_claim_enabled(session):
         return pinned
     from tranibor_adapters.errors import ConfigurationError

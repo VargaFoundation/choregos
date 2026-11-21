@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { ConnectorIcon } from "@/components/connector-icon";
-import { hasInstallationOn, InstallOnGitHub, ownerOf, useGitHubStatus } from "@/components/github-repo-field";
+import { githubRepoOf, hasInstallationOn, InstallOnGitHub, ownerOf, useGitHubStatus } from "@/components/github-repo-field";
 import { ConnectorForm, type ConnectorBody } from "@/components/project-settings/connector-form";
 import type { SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Drawer } from "@/components/ui";
@@ -32,8 +32,6 @@ export function workflowsQuiExigent(reasons: string[]): string[] {
   const names = reasons.map((reason) => /^([\w.-]+): /.exec(reason)?.[1]).filter((name): name is string => !!name);
   return [...new Set(names)];
 }
-
-const GITHUB_TYPES = new Set(["github", "github-issues", "github-actions"]);
 
 /**
  * The GitHub subtitle of a card: which account's installation the connector goes through, or the way to
@@ -106,8 +104,8 @@ export function ConnectorCard({
           </h3>
           {typeName && <p className="text-xs break-words text-ink-muted" data-verbatim>{typeName}</p>}
           {reglage && <p className="font-mono text-xs break-all text-ink-muted">{reglage}</p>}
-          {actuel && GITHUB_TYPES.has(actuel.type) && typeof actuel.config?.repo === "string" && (
-            <GitHubVia repo={actuel.config.repo} />
+          {actuel && githubRepoOf(actuel.type, actuel.config) && (
+            <GitHubVia repo={githubRepoOf(actuel.type, actuel.config) as string} />
           )}
           {/* Who the bookkeeping's writes act as (ADR 0107 point 4). */}
           {actuel && kind === "tracker" && <WritesAs type={actuel.type} config={actuel.config} />}

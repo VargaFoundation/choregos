@@ -14,6 +14,21 @@ function projectOfLocation(): string | null {
   return /^\/p\/([^/]+)/.exec(window.location.pathname)?.[1] ?? null;
 }
 
+/** The connector types the GitHub App serves, and the configuration key naming their repository (ADR 0073). */
+const GITHUB_REPO_KEY: Record<string, string> = {
+  github: "repo",
+  "github-issues": "repo",
+  "github-actions": "repo",
+  argocd: "gitops_repo",
+};
+
+/** The repository a GitHub-served connector reaches, or null for any other type. */
+export function githubRepoOf(type: string, config: { [key: string]: unknown } | undefined): string | null {
+  const key = GITHUB_REPO_KEY[type];
+  const value = key ? config?.[key] : undefined;
+  return typeof value === "string" && value ? value : null;
+}
+
 /** The owner of an `owner/repo` string, lower-cased, or "" when it is not one yet. */
 export function ownerOf(repo: string): string {
   const [owner, name] = repo.trim().split("/");
