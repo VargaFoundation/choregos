@@ -1,4 +1,4 @@
-"""S80-18, ADR 0197: the all-in-one profile renders every solution the platform requires.
+"""S80-18, ADR 0208: the all-in-one profile renders every solution the platform requires.
 
 `charts/choregos/values/all-in-one.yaml` embeds the object store (RustFS) and the OIDC provider (Keycloak)
 beside the data stores the chart already embedded, draws every Secret, turns External Secrets off, the egress

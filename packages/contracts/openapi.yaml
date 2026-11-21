@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Tranibor API
-  version: 0.27.17
+  version: 0.28.0
   description: |
     The Tranibor platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -23,7 +23,7 @@ tags:
   - { name: models }
   - { name: work-items }
   - { name: runs }
-  - { name: trains }
+  - { name: trains, x-plugin: software-delivery }
   - { name: findings }
   - { name: memory }
   - { name: costs }
@@ -1633,6 +1633,43 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /work-items/{id}/files:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [work-items]
+      operationId: attachWorkItemFiles
+      description: >-
+        A person hands one or several files to the work item (ADR 0201), for whoever holds `item:control` on its
+        project. Each file becomes an input artifact of the work item, produced by `person:<user id>`, stored before
+        its row is written. The files of one request are the repeated multipart part `files`. A file is checked before
+        it is stored: its type must be in the workflow's `metadata.attachments.accept`, its bytes must be what its type
+        says, and its size must be within the project's limit for handed files (`a2a.max_file_bytes`). Its name is a
+        slug of its file name; the same name again is a new revision, the same bytes again make none. Allowed in any
+        state that is not terminal. There is no `GET`: the artifact list (`listWorkItemArtifacts`) returns the handed
+        files, with `handed_by`. 409 for a terminal work item, 413 for a file over the limit, 422 for a type not
+        accepted, bytes that are not their type, a name that is empty or that two files of the request share, or more
+        distinct names than `max`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  items: { type: string, format: binary }
+            encoding:
+              files: { style: form, explode: true }
+      responses:
+        "201": { description: Stored, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Artifact" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { description: A file is larger than the project's limit, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /work-items/{id}/journey:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -1856,6 +1893,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunLogs" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /runs/{id}/diff:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [runs]
@@ -1863,6 +1901,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DiffSummary" } } } }
   /projects/{id}/releases:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [trains]
@@ -1874,6 +1913,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReleasePage" } } } }
   /releases/{id}:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [trains]
@@ -1882,6 +1922,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Release" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/trains/{env}:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     get:
       tags: [trains]
@@ -1889,12 +1930,14 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TrainStatus" } } } }
   /projects/{id}/trains/{env}/depart:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
       operationId: departTrain
       responses: { "202": { description: Departure requested }, "409": { $ref: "#/components/responses/Conflict" } }
   /projects/{id}/trains/{env}/freeze:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
@@ -1904,12 +1947,14 @@ paths:
         content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3 } } } } }
       responses: { "202": { description: Freeze requested } }
   /projects/{id}/trains/{env}/unfreeze:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/Env" }]
     post:
       tags: [trains]
       operationId: unfreezeTrain
       responses: { "202": { description: Unfreeze requested } }
   /releases/{id}/approve:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [trains]
@@ -1918,6 +1963,7 @@ paths:
         content: { application/json: { schema: { type: object, properties: { note: { type: string } } } } }
       responses: { "202": { description: Approval passed on }, "403": { $ref: "#/components/responses/Forbidden" } }
   /releases/{id}/abort:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [trains]
@@ -2204,6 +2250,7 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CrossBackendReport" } } } }
   /projects/{id}/metrics/dora:
+    x-plugin: software-delivery
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
       tags: [costs]
@@ -2568,8 +2615,18 @@ paths:
     get:
       tags: [admin]
       operationId: listGatewayKeys
+      description: >-
+        The keys the gateway minted, newest first, one page at a time (ADR 0206). `q` matches a substring of the key
+        id, the run id or the project slug; `state` keeps the active or the revoked keys. Platform administrators only.
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: state, in: query, schema: { type: string, enum: [active, revoked] } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/GatewayKeyPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/policy-ceiling:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -7172,7 +7229,7 @@ components:
         config_revision: { type: string, description: "An opaque digest of the name and configuration, to send back as `base_revision`" }
         workflow_name: { type: [string, "null"] }
         policy_name: { type: [string, "null"] }
-        has_release_train: { type: boolean, default: false, description: "An active workflow of the project has a `via: release_train` transition: only then does the project have trains." }
+        has_release_train: { type: boolean, default: false, x-plugin: software-delivery, description: "An active workflow of the project has a `via: release_train` transition: only then does the project have trains." }
         stats: { $ref: "#/components/schemas/ProjectStats" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -7182,7 +7239,7 @@ components:
         active_work_items: { type: integer }
         cost_month_eur: { type: number }
         budget_month_eur: { type: [number, "null"] }
-        trains_pending: { type: integer }
+        trains_pending: { type: integer, x-plugin: software-delivery }
         first_pass_merge_rate: { type: [number, "null"], description: "The former name of `first_pass_acceptance_rate`, until the release the window list names (ADR 0181 C1)." }
         first_pass_acceptance_rate: { type: [number, "null"], description: "The share of the work items accepted without a rework loop (ADR 0181 C1)." }
         cycle_time_p50_hours: { type: [number, "null"] }
@@ -7720,10 +7777,15 @@ components:
                 type: string
                 enum: [contributor, approver, project_owner, org_admin, developer, release_captain]
                 description: "The least rank an approver holds; `developer` and `release_captain` are the former names of `contributor` and `approver` (ADR 0181 C1)."
-              group: { type: [string, "null"], description: "an identity-provider group the approver must also belong to (ADR 0052)" }
+              group: { type: [string, "null"], description: "an identity-provider group the approver must also belong to (ADR 0052); a workflow's action may name it from a field of its work item, rendered when proposed (ADR 0196)" }
               min: { type: integer, minimum: 1, maximum: 5 }
         step_up_minutes: { type: integer, minimum: 1, maximum: 120, default: 10 }
         separation_of_duties: { type: boolean, default: true }
+        excluded:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 300 }
+          description: "who may not decide the action, whatever their rank: e-mail addresses, compared without case (ADR 0196)"
     ActionCreate:
       type: object
       required: [kind, title, effects]
@@ -10980,7 +11042,7 @@ components:
         output_per_1k: { type: number, minimum: 0 }
     CacheMultipliers:
       type: object
-      description: "What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0196). A null or absent field keeps the default for the model's provider family."
+      description: "What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0200). A null or absent field keeps the default for the model's provider family."
       properties:
         read: { type: [number, "null"], minimum: 0, description: "a token read from the cache (0.1 on Anthropic, 0.05 on Opus 5.5 / Sonnet 5.5)" }
         write_5m: { type: [number, "null"], minimum: 0, description: "a token written with the 5-minute TTL (1.25 on Anthropic)" }
@@ -12492,6 +12554,7 @@ components:
         error: { type: [string, "null"], description: Why the logs could not be read }
         captured_at: { type: [string, "null"], format: date-time }
     DiffSummary:
+      x-plugin: software-delivery
       type: object
       required: [files, additions, deletions]
       properties:
@@ -12512,6 +12575,7 @@ components:
         additions: { type: integer }
         deletions: { type: integer }
     Release:
+      x-plugin: software-delivery
       type: object
       required: [id, project_slug, env, batch_no, status, items]
       properties:
@@ -12541,12 +12605,14 @@ components:
         notes: { type: [string, "null"] }
         promotion_url: { type: [string, "null"] }
     ReleasePage:
+      x-plugin: software-delivery
       type: object
       required: [items, meta]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Release" } }
         meta: { $ref: "#/components/schemas/PageMeta" }
     TrainStatus:
+      x-plugin: software-delivery
       type: object
       required: [env, status, batch_size, frozen]
       properties:
@@ -13005,7 +13071,7 @@ components:
               tokens_out: { type: integer, default: 0 }
               tokens_cached: { type: integer, default: 0 }
               tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07" }
-              tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0196)" }
+              tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0200)" }
               runs: { type: integer, default: 0 }
         total:
           type: object
@@ -13017,7 +13083,7 @@ components:
             tokens_out: { type: integer, default: 0 }
             tokens_cached: { type: integer, default: 0, description: "the input tokens the model read from its cache, part of tokens_in" }
             tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache, part of tokens_in (S4-07)" }
-            tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0196)" }
+            tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0200)" }
     MemoryAbGroup:
       type: object
       properties:
@@ -13055,6 +13121,7 @@ components:
         verdict: { type: string }
         detail: { type: string, default: "" }
     DoraMetric:
+      x-plugin: software-delivery
       type: object
       required: [unit]
       properties:
@@ -13063,6 +13130,7 @@ components:
         level: { type: string, enum: [elite, high, medium, low, unknown], default: unknown }
         sample: { type: integer, default: 0 }
     DoraReport:
+      x-plugin: software-delivery
       type: object
       required: [since, until, deployment_frequency, lead_time, change_failure_rate, time_to_restore]
       properties:
@@ -13238,6 +13306,12 @@ components:
         expires_at: { type: [string, "null"], format: date-time }
         revoked: { type: boolean, default: false }
         created_at: { type: string, format: date-time }
+    GatewayKeyPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/GatewayKeyInfo" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
     AuditEntry:
       type: object
       required: [id, actor_kind, action, ts]

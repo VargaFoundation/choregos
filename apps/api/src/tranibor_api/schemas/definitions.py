@@ -301,6 +301,22 @@ class PriceOverride(Dto):
     output_per_1k: float = Field(ge=0)
 
 
+class CacheMultipliers(Dto):
+    """What a cached input token costs as a multiple of the input price; null keeps the default
+    (S4-12, ADR 0200)."""
+
+    read: float | None = Field(default=None, ge=0)
+    write_5m: float | None = Field(default=None, ge=0)
+    write_1h: float | None = Field(default=None, ge=0)
+
+
+class EffectiveCacheMultipliers(Dto):
+    read: float = Field(ge=0)
+    write_5m: float = Field(ge=0)
+    write_1h: float = Field(ge=0)
+    source: Literal["override", "gateway", "family_default"]
+
+
 class ModelGatewayFacts(Dto):
     provider: str = ""
     upstream_model: str = ""
@@ -326,6 +342,8 @@ class ModelCatalogueEntry(Dto):
     allowed_roles: list[str] = Field(default_factory=list)
     usages: list[Usage] = Field(default_factory=list)
     price_override: PriceOverride | None = None
+    cache_multipliers: CacheMultipliers | None = None
+    effective_cache_multipliers: EffectiveCacheMultipliers | None = None
     #: The most a voice session of this model may spend per minute it lasts (S41-15).
     max_usd_per_minute: float | None = None
     gateway: ModelGatewayFacts | None = None
@@ -343,6 +361,7 @@ class ModelCatalogueEntryCreate(Dto):
     allowed_roles: list[str] = Field(default_factory=list)
     usages: list[Usage] = Field(default_factory=_agent_usage)
     price_override: PriceOverride | None = None
+    cache_multipliers: CacheMultipliers | None = None
     max_usd_per_minute: float | None = Field(default=None, gt=0)
     notes: str = ""
 
@@ -355,6 +374,9 @@ class ModelCataloguePatch(Dto):
     #: `null` is "no change"; to remove an override send `clear_price_override: true`.
     price_override: PriceOverride | None = None
     clear_price_override: bool = False
+    #: Replaces the three multipliers; `clear_cache_multipliers: true` goes back to the defaults.
+    cache_multipliers: CacheMultipliers | None = None
+    clear_cache_multipliers: bool = False
     #: The same: `null` is "no change", `clear_max_usd_per_minute: true` removes it.
     max_usd_per_minute: float | None = Field(default=None, gt=0)
     clear_max_usd_per_minute: bool = False

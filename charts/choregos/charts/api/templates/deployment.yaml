@@ -57,7 +57,7 @@ spec:
         {{- if not (include "choregos.outpostsEnabled" .) }}
         {{- $hashed = set (deepCopy .Values) "global" (omit .Values.global "outposts") }}
         {{- end }}
-        {{- /* ADR 0197: the all-in-one keys, when off (their defaults), are no part of what the checksum covers:
+        {{- /* ADR 0208: the all-in-one keys, when off (their defaults), are no part of what the checksum covers:
              adding them restarts no API of an install that does not use them. */}}
         {{- if not (include "choregos.allInOne" .) }}
         {{- $g := deepCopy $hashed.global }}
@@ -348,7 +348,7 @@ spec:
             {{- include "choregos.outpostsDoorEnv" . | nindent 12 }}
             {{- end }}
             {{- if (.Values.global.auditExport | default dict).enabled }}
-            # The SIEM export of the audit log (ADR 0196): every replica runs the loop; the token is read
+            # The SIEM export of the audit log (ADR 0207): every replica runs the loop; the token is read
             # from a Secret by reference.
             {{- include "choregos.auditExportEnv" . | nindent 12 }}
             {{- end }}

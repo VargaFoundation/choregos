@@ -49,7 +49,7 @@ MIGRATIONS = pathlib.Path(__file__).resolve().parent / "migrations"
 
 #: The revisions of branches whose package was removed, each with the core revision it depended on
 #: (`depends_on` of the branch's first revision, or of the revision itself when it names one). The
-#: ontology's branch, `onto0001` to `onto0003`, left in 0.28 (ADR 0181, O4-1).
+#: ontology's branch, `onto0001` to `onto0003`, left in 0.27.17 (ADR 0181, O4-1).
 RETIRED_REVISIONS: dict[str, str] = {
     "onto0001": "e5a7c9b1d3f5",
     "onto0002": "e5a7c9b1d3f5",

@@ -2,18 +2,23 @@
 """The gateway's batch API: LiteLLM's OpenAI-compatible Files + Batches endpoints, 50 % off upstream.
 
 Through the platform gateway (ADR 0004 pricing, the gateway key, the gateway's egress), never to a
-provider directly (ADR 0190). The wire, as LiteLLM v1.105.5 serves it:
+provider directly (ADR 0190), and without LiteLLM's enterprise code (ADR 0190, amendment of S4-11):
+`target_model_names` would run the `managed_files` hook of `litellm_enterprise`, which needs a paid
+licence in production. The path used here is the open one, `model` routing, as LiteLLM v1.105.5 serves it:
 
-- `POST /v1/files` (multipart: `purpose=batch`, `target_model_names=<alias>`, a `.jsonl` of
-  `{custom_id, method, url, body}` rows) keeps the file against the alias; the router rewrites each row's
-  `body.model` to the model the alias resolves to, so the rows carry the alias and nothing else;
-- `POST /v1/batches` (`input_file_id`, `endpoint`, `completion_window`): the model comes from the file;
-- `GET /v1/batches/{id}`: `status`, `request_counts`, `output_file_id`, `error_file_id`;
+- `GET /v1/model/info` (any key: it lists the deployments the key may call) gives the upstream model an
+  alias resolves to, `litellm_params.model` (`openai/gpt-5.5`), asked once per adapter;
+- `POST /v1/files` (multipart `purpose=batch`, header `x-litellm-model: <alias>`, a `.jsonl` of
+  `{custom_id, method, url, body}` rows) uploads to the alias's deployment with its credentials and
+  answers a file id that carries the alias. LiteLLM does NOT rewrite the rows on this path: each
+  `body.model` is the upstream model id (`gpt-5.5`), not the alias;
+- `POST /v1/batches` (`input_file_id`, `endpoint`, `completion_window`): the alias is read from the file id;
+- `GET /v1/batches/{id}`: `status`, `request_counts`, `output_file_id`, `error_file_id` (ids carry the alias);
 - `GET /v1/files/{output_file_id}/content`: JSON lines `{custom_id, response: {status_code, body}, error}`,
   in any order; `POST /v1/batches/{id}/cancel`.
 
-Upstreams without a batch API answer an error on upload or submit: `BatchError`, the caller goes
-synchronous.
+Upstreams without a batch API answer an error on upload or submit, an alias that is not an OpenAI
+deployment or is ambiguous is refused before any upload: `BatchError`, the caller goes synchronous.
 """
 
 from __future__ import annotations
@@ -45,14 +50,20 @@ class GatewayBatches:
     ) -> None:
         self._base, self._key = base_url.rstrip("/"), key
         self._timeout, self._transport = timeout, transport
+        self._upstream: dict[str, str] = {}
 
-    async def _send(self, method: str, path: str, **options: Any) -> httpx.Response:
+    async def _send(
+        self, method: str, path: str, *, extra_headers: dict[str, str] | None = None, **options: Any
+    ) -> httpx.Response:
         if not self._key:
             raise BatchError("no gateway key: the batch has no gateway to call")
         try:
             async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as client:
                 response = await client.request(
-                    method, self._base + path, headers={"Authorization": f"Bearer {self._key}"}, **options
+                    method,
+                    self._base + path,
+                    headers={"Authorization": f"Bearer {self._key}", **(extra_headers or {})},
+                    **options,
                 )
         except httpx.HTTPError as exc:
             raise BatchError(f"the gateway is unreachable: {exc.__class__.__name__}") from exc
@@ -64,16 +75,38 @@ class GatewayBatches:
             )
         return response
 
+    async def upstream_model(self, alias: str) -> str:
+        """The model id the gateway's alias resolves to, read from the gateway (`GET /v1/model/info`), kept.
+
+        Only an OpenAI deployment (`openai/<id>` or a bare id) has a batch path here; several deployments
+        behind the alias that disagree on the model cannot share one batch."""
+        if alias not in self._upstream:
+            listed = (await self._send("GET", "/v1/model/info")).json()
+            rows = listed.get("data") if isinstance(listed, dict) else None
+            found: set[str] = set()
+            for row in rows if isinstance(rows, list) else []:
+                if not isinstance(row, dict) or row.get("model_name") != alias:
+                    continue
+                params = row.get("litellm_params") or {}
+                found.add(_openai_model(alias, params))
+            if not found:
+                raise BatchError(f"the gateway lists no model {alias!r} for this key")
+            if len(found) > 1:
+                raise BatchError(f"{alias!r} resolves to several upstream models: no single batch")
+            self._upstream[alias] = found.pop()
+        return self._upstream[alias]
+
     async def submit(self, model: str, requests: list[BatchRequest]) -> str:
         if not requests or len(requests) > MAX_REQUESTS:
             raise BatchError(f"a batch holds 1 to {MAX_REQUESTS} requests, not {len(requests)}")
+        upstream = await self.upstream_model(model)
         rows = [
             {
                 "custom_id": r.custom_id,
                 "method": "POST",
                 "url": ENDPOINT,
                 "body": {
-                    "model": model,
+                    "model": upstream,
                     "messages": [
                         {"role": "system", "content": r.system},
                         {"role": "user", "content": r.user},
@@ -88,7 +121,8 @@ class GatewayBatches:
         uploaded = await self._send(
             "POST",
             "/v1/files",
-            data={"purpose": "batch", "target_model_names": model},
+            data={"purpose": "batch"},
+            extra_headers={"x-litellm-model": model},
             files={"file": ("batch.jsonl", payload.encode(), "application/jsonl")},
         )
         file_id = uploaded.json().get("id")
@@ -144,6 +178,20 @@ class GatewayBatches:
 
     async def cancel(self, batch_id: str) -> None:
         await self._send("POST", f"/v1/batches/{quote(batch_id, safe='')}/cancel")
+
+
+def _openai_model(alias: str, params: Any) -> str:
+    """`openai/gpt-5.5` -> `gpt-5.5`; any other provider has no batch path through this adapter."""
+    model = params.get("model") if isinstance(params, dict) else None
+    if not isinstance(model, str) or not model:
+        raise BatchError(f"the gateway does not say which model {alias!r} is")
+    provider, _, name = model.partition("/")
+    explicit = params.get("custom_llm_provider")
+    if name and provider != "openai":
+        raise BatchError(f"{alias!r} is a {provider} deployment: only OpenAI's has a batch path here")
+    if isinstance(explicit, str) and explicit != "openai":
+        raise BatchError(f"{alias!r} is a {explicit} deployment: only OpenAI's has a batch path here")
+    return name or model
 
 
 def _result(row: dict[str, Any]) -> BatchResult:

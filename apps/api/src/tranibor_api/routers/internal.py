@@ -20,6 +20,7 @@ from sqlalchemy import select, update
 from tranibor_adapters.storage import ObjectStoreError
 from tranibor_contracts import (
     ARTIFACT_TYPES,
+    ATTACHMENTS_INPUT,
     ActionStatus,
     Artifact,
     ContextPack,
@@ -38,6 +39,7 @@ from ..catalogue import call as call_catalogue_tool
 from ..config import get_settings
 from ..db.models import (
     AgentSessionRecord,
+    ArtifactRecord,
     CostLedger,
     Organization,
     Project,
@@ -84,6 +86,7 @@ from ..services.agent_reach import spec_of_run, tool_reach
 from ..services.artifacts import (
     ArtifactCorruptedError,
     filename_of,
+    handed_artifacts,
     read_content,
     record_inline_outputs,
     store_file,
@@ -566,35 +569,49 @@ async def get_inputs(id: str, session: Db, claims: OpenRunAuth) -> list[RunInput
     """The declared inputs of the run that an earlier step produced, latest revision of each (ADR 0049).
 
     The runner mounts them as files in `.choregos/inputs/`, so a large report no longer has to fit
-    in the prompt. An input nothing has produced yet is simply absent."""
+    in the prompt. An input nothing has produced yet is simply absent. When the transition declares
+    `attachments`, every file handed to the work item is listed too (ADR 0201 §8); a handed name that
+    is also a declared input is listed once, the declared input's revision winning."""
     run, item, _ = await _run_and_item(session, id)
-    files: list[RunInputFile] = []
-    for name in _declared_inputs(run):
-        row = await latest_artifact(session, item.id, name)
-        if row is None:
+    declared = _declared_inputs(run)
+    rows: list[ArtifactRecord] = []
+    for name in declared:
+        if name == ATTACHMENTS_INPUT:
             continue
-        files.append(
-            RunInputFile(
-                name=row.name,
-                version=row.version,
-                filename=filename_of(row),
-                type=row.type,
-                media_type=row.media_type,
-                digest=row.digest,
-                size=row.size,
-            )
+        row = await latest_artifact(session, item.id, name)
+        if row is not None:
+            rows.append(row)
+    if ATTACHMENTS_INPUT in declared:
+        listed = {row.name for row in rows}
+        rows.extend(row for row in await handed_artifacts(session, item.id) if row.name not in listed)
+    return [
+        RunInputFile(
+            name=row.name,
+            version=row.version,
+            filename=filename_of(row),
+            type=row.type,
+            media_type=row.media_type,
+            digest=row.digest,
+            size=row.size,
         )
-    return files
+        for row in rows
+    ]
 
 
 @router.get("/runs/{id}/inputs/{name}", operation_id="getRunInputContent")
 async def get_input_content(id: str, name: str, session: Db, claims: OpenRunAuth) -> Response:
     """The bytes of a declared input, digest checked; reading it leaves a *read* receipt (S25-04)
-    under the digest of what was read. Only the inputs the run's transition declares are served."""
+    under the digest of what was read. Only the inputs the run's transition declares are served, and
+    a handed file only when it declares `attachments` (ADR 0201 §8)."""
     run, item, project = await _run_and_item(session, id)
-    if name not in _declared_inputs(run):
+    declared = _declared_inputs(run)
+    row: ArtifactRecord | None
+    if name in declared and name != ATTACHMENTS_INPUT:
+        row = await latest_artifact(session, item.id, name)
+    elif ATTACHMENTS_INPUT in declared:
+        row = next((one for one in await handed_artifacts(session, item.id) if one.name == name), None)
+    else:
         raise not_found("Declared input of the run", name)
-    row = await latest_artifact(session, item.id, name)
     if row is None:
         raise not_found("Artifact", name)
     try:

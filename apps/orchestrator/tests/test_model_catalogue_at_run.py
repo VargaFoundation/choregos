@@ -91,7 +91,9 @@ async def test_a_role_the_model_is_not_allowed_for_is_refused(setup: Fixture) ->
 # ───────────────────────────── the ledger ─────────────────────────────
 
 
-async def _collect(setup: Fixture, *, capabilities: frozenset[str] | None = None) -> dict[str, Any]:
+async def _collect(
+    setup: Fixture, *, capabilities: frozenset[str] | None = None, spend: Spend | None = None
+) -> dict[str, Any]:
     from sqlalchemy import select
     from tranibor_api.db.models import CostLedger, Run
     from tranibor_api.db.session import session_scope
@@ -102,7 +104,7 @@ async def _collect(setup: Fixture, *, capabilities: frozenset[str] | None = None
     if capabilities is not None:
         gateway.capabilities = capabilities
     key = await gateway.mint_key({}, 5.0, 600, ["platform/standard"])
-    gateway.spends[key.key_id] = Spend(
+    gateway.spends[key.key_id] = spend or Spend(
         tokens_in=100_000, tokens_out=10_000, cost_usd=0.5, requests=3, models_used=["platform/standard"]
     )
     async with session_scope() as session:
@@ -123,7 +125,7 @@ async def _collect(setup: Fixture, *, capabilities: frozenset[str] | None = None
         line = (
             await session.execute(select(CostLedger).where(CostLedger.run_id == "run-price"))
         ).scalar_one()
-    return {"result": result, "cost": line.cost_usd}
+    return {"result": result, "cost": line.cost_usd, "line": line}
 
 
 async def test_a_price_override_replaces_the_gateway_figure_in_the_ledger(setup: Fixture) -> None:
@@ -152,3 +154,41 @@ async def test_a_gateway_without_spend_readback_leaves_the_line_unmeasured(setup
     assert booked["result"]["unmeasured"] is True
     assert booked["result"]["priced_by"] == "none"
     assert booked["cost"] == pytest.approx(0.5), "an override changes nothing without a measured spend"
+
+
+#: 100k input tokens: 40k fresh, 50k read from the cache, 10k written (4k with the 1-hour TTL).
+CACHE_HEAVY = Spend(
+    tokens_in=100_000, tokens_out=10_000, tokens_cached=50_000, tokens_cache_write=10_000,
+    tokens_cache_write_1h=4_000, cost_usd=0.5, requests=3, models_used=["platform/standard"],
+)  # fmt: skip
+
+
+async def test_an_override_prices_cache_reads_and_writes_at_their_own_rates(setup: Fixture) -> None:
+    """S4-12 (#1893, #1895): with an override, a cache read costs 0.1x, a 5-minute write 1.25x and a
+    1-hour write 2x the input price on an Anthropic model, not 1x each."""
+    await _catalogue(
+        setup, model_name="platform/standard", display_name="s", enabled=True, allowed_roles=[],
+        usages=["agent"], input_per_1k_override=0.002, output_per_1k_override=0.01,
+        gateway_facts={"provider": "anthropic", "upstream_model": "anthropic/claude-sonnet-4"},
+    )  # fmt: skip
+    booked = await _collect(setup, spend=CACHE_HEAVY)
+    fresh, read, write_5m, write_1h = 40 * 0.002, 50 * 0.002 * 0.1, 6 * 0.002 * 1.25, 4 * 0.002 * 2.0
+    assert booked["cost"] == pytest.approx(fresh + read + write_5m + write_1h + 10 * 0.01)
+    assert booked["cost"] < 100 * 0.002 + 10 * 0.01, "not every input token at one rate"
+    assert booked["result"]["cache_multipliers"] == {
+        "read": 0.1, "write_5m": 1.25, "write_1h": 2.0, "source": "family_default",
+    }  # fmt: skip
+    assert (booked["line"].tokens_cache_write, booked["line"].tokens_cache_write_1h) == (10_000, 4_000)
+
+
+async def test_the_entrys_own_multipliers_win_over_the_family_default(setup: Fixture) -> None:
+    await _catalogue(
+        setup, model_name="platform/standard", display_name="s", enabled=True, allowed_roles=[],
+        usages=["agent"], input_per_1k_override=0.002, output_per_1k_override=0.01,
+        gateway_facts={"provider": "anthropic"},
+        cache_read_multiplier=0.05, cache_write_1h_multiplier=3.0,
+    )  # fmt: skip
+    booked = await _collect(setup, spend=CACHE_HEAVY)
+    expected = 40 * 0.002 + 50 * 0.002 * 0.05 + 6 * 0.002 * 1.25 + 4 * 0.002 * 3.0 + 10 * 0.01
+    assert booked["cost"] == pytest.approx(expected)
+    assert booked["result"]["cache_multipliers"]["source"] == "override"

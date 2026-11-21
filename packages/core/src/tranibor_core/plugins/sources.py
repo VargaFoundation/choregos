@@ -70,6 +70,7 @@ Check = Literal[
     "not_found",
     "version",
     "core",
+    "extension",
     "digest",
     "signature",
     "git_ref",

@@ -591,7 +591,7 @@ cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and 
 fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
 real service yet (`tests/live/test_rovo_a2a_live.py`, run by hand once the consent is given).
 
-## Azure DevOps Boards, as the board (ADR 0198)
+## Azure DevOps Boards, as the board (ADR 0209)
 
 The other direction from the MCP doors above: Tranibor reads and writes an Azure Boards project the way it
 does a Jira project. Connector **Tracker**, type **Azure DevOps Boards** (`azure-boards`); the setup, with

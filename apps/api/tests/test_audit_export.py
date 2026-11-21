@@ -1,4 +1,4 @@
-"""The SIEM export of the audit chains (S80-05b, ADR 0196), on SQLite and against simulated receivers.
+"""The SIEM export of the audit chains (S80-05b, ADR 0207), on SQLite and against simulated receivers.
 
 SQLite has no trigger: the chain is written by `kits.audit_export.write_chain`, linked as the trigger links
 it. What this file proves is the exporter's own behaviour (order, cursor, retry, filters, the lag), the
