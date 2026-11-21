@@ -101,6 +101,7 @@ async def _report(
             func.sum(CostLedger.tokens_out),
             func.sum(CostLedger.tokens_cached),
             func.sum(CostLedger.tokens_cache_write),
+            func.sum(CostLedger.tokens_cache_write_1h),
             func.count(CostLedger.id),
         )
         .where(*where)
@@ -117,7 +118,8 @@ async def _report(
             tokens_out=int(row[4] or 0),
             tokens_cached=int(row[5] or 0),
             tokens_cache_write=int(row[6] or 0),
-            runs=int(row[7] or 0),
+            tokens_cache_write_1h=int(row[7] or 0),
+            runs=int(row[8] or 0),
         )
         for row in rows
     ]
@@ -133,6 +135,7 @@ async def _report(
             tokens_out=sum(r.tokens_out for r in report_rows),
             tokens_cached=sum(r.tokens_cached for r in report_rows),
             tokens_cache_write=sum(r.tokens_cache_write for r in report_rows),
+            tokens_cache_write_1h=sum(r.tokens_cache_write_1h for r in report_rows),
         ),
     )
 

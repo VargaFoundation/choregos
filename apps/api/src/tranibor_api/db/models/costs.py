@@ -55,6 +55,9 @@ class CostLedger(Base, PkMixin):
     tokens_cached: Mapped[int] = mapped_column(Integer, default=0)
     #: The input tokens written to the provider's cache, part of `tokens_in` (S4-07, ADR 0188).
     tokens_cache_write: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    #: The part of `tokens_cache_write` written with the 1-hour TTL, the rest being 5-minute writes
+    #: (S4-12, ADR 0200). 0 on a line booked before it, which reads as "5-minute or not told".
+    tokens_cache_write_1h: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     cost_eur: Mapped[float] = mapped_column(Float, default=0.0)
     fx_rate: Mapped[float] = mapped_column(Float, default=1.0)

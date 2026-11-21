@@ -10962,7 +10962,7 @@ components:
         output_per_1k: { type: number, minimum: 0 }
     CacheMultipliers:
       type: object
-      description: "What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0196). A null or absent field keeps the default for the model's provider family."
+      description: "What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0200). A null or absent field keeps the default for the model's provider family."
       properties:
         read: { type: [number, "null"], minimum: 0, description: "a token read from the cache (0.1 on Anthropic, 0.05 on Opus 5.5 / Sonnet 5.5)" }
         write_5m: { type: [number, "null"], minimum: 0, description: "a token written with the 5-minute TTL (1.25 on Anthropic)" }
@@ -12987,7 +12987,7 @@ components:
               tokens_out: { type: integer, default: 0 }
               tokens_cached: { type: integer, default: 0 }
               tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07" }
-              tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0196)" }
+              tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0200)" }
               runs: { type: integer, default: 0 }
         total:
           type: object
@@ -12999,7 +12999,7 @@ components:
             tokens_out: { type: integer, default: 0 }
             tokens_cached: { type: integer, default: 0, description: "the input tokens the model read from its cache, part of tokens_in" }
             tokens_cache_write: { type: integer, default: 0, description: "the input tokens the provider wrote to its cache, part of tokens_in (S4-07)" }
-            tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0196)" }
+            tokens_cache_write_1h: { type: integer, default: 0, description: "the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0200)" }
     MemoryAbGroup:
       type: object
       properties:

@@ -4327,7 +4327,7 @@ export type PriceOverride = {
   output_per_1k: number;
 };
 
-/** What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0196). A null or absent field keeps the default for the model's provider family. */
+/** What a cached input token costs, as a multiple of the model's input price (S4-12, ADR 0200). A null or absent field keeps the default for the model's provider family. */
 export type CacheMultipliers = {
   /** a token read from the cache (0.1 on Anthropic, 0.05 on Opus 5.5 / Sonnet 5.5) */
   read?: number | null;
@@ -6220,7 +6220,7 @@ export type CostReport = {
     tokens_cached?: number;
     /** the input tokens the provider wrote to its cache (Anthropic cache creation), part of tokens_in; absent from a line booked before S4-07 */
     tokens_cache_write?: number;
-    /** the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0196) */
+    /** the part of tokens_cache_write written with the 1-hour TTL (priced at its own, higher multiplier); the rest is the 5-minute write. 0 when the provider did not say or on a line booked before S4-12 (ADR 0200) */
     tokens_cache_write_1h?: number;
     runs?: number;
   }>;
@@ -6235,7 +6235,7 @@ export type CostReport = {
     tokens_cached?: number;
     /** the input tokens the provider wrote to its cache, part of tokens_in (S4-07) */
     tokens_cache_write?: number;
-    /** the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0196) */
+    /** the part of tokens_cache_write written with the 1-hour TTL (S4-12, ADR 0200) */
     tokens_cache_write_1h?: number;
   };
 };

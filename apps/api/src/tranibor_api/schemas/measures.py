@@ -93,6 +93,8 @@ class CostRow(Dto):
     tokens_out: int = 0
     tokens_cached: int = 0
     tokens_cache_write: int = 0
+    #: The part of `tokens_cache_write` written with the 1-hour TTL (S4-12, ADR 0200).
+    tokens_cache_write_1h: int = 0
     runs: int = 0
 
 
@@ -105,6 +107,8 @@ class CostTotal(Dto):
     tokens_out: int = 0
     tokens_cached: int = 0
     tokens_cache_write: int = 0
+    #: The part of `tokens_cache_write` written with the 1-hour TTL (S4-12, ADR 0200).
+    tokens_cache_write_1h: int = 0
 
 
 class CostReport(Dto):

@@ -11,6 +11,8 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tranibor_core import CatalogueEntry, GatewayModel, ModelPolicy, Spend, utcnow
+from tranibor_core.cache_pricing import ResolvedMultipliers, input_cost_usd
+from tranibor_core.cache_pricing import resolve as resolve_multipliers
 from tranibor_core.models import DECISION_MODE, PLATFORM_PROFILES, TIERS, USAGES
 
 from ..db.models import Agent, AgentVersion, ModelCatalogueRow, Organization, Project
@@ -257,9 +259,46 @@ async def priced_spend(
         return spend, info
     price_in = row.input_per_1k_override or 0.0
     price_out = row.output_per_1k_override or 0.0
-    cost = round(spend.tokens_in / 1000 * price_in + spend.tokens_out / 1000 * price_out, 6)
+    # Each kind of input token at its own rate (S4-12, ADR 0200): a cache read and a cache write cost
+    # a multiple of the input price, not the input price.
+    resolved = cache_multipliers_of(row)
+    cost = round(
+        input_cost_usd(
+            price_per_1k=price_in,
+            tokens_in=spend.tokens_in,
+            tokens_cached=spend.tokens_cached,
+            tokens_cache_write=spend.tokens_cache_write,
+            tokens_cache_write_1h=spend.tokens_cache_write_1h,
+            multipliers=resolved.multipliers,
+        )
+        + spend.tokens_out / 1000 * price_out,
+        6,
+    )
     info.update({"priced_by": "override", "gateway_cost_usd": spend.cost_usd})
+    if spend.tokens_cached or spend.tokens_cache_write:
+        info["cache_multipliers"] = {
+            "read": resolved.multipliers.read,
+            "write_5m": resolved.multipliers.write_5m,
+            "write_1h": resolved.multipliers.write_1h,
+            "source": resolved.source,
+        }
     return spend.model_copy(update={"cost_usd": cost}), info
+
+
+def cache_multipliers_of(row: ModelCatalogueRow) -> ResolvedMultipliers:
+    """The cache multipliers of a catalogue entry: its own, else the gateway's cached-input price
+    (reads), else the provider family's default (`tranibor_core.cache_pricing`)."""
+    facts = row.gateway_facts or {}
+    return resolve_multipliers(
+        model_name=row.model_name,
+        provider=str(facts.get("provider") or ""),
+        upstream_model=str(facts.get("upstream_model") or ""),
+        read=row.cache_read_multiplier,
+        write_5m=row.cache_write_5m_multiplier,
+        write_1h=row.cache_write_1h_multiplier,
+        input_cost_per_1k=facts.get("input_cost_per_1k"),
+        cached_input_cost_per_1k=facts.get("cached_input_cost_per_1k"),
+    )
 
 
 def usable_names(policy: ModelPolicy, names: Iterable[str], role: str | None, usage: str) -> list[str]:
