@@ -39,6 +39,36 @@ class WorkflowCatalogueInfo(Strict):
     tags: list[CatalogueTag] = Field(default_factory=list, max_length=12)
 
 
+class WorkflowAttachments(Strict):
+    """The files a workflow takes from a person (ADR 0201 §1): which types, and how many.
+
+    A workflow without the block takes no file from a person. `metadata.inputs` stays the fields.
+    """
+
+    #: Keys of `ARTIFACT_TYPES`: the types of file a person may hand to a work item of this workflow.
+    accept: list[str] = Field(min_length=1, max_length=20)
+    min: int = Field(default=0, ge=0, le=50)
+    max: int = Field(default=20, ge=1, le=50)
+
+    @field_validator("accept")
+    @classmethod
+    def _known_types(cls, accept: list[str]) -> list[str]:
+        from .artifact import ARTIFACT_TYPES  # artifact.py imports this module
+
+        for name in accept:
+            if name not in ARTIFACT_TYPES:
+                raise ValueError(
+                    f"unknown artifact type `{name}`: one of {', '.join(sorted(ARTIFACT_TYPES))}"
+                )
+        return accept
+
+    @model_validator(mode="after")
+    def _min_within_max(self) -> WorkflowAttachments:
+        if self.min > self.max:
+            raise ValueError(f"`min` ({self.min}) is above `max` ({self.max})")
+        return self
+
+
 class WorkflowMetadata(Strict):
     name: Slug
     version: int = Field(ge=1)
@@ -48,6 +78,8 @@ class WorkflowMetadata(Strict):
     #: position of an onboarding, for example. Validated at the ticket's birth, passed to the agents.
     inputs: dict[str, Any] | None = None
     catalogue: WorkflowCatalogueInfo | None = None
+    #: The files a person may hand to a work item of this workflow (ADR 0201); absent: none.
+    attachments: WorkflowAttachments | None = None
 
 
 #: An agent role. The package roles (`StageRole`) keep their meaning: the platform relies on

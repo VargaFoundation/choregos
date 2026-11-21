@@ -30,6 +30,7 @@ members = [
     "tranibor-orchestrator",
     "tranibor-outpost",
     "tranibor-playbooks",
+    "tranibor-procurement",
     "tranibor-runner",
     "tranibor-software-delivery",
     "tranibor-tools-mcp",
@@ -488,6 +489,7 @@ dependencies = [
     { name = "tranibor-orchestrator" },
     { name = "tranibor-outpost" },
     { name = "tranibor-playbooks" },
+    { name = "tranibor-procurement" },
     { name = "tranibor-runner" },
     { name = "tranibor-software-delivery" },
     { name = "tranibor-tools-mcp" },
@@ -536,6 +538,7 @@ requires-dist = [
     { name = "tranibor-orchestrator", editable = "apps/orchestrator" },
     { name = "tranibor-outpost", editable = "packages/outpost" },
     { name = "tranibor-playbooks", editable = "packages/playbooks" },
+    { name = "tranibor-procurement", editable = "plugins/procurement" },
     { name = "tranibor-runner", editable = "packages/runner" },
     { name = "tranibor-software-delivery", editable = "plugins/software-delivery" },
     { name = "tranibor-tools-mcp", editable = "packages/tools-mcp" },
@@ -2485,6 +2488,21 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
+name = "tranibor-procurement"
+version = "0.27.17"
+source = { editable = "plugins/procurement" }
+dependencies = [
+    { name = "markitdown", extra = ["docx", "pdf", "pptx", "xlsx"] },
+    { name = "openpyxl" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "markitdown", extras = ["docx", "pdf", "pptx", "xlsx"], specifier = "==0.1.9" },
+    { name = "openpyxl", specifier = "==3.1.5" },
 ]
 
 [[package]]

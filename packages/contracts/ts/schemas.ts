@@ -66,6 +66,8 @@ export type Artifact = {
   created_at?: string | null;
   /** How the console shows this revision (ADR 0129); null when nothing is said beyond its type. Outside the digest. */
   display?: null | ArtifactDisplay;
+  /** Who handed this file to the work item (ADR 0201 §2): a person or an application's A2A task; null for a step's output. */
+  handed_by?: "person" | "a2a" | null;
   /** A `level` or a `metric`, once its digest checked (ADR 0129); anything else is read from its content. */
   value?: string | number | null;
 };
@@ -1970,6 +1972,15 @@ export type Workflow = {
     /** JSON Schema of the fields of a work item of this workflow (ADR 0031). */
     inputs?: {
       [key: string]: unknown;
+    };
+    /** The files a person may hand to a work item of this workflow (ADR 0201 §1). Absent: the workflow takes no file from a person. A step reads them through the reserved input `attachments`. */
+    attachments?: {
+      /** The artifact types a handed file may have (ADR 0201 §1, §3). */
+      accept: Array<"markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file" | "diff" | "level" | "metric" | "keyvalue">;
+      /** Handed files required before the work item starts (ADR 0201 §7). */
+      min?: number;
+      /** Distinct handed names at most (ADR 0201 §3). */
+      max?: number;
     };
     /** How the workflow catalogue presents it (ADR 0111); the engine ignores it. */
     catalogue?: {

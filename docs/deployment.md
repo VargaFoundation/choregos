@@ -430,7 +430,9 @@ reference: they name an image, and the operator maps names to references.
 ```yaml
 global:
   images:
-    jobs:   { investment-research: ghcr.io/graalsystems/tranibor-investment-research@sha256:… }
+    jobs:
+      investment-research: ghcr.io/graalsystems/tranibor-investment-research@sha256:…
+      procurement: ghcr.io/graalsystems/tranibor-procurement@sha256:…
     agents: { ticket-triager: harbor.example.com/agents/ticket-triager@sha256:… }
     requireDigest: true     # the default: a tag-only reference stops the API and the workers at start-up
 ```
@@ -439,6 +441,15 @@ The chart renders them as `TRANIBOR_JOB_IMAGES`, `TRANIBOR_AGENT_IMAGES` and
 `TRANIBOR_REQUIRE_IMAGE_DIGEST` on the API (which refuses a version naming an unknown image and lists
 the names at `GET /platform/agent-images`, never the references) and on every orchestrator worker
 (which resolves the name when the stage starts, and fails the step without a retry on an unknown one).
+The chart maps no job image by default, so an operator names each one with its digest. A release
+publishes two, signed, for `linux/amd64` and `linux/arm64`: `tranibor-investment-research` and
+`tranibor-procurement` (the job commands of the two first-party plugins, each built from the same
+release's runner). Map `procurement` to the digest of the release you run, and keep the two in step: a
+job image carries the runner of its own release. To leave it out, omit the `procurement` key: the
+plugin's job steps then fail without a retry on the unknown image name, and the API refuses a workflow
+version that names it, while everything else keeps working. Never map it to an image built from another
+release's runner.
+
 Each image is built **from** the runner image: the runner is the entrypoint, the agent is a
 subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
 warm pool built from the runner image: use `k8s_job` for steps that name their own image.

@@ -16,6 +16,7 @@ from jsonschema.exceptions import SchemaError
 from tranibor_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    ATTACHMENTS_INPUT,
     CHECKED_TYPES,
     FACT_TYPES,
     MAX_FACTS,
@@ -138,6 +139,8 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_retries(wf, report, source)
     _check_gates_have_something_to_check(wf, report, source)
     _check_output_schemas(wf, report, source)
+    _check_output_sections(wf, report, source)
+    _check_numbers_identifiers(wf, report, source)
     _check_known_roles(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
@@ -147,6 +150,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_confidence_thresholds(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
+    _check_attachments(wf, report, source)
     _check_effects(wf, report, source)
     _check_output_types(wf, report, source)
     _check_artifact_declarations(wf, report, source)
@@ -283,7 +287,8 @@ def _check_artifact_declarations(wf: Workflow, report: ValidationReport, source:
         for name in sorted(RESERVED_ARTIFACT_NAMES & set(t.outputs)):
             report.error(
                 "outputs.reserved",
-                f"`{name}` is measured by the platform: no step may declare it as an output",
+                f"transition `{t.key}`: `{name}` is measured by the platform: no step may declare it "
+                "as an output",
                 ["transitions", index, "outputs"],
                 source,
             )
@@ -596,6 +601,29 @@ def _check_action_approval(
                 report.error("action.approval_template", refused, where, source)
     for e_index, entry in enumerate(action.approval.excluded):
         referenced(entry, [*location, "excluded", e_index], whole=True)
+
+
+def _check_attachments(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`attachments` is the files handed to a work item (ADR 0201 §9): a step reads them, none writes
+    them, and a workflow that could never be handed one cannot ask for them."""
+    can_receive = wf.metadata.attachments is not None or wf.a2a is not None
+    for index, t in enumerate(wf.transitions):
+        if ATTACHMENTS_INPUT in t.inputs and not can_receive:
+            report.error(
+                "inputs.attachments",
+                f"transition `{t.key}` reads `{ATTACHMENTS_INPUT}`, but this workflow takes no file: "
+                "declare `metadata.attachments` or an `a2a:` block",
+                ["transitions", index, "inputs"],
+                source,
+            )
+    if ATTACHMENTS_INPUT in (wf.artifacts or {}):
+        report.error(
+            "artifacts.attachments",
+            f"`{ATTACHMENTS_INPUT}` is the files handed to the work item, each with its own type: "
+            "it is never shown as one value, so `artifacts:` cannot describe it",
+            ["artifacts", ATTACHMENTS_INPUT],
+            source,
+        )
 
 
 def _check_spawns(wf: Workflow, report: ValidationReport, source: Any) -> None:
@@ -1089,6 +1117,72 @@ def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -
                         [*path, name],
                         source,
                     )
+
+
+def _check_numbers_identifiers(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`numbers_measured`'s `identifiers:` is `read` (the default) or `skip` (S85-16): any other value would
+    silently read identifiers, which is not what its author asked."""
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            value = g.params.get("identifiers") if g.name == "numbers_measured" else None
+            if value is not None and value not in ("read", "skip"):
+                report.error(
+                    "gate.numbers_measured",
+                    f"`identifiers:` is `read` or `skip`, not `{value}`",
+                    ["transitions", index, "gates", g_index, "params", "identifiers"],
+                    source,
+                )
+
+
+def _check_output_sections(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """An `output_sections` guarantee names outputs the transition declares, with patterns that compile.
+
+    An empty `outputs:` would check nothing, and a name the transition does not declare would never be
+    produced: the guarantee would fail on every item, or pass on nothing.
+    """
+    for index, t in enumerate(wf.transitions):
+        for g_index, g in enumerate(t.gates):
+            if g.name != "output_sections":
+                continue
+            path: list[str | int] = ["transitions", index, "gates", g_index, "params"]
+            wanted = g.params.get("outputs")
+            if not wanted or not isinstance(wanted, dict):
+                report.error(
+                    "gate.nothing_to_check",
+                    "guarantee `output_sections` without `outputs:` as a parameter of the guarantee "
+                    "(an output's name and its sections): it would have nothing to check",
+                    [*path, "outputs"],
+                    source,
+                )
+                continue
+            patterns = g.params.get("patterns") or {}
+            if not isinstance(patterns, dict):
+                report.error(
+                    "gate.output_sections",
+                    "`patterns:` maps an output's name to its regular expressions",
+                    [*path, "patterns"],
+                    source,
+                )
+                patterns = {}
+            for key, field_name in (*((n, "outputs") for n in wanted), *((n, "patterns") for n in patterns)):
+                if key not in t.outputs:
+                    report.error(
+                        "gate.output_sections",
+                        f"`{key}` in `{field_name}:` is not an output the transition declares in `outputs:`",
+                        [*path, field_name, key],
+                        source,
+                    )
+            for key, expressions in patterns.items():
+                for expression in expressions or []:
+                    try:
+                        re.compile(str(expression))
+                    except re.error as exc:
+                        report.error(
+                            "gate.output_sections",
+                            f"the pattern {str(expression)!r} of `{key}` does not compile: {exc}",
+                            [*path, "patterns", key],
+                            source,
+                        )
 
 
 def _check_known_roles(wf: Workflow, report: ValidationReport, source: Any) -> None:

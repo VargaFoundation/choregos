@@ -6545,6 +6545,7 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   attachAgentCredential: { method: "POST"; path: "/orgs/{org}/agents/{slug}/credentials"; body: AgentCredentialCreate; response: AgentCredential };
+  attachWorkItemFiles: { method: "POST"; path: "/work-items/{id}/files"; body: void; response: Array<Artifact> };
   authCallback: { method: "GET"; path: "/auth/callback"; body: never; response: void };
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };

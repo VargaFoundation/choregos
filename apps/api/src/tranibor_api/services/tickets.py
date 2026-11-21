@@ -51,6 +51,7 @@ from ..temporal import get_temporal, interpreter_id
 from .costs import estimate_cost
 from .definitions import work_item_workflow, workflow_model
 from .events import persist_event
+from .handed_files import refuse_start_without_files
 from .human_assignee import StepAssignee, actor_of_the_step, assignee_from_actor, assignee_of_row
 from .initiator import of_principal
 from .routing import WorkItemBirth, new_work_item, verify_birth
@@ -454,6 +455,7 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
                 fields=dict(request.fields),
                 budget_usd=request.budget_usd,
             ),
+            start=request.start,
         )
         assert row is not None
         # A schedule gives its own key, one per window (S38-11); an external tracker mints its own.
@@ -485,6 +487,9 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
             item_id=item_id,
         ),
     )
+    if request.start and adapter is None:
+        # An external tracker was checked by `verify_birth`, before its issue was created.
+        refuse_start_without_files(workflow_model(await work_item_workflow(session, item)))
     mark(item, restricted_knowledge or [])
     await persist_event(
         session,

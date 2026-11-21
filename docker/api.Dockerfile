@@ -33,6 +33,8 @@ COPY packages packages
 # The former names' shims (ADR 0176 R2): workspace members, and what keeps `import tranibor_api` working for
 # the enterprise edition built FROM this image.
 COPY compat compat
+# A workspace member the image does not install (ADR 0202): uv reads its metadata, the API never imports it.
+COPY plugins/procurement/pyproject.toml plugins/procurement/
 COPY apps/api apps/api
 COPY apps/orchestrator apps/orchestrator
 # The first-party plugins' extensions (ADR 0181): the published API and worker load them from the
@@ -58,9 +60,11 @@ COPY tests/fixtures/repos tests/fixtures/repos
 # outpost's operator runs in their own network, with an image of its own (`outpost.Dockerfile`), and
 # the platform serves its door without ever importing it.
 # The shims of those two stay out as well (ADR 0176 R2).
+# The procurement plugin's command (ADR 0202) runs in its own job image: not installed here either.
 ARG SHIMS_OUT="--no-install-package choregos-agent-sdk --no-install-package choregos-outpost" # compat-ok
 RUN uv sync --frozen --no-dev --all-packages \
-    --no-install-package tranibor-agent-sdk --no-install-package tranibor-outpost $SHIMS_OUT
+    --no-install-package tranibor-agent-sdk --no-install-package tranibor-outpost \
+    --no-install-package tranibor-procurement $SHIMS_OUT
 
 # SkillSpector, the skill gate's second scanner (ADR 0095), in an environment of its own: its
 # dependencies (LangGraph, YARA…) are not the platform's, and the API runs it as a child process,

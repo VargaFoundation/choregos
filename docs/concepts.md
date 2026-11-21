@@ -49,7 +49,11 @@ A workflow also says, from its YAML alone, how documents travel between its step
 flow, `graph.artifacts`): for each name, the transitions that output it, the ones that list it in
 `inputs`, and where it comes from. `step`: some transition outputs it; `feedback`: `human_feedback`,
 written by a person's rejection; `field`: a property of the work item's fields
-(`metadata.inputs`); `missing`: read, but nothing produces it. It also marks the documents the
+(`metadata.inputs`); `attached`: `attachments`, the files handed to the work item (ADR 0201), never
+`missing`; `missing`: read, but nothing produces it. A transition that lists `attachments` in `inputs`
+gets every handed file mounted, the latest revision of each name; no transition may output it, a
+workflow with neither `metadata.attachments` nor an `a2a:` block cannot read it, and `artifacts:`
+cannot describe it. It also marks the documents the
 platform hands every agent stage (`spec_markdown`, `plan_markdown`, `allowed_paths`) and those the
 pull request body carries. Only declared outputs and inputs count.
 
@@ -220,8 +224,12 @@ minimum. Gates shipped today:
 
 ```
 action_succeeded · evidence_facts · evidence_present · external · flag_present
-numbers_measured · output_schema · outputs_in · outputs_present · tool_called
+numbers_measured · output_schema · output_sections · outputs_in · outputs_present · tool_called
 ```
+
+`output_sections` is `markdown_sections` for an output rather than a file: it needs no repository, and
+requires each named output (`outputs: {memo_markdown: [Summary, Risks]}`) to carry those headings, in
+that order with `ordered: true`; the validator refuses an output the transition does not declare.
 
 The gates that read a diff, a pipeline or a pull request are the `software-delivery` plugin's
 (ADR 0181, round C2), under the same names, and the published images install its extension
@@ -243,7 +251,9 @@ the platform did not measure (a job's facts, `dod.facts`): a threshold on a numb
 wrote is not a guarantee. `numbers_measured` reads the numbers an agent writes in its outputs and
 requires each to be found in the `sources:` documents an earlier step produced — rounding, a
 percentage for a fraction and a dropped sign are tolerated; years, integers below `ignore_below`
-(default 10) and an explicit `allow:` list are skipped. The source `fields` is the work item's own
+(default 10) and an explicit `allow:` list are skipped; with `identifiers: skip` (off by default), so
+are identifiers (`FA-0012`, `CTR_17`, `v2.3.1`), references and not amounts, a hole a workflow opens
+knowingly since `EUR-99999` is one too. The source `fields` is the work item's own
 fields, which a person can edit; a child opened by a fan-out reads `parent.<doc>[.<key>...]` instead,
 the parent's measured document (a key `$name` is the child's own field `name`); a work item with no
 parent has no such source and is refused. `must_quote:` names sources whose every number must also

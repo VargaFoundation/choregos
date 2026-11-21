@@ -169,6 +169,7 @@ at most.
 | `description` | one sentence |
 | `extends` | `template:<name>@<version>`: start from a shipped template |
 | `inputs` | the JSON Schema of a work item's fields; every door (console, CLI, REST, MCP, A2A, triggers) checks fields against it |
+| `attachments` | the files a person may hand to a work item (ADR 0201): `accept` (artifact types, 1 to 20, required), `min` (0 to 50, default 0), `max` (1 to 50, default 20); a step reads them through the reserved input `attachments` |
 | `catalogue` | how the workflow catalogue presents it: `title` (80 characters), `summary` (400), `tags` (12 at most); the engine ignores it |
 
 ## `actors`
@@ -302,6 +303,7 @@ result and the diff; the others wait for an event.
 | `tool_called` | the tools the step required were really called, read from the ledger |
 | `coverage_delta_min` | test coverage does not drop below the threshold |
 | `docs_updated` | the branch updates the documentation when it changes anything else |
+| `output_sections` | named Markdown outputs carry their required sections, no repository needed: `params.outputs`, `params.ordered` |
 | `markdown_sections` | the documents the branch adds carry their required sections |
 | `adr_number_free` | the number of an ADR the branch adds is not already taken |
 | `already_fixed_proven` | the fix is already on the default branch, on measured evidence |
