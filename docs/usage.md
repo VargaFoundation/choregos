@@ -1185,8 +1185,9 @@ patch holds a secret shape keeps only its name and counters, and the revision sa
 A diff larger than `TRANIBOR_ARTIFACT_DIFF_MAX_BYTES` (1 MiB by default) is cut file by file, and says so.
 
 Every output is kept as an **artifact** of the ticket, revision by revision:
-`GET /work-items/{id}/artifacts` lists them (type, media type, size, sha256, the run and agent that
-produced each), `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) describes one, and
+`GET /work-items/{id}/artifacts` lists them, a page at a time by name then version (`cursor`, `limit`; the
+answer is `{items, meta}`, ADR 0206): type, media type, size, sha256, the run and agent that
+produced each, `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) describes one, and
 `…/content` serves its bytes after checking the digest again — altered content is refused (409).
 On a work item's page, the **artifacts** card has one tab per output: its revisions, the run and
 agent that produced each one and the runs that read it (the hand-off receipts), a viewer — markdown

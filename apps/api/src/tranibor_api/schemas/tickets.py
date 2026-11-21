@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, model_validator
-from tranibor_contracts import CHANGE_REQUEST, StageResult
+from tranibor_contracts import CHANGE_REQUEST, Artifact, StageResult
 
 from .base import Dto, PageMeta
 
@@ -303,6 +303,13 @@ class TimelineEntry(Dto):
     via: TrackerWrite | None = None
 
 
+class TimelinePage(Dto):
+    """One page of a work item's timeline, oldest first (ADR 0206)."""
+
+    items: list[TimelineEntry]
+    meta: PageMeta
+
+
 class HandOffEvent(Dto):
     """A hand-over receipt (S25-04): a run produced or read an output, under this digest."""
 
@@ -321,6 +328,13 @@ class HandOff(Dto):
     output: str
     current_digest: str | None = None
     events: list[HandOffEvent] = Field(default_factory=list)
+
+
+class HandOffPage(Dto):
+    """One page of a work item's hand-offs, in the order their first receipt was written (ADR 0206)."""
+
+    items: list[HandOff]
+    meta: PageMeta
 
 
 JourneyMoveKind = Literal[
@@ -455,11 +469,25 @@ class AgentRunPage(Dto):
     meta: PageMeta
 
 
+class RunPage(Dto):
+    """One page of a work item's runs, oldest first (ADR 0206)."""
+
+    items: list[RunDto]
+    meta: PageMeta
+
+
 class RunEventDto(Dto):
     seq: int
     type: str
     ts: datetime
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunEventPage(Dto):
+    """One page of a run's ACP log, oldest first: the order of `seq` a tail reads (ADR 0206)."""
+
+    items: list[RunEventDto]
+    meta: PageMeta
 
 
 class RunEventIn(Dto):
@@ -483,6 +511,34 @@ class RunInputFile(Dto):
     media_type: str
     digest: str
     size: int
+
+
+class RunInputFilePage(Dto):
+    """One page of the declared inputs of a run (ADR 0206), in the order its transition declares them."""
+
+    items: list[RunInputFile]
+    meta: PageMeta
+
+
+class RunSkillPage(Dto):
+    """One page of the skills a run's `StageInput` names, files included, in its order (ADR 0206)."""
+
+    items: list[dict[str, Any]]
+    meta: PageMeta
+
+
+class RunKnowledgePage(Dto):
+    """One page of the knowledge bases a run's `StageInput` names, documents included (ADR 0206)."""
+
+    items: list[dict[str, Any]]
+    meta: PageMeta
+
+
+class ArtifactPage(Dto):
+    """One page of the revisions of a work item's artifacts, by name then version (ADR 0206)."""
+
+    items: list[Artifact]
+    meta: PageMeta
 
 
 class ArtifactRef(Dto):

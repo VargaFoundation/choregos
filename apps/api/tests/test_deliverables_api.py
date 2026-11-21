@@ -92,7 +92,8 @@ async def test_a_deliverable_is_stored_typed_and_receipted(
     served = await client.get(f"/api/v1/work-items/{item['id']}/artifacts/deck/content")
     assert served.content == DECK and served.headers["content-type"] == PPTX
     hand_offs = {
-        h["output"]: h for h in (await client.get(f"/api/v1/work-items/{item['id']}/hand-offs")).json()
+        h["output"]: h
+        for h in (await client.get(f"/api/v1/work-items/{item['id']}/hand-offs")).json()["items"]
     }
     assert hand_offs["deck"]["current_digest"] == DIGEST
     assert [(e["kind"], e["digest"]) for e in hand_offs["deck"]["events"]] == [("produced", DIGEST)]

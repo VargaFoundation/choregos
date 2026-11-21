@@ -161,7 +161,7 @@ async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: 
     assert "agent refine" in comment and "agent implement" in comment
     assert "€" in comment, "the cost is written in the ticket"
 
-    runs = (await platform.client.get(f"/api/v1/work-items/{item.id}/runs")).json()
+    runs = (await platform.client.get(f"/api/v1/work-items/{item.id}/runs")).json()["items"]
     assert len(runs) >= 3
     assert all(run["cost_usd"] > 0 for run in runs), "every run has a cost counted at the gateway"
 

@@ -213,7 +213,9 @@ async def test_a_step_cannot_read_an_artefact_it_did_not_declare_as_an_input(
     headers = await _run(item, project, "T-1-review-1", "review", inputs=["spec_markdown"])
 
     listed = await client.get("/api/v1/internal/runs/T-1-review-1/inputs", headers=headers)
-    assert [e["name"] for e in listed.json()] == ["spec_markdown"], "only the declared input is listed"
+    assert [e["name"] for e in listed.json()["items"]] == ["spec_markdown"], (
+        "only the declared input is listed"
+    )
     declared = await client.get("/api/v1/internal/runs/T-1-review-1/inputs/spec_markdown", headers=headers)
     assert declared.status_code == 200 and declared.text == SPEC
     for name in ("deck", "spec_markdown@1", "../deck"):

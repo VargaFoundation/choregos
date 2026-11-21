@@ -144,7 +144,7 @@ async def test_a_list_of_runs_does_not_resolve_connectors_for_each_run(
 ) -> None:
     await _connector(client, "supplier")
     item_id = await _run(client, project, [{"connector": "supplier", "tools": ["*"]}])
-    (run,) = (await client.get(f"/api/v1/work-items/{item_id}/runs")).json()
+    (run,) = (await client.get(f"/api/v1/work-items/{item_id}/runs")).json()["items"]
     assert run["agent_slug"] == "triage" and run["tool_connectors"] == []
 
 
@@ -199,7 +199,7 @@ async def test_the_timeline_says_which_tracker_write_and_under_which_account(
             )
         item_id = item.id
 
-    entries = (await client.get(f"/api/v1/work-items/{item_id}/timeline")).json()
+    entries = (await client.get(f"/api/v1/work-items/{item_id}/timeline")).json()["items"]
     by_title = {e["title"]: e["via"] for e in entries}
     assert by_title["inbox → triage"] == via
     assert by_title["human request: question"] == via

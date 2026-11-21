@@ -149,7 +149,7 @@ async def test_the_runner_reads_the_skills_of_its_run_and_of_no_other(
         "/api/v1/internal/runs/run-with/skills", headers={"Authorization": f"Bearer {token}"}
     )
     assert read_back.status_code == 200, read_back.text
-    (skill,) = read_back.json()
+    (skill,) = read_back.json()["items"]
     assert (skill["slug"], skill["version"], skill["digest"], skill["files"]) == (
         "procedure-onboarding",
         1,

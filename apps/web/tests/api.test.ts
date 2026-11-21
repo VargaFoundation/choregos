@@ -176,6 +176,24 @@ describe("section upload (S42-13)", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("follows the cursor to the end for a log the views fold whole (ADR 0206)", async () => {
+    const pages = [
+      { items: [{ seq: 1 }, { seq: 2 }], meta: { has_more: true, next_cursor: "c1" } },
+      { items: [{ seq: 3 }], meta: { has_more: false, next_cursor: null } },
+    ];
+    const fetchMock = vi.fn(async (..._args: unknown[]) => new Response(JSON.stringify(pages.shift()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const { api } = await import("@/lib/api");
+      const events = await api.runEvents("r1", 7);
+      expect(events.map((e) => e.seq)).toEqual([1, 2, 3]);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/v1/runs/r1/events?after_seq=7&limit=200");
+      expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/v1/runs/r1/events?after_seq=7&cursor=c1&limit=200");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe("the whole-list readers follow the cursor to the end (ADR 0206)", () => {

@@ -1123,7 +1123,7 @@ class Workspace(App[None]):
         """One round of reads. A route that fails leaves what was read and says so on the node; it never
         takes the workspace down, and never notifies again every round."""
         found: Any = await asyncio.gather(
-            self.api.get(f"/runs/{run_id}/events", params={"after_seq": detail.steps.last_seq}),
+            self.api.get_pages(f"/runs/{run_id}/events", params={"after_seq": detail.steps.last_seq}),
             self.api.get(f"/runs/{run_id}/context-breakdown"),
             self.api.get(f"/runs/{run_id}/agents"),
             return_exceptions=True,
@@ -1421,8 +1421,12 @@ class Workspace(App[None]):
 
     async def read_item_runs(self) -> None:
         assert self.item is not None
-        found = await self._read(f"/work-items/{self.item['id']}/runs")
-        self.item_runs = None if found is None else list(found)
+        try:
+            found: list[Any] | None = await self.api.get_pages(f"/work-items/{self.item['id']}/runs")
+        except (ApiError, httpx.TransportError) as exc:
+            self.notify(str(exc) or type(exc).__name__, title="runs", severity="warning")
+            found = None
+        self.item_runs = found
         self._project_shape = None
         self.draw_projects()
 

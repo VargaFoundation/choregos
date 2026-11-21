@@ -203,8 +203,9 @@ def position_page[T](items: Sequence[T], page: Page) -> tuple[list[T], PageMeta]
     """
     start = 0
     if page.cursor:
-        (position,) = decode_cursor(page.cursor)
-        if not isinstance(position, int) or position < 0:
+        values = decode_cursor(page.cursor)
+        position = values[0]
+        if len(values) != 1 or not isinstance(position, int) or position < 0:
             raise unprocessable(_INVALID)
         start = position
     window = list(items[start : start + page.limit])

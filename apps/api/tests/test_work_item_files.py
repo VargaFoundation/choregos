@@ -96,7 +96,7 @@ async def test_a_pdf_is_stored_and_listed_as_handed_by_a_person(
     assert stored["handed_by"] == "person"
     assert stored["digest"] == artifact_digest(PDF) and stored["size"] == len(PDF)
     assert stored["produced_by"]["run_id"].startswith("person:")
-    listed = (await client.get(f"/api/v1/work-items/{item['id']}/artifacts")).json()
+    listed = (await client.get(f"/api/v1/work-items/{item['id']}/artifacts")).json()["items"]
     assert [(a["name"], a["handed_by"]) for a in listed] == [("Quote-A.pdf", "person")]
     content = await client.get(f"/api/v1/work-items/{item['id']}/artifacts/Quote-A.pdf/content")
     assert content.content == PDF, "the bytes come back, digest checked"

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
 import WorkItemPage from "@/app/p/[slug]/items/[id]/page";
@@ -19,7 +19,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       workItem: vi.fn(),
-      timeline: vi.fn().mockResolvedValue([]),
+      timeline: vi.fn().mockResolvedValue({ items: [], meta: { has_more: false, next_cursor: null } }),
       handOffs: vi.fn().mockResolvedValue([]),
       runs: vi.fn().mockResolvedValue([]),
       connectors: vi.fn().mockResolvedValue([]),
@@ -124,5 +124,20 @@ describe("a ticket's page, finished (S55-14)", () => {
     const facts = await screen.findByTestId("ticket-facts");
     expect(within(facts).queryByTestId("ticket-size")).toBeNull();
     expect(within(facts).queryByText("Risk")).toBeNull();
+  });
+
+  it("reads the timeline a page at a time: More asks for the next page by its cursor (ADR 0206)", async () => {
+    const entry = (title: string) => ({ ts: "2026-11-03T10:00:00Z", title, actor_kind: "system" });
+    vi.mocked(api.timeline)
+      .mockResolvedValueOnce({ items: [entry("first moment")], meta: { has_more: true, next_cursor: "c1" } } as never)
+      .mockResolvedValueOnce({ items: [entry("second moment")], meta: { has_more: false, next_cursor: null } } as never);
+    ticket();
+    expect(await screen.findByText("first moment")).toBeInTheDocument();
+    expect(screen.queryByText("second moment")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "More" }));
+    expect(await screen.findByText("second moment")).toBeInTheDocument();
+    expect(screen.getByText("first moment")).toBeInTheDocument();
+    expect(vi.mocked(api.timeline).mock.calls.at(-1)?.[1]).toMatchObject({ cursor: "c1" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "More" })).toBeNull());
   });
 });

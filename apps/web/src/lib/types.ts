@@ -338,9 +338,11 @@ export type {
 export type {
   ActionPage,
   ApiTokenPage,
+  ArtifactPage,
   BrowserSessionPage,
   GatewayKeyInfo,
   GatewayKeyPage,
+  HandOffPage,
   LinkedAccountPage,
   MembershipPage,
   MemoryAbGroup,
@@ -350,6 +352,9 @@ export type {
   ProjectOperationPage,
   ProjectOrgConnectorPage,
   RemoteCredentialPage,
+  RunEventPage,
+  RunPage,
+  TimelinePage,
 } from "@choregos/contracts/api";
 
 /** Named memories, global and project, and an agent's bindings to them (S40-11, ADR 0075). */

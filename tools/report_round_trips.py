@@ -323,8 +323,10 @@ async def collect(http: httpx.AsyncClient, org: str, since: datetime, *, concurr
         closed = _instant(item.get("closed_at"))
         if closed is not None and closed <= since:
             return  # closed before the window: no run of it can start inside
-        runs = await read(f"/work-items/{item['id']}/runs")
-        if runs is None:
+        try:
+            async with gate:
+                runs = await _pages(http, f"/work-items/{item['id']}/runs", {})
+        except httpx.HTTPStatusError:
             found.skipped_work_items += 1
             return
         await asyncio.gather(*(one_run(run) for run in runs if in_window(run, since)))

@@ -88,7 +88,7 @@ async def test_a_run_reads_exactly_the_documents_it_was_prepared_with(
         "/api/v1/internal/runs/run-kb/knowledge", headers={"Authorization": f"Bearer {token}"}
     )
     assert read.status_code == 200, read.text
-    (base,) = read.json()
+    (base,) = read.json()["items"]
     paths = [d["path"] for d in base["documents"]]
     assert sorted(paths) == ["zoning-2.md", "zoning.md"], "two files named alike stay apart"
     assert "late.md" not in paths

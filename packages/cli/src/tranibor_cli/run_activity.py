@@ -76,7 +76,7 @@ def as_json(api: Client, run_id: str) -> str:
 
 
 def _read(api: Client, run_id: str, steps: RunSteps) -> None:
-    steps.apply(api.get(f"/runs/{run_id}/events", params={"after_seq": steps.last_seq}) or [])
+    steps.apply(api.get_pages(f"/runs/{run_id}/events", params={"after_seq": steps.last_seq}))
 
 
 def _breakdown(api: Client, run_id: str) -> dict[str, Any] | None:

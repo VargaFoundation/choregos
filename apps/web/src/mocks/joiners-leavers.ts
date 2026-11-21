@@ -253,6 +253,6 @@ export function peopleOpsApi(method: string, route: string, body: unknown): unkn
   if (method !== "GET") return undefined;
   if (!ticket[2]) return structuredClone(item);
   if (ticket[2] === "/journey") return journey(item);
-  if (["/timeline", "/hand-offs", "/runs"].includes(ticket[2])) return [];
+  if (["/timeline", "/hand-offs", "/runs"].includes(ticket[2])) return { items: [], meta: { has_more: false, next_cursor: null } };
   return undefined;
 }

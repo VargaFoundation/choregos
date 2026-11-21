@@ -129,8 +129,7 @@ class ItemScreen(ModalScreen[None]):
     async def load(self) -> None:
         body = self.query_one("#item-run", Static)
         try:
-            runs = await self.api.get(f"/work-items/{self.card['id']}/runs")
-            runs = runs["items"] if isinstance(runs, dict) else runs or []
+            runs = await self.api.get_pages(f"/work-items/{self.card['id']}/runs")
             if not runs:
                 body.update(Text("\nno run yet", style="dim"))
                 return
@@ -139,7 +138,7 @@ class ItemScreen(ModalScreen[None]):
                 lines.append(f"{str(run.get('id'))[:12]}  {run.get('status')}  {run.get('stage') or ''}\n")
             run = runs[0]
             steps = RunSteps()
-            steps.apply(await self.api.get(f"/runs/{run['id']}/events", params={"after_seq": 0}) or [])
+            steps.apply(await self.api.get_pages(f"/runs/{run['id']}/events", params={"after_seq": 0}))
             breakdown = None
             try:
                 breakdown = run_activity.latest_of(

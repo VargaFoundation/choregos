@@ -142,6 +142,8 @@ class Client:
         rows: list[Any] = []
         while True:
             page = self.get(path, params=params, **kwargs)
+            if isinstance(page, list):  # an API older than ADR 0206 returns the bare array
+                return rows + page
             rows += page["items"]
             meta = page.get("meta") or {}
             cursor = meta.get("next_cursor")
@@ -238,6 +240,8 @@ class AsyncClient:
         rows: list[Any] = []
         while True:
             page = await self.get(path, params=params, **kwargs)
+            if isinstance(page, list):  # an API older than ADR 0206 returns the bare array
+                return rows + page
             rows += page["items"]
             meta = page.get("meta") or {}
             cursor = meta.get("next_cursor")

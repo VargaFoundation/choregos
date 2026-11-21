@@ -316,7 +316,7 @@ async def test_a_file_part_is_an_input_artefact_a_step_reads(
         "Authorization": "Bearer "
         + mint_run_token("run-review", project_slug="billing-api", work_item_key=key, ttl_minutes=5)
     }
-    listed = (await client.get("/api/v1/internal/runs/run-review/inputs", headers=headers)).json()
+    listed = (await client.get("/api/v1/internal/runs/run-review/inputs", headers=headers)).json()["items"]
     assert [(f["name"], f["filename"], f["digest"]) for f in listed] == [
         ("contract.pdf", "contract.pdf", artifact_digest(PDF))
     ]
